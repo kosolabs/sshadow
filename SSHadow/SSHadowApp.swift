@@ -9,9 +9,12 @@ import SwiftUI
 
 @main
 struct SSHadowApp: App {
+    init() {
+        print("hi")
+    }
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ConnectionConfigView()
         }
     }
 }
