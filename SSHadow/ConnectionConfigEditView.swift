@@ -1,9 +1,20 @@
 import SwiftUI
 
-struct ConnectionConfigView: View {
-    @State private var config = ConnectionConfig(host: "")
+struct ConnectionConfigEditView: View {
+    @Environment(\.modelContext) private var modelContext
+
+    var config = ConnectionConfig(host: "")
     @State private var tester = ConnectionTestViewModel()
-    
+
+    private var host: Binding<String> {
+        Binding<String>(
+            get: { config.host },
+            set: { newValue in
+                config.host = newValue
+            }
+        )
+    }
+
     private var port: Binding<String> {
         Binding<String>(
             get: {
@@ -24,7 +35,7 @@ struct ConnectionConfigView: View {
             }
         )
     }
-    
+
     private var user: Binding<String> {
         Binding<String>(
             get: {
@@ -39,7 +50,7 @@ struct ConnectionConfigView: View {
             }
         )
     }
-    
+
     private var password: Binding<String> {
         Binding<String>(
             get: {
@@ -55,6 +66,21 @@ struct ConnectionConfigView: View {
         )
     }
 
+    private var path: Binding<String> {
+        Binding<String>(
+            get: {
+                return config.path ?? ""
+            },
+            set: { newValue in
+                if newValue.isEmpty {
+                    config.path = nil
+                } else {
+                    config.path = newValue
+                }
+            }
+        )
+    }
+
     var body: some View {
         VStack {
             HStack {
@@ -65,34 +91,35 @@ struct ConnectionConfigView: View {
             }
             Form {
                 Section("Connection") {
-                    TextField("Host", text: $config.host)
-                    TextField("Port", text: port, prompt: Text("\(config.effectivePort) (default)"))
-                    TextField("User", text: user, prompt: Text(config.effectiveUser))
+                    TextField("Host", text: host)
+                    TextField(
+                        "Port",
+                        text: port,
+                        prompt: Text("\(config.effectivePort) (default)")
+                    )
+                    TextField(
+                        "User",
+                        text: user,
+                        prompt: Text(config.effectiveUser)
+                    )
                     SecureField("Password", text: password)
+                    TextField(
+                        "Path",
+                        text: path,
+                        prompt: Text(config.effectivePath)
+                    )
                     HStack {
-                        Button(tester.status == .testing ? "Testing..." : "Test Connection") {
+                        Button(
+                            tester.status == .testing
+                                ? "Testing..." : "Test Connection"
+                        ) {
                             tester.test(config)
                         }
                         .disabled(tester.status == .testing)
-                        
+
                         Spacer()
-                        switch tester.status {
-                        case .notStarted:
-                            Text("")
-                        case .testing:
-                            ProgressView().controlSize(.small)
-                            Text("Testing…")
-                                .foregroundStyle(.secondary)
-                        case .success:
-                            Label("Success", systemImage: "checkmark.circle")
-                                .foregroundStyle(.green)
-                        case .invalidConfig(let message):
-                            Label(message, systemImage: "xmark.octagon")
-                                .foregroundStyle(.red)
-                        case .other(let message):
-                            Label(message, systemImage: "bolt.slash")
-                                .foregroundStyle(.red)
-                        }
+
+                        ConnectionTestStatusView(status: tester.status)
                     }
                 }
             }
@@ -103,5 +130,5 @@ struct ConnectionConfigView: View {
 }
 
 #Preview {
-    ConnectionConfigView()
+    ConnectionConfigEditView()
 }
