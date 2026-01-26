@@ -7,14 +7,30 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		73A0D3992F22B821008406A6 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 73A0D3982F22B821008406A6 /* SwiftLibSSH */; };
+		7322A9202F28305100D8117D /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 7322A91F2F28305100D8117D /* SwiftLibSSH */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		7322A9172F28212400D8117D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 733470812F22037100B8181D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 733470882F22037100B8181D;
+			remoteInfo = SSHadow;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		7322A9112F28212400D8117D /* SSHadowUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SSHadowUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		733470892F22037100B8181D /* SSHadow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SSHadow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		7322A9122F28212400D8117D /* SSHadowUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SSHadowUITests;
+			sourceTree = "<group>";
+		};
 		7334708B2F22037100B8181D /* SSHadow */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = SSHadow;
@@ -23,11 +39,18 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		7322A90E2F28212400D8117D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		733470862F22037100B8181D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				73A0D3992F22B821008406A6 /* SwiftLibSSH in Frameworks */,
+				7322A9202F28305100D8117D /* SwiftLibSSH in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -38,6 +61,7 @@
 			isa = PBXGroup;
 			children = (
 				7334708B2F22037100B8181D /* SSHadow */,
+				7322A9122F28212400D8117D /* SSHadowUITests */,
 				7381F0C32F22B3C5005F4099 /* Frameworks */,
 				7334708A2F22037100B8181D /* Products */,
 			);
@@ -47,6 +71,7 @@
 			isa = PBXGroup;
 			children = (
 				733470892F22037100B8181D /* SSHadow.app */,
+				7322A9112F28212400D8117D /* SSHadowUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -61,6 +86,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		7322A9102F28212400D8117D /* SSHadowUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7322A9192F28212400D8117D /* Build configuration list for PBXNativeTarget "SSHadowUITests" */;
+			buildPhases = (
+				7322A90D2F28212400D8117D /* Sources */,
+				7322A90E2F28212400D8117D /* Frameworks */,
+				7322A90F2F28212400D8117D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7322A9182F28212400D8117D /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				7322A9122F28212400D8117D /* SSHadowUITests */,
+			);
+			name = SSHadowUITests;
+			packageProductDependencies = (
+			);
+			productName = SSHadowUITests;
+			productReference = 7322A9112F28212400D8117D /* SSHadowUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		733470882F22037100B8181D /* SSHadow */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 733470942F22037100B8181D /* Build configuration list for PBXNativeTarget "SSHadow" */;
@@ -78,7 +126,7 @@
 			);
 			name = SSHadow;
 			packageProductDependencies = (
-				73A0D3982F22B821008406A6 /* SwiftLibSSH */,
+				7322A91F2F28305100D8117D /* SwiftLibSSH */,
 			);
 			productName = SSHadow;
 			productReference = 733470892F22037100B8181D /* SSHadow.app */;
@@ -94,6 +142,10 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					7322A9102F28212400D8117D = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 733470882F22037100B8181D;
+					};
 					733470882F22037100B8181D = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -109,7 +161,7 @@
 			mainGroup = 733470802F22037100B8181D;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				73A0D3972F22B821008406A6 /* XCLocalSwiftPackageReference "../swift-lib-ssh" */,
+				7322A91E2F28303800D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7334708A2F22037100B8181D /* Products */;
@@ -117,11 +169,19 @@
 			projectRoot = "";
 			targets = (
 				733470882F22037100B8181D /* SSHadow */,
+				7322A9102F28212400D8117D /* SSHadowUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		7322A90F2F28212400D8117D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		733470872F22037100B8181D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -132,6 +192,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		7322A90D2F28212400D8117D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		733470852F22037100B8181D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -141,7 +208,51 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		7322A9182F28212400D8117D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 733470882F22037100B8181D /* SSHadow */;
+			targetProxy = 7322A9172F28212400D8117D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		7322A91A2F28212400D8117D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kosolabs.SSHadowUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = SSHadow;
+			};
+			name = Debug;
+		};
+		7322A91B2F28212400D8117D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kosolabs.SSHadowUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = SSHadow;
+			};
+			name = Release;
+		};
 		733470922F22037100B8181D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -343,6 +454,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		7322A9192F28212400D8117D /* Build configuration list for PBXNativeTarget "SSHadowUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7322A91A2F28212400D8117D /* Debug */,
+				7322A91B2F28212400D8117D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		733470842F22037100B8181D /* Build configuration list for PBXProject "SSHadow" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -363,16 +483,21 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		73A0D3972F22B821008406A6 /* XCLocalSwiftPackageReference "../swift-lib-ssh" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = "../swift-lib-ssh";
+/* Begin XCRemoteSwiftPackageReference section */
+		7322A91E2F28303800D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kosolabs/swift-lib-ssh.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
 		};
-/* End XCLocalSwiftPackageReference section */
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		73A0D3982F22B821008406A6 /* SwiftLibSSH */ = {
+		7322A91F2F28305100D8117D /* SwiftLibSSH */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = 7322A91E2F28303800D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
 			productName = SwiftLibSSH;
 		};
 /* End XCSwiftPackageProductDependency section */
