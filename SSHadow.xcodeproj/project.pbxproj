@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		7322A9222F2857C700D8117D /* SSHadow.icon in Resources */ = {isa = PBXBuildFile; fileRef = 7322A9212F2857C700D8117D /* SSHadow.icon */; };
 		7322A9282F294D5400D8117D /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 7322A9272F294D5400D8117D /* SwiftLibSSH */; };
+		7322A92F2F2957AF00D8117D /* UniformTypeIdentifiers.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7322A92E2F2957AF00D8117D /* UniformTypeIdentifiers.framework */; };
+		7322A93B2F2957AF00D8117D /* SSHadowFileProvider.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7322A92D2F2957AF00D8117D /* SSHadowFileProvider.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -19,18 +21,59 @@
 			remoteGlobalIDString = 733470882F22037100B8181D;
 			remoteInfo = SSHadow;
 		};
+		7322A9392F2957AF00D8117D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 733470812F22037100B8181D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7322A92C2F2957AF00D8117D;
+			remoteInfo = SSHadowFileProvider;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		7322A9402F2957AF00D8117D /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				7322A93B2F2957AF00D8117D /* SSHadowFileProvider.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		7322A9112F28212400D8117D /* SSHadowUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SSHadowUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7322A9212F2857C700D8117D /* SSHadow.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = SSHadow.icon; sourceTree = "<group>"; };
+		7322A92D2F2957AF00D8117D /* SSHadowFileProvider.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SSHadowFileProvider.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		7322A92E2F2957AF00D8117D /* UniformTypeIdentifiers.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UniformTypeIdentifiers.framework; path = System/Library/Frameworks/UniformTypeIdentifiers.framework; sourceTree = SDKROOT; };
 		733470892F22037100B8181D /* SSHadow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SSHadow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		7322A93C2F2957AF00D8117D /* Exceptions for "SSHadowFileProvider" folder in "SSHadowFileProvider" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 7322A92C2F2957AF00D8117D /* SSHadowFileProvider */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		7322A9122F28212400D8117D /* SSHadowUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = SSHadowUITests;
+			sourceTree = "<group>";
+		};
+		7322A9302F2957AF00D8117D /* SSHadowFileProvider */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7322A93C2F2957AF00D8117D /* Exceptions for "SSHadowFileProvider" folder in "SSHadowFileProvider" target */,
+			);
+			path = SSHadowFileProvider;
 			sourceTree = "<group>";
 		};
 		7334708B2F22037100B8181D /* SSHadow */ = {
@@ -45,6 +88,14 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7322A92A2F2957AF00D8117D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7322A92F2F2957AF00D8117D /* UniformTypeIdentifiers.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -64,6 +115,7 @@
 			children = (
 				7334708B2F22037100B8181D /* SSHadow */,
 				7322A9122F28212400D8117D /* SSHadowUITests */,
+				7322A9302F2957AF00D8117D /* SSHadowFileProvider */,
 				7381F0C32F22B3C5005F4099 /* Frameworks */,
 				7334708A2F22037100B8181D /* Products */,
 				7322A9212F2857C700D8117D /* SSHadow.icon */,
@@ -75,6 +127,7 @@
 			children = (
 				733470892F22037100B8181D /* SSHadow.app */,
 				7322A9112F28212400D8117D /* SSHadowUITests.xctest */,
+				7322A92D2F2957AF00D8117D /* SSHadowFileProvider.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -82,6 +135,7 @@
 		7381F0C32F22B3C5005F4099 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				7322A92E2F2957AF00D8117D /* UniformTypeIdentifiers.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -112,6 +166,28 @@
 			productReference = 7322A9112F28212400D8117D /* SSHadowUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		7322A92C2F2957AF00D8117D /* SSHadowFileProvider */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7322A93D2F2957AF00D8117D /* Build configuration list for PBXNativeTarget "SSHadowFileProvider" */;
+			buildPhases = (
+				7322A9292F2957AF00D8117D /* Sources */,
+				7322A92A2F2957AF00D8117D /* Frameworks */,
+				7322A92B2F2957AF00D8117D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				7322A9302F2957AF00D8117D /* SSHadowFileProvider */,
+			);
+			name = SSHadowFileProvider;
+			packageProductDependencies = (
+			);
+			productName = SSHadowFileProvider;
+			productReference = 7322A92D2F2957AF00D8117D /* SSHadowFileProvider.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		733470882F22037100B8181D /* SSHadow */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 733470942F22037100B8181D /* Build configuration list for PBXNativeTarget "SSHadow" */;
@@ -119,10 +195,12 @@
 				733470852F22037100B8181D /* Sources */,
 				733470862F22037100B8181D /* Frameworks */,
 				733470872F22037100B8181D /* Resources */,
+				7322A9402F2957AF00D8117D /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				7322A93A2F2957AF00D8117D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				7334708B2F22037100B8181D /* SSHadow */,
@@ -149,6 +227,9 @@
 						CreatedOnToolsVersion = 26.2;
 						TestTargetID = 733470882F22037100B8181D;
 					};
+					7322A92C2F2957AF00D8117D = {
+						CreatedOnToolsVersion = 26.2;
+					};
 					733470882F22037100B8181D = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -173,12 +254,20 @@
 			targets = (
 				733470882F22037100B8181D /* SSHadow */,
 				7322A9102F28212400D8117D /* SSHadowUITests */,
+				7322A92C2F2957AF00D8117D /* SSHadowFileProvider */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		7322A90F2F28212400D8117D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7322A92B2F2957AF00D8117D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -203,6 +292,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7322A9292F2957AF00D8117D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		733470852F22037100B8181D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -218,6 +314,11 @@
 			target = 733470882F22037100B8181D /* SSHadow */;
 			targetProxy = 7322A9172F28212400D8117D /* PBXContainerItemProxy */;
 		};
+		7322A93A2F2957AF00D8117D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7322A92C2F2957AF00D8117D /* SSHadowFileProvider */;
+			targetProxy = 7322A9392F2957AF00D8117D /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -226,6 +327,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = A5S59GAS97;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kosolabs.SSHadowUITests;
@@ -244,6 +346,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = A5S59GAS97;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kosolabs.SSHadowUITests;
@@ -254,6 +357,68 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TEST_TARGET_NAME = SSHadow;
+			};
+			name = Release;
+		};
+		7322A93E2F2957AF00D8117D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SSHadowFileProvider/SSHadowFileProvider.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = A5S59GAS97;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SSHadowFileProvider/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SSHadowFileProvider;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kosolabs.SSHadow.SSHadowFileProvider;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		7322A93F2F2957AF00D8117D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SSHadowFileProvider/SSHadowFileProvider.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = A5S59GAS97;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SSHadowFileProvider/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SSHadowFileProvider;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kosolabs.SSHadow.SSHadowFileProvider;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
@@ -384,6 +549,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = A5S59GAS97;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -426,6 +592,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = A5S59GAS97;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -467,6 +634,15 @@
 			buildConfigurations = (
 				7322A91A2F28212400D8117D /* Debug */,
 				7322A91B2F28212400D8117D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7322A93D2F2957AF00D8117D /* Build configuration list for PBXNativeTarget "SSHadowFileProvider" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7322A93E2F2957AF00D8117D /* Debug */,
+				7322A93F2F2957AF00D8117D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
