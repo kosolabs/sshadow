@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		7322A9222F2857C700D8117D /* SSHadow.icon in Resources */ = {isa = PBXBuildFile; fileRef = 7322A9212F2857C700D8117D /* SSHadow.icon */; };
-		7322A9252F28593D00D8117D /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 7322A9242F28593D00D8117D /* SwiftLibSSH */; };
+		7322A9282F294D5400D8117D /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 7322A9272F294D5400D8117D /* SwiftLibSSH */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -52,7 +52,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7322A9252F28593D00D8117D /* SwiftLibSSH in Frameworks */,
+				7322A9282F294D5400D8117D /* SwiftLibSSH in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -129,7 +129,7 @@
 			);
 			name = SSHadow;
 			packageProductDependencies = (
-				7322A9242F28593D00D8117D /* SwiftLibSSH */,
+				7322A9272F294D5400D8117D /* SwiftLibSSH */,
 			);
 			productName = SSHadow;
 			productReference = 733470892F22037100B8181D /* SSHadow.app */;
@@ -164,7 +164,7 @@
 			mainGroup = 733470802F22037100B8181D;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				7322A9232F28592600D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */,
+				7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7334708A2F22037100B8181D /* Products */;
@@ -492,7 +492,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		7322A9232F28592600D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */ = {
+		7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/kosolabs/swift-lib-ssh.git";
 			requirement = {
@@ -503,9 +503,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		7322A9242F28593D00D8117D /* SwiftLibSSH */ = {
+		7322A9272F294D5400D8117D /* SwiftLibSSH */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 7322A9232F28592600D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
+			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
 			productName = SwiftLibSSH;
 		};
 /* End XCSwiftPackageProductDependency section */
