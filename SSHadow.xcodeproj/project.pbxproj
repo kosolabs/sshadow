@@ -7,7 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		7322A9202F28305100D8117D /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 7322A91F2F28305100D8117D /* SwiftLibSSH */; };
+		7322A9222F2857C700D8117D /* SSHadow.icon in Resources */ = {isa = PBXBuildFile; fileRef = 7322A9212F2857C700D8117D /* SSHadow.icon */; };
+		7322A9252F28593D00D8117D /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 7322A9242F28593D00D8117D /* SwiftLibSSH */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -22,6 +23,7 @@
 
 /* Begin PBXFileReference section */
 		7322A9112F28212400D8117D /* SSHadowUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SSHadowUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		7322A9212F2857C700D8117D /* SSHadow.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = SSHadow.icon; sourceTree = "<group>"; };
 		733470892F22037100B8181D /* SSHadow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SSHadow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -50,7 +52,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7322A9202F28305100D8117D /* SwiftLibSSH in Frameworks */,
+				7322A9252F28593D00D8117D /* SwiftLibSSH in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -64,6 +66,7 @@
 				7322A9122F28212400D8117D /* SSHadowUITests */,
 				7381F0C32F22B3C5005F4099 /* Frameworks */,
 				7334708A2F22037100B8181D /* Products */,
+				7322A9212F2857C700D8117D /* SSHadow.icon */,
 			);
 			sourceTree = "<group>";
 		};
@@ -126,7 +129,7 @@
 			);
 			name = SSHadow;
 			packageProductDependencies = (
-				7322A91F2F28305100D8117D /* SwiftLibSSH */,
+				7322A9242F28593D00D8117D /* SwiftLibSSH */,
 			);
 			productName = SSHadow;
 			productReference = 733470892F22037100B8181D /* SSHadow.app */;
@@ -161,7 +164,7 @@
 			mainGroup = 733470802F22037100B8181D;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				7322A91E2F28303800D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */,
+				7322A9232F28592600D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7334708A2F22037100B8181D /* Products */;
@@ -186,6 +189,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7322A9222F2857C700D8117D /* SSHadow.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -374,8 +378,9 @@
 		733470952F22037100B8181D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = SSHadow;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -393,6 +398,7 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -414,8 +420,9 @@
 		733470962F22037100B8181D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = SSHadow;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -433,6 +440,7 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -484,7 +492,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		7322A91E2F28303800D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */ = {
+		7322A9232F28592600D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/kosolabs/swift-lib-ssh.git";
 			requirement = {
@@ -495,9 +503,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		7322A91F2F28305100D8117D /* SwiftLibSSH */ = {
+		7322A9242F28593D00D8117D /* SwiftLibSSH */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 7322A91E2F28303800D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
+			package = 7322A9232F28592600D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
 			productName = SwiftLibSSH;
 		};
 /* End XCSwiftPackageProductDependency section */
