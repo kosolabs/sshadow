@@ -11,6 +11,7 @@
 		7322A9282F294D5400D8117D /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 7322A9272F294D5400D8117D /* SwiftLibSSH */; };
 		7322A92F2F2957AF00D8117D /* UniformTypeIdentifiers.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7322A92E2F2957AF00D8117D /* UniformTypeIdentifiers.framework */; };
 		7322A93B2F2957AF00D8117D /* SSHadowFileProvider.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7322A92D2F2957AF00D8117D /* SSHadowFileProvider.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		73EB15172F29763D00E81E29 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 73EB15162F29763D00E81E29 /* SwiftLibSSH */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -96,6 +97,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7322A92F2F2957AF00D8117D /* UniformTypeIdentifiers.framework in Frameworks */,
+				73EB15172F29763D00E81E29 /* SwiftLibSSH in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -183,6 +185,7 @@
 			);
 			name = SSHadowFileProvider;
 			packageProductDependencies = (
+				73EB15162F29763D00E81E29 /* SwiftLibSSH */,
 			);
 			productName = SSHadowFileProvider;
 			productReference = 7322A92D2F2957AF00D8117D /* SSHadowFileProvider.appex */;
@@ -546,6 +549,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = SSHadow;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = SSHadow/SSHadow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -589,6 +593,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = SSHadow;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = SSHadow/SSHadow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -680,6 +685,11 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		7322A9272F294D5400D8117D /* SwiftLibSSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
+			productName = SwiftLibSSH;
+		};
+		73EB15162F29763D00E81E29 /* SwiftLibSSH */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
 			productName = SwiftLibSSH;
