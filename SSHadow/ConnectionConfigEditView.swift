@@ -57,11 +57,7 @@ struct ConnectionConfigEditView: View {
                 return config.password ?? ""
             },
             set: { newValue in
-                if newValue.isEmpty {
-                    config.password = nil
-                } else {
-                    config.password = newValue
-                }
+                config.password = newValue.isEmpty ? nil : newValue
             }
         )
     }
