@@ -4,9 +4,16 @@ import UniformTypeIdentifiers
 struct ConnectionConfigEditView: View {
     @Environment(\.modelContext) private var modelContext
 
-    var config = ConnectionConfig(host: "")
+    var config = ConnectionConfig()
     @State private var tester = ConnectionTestViewModel()
     @State private var isImportingKey = false
+
+    private var name: Binding<String> {
+        Binding<String>(
+            get: { config.name ?? "" },
+            set: { config.name = $0.isEmpty ? nil : $0 }
+        )
+    }
 
     private var host: Binding<String> {
         Binding<String>(
@@ -66,17 +73,33 @@ struct ConnectionConfigEditView: View {
                 Text("Connection Settings")
             }
             Form {
+                Section {
+                    TextField(
+                        "Display Name",
+                        text: name,
+                        prompt: Text(config.effectiveName)
+                    )
+                }
                 Section("Connection") {
-                    TextField("Host", text: host)
+                    TextField(
+                        "Hostname",
+                        text: host,
+                        prompt: Text("example.com")
+                    )
                     TextField(
                         "Port",
                         text: port,
                         prompt: Text("\(config.effectivePort) (default)")
                     )
+                    TextField(
+                        "Remote Path",
+                        text: path,
+                        prompt: Text(config.effectivePath)
+                    )
                 }
                 Section("Authentication") {
                     TextField(
-                        "User",
+                        "Username",
                         text: user,
                         prompt: Text(config.effectiveUser)
                     )
@@ -119,11 +142,6 @@ struct ConnectionConfigEditView: View {
                     }
                 }
                 Section {
-                    TextField(
-                        "Path",
-                        text: path,
-                        prompt: Text(config.effectivePath)
-                    )
                     HStack {
                         Button("Test Connection") {
                             tester.test(config)
