@@ -31,6 +31,7 @@ struct ConnectionConfigListView: View {
                             }
                         }
                     }
+                    .accessibilityIdentifier("connectionLink_\(config.description)")
                 }
                 .onDelete { indices in
                     for index in indices {
@@ -38,6 +39,8 @@ struct ConnectionConfigListView: View {
                     }
                 }
             }
+            .frame(minWidth: 250)
+            .accessibilityIdentifier("connectionsList")
             .navigationTitle("Connections")
             .toolbar {
                 ToolbarItem(placement: .automatic) {
@@ -48,6 +51,7 @@ struct ConnectionConfigListView: View {
                     }) {
                         Label("Add Connection", systemImage: "plus")
                     }
+                    .accessibilityIdentifier("addConnectionButton")
                 }
                 ToolbarItem(placement: .automatic) {
                     Button(role: .destructive) {
@@ -59,16 +63,19 @@ struct ConnectionConfigListView: View {
                         Label("Delete", systemImage: "trash")
                     }
                     .disabled(selection == nil)
+                    .accessibilityIdentifier("deleteConnectionButton")
                 }
             }
         } detail: {
             if let selection {
                 ConnectionConfigEditView(config: selection)
+                    .navigationTitle("Connection Settings")
             } else {
                 ContentUnavailableView(
                     "Select a Connection",
                     systemImage: "globe"
                 )
+                .navigationTitle("Connection Settings")
             }
         }
     }
@@ -87,6 +94,12 @@ struct ConnectionConfigListView: View {
                 host: "example.com",
                 user: "user",
                 path: "/mnt/media"
+            )
+        )
+        
+        container.mainContext.insert(
+            ConnectionConfig(
+                host: "example.com",
             )
         )
 

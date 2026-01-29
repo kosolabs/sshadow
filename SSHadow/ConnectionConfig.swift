@@ -69,7 +69,11 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
 
     var description: String {
         if host == "" { return "New Connection" }
-        var result = "\(effectiveUser)@\(host)"
+        var result = ""
+        if let user = user {
+            result += "\(user)@"
+        }
+        result += host
         if let port = port {
             result += ":\(port)"
         }

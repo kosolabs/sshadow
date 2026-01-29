@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 @main
 struct SSHadowApp: App {
@@ -7,6 +7,9 @@ struct SSHadowApp: App {
         WindowGroup {
             ConnectionConfigListView()
         }
-        .modelContainer(for: ConnectionConfig.self)
+        .modelContainer(
+            for: ConnectionConfig.self,
+            inMemory: ProcessInfo.processInfo.arguments.contains("-uiTesting")
+        )
     }
 }
