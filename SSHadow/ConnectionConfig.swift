@@ -6,14 +6,50 @@ enum AuthMethod: String, Codable, Sendable {
     case privateKey
 }
 
+struct ConnectionConfigSnapshot: Sendable, Equatable {
+    let id: UUID
+    let name: String
+    let host: String
+    let port: UInt16
+    let user: String
+    let path: String
+    let authMethod: AuthMethod
+    let privateKeyURL: URL?
+    let privateKeyPassphrase: String?
+    let password: String?
+}
+
 @Model class ConnectionConfig {
     @Attribute(.unique) var id: UUID
+    var name: String?
     var host: String
     var port: UInt16?
     var user: String?
     var path: String?
     var authMethod: AuthMethod
     var privateKeyBookmark: Data?
+
+    init(
+        id: UUID = UUID(),
+        name: String? = nil,
+        host: String = "",
+        port: UInt16? = nil,
+        user: String? = nil,
+        path: String? = nil,
+        authMethod: AuthMethod = .password
+    ) {
+        self.id = id
+        self.name = name
+        self.host = host
+        self.port = port
+        self.user = user
+        self.path = path
+        self.authMethod = authMethod
+    }
+
+    var effectiveName: String {
+        name ?? description
+    }
 
     var effectivePort: UInt16 {
         port ?? 22
@@ -27,22 +63,12 @@ enum AuthMethod: String, Codable, Sendable {
         path ?? "~"
     }
 
-    init(
-        id: UUID = UUID(),
-        host: String,
-        port: UInt16? = nil,
-        user: String? = nil,
-        path: String? = nil,
-    ) {
-        self.id = id
-        self.host = host
-        self.port = port
-        self.user = user
-        self.path = path
-        self.authMethod = .password
+    private var passwordKey: String {
+        "password.\(id.uuidString)"
     }
 
     var description: String {
+        if host == "" { return "New Connection" }
         var result = "\(effectiveUser)@\(host)"
         if let port = port {
             result += ":\(port)"
@@ -51,10 +77,6 @@ enum AuthMethod: String, Codable, Sendable {
             result += ":\(path)"
         }
         return result
-    }
-
-    private var passwordKey: String {
-        "password.\(id.uuidString)"
     }
 
     var password: String? {
@@ -132,5 +154,20 @@ enum AuthMethod: String, Codable, Sendable {
                 Keychain().delete(privateKeyPassphraseKey)
             }
         }
+    }
+
+    func snapshot() -> ConnectionConfigSnapshot {
+        ConnectionConfigSnapshot(
+            id: id,
+            name: effectiveName,
+            host: host,
+            port: effectivePort,
+            user: effectiveUser,
+            path: effectivePath,
+            authMethod: authMethod,
+            privateKeyURL: privateKeyURL(),
+            privateKeyPassphrase: privateKeyPassphrase,
+            password: password
+        )
     }
 }

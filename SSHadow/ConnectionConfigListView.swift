@@ -1,24 +1,38 @@
 import Foundation
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct ConnectionConfigListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ConnectionConfig.host) private var configs: [ConnectionConfig]
-    
+
     @State private var selection: ConnectionConfig?
-    
+
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
                 ForEach(configs) { config in
                     NavigationLink(value: config) {
-                        VStack(alignment: .leading) {
-                            Text("\(config.description)")
+                        HStack {
+                            Image(
+                                systemName:
+                                    "externaldrive.connected.to.line.below"
+                            )
+                            .font(.system(size: 18))
+                            .foregroundColor(.primary)
+                            VStack(alignment: .leading) {
+                                if let name = config.name {
+                                    Text(name)
+                                    Text(config.description)
+                                        .font(.caption)
+                                } else {
+                                    Text(config.description)
+                                }
+                            }
                         }
                     }
                 }
-                .onDelete() { indices in
+                .onDelete { indices in
                     for index in indices {
                         modelContext.delete(configs[index])
                     }
@@ -28,8 +42,9 @@ struct ConnectionConfigListView: View {
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     Button(action: {
-                        let config = ConnectionConfig(host: "example.com")
+                        let config = ConnectionConfig()
                         modelContext.insert(config)
+                        selection = config
                     }) {
                         Label("Add Connection", systemImage: "plus")
                     }
@@ -50,14 +65,34 @@ struct ConnectionConfigListView: View {
             if let selection {
                 ConnectionConfigEditView(config: selection)
             } else {
-                ContentUnavailableView("Select a Connection", systemImage: "globe")
+                ContentUnavailableView(
+                    "Select a Connection",
+                    systemImage: "globe"
+                )
             }
         }
     }
 }
 
-
 #Preview {
-    ConnectionConfigListView()
-        .modelContainer(for: ConnectionConfig.self, inMemory: true)
+    do {
+        let container = try ModelContainer(
+            for: ConnectionConfig.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+
+        container.mainContext.insert(
+            ConnectionConfig(
+                name: "Media",
+                host: "example.com",
+                user: "user",
+                path: "/mnt/media"
+            )
+        )
+
+        return ConnectionConfigListView()
+            .modelContainer(container)
+    } catch {
+        return Text("Preview failed: \(error.localizedDescription)")
+    }
 }
