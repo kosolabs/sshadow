@@ -1,79 +1,59 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ConnectionConfigEditView: View {
     @Environment(\.modelContext) private var modelContext
 
     var config = ConnectionConfig(host: "")
     @State private var tester = ConnectionTestViewModel()
+    @State private var isImportingKey = false
 
     private var host: Binding<String> {
         Binding<String>(
             get: { config.host },
-            set: { newValue in
-                config.host = newValue
-            }
+            set: { config.host = $0 }
         )
     }
 
     private var port: Binding<String> {
         Binding<String>(
-            get: {
-                if let p = config.port {
-                    return String(p)
-                } else {
-                    return ""
-                }
-            },
-            set: { newValue in
-                if newValue.isEmpty {
-                    config.port = nil
-                } else if let parsed = UInt16(newValue) {
-                    config.port = parsed
-                } else {
-                    config.port = nil
-                }
-            }
+            get: { config.port.map(String.init) ?? "" },
+            set: { config.port = $0.isEmpty ? nil : UInt16($0) }
         )
     }
 
     private var user: Binding<String> {
         Binding<String>(
-            get: {
-                return config.user ?? ""
-            },
-            set: { newValue in
-                if newValue.isEmpty {
-                    config.user = nil
-                } else {
-                    config.user = newValue
-                }
-            }
+            get: { config.user ?? "" },
+            set: { config.user = $0.isEmpty ? nil : $0 }
+        )
+    }
+
+    private var usePrivateKey: Binding<Bool> {
+        Binding<Bool>(
+            get: { config.authMethod == .privateKey },
+            set: { config.authMethod = $0 ? .privateKey : .password }
         )
     }
 
     private var password: Binding<String> {
         Binding<String>(
-            get: {
-                return config.password ?? ""
-            },
-            set: { newValue in
-                config.password = newValue.isEmpty ? nil : newValue
-            }
+            get: { config.password ?? "" },
+            set: { config.password = $0.isEmpty ? nil : $0 }
+        )
+    }
+
+    private var privateKeyPassphrase: Binding<String> {
+        Binding<String>(
+            get: { config.privateKeyPassphrase ?? "" },
+            set: { config.privateKeyPassphrase = $0.isEmpty ? nil : $0 }
         )
     }
 
     private var path: Binding<String> {
         Binding<String>(
-            get: {
-                return config.path ?? ""
-            },
-            set: { newValue in
-                if newValue.isEmpty {
-                    config.path = nil
-                } else {
-                    config.path = newValue
-                }
-            }
+            get: { config.path ?? "" },
+            set: { config.path = $0.isEmpty ? nil : $0 }
         )
     }
 
@@ -93,22 +73,59 @@ struct ConnectionConfigEditView: View {
                         text: port,
                         prompt: Text("\(config.effectivePort) (default)")
                     )
+                }
+                Section("Authentication") {
                     TextField(
                         "User",
                         text: user,
                         prompt: Text(config.effectiveUser)
                     )
-                    SecureField("Password", text: password)
+                    Toggle("Use Private Key", isOn: usePrivateKey)
+                    if usePrivateKey.wrappedValue {
+                        LabeledContent("Private Key") {
+                            if let url = config.privateKeyURL() {
+                                Text(url.tildePath)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                    .truncationMode(.head)
+                                Button(role: .destructive) {
+                                    config.privateKeyBookmark = nil
+                                } label: {
+                                    Label(
+                                        "Clear",
+                                        systemImage: "xmark.circle.fill"
+                                    )
+                                    .labelStyle(.iconOnly)
+                                }
+                                .buttonStyle(.borderless)
+                                .help("Clear private key selection")
+                            } else {
+                                Button(
+                                    "Select Private Key…",
+                                    systemImage: "key"
+                                ) {
+                                    isImportingKey = true
+                                }
+                                .buttonStyle(.link)
+                            }
+                        }
+                        SecureField(
+                            "Passphrase",
+                            text: privateKeyPassphrase,
+                            prompt: Text("(optional)")
+                        )
+                    } else {
+                        SecureField("Password", text: password)
+                    }
+                }
+                Section {
                     TextField(
                         "Path",
                         text: path,
                         prompt: Text(config.effectivePath)
                     )
                     HStack {
-                        Button(
-                            tester.status == .testing
-                                ? "Testing..." : "Test Connection"
-                        ) {
+                        Button("Test Connection") {
                             tester.test(config)
                         }
                         .disabled(tester.status == .testing)
@@ -120,8 +137,57 @@ struct ConnectionConfigEditView: View {
                 }
             }
             .formStyle(.grouped)
+            .fileImporter(
+                isPresented: $isImportingKey,
+                allowedContentTypes: [.item],
+                allowsMultipleSelection: false,
+                onCompletion: handlePrivateKeyImport
+            )
         }
         .padding()
+    }
+
+    private func handlePrivateKeyImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else {
+                return
+            }
+            let access = url.startAccessingSecurityScopedResource()
+            defer {
+                if access {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+            do {
+                config.privateKeyBookmark = try url.bookmarkData(
+                    options: .withSecurityScope,
+                    includingResourceValuesForKeys: nil,
+                    relativeTo: nil
+                )
+            } catch {
+                print(
+                    "Failed to create bookmark data for URL \(url): \(error)"
+                )
+            }
+        case .failure(let error):
+            print(
+                "Failed to import file: \(error.localizedDescription)"
+            )
+        }
+    }
+}
+
+extension URL {
+    fileprivate var tildePath: String {
+        let home = "/Users/\(NSUserName())"
+        let path = self.standardizedFileURL.path
+
+        if path.hasPrefix(home) {
+            return "~\(path.dropFirst(home.count))"
+        } else {
+            return path
+        }
     }
 }
 
