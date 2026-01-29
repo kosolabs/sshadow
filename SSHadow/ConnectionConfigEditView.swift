@@ -66,19 +66,14 @@ struct ConnectionConfigEditView: View {
 
     var body: some View {
         VStack {
-            HStack {
-                Image(systemName: "globe")
-                    .imageScale(.large)
-                    .foregroundStyle(.tint)
-                Text("Connection Settings")
-            }
             Form {
                 Section {
                     TextField(
                         "Display Name",
                         text: name,
-                        prompt: Text(config.effectiveName)
+                        prompt: Text(config.effectiveName),
                     )
+                    .accessibilityIdentifier("nameField")
                 }
                 Section("Connection") {
                     TextField(
@@ -86,16 +81,19 @@ struct ConnectionConfigEditView: View {
                         text: host,
                         prompt: Text("example.com")
                     )
+                    .accessibilityIdentifier("hostField")
                     TextField(
                         "Port",
                         text: port,
                         prompt: Text("\(config.effectivePort) (default)")
                     )
+                    .accessibilityIdentifier("portField")
                     TextField(
                         "Remote Path",
                         text: path,
                         prompt: Text(config.effectivePath)
                     )
+                    .accessibilityIdentifier("pathField")
                 }
                 Section("Authentication") {
                     TextField(
@@ -103,6 +101,7 @@ struct ConnectionConfigEditView: View {
                         text: user,
                         prompt: Text(config.effectiveUser)
                     )
+                    .accessibilityIdentifier("userField")
                     Toggle("Use Private Key", isOn: usePrivateKey)
                     if usePrivateKey.wrappedValue {
                         LabeledContent("Private Key") {
@@ -139,6 +138,7 @@ struct ConnectionConfigEditView: View {
                         )
                     } else {
                         SecureField("Password", text: password)
+                            .accessibilityIdentifier("passwordField")
                     }
                 }
                 Section {
