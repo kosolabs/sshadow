@@ -19,7 +19,7 @@ struct ConnectionConfigListView: View {
                                     "externaldrive.connected.to.line.below"
                             )
                             .font(.system(size: 18))
-                            .foregroundColor(.primary)
+                            .foregroundColor(config.enabled ? .green : .secondary)
                             VStack(alignment: .leading) {
                                 if let name = config.name {
                                     Text(name)
@@ -32,11 +32,6 @@ struct ConnectionConfigListView: View {
                         }
                     }
                     .accessibilityIdentifier("connectionLink_\(config.description)")
-                }
-                .onDelete { indices in
-                    for index in indices {
-                        modelContext.delete(configs[index])
-                    }
                 }
             }
             .frame(minWidth: 250)

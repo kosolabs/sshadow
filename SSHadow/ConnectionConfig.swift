@@ -9,6 +9,7 @@ enum AuthMethod: String, Codable, Sendable {
 struct ConnectionConfigSnapshot: Sendable, Equatable {
     let id: UUID
     let name: String
+    let enabled: Bool
     let host: String
     let port: UInt16
     let user: String
@@ -22,6 +23,7 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
 @Model class ConnectionConfig {
     @Attribute(.unique) var id: UUID
     var name: String?
+    var enabled: Bool
     var host: String
     var port: UInt16?
     var user: String?
@@ -32,6 +34,7 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
     init(
         id: UUID = UUID(),
         name: String? = nil,
+        enabled: Bool = false,
         host: String = "",
         port: UInt16? = nil,
         user: String? = nil,
@@ -40,6 +43,7 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
     ) {
         self.id = id
         self.name = name
+        self.enabled = enabled
         self.host = host
         self.port = port
         self.user = user
@@ -164,6 +168,7 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
         ConnectionConfigSnapshot(
             id: id,
             name: effectiveName,
+            enabled: enabled,
             host: host,
             port: effectivePort,
             user: effectiveUser,
