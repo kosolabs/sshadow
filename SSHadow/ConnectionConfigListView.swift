@@ -51,7 +51,7 @@ struct ConnectionConfigListView: View {
                 ToolbarItem(placement: .automatic) {
                     Button(role: .destructive) {
                         if let selection {
-                            modelContext.delete(selection)
+                            modelContext.deleteConnectionConfig(selection)
                             self.selection = nil
                         }
                     } label: {
