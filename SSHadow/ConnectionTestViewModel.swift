@@ -8,6 +8,10 @@ import SwiftUI
     init(tester: ConnectionTester = DefaultConnectionTester()) {
         self.tester = tester
     }
+    
+    func clear() {
+        status = .notStarted
+    }
 
     func test(_ config: ConnectionConfig) {
         guard status != .testing else {

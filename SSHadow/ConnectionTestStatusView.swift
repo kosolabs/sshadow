@@ -72,7 +72,7 @@ struct ConnectionTestStatusView: View {
 }
 
 #Preview {
-    VStack(alignment: .leading, spacing: 12) {
+    VStack(alignment: .leading) {
         ConnectionTestStatusView(status: .notStarted)
         ConnectionTestStatusView(status: .testing)
         ConnectionTestStatusView(status: .success)

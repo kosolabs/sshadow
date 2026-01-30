@@ -15,6 +15,19 @@ struct ConnectionConfigEditView: View {
         )
     }
 
+    private var enabled: Binding<Bool> {
+        Binding<Bool>(
+            get: { config.enabled },
+            set: { shouldEnable in
+                if shouldEnable {
+                    tester.test(config)
+                } else {
+                    config.enabled = false
+                }
+            }
+        )
+    }
+
     private var host: Binding<String> {
         Binding<String>(
             get: { config.host },
@@ -74,6 +87,16 @@ struct ConnectionConfigEditView: View {
                         prompt: Text(config.effectiveName),
                     )
                     .accessibilityIdentifier("nameField")
+                    HStack {
+                        Toggle(isOn: enabled) {
+                            HStack {
+                                Text("Enabled")
+                                Spacer()
+                                ConnectionTestStatusView(status: tester.status)
+                            }
+                        }
+                        .accessibilityIdentifier("enabledToggle")
+                    }
                 }
                 Section("Connection") {
                     TextField(
@@ -141,18 +164,6 @@ struct ConnectionConfigEditView: View {
                             .accessibilityIdentifier("passwordField")
                     }
                 }
-                Section {
-                    HStack {
-                        Button("Test Connection") {
-                            tester.test(config)
-                        }
-                        .disabled(tester.status == .testing)
-
-                        Spacer()
-
-                        ConnectionTestStatusView(status: tester.status)
-                    }
-                }
             }
             .formStyle(.grouped)
             .fileImporter(
@@ -161,6 +172,17 @@ struct ConnectionConfigEditView: View {
                 allowsMultipleSelection: false,
                 onCompletion: handlePrivateKeyImport
             )
+            .onChange(of: tester.status) {
+                switch tester.status {
+                case .success:
+                    config.enabled = true
+                default:
+                    break
+                }
+            }
+            .onChange(of: config) {
+                tester.clear()
+            }
         }
         .padding()
     }
