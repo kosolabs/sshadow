@@ -67,10 +67,6 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
         path ?? "~"
     }
 
-    private var passwordKey: String {
-        "password.\(id.uuidString)"
-    }
-
     var description: String {
         if host == "" { return "New Connection" }
         var result = ""
@@ -86,31 +82,35 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
         }
         return result
     }
-
-    var password: String? {
-        get {
-            guard let data = Keychain().get(passwordKey) else {
-                return nil
-            }
-            do {
-                return try data.decoded(as: .utf8)
-            } catch {
-                print("Failed to decode password from UTF-8 for id: \(id)")
-                return nil
-            }
+    
+    // MARK: - Password Management
+    
+    private var passwordKey: String {
+        "password.\(id.uuidString)"
+    }
+    
+    func getPassword() -> String? {
+        guard let data = Keychain().get(passwordKey) else {
+            return nil
         }
-
-        set {
-            if let value = newValue {
-                guard let data = value.data(using: .utf8) else {
-                    print("Failed to encode password as UTF-8 for id: \(id)")
-                    return
-                }
-                Keychain().set(passwordKey, to: data)
-            } else {
-                Keychain().delete(passwordKey)
-            }
+        do {
+            return try data.decoded(as: .utf8)
+        } catch {
+            print("Failed to decode password from UTF-8 for id: \(id)")
+            return nil
         }
+    }
+    
+    func setPassword(_ password: String) {
+        guard let data = password.data(using: .utf8) else {
+            print("Failed to encode password as UTF-8 for id: \(id)")
+            return
+        }
+        Keychain().set(passwordKey, to: data)
+    }
+    
+    func deletePassword() {
+        Keychain().delete(passwordKey)
     }
 
     func privateKeyURL() -> URL? {
@@ -130,38 +130,38 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
         }
     }
 
+    // MARK: - Private Key Passphrase Management
+    
     private var privateKeyPassphraseKey: String {
         "privateKeyPassphrase.\(id.uuidString)"
     }
-
-    var privateKeyPassphrase: String? {
-        get {
-            guard let data = Keychain().get(privateKeyPassphraseKey) else {
-                return nil
-            }
-            do {
-                return try data.decoded(as: .utf8)
-            } catch {
-                print(
-                    "Failed to decode privateKeyPassphrase from UTF-8 for id: \(id)"
-                )
-                return nil
-            }
+    
+    func getPrivateKeyPassphrase() -> String? {
+        guard let data = Keychain().get(privateKeyPassphraseKey) else {
+            return nil
         }
-
-        set {
-            if let value = newValue {
-                guard let data = value.data(using: .utf8) else {
-                    print(
-                        "Failed to encode privateKeyPassphrase as UTF-8 for id: \(id)"
-                    )
-                    return
-                }
-                Keychain().set(privateKeyPassphraseKey, to: data)
-            } else {
-                Keychain().delete(privateKeyPassphraseKey)
-            }
+        do {
+            return try data.decoded(as: .utf8)
+        } catch {
+            print(
+                "Failed to decode privateKeyPassphrase from UTF-8 for id: \(id)"
+            )
+            return nil
         }
+    }
+    
+    func setPrivateKeyPassphrase(_ passphrase: String) {
+        guard let data = passphrase.data(using: .utf8) else {
+            print(
+                "Failed to encode privateKeyPassphrase as UTF-8 for id: \(id)"
+            )
+            return
+        }
+        Keychain().set(privateKeyPassphraseKey, to: data)
+    }
+    
+    func deletePrivateKeyPassphrase() {
+        Keychain().delete(privateKeyPassphraseKey)
     }
 
     func snapshot() -> ConnectionConfigSnapshot {
@@ -175,8 +175,16 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
             path: effectivePath,
             authMethod: authMethod,
             privateKeyURL: privateKeyURL(),
-            privateKeyPassphrase: privateKeyPassphrase,
-            password: password
+            privateKeyPassphrase: getPrivateKeyPassphrase(),
+            password: getPassword()
         )
+    }
+}
+
+extension ModelContext {
+    func deleteConnectionConfig(_ config: ConnectionConfig) {
+        config.deletePassword()
+        config.deletePrivateKeyPassphrase()
+        self.delete(config)
     }
 }

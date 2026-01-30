@@ -58,15 +58,27 @@ struct ConnectionConfigEditView: View {
 
     private var password: Binding<String> {
         Binding<String>(
-            get: { config.password ?? "" },
-            set: { config.password = $0.isEmpty ? nil : $0 }
+            get: { config.getPassword() ?? "" },
+            set: {
+                if $0.isEmpty {
+                    config.deletePassword()
+                } else {
+                    config.setPassword($0)
+                }
+            }
         )
     }
 
     private var privateKeyPassphrase: Binding<String> {
         Binding<String>(
-            get: { config.privateKeyPassphrase ?? "" },
-            set: { config.privateKeyPassphrase = $0.isEmpty ? nil : $0 }
+            get: { config.getPrivateKeyPassphrase() ?? "" },
+            set: {
+                if $0.isEmpty {
+                    config.deletePrivateKeyPassphrase()
+                } else {
+                    config.setPrivateKeyPassphrase($0)
+                }
+            }
         )
     }
 
