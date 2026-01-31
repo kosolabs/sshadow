@@ -19,19 +19,23 @@ struct ConnectionConfigListView: View {
                                     "externaldrive.connected.to.line.below"
                             )
                             .font(.system(size: 18))
-                            .foregroundColor(config.enabled ? .green : .secondary)
+                            .foregroundColor(
+                                config.isEnabled() ? .green : .secondary
+                            )
                             VStack(alignment: .leading) {
                                 if let name = config.name {
                                     Text(name)
-                                    Text(config.description)
+                                    Text(config.url ?? "New Connection")
                                         .font(.caption)
                                 } else {
-                                    Text(config.description)
+                                    Text(config.url ?? "New Connection")
                                 }
                             }
                         }
                     }
-                    .accessibilityIdentifier("connectionLink_\(config.description)")
+                    .accessibilityIdentifier(
+                        "connectionLink_\(config.url ?? config.id.uuidString)"
+                    )
                 }
             }
             .frame(minWidth: 250)
@@ -51,7 +55,7 @@ struct ConnectionConfigListView: View {
                 ToolbarItem(placement: .automatic) {
                     Button(role: .destructive) {
                         if let selection {
-                            modelContext.deleteConnectionConfig(selection)
+                            modelContext.delete(connectionConfig: selection)
                             self.selection = nil
                         }
                     } label: {
@@ -91,7 +95,7 @@ struct ConnectionConfigListView: View {
                 path: "/mnt/media"
             )
         )
-        
+
         container.mainContext.insert(
             ConnectionConfig(
                 host: "example.com",
