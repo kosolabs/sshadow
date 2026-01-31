@@ -1,10 +1,11 @@
+import OSLog
 import FileProvider
 
 class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
     required init(domain: NSFileProviderDomain) {
         // TODO: The containing application must create a domain using `NSFileProviderManager.add(_:, completionHandler:)`. The system will then launch the application extension process, call `FileProviderExtension.init(domain:)` to instantiate the extension for that domain, and call methods on the instance.
+        logger.notice("Request to init: \(domain.displayName, privacy: .public) (\(domain.identifier.rawValue, privacy: .public))")
         super.init()
-        print("domain: \(domain)")
     }
     
     func invalidate() {
