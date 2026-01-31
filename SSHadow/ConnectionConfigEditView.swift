@@ -17,12 +17,12 @@ struct ConnectionConfigEditView: View {
 
     private var enabled: Binding<Bool> {
         Binding<Bool>(
-            get: { config.enabled },
+            get: { config.isEnabled() },
             set: { shouldEnable in
                 if shouldEnable {
                     tester.test(config)
                 } else {
-                    config.enabled = false
+                    config.disable()
                 }
             }
         )
@@ -187,7 +187,7 @@ struct ConnectionConfigEditView: View {
             .onChange(of: tester.status) {
                 switch tester.status {
                 case .success:
-                    config.enabled = true
+                    config.enable()
                 default:
                     break
                 }

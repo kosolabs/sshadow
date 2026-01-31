@@ -1,3 +1,5 @@
+import FileProvider
+import OSLog
 import SwiftData
 import SwiftUI
 
@@ -20,7 +22,7 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
     let password: String?
 }
 
-@Model class ConnectionConfig {
+@Model class ConnectionConfig: CustomStringConvertible {
     @Attribute(.unique) var id: UUID
     var name: String?
     var enabled: Bool
@@ -51,8 +53,26 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
         self.authMethod = authMethod
     }
 
+    // MARK: - Effective Values
+
+    var url: String? {
+        if host == "" { return nil }
+        var result = ""
+        if let user = user {
+            result += "\(user)@"
+        }
+        result += host
+        if let port = port {
+            result += ":\(port)"
+        }
+        if let path = path {
+            result += ":\(path)"
+        }
+        return result
+    }
+
     var effectiveName: String {
-        name ?? description
+        name ?? url ?? "New Connection"
     }
 
     var effectivePort: UInt16 {
@@ -68,27 +88,52 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
     }
 
     var description: String {
-        if host == "" { return "New Connection" }
-        var result = ""
-        if let user = user {
-            result += "\(user)@"
+        "ConnectionConfig(id: \(id), name: \(name ?? "-"), enabled: \(enabled), url: \(url ?? "-"), authMethod: \(authMethod))"
+    }
+
+    var domain: NSFileProviderDomain {
+        NSFileProviderDomain(
+            identifier: NSFileProviderDomainIdentifier(id.uuidString),
+            displayName: effectiveName,
+        )
+    }
+
+    // MARK: - Enable / Disable
+
+    func isEnabled() -> Bool {
+        return enabled
+    }
+
+    func enable() {
+        logger.notice("Enabling: \(self)")
+        NSFileProviderManager.add(domain) { error in
+            if let error = error {
+                logger.error("Failed to enable \(self): \(error)")
+            } else {
+                self.enabled = true
+            }
         }
-        result += host
-        if let port = port {
-            result += ":\(port)"
+    }
+
+    func disable() {
+        logger.notice("Disabling: \(self)")
+        NSFileProviderManager.remove(domain) { error in
+            if let error = error {
+                logger.error(
+                    "Failed to disable \(self): \(error)"
+                )
+            } else {
+                self.enabled = false
+            }
         }
-        if let path = path {
-            result += ":\(path)"
-        }
-        return result
     }
     
     // MARK: - Password Management
-    
+
     private var passwordKey: String {
         "password.\(id.uuidString)"
     }
-    
+
     func getPassword() -> String? {
         guard let data = Keychain().get(passwordKey) else {
             return nil
@@ -100,7 +145,7 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
             return nil
         }
     }
-    
+
     func setPassword(_ password: String) {
         guard let data = password.data(using: .utf8) else {
             print("Failed to encode password as UTF-8 for id: \(id)")
@@ -108,7 +153,7 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
         }
         Keychain().set(passwordKey, to: data)
     }
-    
+
     func deletePassword() {
         Keychain().delete(passwordKey)
     }
@@ -131,11 +176,11 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
     }
 
     // MARK: - Private Key Passphrase Management
-    
+
     private var privateKeyPassphraseKey: String {
         "privateKeyPassphrase.\(id.uuidString)"
     }
-    
+
     func getPrivateKeyPassphrase() -> String? {
         guard let data = Keychain().get(privateKeyPassphraseKey) else {
             return nil
@@ -149,7 +194,7 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
             return nil
         }
     }
-    
+
     func setPrivateKeyPassphrase(_ passphrase: String) {
         guard let data = passphrase.data(using: .utf8) else {
             print(
@@ -159,7 +204,7 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
         }
         Keychain().set(privateKeyPassphraseKey, to: data)
     }
-    
+
     func deletePrivateKeyPassphrase() {
         Keychain().delete(privateKeyPassphraseKey)
     }
@@ -182,7 +227,7 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
 }
 
 extension ModelContext {
-    func deleteConnectionConfig(_ config: ConnectionConfig) {
+    func delete(connectionConfig config: ConnectionConfig) {
         config.deletePassword()
         config.deletePrivateKeyPassphrase()
         self.delete(config)
