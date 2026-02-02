@@ -32,6 +32,8 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
     var path: String?
     var authMethod: AuthMethod
     var privateKeyBookmark: Data?
+    
+    @Transient private var tester: ConnectionTester = DefaultConnectionTester()
 
     init(
         id: UUID = UUID(),
@@ -41,7 +43,8 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
         port: UInt16? = nil,
         user: String? = nil,
         path: String? = nil,
-        authMethod: AuthMethod = .password
+        authMethod: AuthMethod = .password,
+        tester: ConnectionTester = DefaultConnectionTester()
     ) {
         self.id = id
         self.name = name
@@ -51,6 +54,8 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
         self.user = user
         self.path = path
         self.authMethod = authMethod
+        
+        self.tester = tester
     }
 
     // MARK: - Effective Values
@@ -104,15 +109,11 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
         return enabled
     }
 
-    func enable() {
-        logger.notice("Enabling: \(self)")
-        NSFileProviderManager.add(domain) { error in
-            if let error = error {
-                logger.error("Failed to enable \(self): \(error)")
-            } else {
-                self.enabled = true
-            }
-        }
+    func enable() async throws {
+        await logger.notice("Enabling: \(self)")
+        try await tester.test(config: snapshot())
+        try await NSFileProviderManager.add(domain)
+        self.enabled = true
     }
 
     func disable() {
@@ -127,7 +128,7 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
             }
         }
     }
-    
+
     // MARK: - Password Management
 
     private var passwordKey: String {

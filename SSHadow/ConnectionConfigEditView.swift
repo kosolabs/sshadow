@@ -5,8 +5,11 @@ struct ConnectionConfigEditView: View {
     @Environment(\.modelContext) private var modelContext
 
     var config = ConnectionConfig()
-    @State private var tester = ConnectionTestViewModel()
-    @State private var isImportingKey = false
+    @State private var isImportingKey: Bool = false
+
+    @State private var enableTask: Task<(), Never>? = nil
+    @State private var testing: Bool = false
+    @State private var error: Error? = nil
 
     private var name: Binding<String> {
         Binding<String>(
@@ -20,7 +23,18 @@ struct ConnectionConfigEditView: View {
             get: { config.isEnabled() },
             set: { shouldEnable in
                 if shouldEnable {
-                    tester.test(config)
+                    enableTask = Task {
+                        self.testing = true
+                        self.error = nil
+                        do {
+                            try await config.enable()
+                        } catch {
+                            if !Task.isCancelled {
+                                self.error = error
+                            }
+                        }
+                        self.testing = false
+                    }
                 } else {
                     config.disable()
                 }
@@ -96,7 +110,7 @@ struct ConnectionConfigEditView: View {
                     TextField(
                         "Display Name",
                         text: name,
-                        prompt: Text(config.effectiveName),
+                        prompt: Text(config.effectiveName)
                     )
                     .accessibilityIdentifier("nameField")
                     HStack {
@@ -104,9 +118,13 @@ struct ConnectionConfigEditView: View {
                             HStack {
                                 Text("Enabled")
                                 Spacer()
-                                ConnectionTestStatusView(status: tester.status)
+                                ConnectionTestStatusView(
+                                    testing: testing,
+                                    error: error
+                                )
                             }
                         }
+                        .disabled(testing)
                         .accessibilityIdentifier("enabledToggle")
                     }
                 }
@@ -184,16 +202,13 @@ struct ConnectionConfigEditView: View {
                 allowsMultipleSelection: false,
                 onCompletion: handlePrivateKeyImport
             )
-            .onChange(of: tester.status) {
-                switch tester.status {
-                case .success:
-                    config.enable()
-                default:
-                    break
-                }
-            }
             .onChange(of: config) {
-                tester.clear()
+                if let task = enableTask {
+                    task.cancel()
+                }
+                enableTask = nil
+                testing = false
+                error = nil
             }
         }
         .padding()

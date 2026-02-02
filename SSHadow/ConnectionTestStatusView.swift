@@ -1,85 +1,96 @@
 import SwiftUI
 
 struct ConnectionTestStatusView: View {
-    let status: ConnectionTestStatus
+    let testing: Bool
+    let error: Error?
 
     var body: some View {
-        switch status {
-        case .notStarted:
-            EmptyView()
-        case .testing:
+        if testing {
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text("Testing…")
+                Text("Verifying…")
                     .foregroundStyle(.secondary)
             }
-        case .success:
+        } else if let connectionTestError = error as? ConnectionTestStatus {
+            switch connectionTestError {
+            case .invalidConfig(let message):
+                Label(
+                    message,
+                    systemImage: "xmark.octagon"
+                )
+                .foregroundStyle(.red)
+            case .unknownHost:
+                Label(
+                    "Unknown host",
+                    systemImage: "network.slash"
+                )
+                .foregroundStyle(.red)
+            case .connectionRefused:
+                Label(
+                    "Connection refused",
+                    systemImage: "network.slash"
+                )
+                .foregroundStyle(.red)
+            case .socketError:
+                Label(
+                    "Socket error",
+                    systemImage: "network.slash"
+                )
+                .foregroundStyle(.red)
+            case .timeout:
+                Label(
+                    "Connection timed out",
+                    systemImage: "network.slash"
+                )
+                .foregroundStyle(.red)
+            case .userauthPasswordFailed:
+                Label(
+                    "Password authentication failed",
+                    systemImage: "lock.circle"
+                )
+                .foregroundStyle(.red)
+            case .pathNotADirectory:
+                Label(
+                    "Remote path is not a directory",
+                    systemImage: "questionmark.folder"
+                )
+                .foregroundStyle(.red)
+            case .pathNotFound:
+                Label(
+                    "Remote path does not exist",
+                    systemImage: "questionmark.folder"
+                )
+                .foregroundStyle(.red)
+            }
+        } else if let error {
             Label(
-                "Success",
-                systemImage: "checkmark.circle"
-            )
-            .foregroundStyle(.green)
-        case .invalidConfig(let message):
-            Label(
-                message,
-                systemImage: "xmark.octagon"
-            )
-            .foregroundStyle(.red)
-        case .unknownHost:
-            Label(
-                "Unknown host",
-                systemImage: "network.slash"
-            )
-            .foregroundStyle(.red)
-        case .connectionRefused:
-            Label(
-                "Connection refused",
-                systemImage: "network.slash"
-            )
-            .foregroundStyle(.red)
-        case .timeout:
-            Label(
-                "Connection timed out",
-                systemImage: "network.slash"
-            )
-            .foregroundStyle(.red)
-        case .userauthPasswordFailed:
-            Label(
-                "Password authentication failed",
-                systemImage: "lock.circle"
-            )
-            .foregroundStyle(.red)
-        case .pathNotADirectory:
-            Label(
-                "Remote path is not a directory",
-                systemImage: "questionmark.folder"
-            )
-            .foregroundStyle(.red)
-        case .pathNotFound:
-            Label(
-                "Remote path does not exist",
-                systemImage: "questionmark.folder"
-            )
-            .foregroundStyle(.red)
-        case .other(let message):
-            Label(
-                message,
+                "Other: \(error.localizedDescription)",
                 systemImage: "bolt.slash"
             )
             .foregroundStyle(.red)
+
+        } else {
+            EmptyView()
         }
     }
 }
 
 #Preview {
     VStack(alignment: .leading) {
-        ConnectionTestStatusView(status: .notStarted)
-        ConnectionTestStatusView(status: .testing)
-        ConnectionTestStatusView(status: .success)
-        ConnectionTestStatusView(status: .invalidConfig("Missing host"))
-        ConnectionTestStatusView(status: .pathNotADirectory)
-        ConnectionTestStatusView(status: .pathNotFound)
-        ConnectionTestStatusView(status: .other("Network unreachable"))
+        ConnectionTestStatusView(testing: false, error: nil)
+        ConnectionTestStatusView(testing: true, error: nil)
+        ConnectionTestStatusView(
+            testing: false,
+            error: ConnectionTestStatus.invalidConfig("Missing host")
+        )
+        ConnectionTestStatusView(
+            testing: false,
+            error: ConnectionTestStatus.pathNotADirectory
+        )
+        ConnectionTestStatusView(
+            testing: false,
+            error: ConnectionTestStatus.pathNotFound
+        )
     }
     .padding()
 }
