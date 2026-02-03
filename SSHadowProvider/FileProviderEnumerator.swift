@@ -1,4 +1,10 @@
 import FileProvider
+import OSLog
+
+private let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier!,
+    category: "FileProviderEnumerator"
+)
 
 class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
     
@@ -6,11 +12,13 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
     private let anchor = NSFileProviderSyncAnchor("an anchor".data(using: .utf8)!)
     
     init(enumeratedItemIdentifier: NSFileProviderItemIdentifier) {
+        logger.debug("init: \(enumeratedItemIdentifier.rawValue, privacy: .public)")
         self.enumeratedItemIdentifier = enumeratedItemIdentifier
         super.init()
     }
 
     func invalidate() {
+        logger.debug("invalidate")
         // TODO: perform invalidation of server connection if necessary
     }
 
@@ -27,6 +35,8 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
          - inform the observer about the items returned by the server (possibly multiple times)
          - inform the observer that you are finished with this page
          */
+        logger.debug("observer: \(observer.description, privacy: .public), page: \(page.rawValue, privacy: .public)")
+        
         observer.didEnumerate([FileProviderItem(identifier: NSFileProviderItemIdentifier("a file"))])
         observer.finishEnumerating(upTo: nil)
     }

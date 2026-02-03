@@ -1,5 +1,11 @@
 import FileProvider
 import UniformTypeIdentifiers
+import OSLog
+
+private let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier!,
+    category: "FileProviderItem"
+)
 
 class FileProviderItem: NSObject, NSFileProviderItem {
 
@@ -9,6 +15,7 @@ class FileProviderItem: NSObject, NSFileProviderItem {
     private let identifier: NSFileProviderItemIdentifier
     
     init(identifier: NSFileProviderItemIdentifier) {
+        logger.debug("init: \(identifier.rawValue, privacy: .public)")
         self.identifier = identifier
     }
     

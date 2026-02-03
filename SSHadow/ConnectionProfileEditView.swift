@@ -1,10 +1,11 @@
+import SSHadowShared
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct ConnectionConfigEditView: View {
+struct ConnectionProfileEditView: View {
     @Environment(\.modelContext) private var modelContext
 
-    var config = ConnectionConfig()
+    var config = ConnectionProfile()
     @State private var isImportingKey: Bool = false
 
     @State private var enableTask: Task<(), Never>? = nil
@@ -65,8 +66,8 @@ struct ConnectionConfigEditView: View {
 
     private var usePrivateKey: Binding<Bool> {
         Binding<Bool>(
-            get: { config.authMethod == .privateKey },
-            set: { config.authMethod = $0 ? .privateKey : .password }
+            get: { config.authMethod == AuthMethod.privateKey },
+            set: { config.authMethod = $0 ? AuthMethod.privateKey : .password }
         )
     }
 
@@ -259,5 +260,5 @@ extension URL {
 }
 
 #Preview {
-    ConnectionConfigEditView()
+    ConnectionProfileEditView()
 }

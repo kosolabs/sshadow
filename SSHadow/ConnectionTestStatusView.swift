@@ -1,3 +1,4 @@
+import SSHadowShared
 import SwiftUI
 
 struct ConnectionTestStatusView: View {
@@ -11,7 +12,7 @@ struct ConnectionTestStatusView: View {
                 Text("Verifying…")
                     .foregroundStyle(.secondary)
             }
-        } else if let connectionTestError = error as? ConnectionTestStatus {
+        } else if let connectionTestError = error as? ConnectionTestError {
             switch connectionTestError {
             case .invalidConfig(let message):
                 Label(
@@ -61,6 +62,12 @@ struct ConnectionTestStatusView: View {
                     systemImage: "questionmark.folder"
                 )
                 .foregroundStyle(.red)
+            @unknown default:
+                Label(
+                    "Other: \(connectionTestError.localizedDescription)",
+                    systemImage: "bolt.slash"
+                )
+                .foregroundStyle(.red)
             }
         } else if let error {
             Label(
@@ -81,15 +88,15 @@ struct ConnectionTestStatusView: View {
         ConnectionTestStatusView(testing: true, error: nil)
         ConnectionTestStatusView(
             testing: false,
-            error: ConnectionTestStatus.invalidConfig("Missing host")
+            error: ConnectionTestError.invalidConfig("Missing host")
         )
         ConnectionTestStatusView(
             testing: false,
-            error: ConnectionTestStatus.pathNotADirectory
+            error: ConnectionTestError.pathNotADirectory
         )
         ConnectionTestStatusView(
             testing: false,
-            error: ConnectionTestStatus.pathNotFound
+            error: ConnectionTestError.pathNotFound
         )
     }
     .padding()

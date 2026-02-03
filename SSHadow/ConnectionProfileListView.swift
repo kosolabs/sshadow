@@ -1,12 +1,14 @@
 import Foundation
+import SSHadowShared
 import SwiftData
 import SwiftUI
 
-struct ConnectionConfigListView: View {
+struct ConnectionProfileListView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \ConnectionConfig.host) private var configs: [ConnectionConfig]
+    @Query(sort: \ConnectionProfile.host) private var configs:
+        [ConnectionProfile]
 
-    @State private var selection: ConnectionConfig?
+    @State private var selection: ConnectionProfile?
 
     var body: some View {
         NavigationSplitView {
@@ -44,7 +46,7 @@ struct ConnectionConfigListView: View {
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     Button(action: {
-                        let config = ConnectionConfig()
+                        let config = ConnectionProfile()
                         modelContext.insert(config)
                         selection = config
                     }) {
@@ -67,7 +69,7 @@ struct ConnectionConfigListView: View {
             }
         } detail: {
             if let selection {
-                ConnectionConfigEditView(config: selection)
+                ConnectionProfileEditView(config: selection)
                     .navigationTitle("Connection Settings")
             } else {
                 ContentUnavailableView(
@@ -83,12 +85,12 @@ struct ConnectionConfigListView: View {
 #Preview {
     do {
         let container = try ModelContainer(
-            for: ConnectionConfig.self,
+            for: ConnectionProfile.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
 
         container.mainContext.insert(
-            ConnectionConfig(
+            ConnectionProfile(
                 name: "Media",
                 host: "example.com",
                 user: "user",
@@ -97,12 +99,12 @@ struct ConnectionConfigListView: View {
         )
 
         container.mainContext.insert(
-            ConnectionConfig(
+            ConnectionProfile(
                 host: "example.com",
             )
         )
 
-        return ConnectionConfigListView()
+        return ConnectionProfileListView()
             .modelContainer(container)
     } catch {
         return Text("Preview failed: \(error.localizedDescription)")
