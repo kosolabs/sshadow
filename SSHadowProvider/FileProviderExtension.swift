@@ -1,14 +1,27 @@
 import OSLog
+import SSHadowShared
+import SwiftData
 import FileProvider
+
+private let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier!,
+    category: "FileProviderExtension"
+)
 
 class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
     required init(domain: NSFileProviderDomain) {
         // TODO: The containing application must create a domain using `NSFileProviderManager.add(_:, completionHandler:)`. The system will then launch the application extension process, call `FileProviderExtension.init(domain:)` to instantiate the extension for that domain, and call methods on the instance.
-        logger.notice("Request to init: \(domain.displayName, privacy: .public) (\(domain.identifier.rawValue, privacy: .public))")
+        logger.debug("init: \(domain.displayName, privacy: .public) (\(domain.identifier.rawValue, privacy: .public))")
+        
+        if let userInfo = domain.userInfo, let json = userInfo["connectionConfig"] as? String, let config = ConnectionConfig.fromJSON(json) {
+            logger.info("privateKeyURL: \(config.privateKeyURL?.path ?? "nil", privacy: .public)")
+        }
+
         super.init()
     }
     
     func invalidate() {
+        logger.debug("invalidate")
         // TODO: cleanup any resources
     }
     

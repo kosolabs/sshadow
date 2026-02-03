@@ -1,8 +1,14 @@
 import Foundation
 import OSLog
-import SwiftLibSSH
+import SSHadowShared
+internal import SwiftLibSSH
 
-enum ConnectionTestStatus: Error, Equatable {
+private let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier!,
+    category: "ConnectionTester"
+)
+
+public enum ConnectionTestError: Error, Equatable {
     case invalidConfig(String)
     case unknownHost
     case connectionRefused
@@ -13,12 +19,14 @@ enum ConnectionTestStatus: Error, Equatable {
     case pathNotFound
 }
 
-protocol ConnectionTester {
-    func test(config: ConnectionConfigSnapshot) async throws
+public protocol ConnectionTester {
+    func test(config: ConnectionConfig) async throws
 }
 
-struct DefaultConnectionTester: ConnectionTester {
-    func test(config: ConnectionConfigSnapshot) async throws {
+public struct DefaultConnectionTester: ConnectionTester {
+    public init() {}
+
+    public func test(config: ConnectionConfig) async throws {
         try await withAuthenticatedClient(config: config) {
             sshClient in
             try await sshClient.withSftp { sftpClient in
@@ -26,7 +34,7 @@ struct DefaultConnectionTester: ConnectionTester {
                     atPath: config.path
                 )
                 if attrs.type != .directory {
-                    throw ConnectionTestStatus.pathNotADirectory
+                    throw ConnectionTestError.pathNotADirectory
                 }
             }
 
@@ -43,22 +51,22 @@ private func mapError(error: Error) throws {
     switch sshError {
     case .connectFailed(let message):
         if message.contains("Failed to resolve hostname") {
-            throw ConnectionTestStatus.unknownHost
+            throw ConnectionTestError.unknownHost
         }
         if message.contains("Connection refused") {
-            throw ConnectionTestStatus.connectionRefused
+            throw ConnectionTestError.connectionRefused
         }
         if message.contains("Socket error") {
-            throw ConnectionTestStatus.socketError
+            throw ConnectionTestError.socketError
         }
         if message.contains("Timeout") {
-            throw ConnectionTestStatus.timeout
+            throw ConnectionTestError.timeout
         }
     case .userauthPasswordFailed:
-        throw ConnectionTestStatus.userauthPasswordFailed
+        throw ConnectionTestError.userauthPasswordFailed
     case .sftpStatFailed(let message):
         if message.contains("No such file") {
-            throw ConnectionTestStatus.pathNotFound
+            throw ConnectionTestError.pathNotFound
         }
     default:
         throw error
@@ -67,13 +75,13 @@ private func mapError(error: Error) throws {
 }
 
 private func withAuthenticatedClient(
-    config: ConnectionConfigSnapshot,
+    config: ConnectionConfig,
     perform: @Sendable (SSHClient) async throws -> Void
 ) async throws {
     switch config.authMethod {
     case .password:
         guard let password = config.password else {
-            throw ConnectionTestStatus.invalidConfig("Password is required")
+            throw ConnectionTestError.invalidConfig("Password is required")
         }
         do {
             try await SSHClient.withAuthenticatedClient(
@@ -88,10 +96,10 @@ private func withAuthenticatedClient(
         }
     case .privateKey:
         guard let privateKeyURL = config.privateKeyURL else {
-            throw ConnectionTestStatus.invalidConfig("Private key is required")
+            throw ConnectionTestError.invalidConfig("Private key is required")
         }
         guard privateKeyURL.startAccessingSecurityScopedResource() else {
-            throw ConnectionTestStatus.invalidConfig(
+            throw ConnectionTestError.invalidConfig(
                 "Failed to access private key file"
             )
         }
@@ -108,6 +116,8 @@ private func withAuthenticatedClient(
         } catch {
             try mapError(error: error)
         }
+    @unknown default:
+        fatalError("Unknown authentication method")
     }
 }
 

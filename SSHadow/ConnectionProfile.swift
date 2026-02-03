@@ -1,28 +1,15 @@
 import FileProvider
 import OSLog
+import SSHadowShared
 import SwiftData
 import SwiftUI
 
-enum AuthMethod: String, Codable, Sendable {
-    case password
-    case privateKey
-}
+private let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier!,
+    category: "ConnectionProfile"
+)
 
-struct ConnectionConfigSnapshot: Sendable, Equatable {
-    let id: UUID
-    let name: String
-    let enabled: Bool
-    let host: String
-    let port: UInt16
-    let user: String
-    let path: String
-    let authMethod: AuthMethod
-    let privateKeyURL: URL?
-    let privateKeyPassphrase: String?
-    let password: String?
-}
-
-@Model class ConnectionConfig: CustomStringConvertible {
+@Model class ConnectionProfile: CustomStringConvertible {
     @Attribute(.unique) var id: UUID
     var name: String?
     var enabled: Bool
@@ -32,7 +19,7 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
     var path: String?
     var authMethod: AuthMethod
     var privateKeyBookmark: Data?
-    
+
     @Transient private var tester: ConnectionTester = DefaultConnectionTester()
 
     init(
@@ -54,7 +41,7 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
         self.user = user
         self.path = path
         self.authMethod = authMethod
-        
+
         self.tester = tester
     }
 
@@ -96,11 +83,33 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
         "ConnectionConfig(id: \(id), name: \(name ?? "-"), enabled: \(enabled), url: \(url ?? "-"), authMethod: \(authMethod))"
     }
 
+    var config: ConnectionConfig {
+        ConnectionConfig(
+            id: id,
+            name: effectiveName,
+            enabled: enabled,
+            host: host,
+            port: effectivePort,
+            user: effectiveUser,
+            path: effectivePath,
+            authMethod: authMethod,
+            privateKeyURL: privateKeyURL(),
+            privateKeyPassphrase: getPrivateKeyPassphrase(),
+            password: getPassword()
+        )
+    }
+
     var domain: NSFileProviderDomain {
-        NSFileProviderDomain(
+        let result = NSFileProviderDomain(
             identifier: NSFileProviderDomainIdentifier(id.uuidString),
             displayName: effectiveName,
         )
+        if let data = try? JSONEncoder().encode(config),
+            let val = String(data: data, encoding: .utf8)
+        {
+            result.userInfo = ["connectionConfig": val]
+        }
+        return result
     }
 
     // MARK: - Enable / Disable
@@ -110,14 +119,14 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
     }
 
     func enable() async throws {
-        await logger.notice("Enabling: \(self)")
-        try await tester.test(config: snapshot())
+        await logger.info("Enabling: \(self)")
+        try await tester.test(config: config)
         try await NSFileProviderManager.add(domain)
         self.enabled = true
     }
 
     func disable() {
-        logger.notice("Disabling: \(self)")
+        logger.info("Disabling: \(self)")
         NSFileProviderManager.remove(domain) { error in
             if let error = error {
                 logger.error(
@@ -209,26 +218,10 @@ struct ConnectionConfigSnapshot: Sendable, Equatable {
     func deletePrivateKeyPassphrase() {
         Keychain().delete(privateKeyPassphraseKey)
     }
-
-    func snapshot() -> ConnectionConfigSnapshot {
-        ConnectionConfigSnapshot(
-            id: id,
-            name: effectiveName,
-            enabled: enabled,
-            host: host,
-            port: effectivePort,
-            user: effectiveUser,
-            path: effectivePath,
-            authMethod: authMethod,
-            privateKeyURL: privateKeyURL(),
-            privateKeyPassphrase: getPrivateKeyPassphrase(),
-            password: getPassword()
-        )
-    }
 }
 
 extension ModelContext {
-    func delete(connectionConfig config: ConnectionConfig) {
+    func delete(connectionConfig config: ConnectionProfile) {
         config.deletePassword()
         config.deletePrivateKeyPassphrase()
         self.delete(config)

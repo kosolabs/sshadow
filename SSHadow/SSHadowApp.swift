@@ -1,3 +1,4 @@
+import SSHadowShared
 import SwiftData
 import SwiftUI
 
@@ -5,10 +6,10 @@ import SwiftUI
 struct SSHadowApp: App {
     var body: some Scene {
         WindowGroup {
-            ConnectionConfigListView()
+            ConnectionProfileListView()
         }
         .modelContainer(
-            for: ConnectionConfig.self,
+            for: ConnectionProfile.self,
             inMemory: ProcessInfo.processInfo.arguments.contains("-uiTesting")
         )
     }
