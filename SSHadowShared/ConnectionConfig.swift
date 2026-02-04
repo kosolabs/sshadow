@@ -2,13 +2,14 @@ import FileProvider
 import OSLog
 import SwiftData
 import SwiftUI
+import SwiftLibSSH
 
-public enum AuthMethod: String, Codable, Sendable {
-    case password
-    case privateKey
-}
+public struct ConnectionConfig: Codable, Sendable, Equatable {
+    public enum AuthMethod: Codable, Sendable, Equatable {
+        case password(String)
+        case privateKey(base64PrivateKey: String, passphrase: String?)
+    }
 
-public struct ConnectionConfig: Sendable, Codable, Equatable {
     public let id: UUID
     public let name: String
     public let enabled: Bool
@@ -17,11 +18,17 @@ public struct ConnectionConfig: Sendable, Codable, Equatable {
     public let user: String
     public let path: String
     public let authMethod: AuthMethod
-    public let privateKeyURL: URL?
-    public let privateKeyPassphrase: String?
-    public let password: String?
-    
-    public init(id: UUID, name: String, enabled: Bool, host: String, port: UInt16, user: String, path: String, authMethod: AuthMethod, privateKeyURL: URL?, privateKeyPassphrase: String?, password: String?) {
+
+    public init(
+        id: UUID,
+        name: String,
+        enabled: Bool,
+        host: String,
+        port: UInt16,
+        user: String,
+        path: String,
+        authMethod: AuthMethod,
+    ) {
         self.id = id
         self.name = name
         self.enabled = enabled
@@ -30,9 +37,6 @@ public struct ConnectionConfig: Sendable, Codable, Equatable {
         self.user = user
         self.path = path
         self.authMethod = authMethod
-        self.privateKeyURL = privateKeyURL
-        self.privateKeyPassphrase = privateKeyPassphrase
-        self.password = password
     }
 
     public func toJSON() -> String? {
@@ -50,5 +54,52 @@ public struct ConnectionConfig: Sendable, Codable, Equatable {
             ConnectionConfig.self,
             from: data
         )
+    }
+}
+
+public extension SSHClient {
+    static func connect(config: ConnectionConfig) async throws -> SSHClient {
+        switch config.authMethod {
+        case .password(let password):
+            return try await SSHClient.connect(
+                host: config.host,
+                port: config.port,
+                user: config.user,
+                password: password
+            )
+        case .privateKey(let privateKey, let passphrase):
+            return try await SSHClient.connect(
+                host: config.host,
+                port: config.port,
+                user: config.user,
+                base64PrivateKey: privateKey,
+                passphrase: passphrase
+            )
+        }
+    }
+
+    static func withAuthenticatedClient(
+        config: ConnectionConfig,
+        perform: @Sendable (SSHClient) async throws -> Void
+    ) async throws {
+        switch config.authMethod {
+        case .password(let password):
+            try await SSHClient.withAuthenticatedClient(
+                host: config.host,
+                port: config.port,
+                user: config.user,
+                password: password,
+                perform: perform,
+            )
+        case .privateKey(let privateKey, let passphrase):
+            try await SSHClient.withAuthenticatedClient(
+                host: config.host,
+                port: config.port,
+                user: config.user,
+                base64PrivateKey: privateKey,
+                passphrase: passphrase,
+                perform: perform,
+            )
+        }
     }
 }

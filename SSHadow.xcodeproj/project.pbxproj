@@ -7,7 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		73011DB02F318CBE00443E45 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 73011DAF2F318CBE00443E45 /* SwiftLibSSH */; };
+		73011DE62F32A99100443E45 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 73011DE52F32A99100443E45 /* SwiftLibSSH */; };
+		73011DE82F32A9F300443E45 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 73011DE72F32A9F300443E45 /* SwiftLibSSH */; };
 		7309810A2F318825009F7AA2 /* SSHadowShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* SSHadowShared.framework */; };
 		730981142F318825009F7AA2 /* SSHadowShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* SSHadowShared.framework */; };
 		730981152F318825009F7AA2 /* SSHadowShared.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* SSHadowShared.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -166,7 +167,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				73011DB02F318CBE00443E45 /* SwiftLibSSH in Frameworks */,
+				73011DE82F32A9F300443E45 /* SwiftLibSSH in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -199,6 +200,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7393A9C12F3134FB00213730 /* UniformTypeIdentifiers.framework in Frameworks */,
+				73011DE62F32A99100443E45 /* SwiftLibSSH in Frameworks */,
 				7309811F2F3188DA009F7AA2 /* SSHadowShared.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -271,7 +273,7 @@
 			);
 			name = SSHadowShared;
 			packageProductDependencies = (
-				73011DAF2F318CBE00443E45 /* SwiftLibSSH */,
+				73011DE72F32A9F300443E45 /* SwiftLibSSH */,
 			);
 			productName = SSHadowShared;
 			productReference = 730980FF2F318825009F7AA2 /* SSHadowShared.framework */;
@@ -370,6 +372,7 @@
 			);
 			name = SSHadowProvider;
 			packageProductDependencies = (
+				73011DE52F32A99100443E45 /* SwiftLibSSH */,
 			);
 			productName = SSHadowProvider;
 			productReference = 7393A9C02F3134FB00213730 /* SSHadowProvider.appex */;
@@ -543,7 +546,7 @@
 		730981172F318825009F7AA2 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -581,7 +584,7 @@
 		730981182F318825009F7AA2 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -928,7 +931,7 @@
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
@@ -968,7 +971,7 @@
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
@@ -1069,7 +1072,12 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		73011DAF2F318CBE00443E45 /* SwiftLibSSH */ = {
+		73011DE52F32A99100443E45 /* SwiftLibSSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
+			productName = SwiftLibSSH;
+		};
+		73011DE72F32A9F300443E45 /* SwiftLibSSH */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
 			productName = SwiftLibSSH;

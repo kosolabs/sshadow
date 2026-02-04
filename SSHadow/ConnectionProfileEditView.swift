@@ -66,8 +66,13 @@ struct ConnectionProfileEditView: View {
 
     private var usePrivateKey: Binding<Bool> {
         Binding<Bool>(
-            get: { config.authMethod == AuthMethod.privateKey },
-            set: { config.authMethod = $0 ? AuthMethod.privateKey : .password }
+            get: {
+                config.authMethod == ConnectionProfile.AuthMethod.privateKey
+            },
+            set: {
+                config.authMethod =
+                    $0 ? ConnectionProfile.AuthMethod.privateKey : .password
+            }
         )
     }
 

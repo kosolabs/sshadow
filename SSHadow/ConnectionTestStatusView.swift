@@ -12,6 +12,29 @@ struct ConnectionTestStatusView: View {
                 Text("Verifying…")
                     .foregroundStyle(.secondary)
             }
+        } else if let validationError = error
+            as? ConnectionProfile.ValidationError
+        {
+            switch validationError {
+            case .passwordNil:
+                Label(
+                    "Password is required",
+                    systemImage: "lock.circle"
+                )
+                .foregroundStyle(.red)
+            case .privateKeyURLNil:
+                Label(
+                    "Private key is required",
+                    systemImage: "lock.circle"
+                )
+                .foregroundStyle(.red)
+            default:
+                Label(
+                    "Other: \(validationError.localizedDescription)",
+                    systemImage: "bolt.slash"
+                )
+                .foregroundStyle(.red)
+            }
         } else if let connectionTestError = error as? ConnectionTestError {
             switch connectionTestError {
             case .invalidConfig(let message):
