@@ -10,6 +10,18 @@ private let logger = Logger(
 )
 
 @Model class ConnectionProfile: CustomStringConvertible {
+    enum ValidationError: Error {
+        case passwordNil
+        case privateKeyURLNil
+        case privateKeyReadFailed
+        case encodeToJSONFailed
+    }
+
+    enum AuthMethod: Codable, Sendable, Equatable {
+        case password
+        case privateKey
+    }
+
     @Attribute(.unique) var id: UUID
     var name: String?
     var enabled: Bool
@@ -83,8 +95,54 @@ private let logger = Logger(
         "ConnectionConfig(id: \(id), name: \(name ?? "-"), enabled: \(enabled), url: \(url ?? "-"), authMethod: \(authMethod))"
     }
 
-    var config: ConnectionConfig {
-        ConnectionConfig(
+    func getDomain() -> NSFileProviderDomain {
+        NSFileProviderDomain(
+            identifier: NSFileProviderDomainIdentifier(id.uuidString),
+            displayName: effectiveName,
+        )
+    }
+
+    func getDomain(with config: ConnectionConfig) throws -> NSFileProviderDomain
+    {
+        let domain = getDomain()
+
+        guard let data = try? JSONEncoder().encode(config) else {
+            throw ValidationError.encodeToJSONFailed
+        }
+        guard let val = String(data: data, encoding: .utf8) else {
+            throw ValidationError.encodeToJSONFailed
+        }
+
+        domain.userInfo = ["connectionConfig": val]
+        return domain
+    }
+
+    func getConfigAuthMethod() throws -> ConnectionConfig.AuthMethod {
+        switch authMethod {
+        case .password:
+            guard let password = getPassword() else {
+                throw ValidationError.passwordNil
+            }
+            return ConnectionConfig.AuthMethod.password(password)
+        case .privateKey:
+            guard let url = privateKeyURL() else {
+                throw ValidationError.privateKeyURLNil
+            }
+            guard url.startAccessingSecurityScopedResource() else {
+                throw ValidationError.privateKeyReadFailed
+            }
+            let privateKey = try String(contentsOf: url, encoding: .utf8)
+            url.stopAccessingSecurityScopedResource()
+
+            return ConnectionConfig.AuthMethod.privateKey(
+                base64PrivateKey: privateKey,
+                passphrase: getPrivateKeyPassphrase()
+            )
+        }
+    }
+
+    func getConfig() throws -> ConnectionConfig {
+        try ConnectionConfig(
             id: id,
             name: effectiveName,
             enabled: enabled,
@@ -92,24 +150,8 @@ private let logger = Logger(
             port: effectivePort,
             user: effectiveUser,
             path: effectivePath,
-            authMethod: authMethod,
-            privateKeyURL: privateKeyURL(),
-            privateKeyPassphrase: getPrivateKeyPassphrase(),
-            password: getPassword()
+            authMethod: getConfigAuthMethod()
         )
-    }
-
-    var domain: NSFileProviderDomain {
-        let result = NSFileProviderDomain(
-            identifier: NSFileProviderDomainIdentifier(id.uuidString),
-            displayName: effectiveName,
-        )
-        if let data = try? JSONEncoder().encode(config),
-            let val = String(data: data, encoding: .utf8)
-        {
-            result.userInfo = ["connectionConfig": val]
-        }
-        return result
     }
 
     // MARK: - Enable / Disable
@@ -120,14 +162,16 @@ private let logger = Logger(
 
     func enable() async throws {
         await logger.info("Enabling: \(self)")
+        let config = try getConfig()
         try await tester.test(config: config)
+        let domain = try getDomain(with: config)
         try await NSFileProviderManager.add(domain)
         self.enabled = true
     }
 
     func disable() {
         logger.info("Disabling: \(self)")
-        NSFileProviderManager.remove(domain) { error in
+        NSFileProviderManager.remove(getDomain()) { error in
             if let error = error {
                 logger.error(
                     "Failed to disable \(self): \(error)"
