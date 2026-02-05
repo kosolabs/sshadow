@@ -1,6 +1,5 @@
 import Foundation
 import OSLog
-import SSHadowShared
 import SwiftLibSSH
 
 private let logger = Logger(
@@ -9,7 +8,6 @@ private let logger = Logger(
 )
 
 public enum ConnectionTestError: Error, Equatable {
-    case invalidConfig(String)
     case unknownHost
     case connectionRefused
     case socketError
@@ -74,7 +72,7 @@ public struct DefaultConnectionTester: ConnectionTester {
 }
 
 extension Data {
-    func decoded(as encoding: String.Encoding) throws -> String {
+    public func decoded(as encoding: String.Encoding) throws -> String {
         guard let str = String(data: self, encoding: encoding) else {
             throw SSHClientError.decodeFailed(
                 "Failed to decode data as \(encoding)"
