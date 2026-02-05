@@ -37,12 +37,6 @@ struct ConnectionTestStatusView: View {
             }
         } else if let connectionTestError = error as? ConnectionTestError {
             switch connectionTestError {
-            case .invalidConfig(let message):
-                Label(
-                    message,
-                    systemImage: "xmark.octagon"
-                )
-                .foregroundStyle(.red)
             case .unknownHost:
                 Label(
                     "Unknown host",
@@ -52,12 +46,6 @@ struct ConnectionTestStatusView: View {
             case .connectionRefused:
                 Label(
                     "Connection refused",
-                    systemImage: "network.slash"
-                )
-                .foregroundStyle(.red)
-            case .socketError:
-                Label(
-                    "Socket error",
                     systemImage: "network.slash"
                 )
                 .foregroundStyle(.red)
@@ -85,12 +73,6 @@ struct ConnectionTestStatusView: View {
                     systemImage: "questionmark.folder"
                 )
                 .foregroundStyle(.red)
-            @unknown default:
-                Label(
-                    "Other: \(connectionTestError.localizedDescription)",
-                    systemImage: "bolt.slash"
-                )
-                .foregroundStyle(.red)
             }
         } else if let error {
             Label(
@@ -109,10 +91,6 @@ struct ConnectionTestStatusView: View {
     VStack(alignment: .leading) {
         ConnectionTestStatusView(testing: false, error: nil)
         ConnectionTestStatusView(testing: true, error: nil)
-        ConnectionTestStatusView(
-            testing: false,
-            error: ConnectionTestError.invalidConfig("Missing host")
-        )
         ConnectionTestStatusView(
             testing: false,
             error: ConnectionTestError.pathNotADirectory

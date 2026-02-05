@@ -52,6 +52,17 @@
                ReferencedContainer = "container:SSHadow.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "73A183212F32E5F40004D288"
+               BuildableName = "SSHadowTests.xctest"
+               BlueprintName = "SSHadowTests"
+               ReferencedContainer = "container:SSHadow.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

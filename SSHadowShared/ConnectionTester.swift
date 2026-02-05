@@ -1,6 +1,5 @@
 import Foundation
 import OSLog
-import SSHadowShared
 import SwiftLibSSH
 
 private let logger = Logger(
@@ -9,10 +8,8 @@ private let logger = Logger(
 )
 
 public enum ConnectionTestError: Error, Equatable {
-    case invalidConfig(String)
     case unknownHost
     case connectionRefused
-    case socketError
     case timeout
     case userauthPasswordFailed
     case pathNotADirectory
@@ -50,11 +47,11 @@ public struct DefaultConnectionTester: ConnectionTester {
                 if message.contains("Failed to resolve hostname") {
                     throw ConnectionTestError.unknownHost
                 }
-                if message.contains("Connection refused") {
+                if message.contains("Connection refused")
+                    || message.contains("Socket error")
+                    || message.contains("Bad file descriptor")
+                {
                     throw ConnectionTestError.connectionRefused
-                }
-                if message.contains("Socket error") {
-                    throw ConnectionTestError.socketError
                 }
                 if message.contains("Timeout") {
                     throw ConnectionTestError.timeout
@@ -74,7 +71,7 @@ public struct DefaultConnectionTester: ConnectionTester {
 }
 
 extension Data {
-    func decoded(as encoding: String.Encoding) throws -> String {
+    public func decoded(as encoding: String.Encoding) throws -> String {
         guard let str = String(data: self, encoding: encoding) else {
             throw SSHClientError.decodeFailed(
                 "Failed to decode data as \(encoding)"

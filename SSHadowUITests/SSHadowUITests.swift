@@ -14,7 +14,7 @@ final class SSHadowUITests: XCTestCase {
         app.buttons["addConnectionButton"].firstMatch.click()
 
         app.textFields["nameField"].firstMatch.click()
-        app.typeText("Media")
+        app.typeText("Test")
 
         app.textFields["hostField"].firstMatch.click()
         app.typeText("localhost")
@@ -28,11 +28,17 @@ final class SSHadowUITests: XCTestCase {
         app.textFields["userField"].firstMatch.click()
         app.typeText("myuser")
 
+        let error = app.staticTexts["Password is required"]
+        XCTAssertFalse(error.exists)
+
+        app.switches["enabledToggle"].firstMatch.click()
+
+        XCTAssertTrue(error.waitForExistence(timeout: 2))
+
         app.secureTextFields["passwordField"].firstMatch.click()
         app.typeText("mypass")
 
         let link = app.buttons["connectionLink_myuser@localhost:2222:/tmp"]
-
         XCTAssertTrue(link.waitForExistence(timeout: 2))
 
         app.buttons["deleteConnectionButton"].firstMatch.click()
