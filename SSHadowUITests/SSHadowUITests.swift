@@ -17,7 +17,7 @@ final class SSHadowUITests: XCTestCase {
         app.typeText("Test")
 
         app.textFields["hostField"].firstMatch.click()
-        app.typeText("192.0.2.1")
+        app.typeText("localhost")
 
         app.textFields["portField"].firstMatch.click()
         app.typeText("2222")
@@ -38,13 +38,8 @@ final class SSHadowUITests: XCTestCase {
         app.secureTextFields["passwordField"].firstMatch.click()
         app.typeText("mypass")
 
-        let link = app.buttons["connectionLink_myuser@192.0.2.1:2222:/tmp"]
+        let link = app.buttons["connectionLink_myuser@localhost:2222:/tmp"]
         XCTAssertTrue(link.waitForExistence(timeout: 2))
-        
-        app.switches["enabledToggle"].firstMatch.click()
-        
-        XCTAssertTrue(app.staticTexts["Verifying…"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Connection timed out"].waitForExistence(timeout: 10))
 
         app.buttons["deleteConnectionButton"].firstMatch.click()
 

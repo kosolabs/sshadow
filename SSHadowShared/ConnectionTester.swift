@@ -10,7 +10,6 @@ private let logger = Logger(
 public enum ConnectionTestError: Error, Equatable {
     case unknownHost
     case connectionRefused
-    case socketError
     case timeout
     case userauthPasswordFailed
     case pathNotADirectory
@@ -48,11 +47,11 @@ public struct DefaultConnectionTester: ConnectionTester {
                 if message.contains("Failed to resolve hostname") {
                     throw ConnectionTestError.unknownHost
                 }
-                if message.contains("Connection refused") {
+                if message.contains("Connection refused")
+                    || message.contains("Socket error")
+                    || message.contains("Bad file descriptor")
+                {
                     throw ConnectionTestError.connectionRefused
-                }
-                if message.contains("Socket error") {
-                    throw ConnectionTestError.socketError
                 }
                 if message.contains("Timeout") {
                     throw ConnectionTestError.timeout

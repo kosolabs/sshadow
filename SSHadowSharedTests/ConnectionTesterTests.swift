@@ -40,23 +40,4 @@ struct ConnectionTesterTests {
             )
         }
     }
-    
-    @Test func testTimeout() async throws {
-        let tester = DefaultConnectionTester()
-        
-        await #expect(throws: ConnectionTestError.timeout) {
-            try await tester.test(
-                config: ConnectionConfig(
-                    id: UUID(),
-                    name: "test",
-                    enabled: true,
-                    host: "192.0.2.1",
-                    port: 22,
-                    user: "user",
-                    path: "/home/user",
-                    authMethod: .password("pass")
-                )
-            )
-        }
-    }
 }

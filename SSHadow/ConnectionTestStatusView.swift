@@ -49,12 +49,6 @@ struct ConnectionTestStatusView: View {
                     systemImage: "network.slash"
                 )
                 .foregroundStyle(.red)
-            case .socketError:
-                Label(
-                    "Socket error",
-                    systemImage: "network.slash"
-                )
-                .foregroundStyle(.red)
             case .timeout:
                 Label(
                     "Connection timed out",
