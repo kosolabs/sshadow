@@ -1,46 +1,60 @@
 import Foundation
+import OSLog
 import Security
 
-struct Keychain {
-    let service: String?
+private let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier!,
+    category: "Keychain"
+)
 
-    init(service: String? = nil) {
-        self.service = service ?? Bundle.main.bundleIdentifier
+public struct Keychain {
+    private let service: String
+    private let accessGroup: String
+
+    public init(
+        service: String = "com.kosolabs.SSHadow",
+        accessGroup: String = "group.com.kosolabs.SSHadow"
+    ) {
+        self.service = service
+        self.accessGroup = accessGroup
     }
 
-    func delete(_ key: String) {
+    public func delete(_ key: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service as Any?,
+            kSecAttrService as String: service,
+            kSecAttrAccessGroup as String: accessGroup,
             kSecAttrAccount as String: key,
-        ].compactMapValues { $0 }
-        SecItemDelete(query as CFDictionary)
+        ]
+        let status = SecItemDelete(query as CFDictionary)
     }
 
-    func set(_ key: String, to data: Data) {
+    public func set(_ key: String, to data: Data) {
         delete(key)
 
         let attributes: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service as Any?,
+            kSecAttrService as String: service,
+            kSecAttrAccessGroup as String: accessGroup,
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
             kSecAttrAccessible as String:
                 kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-        ].compactMapValues { $0 }
+        ]
 
         SecItemAdd(attributes as CFDictionary, nil)
     }
 
-    func get(_ key: String) -> Data? {
+    public func get(_ key: String) -> Data? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service as Any?,
+            kSecAttrService as String: service,
+            kSecAttrAccessGroup as String: accessGroup,
             kSecAttrAccount as String: key,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
-        ].compactMapValues { $0 }
-
+        ]
+        
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
 
