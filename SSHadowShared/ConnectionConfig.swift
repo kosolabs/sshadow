@@ -4,10 +4,19 @@ import SwiftData
 import SwiftUI
 import SwiftLibSSH
 
-public struct ConnectionConfig: Codable, Sendable, Equatable {
-    public enum AuthMethod: Codable, Sendable, Equatable {
+public struct ConnectionConfig: Codable, CustomStringConvertible, Sendable, Equatable {
+    public enum AuthMethod: Codable, CustomStringConvertible, Sendable, Equatable {
         case password(String)
         case privateKey(base64PrivateKey: String, passphrase: String?)
+        
+        public var description: String {
+            switch self {
+            case .password:
+                return ".password"
+            case .privateKey:
+                return ".privateKey"
+            }
+        }
     }
 
     public let id: UUID
@@ -37,6 +46,21 @@ public struct ConnectionConfig: Codable, Sendable, Equatable {
         self.user = user
         self.path = path
         self.authMethod = authMethod
+    }
+    
+    public var url: String {
+        var result = "\(user)@\(host)"
+        if port != 22 {
+            result += ":\(port)"
+        }
+        if !path.isEmpty {
+            result += ":\(path)"
+        }
+        return result
+    }
+
+    public var description: String {
+        return "ConnectionConfig(id: \(id), name: \(name), enabled: \(enabled), url: \(url), authMethod: \(authMethod))"
     }
 
     public func toJSON() -> String? {

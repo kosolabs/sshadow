@@ -139,32 +139,6 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
         guard let config = self.config else {
             throw NSFileProviderError(.notAuthenticated)
         }
-        logger.debug(
-            "enumerator for \(containerItemIdentifier.rawValue, privacy: .public), request: \(request, privacy: .public)"
-        )
-        logger.debug(
-            "is root: \(containerItemIdentifier == NSFileProviderItemIdentifier.rootContainer)"
-        )
-
-        Task {
-            do {
-                try await SSHClient.withAuthenticatedClient(config: config) {
-                    ssh in
-                    try await ssh.withSftp { sftp in
-                        let attrs = try await sftp.attributes(
-                            atPath: config.path
-                        )
-                        logger.debug(
-                            "Attributes for path \(config.path, privacy: .public): \(String(describing: attrs), privacy: .public)"
-                        )
-                    }
-                }
-            } catch {
-                logger.error(
-                    "Failed to create enumerator: \(error, privacy: .public)"
-                )
-            }
-        }
 
         return FileProviderEnumerator(
             config: config,

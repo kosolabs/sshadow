@@ -19,9 +19,7 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
         config: ConnectionConfig,
         enumeratedItemIdentifier: NSFileProviderItemIdentifier
     ) {
-        logger.debug(
-            "init: \(enumeratedItemIdentifier.rawValue, privacy: .public)"
-        )
+        logger.debug("init: \(config, privacy: .public)")
         self.config = config
         self.enumeratedItemIdentifier = enumeratedItemIdentifier
         super.init()
@@ -48,19 +46,40 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
          - inform the observer about the items returned by the server (possibly multiple times)
          - inform the observer that you are finished with this page
          */
-        logger.debug(
-            "observer: \(observer.description, privacy: .public), page: \(page.rawValue, privacy: .public)"
-        )
 
-        if enumeratedItemIdentifier == .rootContainer {
-            Task {
+        Task {
+            do {
+                try await SSHClient.withAuthenticatedClient(config: config) {
+                    ssh in
+                    try await ssh.withSftp { sftp in
+                        try await sftp.withDirectory(atPath: config.path) {
+                            dir in
+                            var items: [any NSFileProviderItemProtocol] = []
+                            for try await attrs in dir {
+                                items.append(
+                                    FileProviderItem(
+                                        identifier:
+                                            NSFileProviderItemIdentifier(
+                                                attrs.name ?? "nil"
+                                            )
+                                    )
+                                )
+                            }
+                            observer.didEnumerate(items)
+                        }
+                    }
+                }
+                logger.debug(
+                    "finished enumerating items for \(self.config, privacy: .public)"
+                )
+                observer.finishEnumerating(upTo: nil)
+            } catch {
+                logger.error(
+                    "error while enumerating items for \(self.config, privacy: .public): \(error, privacy: .public)"
+                )
+                observer.finishEnumeratingWithError(error)
             }
         }
-
-        observer.didEnumerate([
-            FileProviderItem(identifier: NSFileProviderItemIdentifier("a file"))
-        ])
-        observer.finishEnumerating(upTo: nil)
     }
 
     func enumerateChanges(
