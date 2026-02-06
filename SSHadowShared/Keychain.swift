@@ -20,45 +20,68 @@ public struct Keychain {
     }
 
     public func delete(_ key: String) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccessGroup as String: accessGroup,
-            kSecAttrAccount as String: key,
-        ]
+        let query =
+            [
+                kSecClass: kSecClassGenericPassword,
+                kSecAttrService: service,
+                kSecAttrAccount: key,
+                kSecAttrAccessGroup: accessGroup,
+                kSecUseDataProtectionKeychain: true,
+            ] as [String: Any]
         let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            logger.error(
+                "SecItemDelete failed for key '\(key, privacy: .public)' with status: \(status)"
+            )
+            return
+        }
     }
 
     public func set(_ key: String, to data: Data) {
         delete(key)
 
-        let attributes: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccessGroup as String: accessGroup,
-            kSecAttrAccount as String: key,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String:
-                kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-        ]
+        let attributes =
+            [
+                kSecClass: kSecClassGenericPassword,
+                kSecAttrService: service,
+                kSecAttrAccount: key,
+                kSecAttrAccessGroup: accessGroup,
+                kSecUseDataProtectionKeychain: true,
+                kSecValueData: data,
+                kSecAttrAccessible:
+                    kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            ] as [String: Any]
 
-        SecItemAdd(attributes as CFDictionary, nil)
+        let status = SecItemAdd(attributes as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            logger.error(
+                "SecItemAdd failed for key '\(key, privacy: .public)' with status: \(status)"
+            )
+            return
+        }
     }
 
     public func get(_ key: String) -> Data? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccessGroup as String: accessGroup,
-            kSecAttrAccount as String: key,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        
+        let query =
+            [
+                kSecClass: kSecClassGenericPassword,
+                kSecAttrService: service,
+                kSecAttrAccount: key,
+                kSecAttrAccessGroup: accessGroup,
+                kSecUseDataProtectionKeychain: true,
+                kSecReturnData: true,
+                kSecMatchLimit: kSecMatchLimitOne,
+            ] as [String: Any]
+
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
-
         guard status != errSecItemNotFound else {
+            return nil
+        }
+        guard status == errSecSuccess else {
+            logger.error(
+                "SecItemCopyMatching failed for key '\(key, privacy: .public)' with status: \(status)"
+            )
             return nil
         }
         return item as? Data

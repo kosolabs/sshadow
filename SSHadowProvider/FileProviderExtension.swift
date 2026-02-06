@@ -17,7 +17,7 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
         logger.debug(
             "init: \(domain.displayName, privacy: .public) (\(domain.identifier.rawValue, privacy: .public))"
         )
-        
+
         if let userInfo = domain.userInfo,
             let json = userInfo["connectionConfig"] as? String,
             let config = ConnectionConfig.fromJSON(json)
@@ -26,6 +26,13 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
         } else {
             logger.fault("Failed to retrieve connection config")
             self.config = nil
+        }
+        
+        do {
+            let password = try Keychain().get("password.\(domain.identifier.rawValue)")?.decoded(as: .utf8)
+            logger.info("password: \(password ?? "nil", privacy: .public)")
+        } catch {
+            logger.error("error: \(error)")
         }
 
         super.init()
