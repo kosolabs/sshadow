@@ -27,13 +27,6 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
             logger.fault("Failed to retrieve connection config")
             self.config = nil
         }
-        
-        do {
-            let password = try Keychain().get("password.\(domain.identifier.rawValue)")?.decoded(as: .utf8)
-            logger.info("password: \(password ?? "nil", privacy: .public)")
-        } catch {
-            logger.error("error: \(error)")
-        }
 
         super.init()
     }

@@ -1,14 +1,19 @@
 import FileProvider
 import OSLog
 import SwiftData
-import SwiftUI
 import SwiftLibSSH
+import SwiftUI
 
-public struct ConnectionConfig: Codable, CustomStringConvertible, Sendable, Equatable {
-    public enum AuthMethod: Codable, CustomStringConvertible, Sendable, Equatable {
-        case password(String)
-        case privateKey(base64PrivateKey: String, passphrase: String?)
-        
+private let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier!,
+    category: "ConnectionConfig"
+)
+
+public struct ConnectionConfig: Codable, CustomStringConvertible, Sendable {
+    public enum AuthMethod: Codable, CustomStringConvertible, Sendable {
+        case password
+        case privateKey(bookmark: Data)
+
         public var description: String {
             switch self {
             case .password:
@@ -19,9 +24,12 @@ public struct ConnectionConfig: Codable, CustomStringConvertible, Sendable, Equa
         }
     }
 
+    public enum ConnectionConfigError: Error {
+        case passwordNil
+    }
+
     public let id: UUID
     public let name: String
-    public let enabled: Bool
     public let host: String
     public let port: UInt16
     public let user: String
@@ -31,7 +39,6 @@ public struct ConnectionConfig: Codable, CustomStringConvertible, Sendable, Equa
     public init(
         id: UUID,
         name: String,
-        enabled: Bool,
         host: String,
         port: UInt16,
         user: String,
@@ -40,14 +47,13 @@ public struct ConnectionConfig: Codable, CustomStringConvertible, Sendable, Equa
     ) {
         self.id = id
         self.name = name
-        self.enabled = enabled
         self.host = host
         self.port = port
         self.user = user
         self.path = path
         self.authMethod = authMethod
     }
-    
+
     public var url: String {
         var result = "\(user)@\(host)"
         if port != 22 {
@@ -60,7 +66,34 @@ public struct ConnectionConfig: Codable, CustomStringConvertible, Sendable, Equa
     }
 
     public var description: String {
-        return "ConnectionConfig(id: \(id), name: \(name), enabled: \(enabled), url: \(url), authMethod: \(authMethod))"
+        return
+            "ConnectionConfig(id: \(id), name: \(name), url: \(url), authMethod: \(authMethod))"
+    }
+
+    private var passwordKey: String {
+        Keychain.shared.getPasswordKey(id: id)
+    }
+
+    public func getPassword() throws -> String {
+        guard let password: String = Keychain.shared.get(passwordKey) else {
+            throw ConnectionConfigError.passwordNil
+        }
+        return password
+    }
+
+    private var privateKeyPassphraseKey: String {
+        Keychain.shared.getPrivateKeyPassphraseKey(id: id)
+    }
+
+    public func getPrivateKeyPassphrase() throws -> String? {
+        guard
+            let passphrase: String = Keychain.shared.get(
+                privateKeyPassphraseKey
+            )
+        else {
+            return nil
+        }
+        return passphrase
     }
 
     public func toJSON() -> String? {
@@ -81,47 +114,71 @@ public struct ConnectionConfig: Codable, CustomStringConvertible, Sendable, Equa
     }
 }
 
-public extension SSHClient {
-    static func connect(config: ConnectionConfig) async throws -> SSHClient {
+extension SSHClient {
+    public static func connect(
+        config: ConnectionConfig
+    ) async throws -> SSHClient {
         switch config.authMethod {
-        case .password(let password):
+        case .password:
             return try await SSHClient.connect(
                 host: config.host,
                 port: config.port,
                 user: config.user,
-                password: password
+                password: try config.getPassword(),
             )
-        case .privateKey(let privateKey, let passphrase):
+        case .privateKey(let bookmark):
+            var isStale = false
+            let url = try URL(
+                resolvingBookmarkData: bookmark,
+                bookmarkDataIsStale: &isStale
+            )
+            guard url.startAccessingSecurityScopedResource() else {
+                throw SSHClientError.authenticationFailed(
+                    "Failed to read private key from URL: \(url)"
+                )
+            }
+            defer { url.stopAccessingSecurityScopedResource() }
             return try await SSHClient.connect(
                 host: config.host,
                 port: config.port,
                 user: config.user,
-                base64PrivateKey: privateKey,
-                passphrase: passphrase
+                privateKeyURL: url,
+                passphrase: try config.getPrivateKeyPassphrase()
             )
         }
     }
 
-    static func withAuthenticatedClient(
+    public static func withAuthenticatedClient(
         config: ConnectionConfig,
         perform: @Sendable (SSHClient) async throws -> Void
     ) async throws {
         switch config.authMethod {
-        case .password(let password):
+        case .password:
             try await SSHClient.withAuthenticatedClient(
                 host: config.host,
                 port: config.port,
                 user: config.user,
-                password: password,
+                password: try config.getPassword(),
                 perform: perform,
             )
-        case .privateKey(let privateKey, let passphrase):
+        case .privateKey(let bookmark):
+            var isStale = false
+            let privateKeyURL = try URL(
+                resolvingBookmarkData: bookmark,
+                bookmarkDataIsStale: &isStale
+            )
+            guard privateKeyURL.startAccessingSecurityScopedResource() else {
+                throw SSHClientError.authenticationFailed(
+                    "Failed to read private key from URL: \(privateKeyURL)"
+                )
+            }
+            defer { privateKeyURL.stopAccessingSecurityScopedResource() }
             try await SSHClient.withAuthenticatedClient(
                 host: config.host,
                 port: config.port,
                 user: config.user,
-                base64PrivateKey: privateKey,
-                passphrase: passphrase,
+                privateKeyURL: privateKeyURL,
+                passphrase: try config.getPrivateKeyPassphrase(),
                 perform: perform,
             )
         }

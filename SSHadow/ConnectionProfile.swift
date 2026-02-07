@@ -17,9 +17,18 @@ private let logger = Logger(
         case encodeToJSONFailed
     }
 
-    enum AuthMethod: Codable, Sendable, Equatable {
+    enum AuthMethod: Codable, CustomStringConvertible, Sendable {
         case password
-        case privateKey
+        case privateKey(bookmark: Data?)
+
+        public var description: String {
+            switch self {
+            case .password:
+                return ".password"
+            case .privateKey:
+                return ".privateKey"
+            }
+        }
     }
 
     @Attribute(.unique) var id: UUID
@@ -30,7 +39,6 @@ private let logger = Logger(
     var user: String?
     var path: String?
     var authMethod: AuthMethod
-    var privateKeyBookmark: Data?
 
     @Transient private var tester: ConnectionTester = DefaultConnectionTester()
 
@@ -92,7 +100,7 @@ private let logger = Logger(
     }
 
     var description: String {
-        "ConnectionConfig(id: \(id), name: \(name ?? "-"), enabled: \(enabled), url: \(url ?? "-"), authMethod: \(authMethod))"
+        "ConnectionProfile(id: \(id), name: \(name ?? "-"), enabled: \(enabled), url: \(url ?? "-"), authMethod: \(authMethod))"
     }
 
     func getDomain() -> NSFileProviderDomain {
@@ -104,8 +112,6 @@ private let logger = Logger(
 
     func getDomain(with config: ConnectionConfig) throws -> NSFileProviderDomain
     {
-        let domain = getDomain()
-
         guard let data = try? JSONEncoder().encode(config) else {
             throw ValidationError.encodeToJSONFailed
         }
@@ -113,6 +119,7 @@ private let logger = Logger(
             throw ValidationError.encodeToJSONFailed
         }
 
+        let domain = getDomain()
         domain.userInfo = ["connectionConfig": val]
         return domain
     }
@@ -120,24 +127,15 @@ private let logger = Logger(
     func getConfigAuthMethod() throws -> ConnectionConfig.AuthMethod {
         switch authMethod {
         case .password:
-            guard let password = getPassword() else {
+            guard getPassword() != nil else {
                 throw ValidationError.passwordNil
             }
-            return ConnectionConfig.AuthMethod.password(password)
-        case .privateKey:
-            guard let url = privateKeyURL() else {
+            return .password
+        case .privateKey(let bookmark):
+            guard let bookmark = bookmark else {
                 throw ValidationError.privateKeyURLNil
             }
-            guard url.startAccessingSecurityScopedResource() else {
-                throw ValidationError.privateKeyReadFailed
-            }
-            let privateKey = try String(contentsOf: url, encoding: .utf8)
-            url.stopAccessingSecurityScopedResource()
-
-            return ConnectionConfig.AuthMethod.privateKey(
-                base64PrivateKey: privateKey,
-                passphrase: getPrivateKeyPassphrase()
-            )
+            return .privateKey(bookmark: bookmark)
         }
     }
 
@@ -145,7 +143,6 @@ private let logger = Logger(
         try ConnectionConfig(
             id: id,
             name: effectiveName,
-            enabled: enabled,
             host: host,
             port: effectivePort,
             user: effectiveUser,
@@ -185,46 +182,37 @@ private let logger = Logger(
     // MARK: - Password Management
 
     private var passwordKey: String {
-        "password.\(id.uuidString)"
+        Keychain.shared.getPasswordKey(id: id)
     }
 
     func getPassword() -> String? {
-        guard let data = Keychain().get(passwordKey) else {
-            return nil
-        }
-        do {
-            return try data.decoded(as: .utf8)
-        } catch {
-            print("Failed to decode password from UTF-8 for id: \(id)")
-            return nil
-        }
+        Keychain.shared.get(passwordKey)
     }
 
     func setPassword(_ password: String) {
-        guard let data = password.data(using: .utf8) else {
-            print("Failed to encode password as UTF-8 for id: \(id)")
-            return
-        }
-        Keychain().set(passwordKey, to: data)
+        Keychain.shared.set(passwordKey, to: password)
     }
 
     func deletePassword() {
-        Keychain().delete(passwordKey)
+        Keychain.shared.delete(passwordKey)
     }
 
     func privateKeyURL() -> URL? {
-        guard let bookmark = privateKeyBookmark else {
+        guard case .privateKey(let maybeBookmark) = authMethod,
+            let bookmark = maybeBookmark
+        else {
             return nil
         }
         do {
             var isStale = false
             return try URL(
                 resolvingBookmarkData: bookmark,
-                options: .withSecurityScope,
                 bookmarkDataIsStale: &isStale
             )
         } catch {
-            print("Failed to resolve bookmark data for id: \(id)")
+            logger.error(
+                "Failed to resolve bookmark data for id: \(self.id, privacy: .public), error: \(error, privacy: .public)"
+            )
             return nil
         }
     }
@@ -232,35 +220,19 @@ private let logger = Logger(
     // MARK: - Private Key Passphrase Management
 
     private var privateKeyPassphraseKey: String {
-        "privateKeyPassphrase.\(id.uuidString)"
+        Keychain.shared.getPrivateKeyPassphraseKey(id: id)
     }
 
     func getPrivateKeyPassphrase() -> String? {
-        guard let data = Keychain().get(privateKeyPassphraseKey) else {
-            return nil
-        }
-        do {
-            return try data.decoded(as: .utf8)
-        } catch {
-            print(
-                "Failed to decode privateKeyPassphrase from UTF-8 for id: \(id)"
-            )
-            return nil
-        }
+        Keychain.shared.get(privateKeyPassphraseKey)
     }
 
     func setPrivateKeyPassphrase(_ passphrase: String) {
-        guard let data = passphrase.data(using: .utf8) else {
-            print(
-                "Failed to encode privateKeyPassphrase as UTF-8 for id: \(id)"
-            )
-            return
-        }
-        Keychain().set(privateKeyPassphraseKey, to: data)
+        Keychain.shared.set(privateKeyPassphraseKey, to: passphrase)
     }
 
     func deletePrivateKeyPassphrase() {
-        Keychain().delete(privateKeyPassphraseKey)
+        Keychain.shared.delete(privateKeyPassphraseKey)
     }
 }
 

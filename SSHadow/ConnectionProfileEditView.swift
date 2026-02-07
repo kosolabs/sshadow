@@ -67,11 +67,13 @@ struct ConnectionProfileEditView: View {
     private var usePrivateKey: Binding<Bool> {
         Binding<Bool>(
             get: {
-                config.authMethod == ConnectionProfile.AuthMethod.privateKey
+                if case .privateKey = config.authMethod {
+                    return true
+                }
+                return false
             },
             set: {
-                config.authMethod =
-                    $0 ? ConnectionProfile.AuthMethod.privateKey : .password
+                config.authMethod = $0 ? .privateKey(bookmark: nil) : .password
             }
         )
     }
@@ -170,7 +172,9 @@ struct ConnectionProfileEditView: View {
                                     .lineLimit(1)
                                     .truncationMode(.head)
                                 Button(role: .destructive) {
-                                    config.privateKeyBookmark = nil
+                                    config.authMethod = .privateKey(
+                                        bookmark: nil
+                                    )
                                 } label: {
                                     Label(
                                         "Clear",
@@ -233,11 +237,11 @@ struct ConnectionProfileEditView: View {
                 }
             }
             do {
-                config.privateKeyBookmark = try url.bookmarkData(
-                    options: .withSecurityScope,
+                let bookmark = try url.bookmarkData(
                     includingResourceValuesForKeys: nil,
                     relativeTo: nil
                 )
+                config.authMethod = .privateKey(bookmark: bookmark)
             } catch {
                 print(
                     "Failed to create bookmark data for URL \(url): \(error)"
