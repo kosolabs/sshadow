@@ -12,27 +12,15 @@ private let logger = Logger(
 struct SSHadowApp: App {
     var body: some Scene {
         WindowGroup {
-            if isUnitTesting {
-                Text("Unit Testing")
-            } else {
-                ConnectionProfileListView()
-            }
+            ConnectionProfileListView()
         }
         .modelContainer(
             for: ConnectionProfile.self,
-            inMemory: isUITesting || isUnitTesting
+            inMemory: isUITesting
         )
     }
 
     private var isUITesting: Bool {
         ProcessInfo.processInfo.arguments.contains("-uiTesting")
-    }
-
-    private var isUnitTesting: Bool {
-        let result =
-            ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"]
-            != nil
-        logger.debug("isUnitTesting: \(result)")
-        return result
     }
 }
