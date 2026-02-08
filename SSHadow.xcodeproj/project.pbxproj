@@ -1067,8 +1067,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/kosolabs/swift-lib-ssh.git";
 			requirement = {
-				kind = exactVersion;
-				version = 1.4.0;
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.5.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

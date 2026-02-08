@@ -11,11 +11,14 @@ private let logger = Logger(
 
 public struct ConnectionConfig: Codable, CustomStringConvertible, Sendable {
     public enum AuthMethod: Codable, CustomStringConvertible, Sendable {
+        case none
         case password
         case privateKey(bookmark: Data)
 
         public var description: String {
             switch self {
+            case .none:
+                return ".none"
             case .password:
                 return ".password"
             case .privateKey:
@@ -119,6 +122,12 @@ extension SSHClient {
         config: ConnectionConfig
     ) async throws -> SSHClient {
         switch config.authMethod {
+        case .none:
+            return try await SSHClient.connect(
+                host: config.host,
+                port: config.port,
+                user: config.user,
+            )
         case .password:
             return try await SSHClient.connect(
                 host: config.host,
@@ -153,6 +162,13 @@ extension SSHClient {
         perform: @Sendable (SSHClient) async throws -> Void
     ) async throws {
         switch config.authMethod {
+        case .none:
+            try await SSHClient.withAuthenticatedClient(
+                host: config.host,
+                port: config.port,
+                user: config.user,
+                perform: perform,
+            )
         case .password:
             try await SSHClient.withAuthenticatedClient(
                 host: config.host,

@@ -1,6 +1,12 @@
+import OSLog
 import SSHadowShared
 import SwiftData
 import SwiftUI
+
+private let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier!,
+    category: "SSHadowApp"
+)
 
 @main
 struct SSHadowApp: App {
@@ -10,7 +16,11 @@ struct SSHadowApp: App {
         }
         .modelContainer(
             for: ConnectionProfile.self,
-            inMemory: ProcessInfo.processInfo.arguments.contains("-uiTesting")
+            inMemory: isUITesting
         )
+    }
+
+    private var isUITesting: Bool {
+        ProcessInfo.processInfo.arguments.contains("-uiTesting")
     }
 }

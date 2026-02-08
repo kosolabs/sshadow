@@ -7,18 +7,8 @@ private let logger = Logger(
     category: "Keychain"
 )
 
-public protocol KeychainProviding: Sendable {
-    func delete(_ key: String)
-    func set(_ key: String, to data: Data)
-    func set(_ key: String, to string: String)
-    func get(_ key: String) -> Data?
-    func get(_ key: String) -> String?
-    func getPasswordKey(id: UUID) -> String
-    func getPrivateKeyPassphraseKey(id: UUID) -> String
-}
-
-public final class Keychain: KeychainProviding {
-    public static var shared: any KeychainProviding = Keychain()
+public final class Keychain {
+    public static var shared = Keychain()
 
     private let service: String
     private let accessGroup: String
