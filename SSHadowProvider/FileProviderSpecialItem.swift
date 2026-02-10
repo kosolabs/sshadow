@@ -4,29 +4,21 @@ import SSHadowShared
 import SwiftLibSSH
 import UniformTypeIdentifiers
 
-
-class FileProviderItem: NSObject, NSFileProviderItem {
+class FileProviderSpecialItem: NSObject, NSFileProviderItem {
     private let logger: Logger
-
-    // TODO: implement an initializer to create an item from your extension's backing model
-    // TODO: implement the accessors to return the values from your extension's backing model
-
     let itemIdentifier: NSFileProviderItemIdentifier
-    private let itemAttributes: SFTPAttributes
 
     init(
         domainName: String,
         itemIdentifier: NSFileProviderItemIdentifier,
-        itemAttributes: SFTPAttributes,
     ) {
         logger = getLogger(category: "Item.\(domainName)")
         logger.debug("init: \(itemIdentifier.rawValue, privacy: .public)")
         self.itemIdentifier = itemIdentifier
-        self.itemAttributes = itemAttributes
     }
 
     var parentItemIdentifier: NSFileProviderItemIdentifier {
-        return itemIdentifier.parent()
+        return .rootContainer
     }
 
     var capabilities: NSFileProviderItemCapabilities {
@@ -44,10 +36,10 @@ class FileProviderItem: NSObject, NSFileProviderItem {
     }
 
     var filename: String {
-        return itemAttributes.name
+        return itemIdentifier.rawValue
     }
 
     var contentType: UTType {
-        itemAttributes.type == .directory ? .folder : .text
+        .folder
     }
 }

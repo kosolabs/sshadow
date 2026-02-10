@@ -31,7 +31,7 @@ struct ConnectionTesterTests {
                     id: UUID(),
                     name: "test",
                     host: "localhost",
-                    port: 2222,
+                    port: 2223,
                     user: "user",
                     path: "/home/user",
                     authMethod: .none,

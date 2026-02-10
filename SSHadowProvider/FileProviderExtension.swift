@@ -4,18 +4,14 @@ import SSHadowShared
 import SwiftData
 import SwiftLibSSH
 
-private let logger = Logger(
-    subsystem: Bundle.main.bundleIdentifier!,
-    category: "FileProviderExtension"
-)
-
 class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
+    private let logger: Logger
     private let config: ConnectionConfig?
 
     required init(domain: NSFileProviderDomain) {
         // TODO: The containing application must create a domain using `NSFileProviderManager.add(_:, completionHandler:)`. The system will then launch the application extension process, call `FileProviderExtension.init(domain:)` to instantiate the extension for that domain, and call methods on the instance.
-        logger.debug(
-            "init: \(domain.displayName, privacy: .public) (\(domain.identifier.rawValue, privacy: .public))"
+        logger = getLogger(
+            category: "Extension.\(domain.displayName)"
         )
 
         if let userInfo = domain.userInfo,
@@ -23,6 +19,9 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
             let config = ConnectionConfig.fromJSON(json)
         {
             self.config = config
+            logger.debug(
+                "init: \(config, privacy: .public)"
+            )
         } else {
             logger.fault("Failed to retrieve connection config")
             self.config = nil
@@ -32,20 +31,59 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
     }
 
     func invalidate() {
-        logger.debug("invalidate")
         // TODO: cleanup any resources
     }
 
     func item(
-        for identifier: NSFileProviderItemIdentifier,
+        for itemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest,
         completionHandler: @escaping (NSFileProviderItem?, Error?) -> Void
     ) -> Progress {
         // resolve the given identifier to a record in the model
 
         // TODO: implement the actual lookup
+        guard let config = self.config else {
+            completionHandler(nil, NSFileProviderError(.notAuthenticated))
+            return Progress()
+        }
 
-        completionHandler(FileProviderItem(identifier: identifier), nil)
+        logger.debug("item: \(itemIdentifier.rawValue, privacy: .public)")
+        Task {
+            if itemIdentifier == .rootContainer
+                || itemIdentifier == .trashContainer
+                || itemIdentifier == .workingSet
+            {
+                completionHandler(
+                    FileProviderSpecialItem(
+                        domainName: config.name,
+                        itemIdentifier: itemIdentifier
+                    ),
+                    nil
+                )
+            } else {
+                do {
+                    try await SSHClient.withSession(config: config) {
+                        _,
+                        sftpClient in
+                        let attrs = try await sftpClient.attributes(
+                            atPath: itemIdentifier.rawValue
+                        )
+                        completionHandler(
+                            FileProviderItem(
+                                domainName: config.name,
+                                itemIdentifier: itemIdentifier.child(
+                                    name: attrs.name
+                                ),
+                                itemAttributes: attrs
+                            ),
+                            nil
+                        )
+                    }
+                } catch {
+                    completionHandler(nil, error)
+                }
+            }
+        }
         return Progress()
     }
 
@@ -142,7 +180,7 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 
         return FileProviderEnumerator(
             config: config,
-            enumeratedItemIdentifier: containerItemIdentifier
+            itemIdentifier: containerItemIdentifier
         )
     }
 }
