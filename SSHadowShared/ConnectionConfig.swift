@@ -157,46 +157,21 @@ extension SSHClient {
         }
     }
 
-    public static func withAuthenticatedClient(
+    @discardableResult
+    public static func withSession<T: Sendable>(
         config: ConnectionConfig,
-        perform: @Sendable (SSHClient) async throws -> Void
-    ) async throws {
-        switch config.authMethod {
-        case .none:
-            try await SSHClient.withAuthenticatedClient(
-                host: config.host,
-                port: config.port,
-                user: config.user,
-                perform: perform,
-            )
-        case .password:
-            try await SSHClient.withAuthenticatedClient(
-                host: config.host,
-                port: config.port,
-                user: config.user,
-                password: try config.getPassword(),
-                perform: perform,
-            )
-        case .privateKey(let bookmark):
-            var isStale = false
-            let privateKeyURL = try URL(
-                resolvingBookmarkData: bookmark,
-                bookmarkDataIsStale: &isStale
-            )
-            guard privateKeyURL.startAccessingSecurityScopedResource() else {
-                throw SSHClientError.authenticationFailed(
-                    "Failed to read private key from URL: \(privateKeyURL)"
-                )
+        perform: @Sendable (SSHClient, SFTPClient) async throws -> T
+    ) async throws -> T {
+        let sshClient = try await connect(config: config)
+        do {
+            let result = try await sshClient.withSftp() { sftpClient in
+                try await perform(sshClient, sftpClient)
             }
-            defer { privateKeyURL.stopAccessingSecurityScopedResource() }
-            try await SSHClient.withAuthenticatedClient(
-                host: config.host,
-                port: config.port,
-                user: config.user,
-                privateKeyURL: privateKeyURL,
-                passphrase: try config.getPrivateKeyPassphrase(),
-                perform: perform,
-            )
+            await sshClient.close()
+            return result
+        } catch {
+            await sshClient.close()
+            throw error
         }
     }
 }

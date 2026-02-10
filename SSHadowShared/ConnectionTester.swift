@@ -25,15 +25,13 @@ public struct DefaultConnectionTester: ConnectionTester {
 
     public func test(config: ConnectionConfig) async throws {
         do {
-            try await SSHClient.withAuthenticatedClient(config: config) {
-                sshClient in
-                try await sshClient.withSftp { sftpClient in
-                    let attrs = try await sftpClient.attributes(
-                        atPath: config.path
-                    )
-                    if attrs.type != .directory {
-                        throw ConnectionTestError.pathNotADirectory
-                    }
+            try await SSHClient.withSession(config: config) {
+                _, sftpClient in
+                let attrs = try await sftpClient.attributes(
+                    atPath: config.path
+                )
+                if attrs.type != .directory {
+                    throw ConnectionTestError.pathNotADirectory
                 }
             }
         } catch {

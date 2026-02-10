@@ -3,30 +3,31 @@ import OSLog
 import SSHadowShared
 import SwiftLibSSH
 
-private let logger = Logger(
-    subsystem: Bundle.main.bundleIdentifier!,
-    category: "FileProviderEnumerator"
-)
-
 class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
+    private let logger: Logger
     private let config: ConnectionConfig
-    private let enumeratedItemIdentifier: NSFileProviderItemIdentifier
+    private let itemIdentifier: NSFileProviderItemIdentifier
     private let anchor = NSFileProviderSyncAnchor(
         "an anchor".data(using: .utf8)!
     )
 
     init(
         config: ConnectionConfig,
-        enumeratedItemIdentifier: NSFileProviderItemIdentifier
+        itemIdentifier: NSFileProviderItemIdentifier
     ) {
-        logger.debug("init: \(config, privacy: .public)")
+        logger = Logger(
+            subsystem: Bundle.main.bundleIdentifier!,
+            category: "Enumerator.\(config.name)"
+        )
+        logger.debug(
+            "init: \(itemIdentifier.rawValue, privacy: .public)"
+        )
         self.config = config
-        self.enumeratedItemIdentifier = enumeratedItemIdentifier
+        self.itemIdentifier = itemIdentifier
         super.init()
     }
 
     func invalidate() {
-        logger.debug("invalidate")
         // TODO: perform invalidation of server connection if necessary
     }
 
@@ -48,34 +49,41 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
          */
 
         Task {
+            if itemIdentifier == .trashContainer {
+                observer.finishEnumerating(upTo: nil)
+                return
+            }
+
+            if itemIdentifier == .workingSet {
+                observer.finishEnumerating(upTo: nil)
+                return
+            }
+
             do {
-                try await SSHClient.withAuthenticatedClient(config: config) {
-                    ssh in
-                    try await ssh.withSftp { sftp in
-                        try await sftp.withDirectory(atPath: config.path) {
-                            dir in
-                            var items: [any NSFileProviderItemProtocol] = []
-                            for try await attrs in dir {
-                                items.append(
-                                    FileProviderItem(
-                                        identifier:
-                                            NSFileProviderItemIdentifier(
-                                                attrs.name ?? "nil"
-                                            )
-                                    )
+                let items = try await SSHClient.withSession(config: config) { _, sftp in
+                    try await sftp.withDirectory(
+                        atPath: itemIdentifier.path(base: config.path)
+                    ) { dir in
+                        var items: [any NSFileProviderItemProtocol] = []
+                        for try await attrs in dir {
+                            items.append(
+                                FileProviderItem(
+                                    domainName: config.name,
+                                    itemIdentifier: itemIdentifier.child(
+                                        name: attrs.name
+                                    ),
+                                    itemAttributes: attrs
                                 )
-                            }
-                            observer.didEnumerate(items)
+                            )
                         }
+                        return items
                     }
                 }
-                logger.debug(
-                    "finished enumerating items for \(self.config, privacy: .public)"
-                )
+                observer.didEnumerate(items)
                 observer.finishEnumerating(upTo: nil)
             } catch {
                 logger.error(
-                    "error while enumerating items for \(self.config, privacy: .public): \(error, privacy: .public)"
+                    "error while enumerating items for \(self.config.name, privacy: .public): \(error, privacy: .public)"
                 )
                 observer.finishEnumeratingWithError(error)
             }
