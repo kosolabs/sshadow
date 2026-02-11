@@ -24,7 +24,11 @@ extension NSFileProviderItemIdentifier {
         return NSFileProviderItemIdentifier(rawValue: childRawValue)
     }
     
-    func path(base: String) -> String {
+    var file: String {
+        rawValue.split(separator: "/").last.map(String.init) ?? ""
+    }
+    
+    func fullPath(base: String) -> String {
         if self == .rootContainer {
             return base
         }

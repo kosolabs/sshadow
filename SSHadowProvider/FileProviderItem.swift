@@ -44,9 +44,17 @@ class FileProviderItem: NSObject, NSFileProviderItem {
     }
 
     var filename: String {
-        return itemAttributes.name
+        itemIdentifier.file
     }
-
+    
+    var documentSize: NSNumber? {
+        return itemAttributes.size as NSNumber
+    }
+    
+    var contentModificationDate: Date? {
+        itemAttributes.modifyTime
+    }
+    
     var contentType: UTType {
         itemAttributes.type == .directory ? .folder : .text
     }

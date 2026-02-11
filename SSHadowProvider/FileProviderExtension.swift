@@ -71,9 +71,7 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
                         completionHandler(
                             FileProviderItem(
                                 domainName: config.name,
-                                itemIdentifier: itemIdentifier.child(
-                                    name: attrs.name
-                                ),
+                                itemIdentifier: itemIdentifier,
                                 itemAttributes: attrs
                             ),
                             nil

@@ -60,21 +60,25 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
             }
 
             do {
-                let items = try await SSHClient.withSession(config: config) { _, sftp in
+                let items = try await SSHClient.withSession(config: config) {
+                    _,
+                    sftp in
                     try await sftp.withDirectory(
-                        atPath: itemIdentifier.path(base: config.path)
+                        atPath: itemIdentifier.fullPath(base: config.path)
                     ) { dir in
                         var items: [any NSFileProviderItemProtocol] = []
                         for try await attrs in dir {
-                            items.append(
-                                FileProviderItem(
-                                    domainName: config.name,
-                                    itemIdentifier: itemIdentifier.child(
-                                        name: attrs.name
-                                    ),
-                                    itemAttributes: attrs
+                            if let name = attrs.name {
+                                items.append(
+                                    FileProviderItem(
+                                        domainName: config.name,
+                                        itemIdentifier: itemIdentifier.child(
+                                            name: name
+                                        ),
+                                        itemAttributes: attrs
+                                    )
                                 )
-                            )
+                            }
                         }
                         return items
                     }

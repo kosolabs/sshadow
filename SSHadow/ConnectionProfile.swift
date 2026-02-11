@@ -69,11 +69,7 @@ private let logger = Logger(
 
     var url: String? {
         if host == "" { return nil }
-        var result = ""
-        if let user = user {
-            result += "\(user)@"
-        }
-        result += host
+        var result = "\(effectiveUser)@\(host)"
         if let port = port {
             result += ":\(port)"
         }
@@ -158,7 +154,7 @@ private let logger = Logger(
     }
 
     func enable() async throws {
-        await logger.info("Enabling: \(self)")
+        await logger.log("Enabling: \(self)")
         let config = try getConfig()
         try await tester.test(config: config)
         let domain = try getDomain(with: config)
@@ -167,7 +163,7 @@ private let logger = Logger(
     }
 
     func disable() {
-        logger.info("Disabling: \(self)")
+        logger.log("Disabling: \(self)")
         NSFileProviderManager.remove(getDomain()) { error in
             if let error = error {
                 logger.error(
