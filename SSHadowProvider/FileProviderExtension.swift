@@ -42,47 +42,54 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
         // resolve the given identifier to a record in the model
 
         // TODO: implement the actual lookup
-        guard let config = self.config else {
-            completionHandler(nil, NSFileProviderError(.notAuthenticated))
-            return Progress()
-        }
 
         logger.debug("item: \(itemIdentifier.rawValue, privacy: .public)")
+        let progress = Progress()
+
         Task {
-            if itemIdentifier == .rootContainer
-                || itemIdentifier == .trashContainer
-                || itemIdentifier == .workingSet
-            {
-                completionHandler(
-                    FileProviderSpecialItem(
-                        domainName: config.name,
-                        itemIdentifier: itemIdentifier
-                    ),
-                    nil
+            do {
+                let item = try await item(
+                    for: itemIdentifier,
+                    request: request,
+                    progress: progress
                 )
-            } else {
-                do {
-                    try await SSHClient.withSession(config: config) {
-                        _,
-                        sftpClient in
-                        let attrs = try await sftpClient.attributes(
-                            atPath: itemIdentifier.rawValue
-                        )
-                        completionHandler(
-                            FileProviderItem(
-                                domainName: config.name,
-                                itemIdentifier: itemIdentifier,
-                                itemAttributes: attrs
-                            ),
-                            nil
-                        )
-                    }
-                } catch {
-                    completionHandler(nil, error)
-                }
+                completionHandler(item, nil)
+            } catch {
+                completionHandler(nil, error)
             }
         }
-        return Progress()
+
+        return progress
+    }
+
+    private func item(
+        for itemIdentifier: NSFileProviderItemIdentifier,
+        request: NSFileProviderRequest,
+        progress: Progress,
+    ) async throws -> NSFileProviderItem {
+        guard let config = self.config else {
+            throw NSFileProviderError(.notAuthenticated)
+        }
+
+        if itemIdentifier == .rootContainer
+            || itemIdentifier == .trashContainer
+            || itemIdentifier == .workingSet
+        {
+            return FileProviderSpecialItem(
+                domainName: config.name,
+                itemIdentifier: itemIdentifier
+            )
+        }
+
+        let attrs = try await SSHClient.withSession(config: config) { _, sftp in
+            try await sftp.attributes(atPath: itemIdentifier.rawValue)
+        }
+
+        return FileProviderItem(
+            domainName: config.name,
+            itemIdentifier: itemIdentifier,
+            itemAttributes: attrs
+        )
     }
 
     func fetchContents(

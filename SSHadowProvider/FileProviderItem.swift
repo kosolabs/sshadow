@@ -51,8 +51,16 @@ class FileProviderItem: NSObject, NSFileProviderItem {
         return itemAttributes.size as NSNumber
     }
     
+    var lastUsedDate: Date? {
+        itemAttributes.accessTime
+    }
+    
     var contentModificationDate: Date? {
         itemAttributes.modifyTime
+    }
+    
+    var creationDate: Date?{
+        itemAttributes.createTime
     }
     
     var contentType: UTType {

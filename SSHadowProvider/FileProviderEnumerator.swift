@@ -49,42 +49,11 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
          */
 
         Task {
-            if itemIdentifier == .trashContainer {
-                observer.finishEnumerating(upTo: nil)
-                return
-            }
-
-            if itemIdentifier == .workingSet {
-                observer.finishEnumerating(upTo: nil)
-                return
-            }
-
             do {
-                let items = try await SSHClient.withSession(config: config) {
-                    _,
-                    sftp in
-                    try await sftp.withDirectory(
-                        atPath: itemIdentifier.fullPath(base: config.path)
-                    ) { dir in
-                        var items: [any NSFileProviderItemProtocol] = []
-                        for try await attrs in dir {
-                            if let name = attrs.name {
-                                items.append(
-                                    FileProviderItem(
-                                        domainName: config.name,
-                                        itemIdentifier: itemIdentifier.child(
-                                            name: name
-                                        ),
-                                        itemAttributes: attrs
-                                    )
-                                )
-                            }
-                        }
-                        return items
-                    }
+                let upTo = try await enumerateItems(startingAt: page) { items in
+                    observer.didEnumerate(items)
                 }
-                observer.didEnumerate(items)
-                observer.finishEnumerating(upTo: nil)
+                observer.finishEnumerating(upTo: upTo)
             } catch {
                 logger.error(
                     "error while enumerating items for \(self.config.name, privacy: .public): \(error, privacy: .public)"
@@ -92,6 +61,37 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
                 observer.finishEnumeratingWithError(error)
             }
         }
+    }
+
+    func enumerateItems(
+        startingAt page: NSFileProviderPage,
+        yield: ([any NSFileProviderItemProtocol]) -> Void
+    ) async throws -> NSFileProviderPage? {
+        if itemIdentifier == .trashContainer {
+            return nil
+        }
+
+        if itemIdentifier == .workingSet {
+            return nil
+        }
+
+        try await SSHClient.withSession(config: config) { _, sftp in
+            let path = itemIdentifier.fullPath(base: config.path)
+            try await sftp.withDirectory(atPath: path) { dir in
+                for try await attrs in dir {
+                    if let name = attrs.name {
+                        let item = FileProviderItem(
+                            domainName: config.name,
+                            itemIdentifier: itemIdentifier.child(name: name),
+                            itemAttributes: attrs
+                        )
+                        yield([item])
+                    }
+                }
+            }
+        }
+
+        return nil
     }
 
     func enumerateChanges(
