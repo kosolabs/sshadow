@@ -14,17 +14,14 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
             category: "Extension.\(domain.displayName)"
         )
 
-        if let userInfo = domain.userInfo,
-            let json = userInfo["connectionConfig"] as? String,
-            let config = ConnectionConfig.fromJSON(json)
+        if let userInfo = try? UserInfo.fromDictionary(domain.userInfo),
+            let config = try? ConnectionConfig(from: userInfo)
         {
             self.config = config
-            logger.debug(
-                "init: \(config, privacy: .public)"
-            )
+            logger.debug("init: \(config, privacy: .public)")
         } else {
-            logger.fault("Failed to retrieve connection config")
             self.config = nil
+            logger.fault("Failed to retrieve connection config")
         }
 
         super.init()

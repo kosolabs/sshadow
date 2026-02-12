@@ -1,0 +1,6 @@
+StrictModes no
+UsePAM no
+PasswordAuthentication no
+PubkeyAuthentication yes
+LogLevel DEBUG
+Match User *

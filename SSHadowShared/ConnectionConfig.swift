@@ -12,8 +12,8 @@ private let logger = Logger(
 public struct ConnectionConfig: Codable, CustomStringConvertible, Sendable {
     public enum AuthMethod: Codable, CustomStringConvertible, Sendable {
         case none
-        case password
-        case privateKey(bookmark: Data)
+        case password(String)
+        case privateKey(base64PrivateKey: String, passphrase: String?)
 
         public var description: String {
             switch self {
@@ -72,49 +72,6 @@ public struct ConnectionConfig: Codable, CustomStringConvertible, Sendable {
         return
             "ConnectionConfig(id: \(id), name: \(name), url: \(url), authMethod: \(authMethod))"
     }
-
-    private var passwordKey: String {
-        Keychain.shared.getPasswordKey(id: id)
-    }
-
-    public func getPassword() throws -> String {
-        guard let password: String = Keychain.shared.get(passwordKey) else {
-            throw ConnectionConfigError.passwordNil
-        }
-        return password
-    }
-
-    private var privateKeyPassphraseKey: String {
-        Keychain.shared.getPrivateKeyPassphraseKey(id: id)
-    }
-
-    public func getPrivateKeyPassphrase() throws -> String? {
-        guard
-            let passphrase: String = Keychain.shared.get(
-                privateKeyPassphraseKey
-            )
-        else {
-            return nil
-        }
-        return passphrase
-    }
-
-    public func toJSON() -> String? {
-        guard let data = try? JSONEncoder().encode(self) else {
-            return nil
-        }
-        return String(data: data, encoding: .utf8)
-    }
-
-    public static func fromJSON(_ json: String) -> ConnectionConfig? {
-        guard let data = json.data(using: .utf8) else {
-            return nil
-        }
-        return try? JSONDecoder().decode(
-            ConnectionConfig.self,
-            from: data
-        )
-    }
 }
 
 extension SSHClient {
@@ -128,31 +85,20 @@ extension SSHClient {
                 port: config.port,
                 user: config.user,
             )
-        case .password:
+        case .password(let password):
             return try await SSHClient.connect(
                 host: config.host,
                 port: config.port,
                 user: config.user,
-                password: try config.getPassword(),
+                password: password,
             )
-        case .privateKey(let bookmark):
-            var isStale = false
-            let url = try URL(
-                resolvingBookmarkData: bookmark,
-                bookmarkDataIsStale: &isStale
-            )
-            guard url.startAccessingSecurityScopedResource() else {
-                throw SSHClientError.authenticationFailed(
-                    "Failed to read private key from URL: \(url)"
-                )
-            }
-            defer { url.stopAccessingSecurityScopedResource() }
+        case .privateKey(let base64PrivateKey, let passphrase):
             return try await SSHClient.connect(
                 host: config.host,
                 port: config.port,
                 user: config.user,
-                privateKeyURL: url,
-                passphrase: try config.getPrivateKeyPassphrase()
+                base64PrivateKey: base64PrivateKey,
+                passphrase: passphrase,
             )
         }
     }
