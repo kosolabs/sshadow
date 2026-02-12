@@ -99,54 +99,6 @@ private let logger = Logger(
         "ConnectionProfile(id: \(id), name: \(name ?? "-"), enabled: \(enabled), url: \(url ?? "-"), authMethod: \(authMethod))"
     }
 
-    func getDomain() -> NSFileProviderDomain {
-        NSFileProviderDomain(
-            identifier: NSFileProviderDomainIdentifier(id.uuidString),
-            displayName: effectiveName,
-        )
-    }
-
-    func getDomain(with config: ConnectionConfig) throws -> NSFileProviderDomain
-    {
-        guard let data = try? JSONEncoder().encode(config) else {
-            throw ValidationError.encodeToJSONFailed
-        }
-        guard let val = String(data: data, encoding: .utf8) else {
-            throw ValidationError.encodeToJSONFailed
-        }
-
-        let domain = getDomain()
-        domain.userInfo = ["connectionConfig": val]
-        return domain
-    }
-
-    func getConfigAuthMethod() throws -> ConnectionConfig.AuthMethod {
-        switch authMethod {
-        case .password:
-            guard getPassword() != nil else {
-                throw ValidationError.passwordNil
-            }
-            return .password
-        case .privateKey(let bookmark):
-            guard let bookmark = bookmark else {
-                throw ValidationError.privateKeyURLNil
-            }
-            return .privateKey(bookmark: bookmark)
-        }
-    }
-
-    func getConfig() throws -> ConnectionConfig {
-        try ConnectionConfig(
-            id: id,
-            name: effectiveName,
-            host: host,
-            port: effectivePort,
-            user: effectiveUser,
-            path: effectivePath,
-            authMethod: getConfigAuthMethod()
-        )
-    }
-
     // MARK: - Enable / Disable
 
     func isEnabled() -> Bool {
@@ -155,9 +107,10 @@ private let logger = Logger(
 
     func enable() async throws {
         await logger.log("Enabling: \(self)")
-        let config = try getConfig()
+        let config = try await ConnectionConfig(from: self)
         try await tester.test(config: config)
-        let domain = try getDomain(with: config)
+        let userInfo = try await UserInfo(from: self)
+        let domain = try getDomain(with: userInfo)
         try await NSFileProviderManager.add(domain)
         self.enabled = true
     }
@@ -230,6 +183,60 @@ private let logger = Logger(
     func deletePrivateKeyPassphrase() {
         Keychain.shared.delete(privateKeyPassphraseKey)
     }
+    
+    func getDomain() -> NSFileProviderDomain {
+        NSFileProviderDomain(
+            identifier: NSFileProviderDomainIdentifier(id.uuidString),
+            displayName: effectiveName,
+        )
+    }
+
+    func getDomain(with userInfo: UserInfo) throws -> NSFileProviderDomain {
+        let domain = getDomain()
+        domain.userInfo = try userInfo.toDictionary()
+        return domain
+    }
+
+    fileprivate func resolveConfigAuthMethod() throws -> ConnectionConfig.AuthMethod {
+        switch authMethod {
+        case .password:
+            guard let password = getPassword() else {
+                throw ValidationError.passwordNil
+            }
+            return .password(password)
+        case .privateKey(let bookmark):
+            guard let bookmark = bookmark else {
+                throw ValidationError.privateKeyURLNil
+            }
+            var isStale = false
+            let url = try URL(
+                resolvingBookmarkData: bookmark,
+                bookmarkDataIsStale: &isStale
+            )
+            guard url.startAccessingSecurityScopedResource() else {
+                throw ValidationError.privateKeyReadFailed
+            }
+            defer { url.stopAccessingSecurityScopedResource() }
+            let base64PrivateKey = try Data(contentsOf: url).decoded(as: .utf8)
+            let passphrase = getPrivateKeyPassphrase()
+            return .privateKey(base64PrivateKey: base64PrivateKey, passphrase: passphrase)
+        }
+    }
+
+    fileprivate func resolveUserInfoAuthMethod() throws -> UserInfo.AuthMethod {
+        switch authMethod {
+        case .password:
+            guard getPassword() != nil else {
+                throw ValidationError.passwordNil
+            }
+            return .password
+        case .privateKey(let bookmark):
+            guard let bookmark = bookmark else {
+                throw ValidationError.privateKeyURLNil
+            }
+            return .privateKey(bookmark: bookmark)
+        }
+    }
 }
 
 extension ModelContext {
@@ -237,5 +244,33 @@ extension ModelContext {
         config.deletePassword()
         config.deletePrivateKeyPassphrase()
         self.delete(config)
+    }
+}
+
+extension ConnectionConfig {
+    init(from profile: ConnectionProfile) throws {
+        try self.init(
+            id: profile.id,
+            name: profile.effectiveName,
+            host: profile.host,
+            port: profile.effectivePort,
+            user: profile.effectiveUser,
+            path: profile.effectivePath,
+            authMethod: profile.resolveConfigAuthMethod()
+        )
+    }
+}
+
+extension UserInfo {
+    init(from profile: ConnectionProfile) throws {
+        try self.init(
+            id: profile.id,
+            name: profile.effectiveName,
+            host: profile.host,
+            port: profile.effectivePort,
+            user: profile.effectiveUser,
+            path: profile.effectivePath,
+            authMethod: profile.resolveUserInfoAuthMethod()
+        )
     }
 }
