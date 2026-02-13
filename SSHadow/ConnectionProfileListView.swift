@@ -40,7 +40,7 @@ struct ConnectionProfileListView: View {
                     )
                 }
             }
-            .frame(minWidth: 250)
+            .frame(minWidth: 250, minHeight: 500)
             .accessibilityIdentifier("connectionsList")
             .navigationTitle("Connections")
             .toolbar {

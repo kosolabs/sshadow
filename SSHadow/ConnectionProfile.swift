@@ -19,7 +19,7 @@ private let logger = Logger(
 
     enum AuthMethod: Codable, CustomStringConvertible, Sendable {
         case password
-        case privateKey(bookmark: Data?)
+        case privateKey
 
         public var description: String {
             switch self {
@@ -39,6 +39,7 @@ private let logger = Logger(
     var user: String?
     var path: String?
     var authMethod: AuthMethod
+    var bookmark: Data?
 
     @Transient private var tester: ConnectionTester = DefaultConnectionTester()
 
@@ -147,9 +148,7 @@ private let logger = Logger(
     }
 
     func privateKeyURL() -> URL? {
-        guard case .privateKey(let maybeBookmark) = authMethod,
-            let bookmark = maybeBookmark
-        else {
+        guard let bookmark = bookmark else {
             return nil
         }
         do {
@@ -204,7 +203,7 @@ private let logger = Logger(
                 throw ValidationError.passwordNil
             }
             return .password(password)
-        case .privateKey(let bookmark):
+        case .privateKey:
             guard let bookmark = bookmark else {
                 throw ValidationError.privateKeyURLNil
             }
@@ -230,7 +229,7 @@ private let logger = Logger(
                 throw ValidationError.passwordNil
             }
             return .password
-        case .privateKey(let bookmark):
+        case .privateKey:
             guard let bookmark = bookmark else {
                 throw ValidationError.privateKeyURLNil
             }
@@ -241,6 +240,9 @@ private let logger = Logger(
 
 extension ModelContext {
     func delete(connectionConfig config: ConnectionProfile) {
+        if config.enabled {
+            config.disable()
+        }
         config.deletePassword()
         config.deletePrivateKeyPassphrase()
         self.delete(config)
