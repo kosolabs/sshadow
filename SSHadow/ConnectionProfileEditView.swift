@@ -1,4 +1,4 @@
-import SSHadowShared
+import Common
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -164,7 +164,7 @@ struct ConnectionProfileEditView: View {
                     )
                     .accessibilityIdentifier("userField")
                     Toggle("Use Private Key", isOn: usePrivateKey)
-                    .accessibilityIdentifier("usePrivateKeyToggle")
+                        .accessibilityIdentifier("usePrivateKeyToggle")
                     if usePrivateKey.wrappedValue {
                         LabeledContent("Private Key") {
                             if let url = config.privateKeyURL() {

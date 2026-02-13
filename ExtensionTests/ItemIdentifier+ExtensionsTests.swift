@@ -1,7 +1,9 @@
 import FileProvider
 import Testing
 
-struct NSFileProviderItemIdentifierExtensionsTests {
+@testable import Extension
+
+struct ItemIdentifierExtensionsTests {
     
     // MARK: - Parent Tests
     

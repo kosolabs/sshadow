@@ -1,6 +1,6 @@
+import Common
 import FileProvider
 import OSLog
-import SSHadowShared
 import SwiftData
 import SwiftUI
 
@@ -182,7 +182,7 @@ private let logger = Logger(
     func deletePrivateKeyPassphrase() {
         Keychain.shared.delete(privateKeyPassphraseKey)
     }
-    
+
     func getDomain() -> NSFileProviderDomain {
         NSFileProviderDomain(
             identifier: NSFileProviderDomainIdentifier(id.uuidString),
@@ -196,7 +196,9 @@ private let logger = Logger(
         return domain
     }
 
-    fileprivate func resolveConfigAuthMethod() throws -> ConnectionConfig.AuthMethod {
+    fileprivate func resolveConfigAuthMethod() throws
+        -> ConnectionConfig.AuthMethod
+    {
         switch authMethod {
         case .password:
             guard let password = getPassword() else {
@@ -218,7 +220,10 @@ private let logger = Logger(
             defer { url.stopAccessingSecurityScopedResource() }
             let base64PrivateKey = try Data(contentsOf: url).decoded(as: .utf8)
             let passphrase = getPrivateKeyPassphrase()
-            return .privateKey(base64PrivateKey: base64PrivateKey, passphrase: passphrase)
+            return .privateKey(
+                base64PrivateKey: base64PrivateKey,
+                passphrase: passphrase
+            )
         }
     }
 
