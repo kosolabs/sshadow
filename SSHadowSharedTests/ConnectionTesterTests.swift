@@ -14,9 +14,7 @@ struct ConnectionTesterTests {
             user: NSUserName(),
             path: "Public",
             authMethod: .privateKey(
-                base64PrivateKey: Data(
-                    contentsOf: URL(filePath: "/tmp/id_ed25519")
-                ).decoded(as: .utf8),
+                base64PrivateKey: getPrivateKey(),
                 passphrase: nil
             ),
         )
@@ -69,4 +67,9 @@ struct ConnectionTesterTests {
             )
         }
     }
+}
+
+func getPrivateKey() throws -> String {
+    let privateKeyURL = URL(filePath: "/tmp/id_ed25519")
+    return try Data(contentsOf: privateKeyURL).decoded(as: .utf8)
 }
