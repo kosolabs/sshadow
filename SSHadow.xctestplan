@@ -1,0 +1,38 @@
+{
+  "configurations" : [
+    {
+      "id" : "ACFA1F9D-41B8-4011-8097-AC88601000EF",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:SSHadow.xcodeproj",
+        "identifier" : "730981082F318825009F7AA2",
+        "name" : "SSHadowSharedTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:SSHadow.xcodeproj",
+        "identifier" : "738D631F2F3FAB2300FED311",
+        "name" : "SSHadowProviderTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:SSHadow.xcodeproj",
+        "identifier" : "7322A9102F28212400D8117D",
+        "name" : "SSHadowUITests"
+      }
+    }
+  ],
+  "version" : 1
+}
