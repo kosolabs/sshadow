@@ -1,9 +1,9 @@
+import Common
 import FileProvider
 import OSLog
-import SSHadowShared
 import SwiftLibSSH
 
-class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
+class Enumerator: NSObject, NSFileProviderEnumerator {
     private let logger: Logger
     private let config: ConnectionConfig
     private let itemIdentifier: NSFileProviderItemIdentifier
@@ -80,7 +80,7 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
             try await sftp.withDirectory(atPath: path) { dir in
                 for try await attrs in dir {
                     if let name = attrs.name {
-                        let item = FileProviderItem(
+                        let item = Item(
                             domainName: config.name,
                             itemIdentifier: itemIdentifier.child(name: name),
                             itemAttributes: attrs

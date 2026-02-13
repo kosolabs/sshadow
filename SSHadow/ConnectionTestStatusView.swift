@@ -1,4 +1,4 @@
-import SSHadowShared
+import Common
 import SwiftUI
 
 struct ConnectionTestStatusView: View {

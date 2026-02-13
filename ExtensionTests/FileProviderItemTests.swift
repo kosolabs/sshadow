@@ -5,6 +5,8 @@ import UniformTypeIdentifiers
 import CLibSSH
 import SwiftLibSSH
 
+@testable import Extension
+
 struct FileProviderItemTests {
 
     // MARK: - Filename Tests
@@ -12,7 +14,7 @@ struct FileProviderItemTests {
     @Test func filenameIsDerivedFromIdentifier() {
         let identifier = NSFileProviderItemIdentifier("folder/document.pdf")
         
-        let item = FileProviderItem(
+        let item = Item(
             domainName: "test",
             itemIdentifier: identifier,
             itemAttributes: SFTPAttributes()
@@ -26,7 +28,7 @@ struct FileProviderItemTests {
     @Test func documentSizeIsMappedFromAttributes() {
         let attributes = SFTPAttributes(size: 2048)
         
-        let item = FileProviderItem(
+        let item = Item(
             domainName: "test",
             itemIdentifier: NSFileProviderItemIdentifier("file"),
             itemAttributes: attributes
@@ -43,7 +45,7 @@ struct FileProviderItemTests {
         let date = Date(timeIntervalSince1970: timestamp)
         let attributes = SFTPAttributes(modifyTime: date)
         
-        let item = FileProviderItem(
+        let item = Item(
             domainName: "test",
             itemIdentifier: NSFileProviderItemIdentifier("file"),
             itemAttributes: attributes
@@ -57,7 +59,7 @@ struct FileProviderItemTests {
     @Test func contentTypeIsFolderForDirectoryType() {
         let attributes = SFTPAttributes(type: .directory)
         
-        let item = FileProviderItem(
+        let item = Item(
             domainName: "test",
             itemIdentifier: NSFileProviderItemIdentifier("folder"),
             itemAttributes: attributes
@@ -69,7 +71,7 @@ struct FileProviderItemTests {
     @Test func contentTypeIsTextForFileType() {
         let attributes = SFTPAttributes(type: .regular)
         
-        let item = FileProviderItem(
+        let item = Item(
             domainName: "test",
             itemIdentifier: NSFileProviderItemIdentifier("file.txt"),
             itemAttributes: attributes

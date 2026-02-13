@@ -16,21 +16,21 @@
       "target" : {
         "containerPath" : "container:SSHadow.xcodeproj",
         "identifier" : "730981082F318825009F7AA2",
-        "name" : "SSHadowSharedTests"
+        "name" : "CommonTests"
       }
     },
     {
       "target" : {
         "containerPath" : "container:SSHadow.xcodeproj",
-        "identifier" : "738D631F2F3FAB2300FED311",
-        "name" : "SSHadowProviderTests"
+        "identifier" : "738D63AB2F3FD1F100FED311",
+        "name" : "ExtensionTests"
       }
     },
     {
       "target" : {
         "containerPath" : "container:SSHadow.xcodeproj",
         "identifier" : "7322A9102F28212400D8117D",
-        "name" : "SSHadowUITests"
+        "name" : "UITests"
       }
     }
   ],

@@ -6,3 +6,6 @@ stop-test-server:
 
 test: start-test-server
     xcodebuild test -scheme SSHadow -destination 'platform=macOS'
+
+log:
+    log stream --predicate 'subsystem beginswith "com.kosolabs.SSHadow"' --style ndjson --level debug | jq -R -r --unbuffered -f logfilter.jq

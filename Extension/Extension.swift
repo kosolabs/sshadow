@@ -1,14 +1,14 @@
+import Common
 import FileProvider
 import OSLog
-import SSHadowShared
 import SwiftData
 import SwiftLibSSH
 
-class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
+public class Extension: NSObject, NSFileProviderReplicatedExtension {
     private let logger: Logger
     private let config: ConnectionConfig?
 
-    required init(domain: NSFileProviderDomain) {
+    required public init(domain: NSFileProviderDomain) {
         // TODO: The containing application must create a domain using `NSFileProviderManager.add(_:, completionHandler:)`. The system will then launch the application extension process, call `FileProviderExtension.init(domain:)` to instantiate the extension for that domain, and call methods on the instance.
         logger = getLogger(
             category: "Extension.\(domain.displayName)"
@@ -27,11 +27,11 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
         super.init()
     }
 
-    func invalidate() {
+    public func invalidate() {
         // TODO: cleanup any resources
     }
 
-    func item(
+    public func item(
         for itemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest,
         completionHandler: @escaping (NSFileProviderItem?, Error?) -> Void
@@ -59,7 +59,7 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
         return progress
     }
 
-    private func item(
+    func item(
         for itemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest,
         progress: Progress,
@@ -72,7 +72,7 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
             || itemIdentifier == .trashContainer
             || itemIdentifier == .workingSet
         {
-            return FileProviderSpecialItem(
+            return SpecialItem(
                 domainName: config.name,
                 itemIdentifier: itemIdentifier
             )
@@ -82,14 +82,14 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
             try await sftp.attributes(atPath: itemIdentifier.rawValue)
         }
 
-        return FileProviderItem(
+        return Item(
             domainName: config.name,
             itemIdentifier: itemIdentifier,
             itemAttributes: attrs
         )
     }
 
-    func fetchContents(
+    public func fetchContents(
         for itemIdentifier: NSFileProviderItemIdentifier,
         version requestedVersion: NSFileProviderItemVersion?,
         request: NSFileProviderRequest,
@@ -109,7 +109,7 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
         return Progress()
     }
 
-    func createItem(
+    public func createItem(
         basedOn itemTemplate: NSFileProviderItem,
         fields: NSFileProviderItemFields,
         contents url: URL?,
@@ -126,7 +126,7 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
         return Progress()
     }
 
-    func modifyItem(
+    public func modifyItem(
         _ item: NSFileProviderItem,
         baseVersion version: NSFileProviderItemVersion,
         changedFields: NSFileProviderItemFields,
@@ -153,7 +153,7 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
         return Progress()
     }
 
-    func deleteItem(
+    public func deleteItem(
         identifier: NSFileProviderItemIdentifier,
         baseVersion version: NSFileProviderItemVersion,
         options: NSFileProviderDeleteItemOptions = [],
@@ -172,7 +172,7 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
         return Progress()
     }
 
-    func enumerator(
+    public func enumerator(
         for containerItemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest
     ) throws -> NSFileProviderEnumerator {
@@ -180,7 +180,7 @@ class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
             throw NSFileProviderError(.notAuthenticated)
         }
 
-        return FileProviderEnumerator(
+        return Enumerator(
             config: config,
             itemIdentifier: containerItemIdentifier
         )

@@ -2,7 +2,7 @@ import Foundation
 import SwiftLibSSH
 import Testing
 
-@testable import SSHadowShared
+@testable import Common
 
 struct ConnectionTesterTests {
     @Test func testConnectionSucceeds() async throws {
