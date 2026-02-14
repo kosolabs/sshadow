@@ -3,7 +3,7 @@ import FileProvider
 import OSLog
 import SwiftLibSSH
 
-class Enumerator: NSObject, NSFileProviderEnumerator {
+public class Enumerator: NSObject, NSFileProviderEnumerator {
     private let logger: Logger
     private let config: ConnectionConfig
     private let itemIdentifier: NSFileProviderItemIdentifier
@@ -27,11 +27,11 @@ class Enumerator: NSObject, NSFileProviderEnumerator {
         super.init()
     }
 
-    func invalidate() {
+    public func invalidate() {
         // TODO: perform invalidation of server connection if necessary
     }
 
-    func enumerateItems(
+    public func enumerateItems(
         for observer: NSFileProviderEnumerationObserver,
         startingAt page: NSFileProviderPage
     ) {
@@ -56,7 +56,7 @@ class Enumerator: NSObject, NSFileProviderEnumerator {
                 observer.finishEnumerating(upTo: upTo)
             } catch {
                 logger.error(
-                    "error while enumerating items for \(self.config.name, privacy: .public): \(error, privacy: .public)"
+                    "Failed to enumerate items for \(self.config.name, privacy: .public): \(error, privacy: .public)"
                 )
                 observer.finishEnumeratingWithError(error)
             }
@@ -76,7 +76,8 @@ class Enumerator: NSObject, NSFileProviderEnumerator {
         }
 
         try await SSHClient.withSession(config: config) { _, sftp in
-            let path = itemIdentifier.fullPath(base: config.path)
+            let path = config.path(for: itemIdentifier)
+            logger.debug("Enumerating items at: \(path, privacy: .public)")
             try await sftp.withDirectory(atPath: path) { dir in
                 for try await attrs in dir {
                     if let name = attrs.name {
@@ -94,7 +95,7 @@ class Enumerator: NSObject, NSFileProviderEnumerator {
         return nil
     }
 
-    func enumerateChanges(
+    public func enumerateChanges(
         for observer: NSFileProviderChangeObserver,
         from anchor: NSFileProviderSyncAnchor
     ) {
@@ -110,7 +111,7 @@ class Enumerator: NSObject, NSFileProviderEnumerator {
         observer.finishEnumeratingChanges(upTo: anchor, moreComing: false)
     }
 
-    func currentSyncAnchor(
+    public func currentSyncAnchor(
         completionHandler: @escaping (NSFileProviderSyncAnchor?) -> Void
     ) {
         completionHandler(anchor)

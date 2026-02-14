@@ -4,9 +4,9 @@ import OSLog
 import SwiftLibSSH
 import UniformTypeIdentifiers
 
-class SpecialItem: NSObject, NSFileProviderItem {
+public class SpecialItem: NSObject, NSFileProviderItem {
     private let logger: Logger
-    let itemIdentifier: NSFileProviderItemIdentifier
+    public let itemIdentifier: NSFileProviderItemIdentifier
 
     init(
         domainName: String,
@@ -17,29 +17,29 @@ class SpecialItem: NSObject, NSFileProviderItem {
         self.itemIdentifier = itemIdentifier
     }
 
-    var parentItemIdentifier: NSFileProviderItemIdentifier {
+    public var parentItemIdentifier: NSFileProviderItemIdentifier {
         return .rootContainer
     }
 
-    var capabilities: NSFileProviderItemCapabilities {
+    public var capabilities: NSFileProviderItemCapabilities {
         return [
             .allowsReading, .allowsWriting, .allowsRenaming, .allowsReparenting,
             .allowsTrashing, .allowsDeleting,
         ]
     }
 
-    var itemVersion: NSFileProviderItemVersion {
+    public var itemVersion: NSFileProviderItemVersion {
         NSFileProviderItemVersion(
             contentVersion: "a content version".data(using: .utf8)!,
             metadataVersion: "a metadata version".data(using: .utf8)!
         )
     }
 
-    var filename: String {
+    public var filename: String {
         return itemIdentifier.rawValue
     }
 
-    var contentType: UTType {
+    public var contentType: UTType {
         .folder
     }
 }
