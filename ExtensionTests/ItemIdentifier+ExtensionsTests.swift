@@ -4,24 +4,24 @@ import Testing
 @testable import Extension
 
 struct ItemIdentifierExtensionsTests {
-    
+
     // MARK: - Parent Tests
-    
+
     @Test func rootContainerParentIsRootContainer() {
         let rootContainer: NSFileProviderItemIdentifier = .rootContainer
         #expect(rootContainer.parent() == .rootContainer)
     }
-    
+
     @Test func topLevelItemParentIsRootContainer() {
         let topLevel = NSFileProviderItemIdentifier("folder")
         #expect(topLevel.parent() == .rootContainer)
     }
-    
+
     @Test func nestedItemParentIsParentFolder() {
         let nested = NSFileProviderItemIdentifier("folder/file")
         #expect(nested.parent() == NSFileProviderItemIdentifier("folder"))
     }
-    
+
     @Test func deeplyNestedItemParentIsImmediateParent() {
         let deeplyNested = NSFileProviderItemIdentifier("a/b/c")
         #expect(deeplyNested.parent() == NSFileProviderItemIdentifier("a/b"))

@@ -1,13 +1,11 @@
 import Testing
-import Foundation
 import FileProvider
 import UniformTypeIdentifiers
-import CLibSSH
 import SwiftLibSSH
 
 @testable import Extension
 
-struct FileProviderItemTests {
+struct ItemTests {
 
     // MARK: - Filename Tests
     

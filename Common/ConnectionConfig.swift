@@ -9,8 +9,12 @@ private let logger = Logger(
     category: "ConnectionConfig"
 )
 
-public struct ConnectionConfig: Codable, CustomStringConvertible, Sendable {
-    public enum AuthMethod: Codable, CustomStringConvertible, Sendable {
+public struct ConnectionConfig:
+    Codable, CustomStringConvertible, Equatable, Sendable
+{
+    public enum AuthMethod:
+        Codable, CustomStringConvertible, Equatable, Sendable
+    {
         case none
         case password(String)
         case privateKey(base64PrivateKey: String, passphrase: String?)
@@ -71,11 +75,11 @@ public struct ConnectionConfig: Codable, CustomStringConvertible, Sendable {
     public var description: String {
         "ConnectionConfig(id: \(id), name: \(name), url: \(url), authMethod: \(authMethod))"
     }
-    
+
     public func path(for subpath: String) -> String {
         self.path.isEmpty ? subpath : "\(self.path)/\(subpath)"
     }
-    
+
     public func path(for item: NSFileProviderItemIdentifier) -> String {
         if item == .rootContainer {
             return self.path

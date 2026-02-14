@@ -186,6 +186,13 @@
 			);
 			target = 733470882F22037100B8181D /* SSHadow */;
 		};
+		73D94BC82F41216200CF7891 /* Exceptions for "CommonTests" folder in "ExtensionTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				TestData.swift,
+			);
+			target = 738D63AB2F3FD1F100FED311 /* ExtensionTests */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -196,6 +203,9 @@
 		};
 		7309810F2F318825009F7AA2 /* CommonTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				73D94BC82F41216200CF7891 /* Exceptions for "CommonTests" folder in "ExtensionTests" target */,
+			);
 			path = CommonTests;
 			sourceTree = "<group>";
 		};
