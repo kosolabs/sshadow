@@ -97,16 +97,89 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
     ) -> Progress {
         // TODO: implement fetching of the contents for the itemIdentifier at the specified version
 
-        completionHandler(
-            nil,
-            nil,
-            NSError(
-                domain: NSCocoaErrorDomain,
-                code: NSFeatureUnsupportedError,
-                userInfo: [:]
+        logger.debug(
+            "fetchContents: \(itemIdentifier.rawValue, privacy: .public)"
+        )
+        let progress = Progress()
+
+        Task {
+            do {
+                let (url, item) = try await fetchContents(
+                    for: itemIdentifier,
+                    version: requestedVersion,
+                    request: request,
+                    progress: progress
+                )
+                completionHandler(url, item, nil)
+            } catch {
+                logger.error(
+                    """
+                    Failed to fetch contents of \
+                    \(itemIdentifier.rawValue, privacy: .public): \
+                    \(error, privacy: .public)
+                    """
+                )
+                completionHandler(nil, nil, error)
+            }
+        }
+
+        return progress
+    }
+
+    func fetchContents(
+        for itemIdentifier: NSFileProviderItemIdentifier,
+        version requestedVersion: NSFileProviderItemVersion?,
+        request: NSFileProviderRequest,
+        progress: Progress,
+    ) async throws -> (URL, NSFileProviderItem) {
+        guard let config = self.config else {
+            throw NSFileProviderError(.notAuthenticated)
+        }
+        logger.debug(
+            """
+            Fetching contents of \
+            \(config.path(for: itemIdentifier.rawValue), privacy: .public)
+            """
+        )
+
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        guard FileManager.default.createFile(atPath: url.path(), contents: nil)
+        else {
+            throw NSFileProviderError(.insufficientQuota)
+        }
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+
+        let attrs = try await SSHClient.withSession(config: config) { _, sftp in
+            try await sftp.withSftpFile(
+                atPath: config.path(for: itemIdentifier),
+                accessType: .readOnly
+            ) { file in
+                let attrs = try await file.attributes()
+                logger.debug("fetching \(attrs.size) bytes")
+                progress.totalUnitCount = Int64(attrs.size)
+                for try await data in file.stream() {
+                    logger.debug("fetched \(data.count) bytes")
+                    if progress.isCancelled {
+                        throw CocoaError(.userCancelled)
+                    }
+                    try handle.write(contentsOf: data)
+                    progress.completedUnitCount += Int64(data.count)
+                }
+                logger.debug("finished fetching")
+                return attrs
+            }
+        }
+
+        return (
+            url,
+            Item(
+                domainName: config.name,
+                itemIdentifier: itemIdentifier,
+                itemAttributes: attrs
             )
         )
-        return Progress()
     }
 
     public func createItem(

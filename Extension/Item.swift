@@ -4,13 +4,13 @@ import OSLog
 import SwiftLibSSH
 import UniformTypeIdentifiers
 
-class Item: NSObject, NSFileProviderItem {
+public class Item: NSObject, NSFileProviderItem {
     private let logger: Logger
 
     // TODO: implement an initializer to create an item from your extension's backing model
     // TODO: implement the accessors to return the values from your extension's backing model
 
-    let itemIdentifier: NSFileProviderItemIdentifier
+    public let itemIdentifier: NSFileProviderItemIdentifier
     private let itemAttributes: SFTPAttributes
 
     init(
@@ -24,45 +24,45 @@ class Item: NSObject, NSFileProviderItem {
         self.itemAttributes = itemAttributes
     }
 
-    var parentItemIdentifier: NSFileProviderItemIdentifier {
+    public var parentItemIdentifier: NSFileProviderItemIdentifier {
         return itemIdentifier.parent()
     }
 
-    var capabilities: NSFileProviderItemCapabilities {
+    public var capabilities: NSFileProviderItemCapabilities {
         return [
             .allowsReading, .allowsWriting, .allowsRenaming, .allowsReparenting,
             .allowsTrashing, .allowsDeleting,
         ]
     }
 
-    var itemVersion: NSFileProviderItemVersion {
+    public var itemVersion: NSFileProviderItemVersion {
         NSFileProviderItemVersion(
             contentVersion: "a content version".data(using: .utf8)!,
             metadataVersion: "a metadata version".data(using: .utf8)!
         )
     }
 
-    var filename: String {
+    public var filename: String {
         itemIdentifier.file
     }
 
-    var documentSize: NSNumber? {
+    public var documentSize: NSNumber? {
         return itemAttributes.size as NSNumber
     }
 
-    var lastUsedDate: Date? {
+    public var lastUsedDate: Date? {
         itemAttributes.accessTime
     }
 
-    var contentModificationDate: Date? {
+    public var contentModificationDate: Date? {
         itemAttributes.modifyTime
     }
 
-    var creationDate: Date? {
+    public var creationDate: Date? {
         itemAttributes.createTime
     }
 
-    var contentType: UTType {
+    public var contentType: UTType {
         itemAttributes.type == .directory ? .folder : .text
     }
 }

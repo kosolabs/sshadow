@@ -57,19 +57,4 @@ struct ItemIdentifierExtensionsTests {
         let emptyPathFile = NSFileProviderItemIdentifier("")
         #expect(emptyPathFile.file == "")
     }
-
-    // MARK: - Full Path Tests
-
-    @Test func fullPathForRootContainerReturnsBasePath() {
-        let base = "/home/user"
-        let rootContainer: NSFileProviderItemIdentifier = .rootContainer
-        #expect(rootContainer.fullPath(base: base) == base)
-    }
-
-    @Test func fullPathForItemReturnsCombinedPath() {
-        let base = "/home/user"
-        let item = NSFileProviderItemIdentifier("folder/file.txt")
-        let expected = "/home/user/folder/file.txt"
-        #expect(item.fullPath(base: base) == expected)
-    }
 }

@@ -69,8 +69,22 @@ public struct ConnectionConfig: Codable, CustomStringConvertible, Sendable {
     }
 
     public var description: String {
-        return
-            "ConnectionConfig(id: \(id), name: \(name), url: \(url), authMethod: \(authMethod))"
+        "ConnectionConfig(id: \(id), name: \(name), url: \(url), authMethod: \(authMethod))"
+    }
+    
+    public func path(for subpath: String) -> String {
+        self.path.isEmpty ? subpath : "\(self.path)/\(subpath)"
+    }
+    
+    public func path(for item: NSFileProviderItemIdentifier) -> String {
+        if item == .rootContainer {
+            return self.path
+        }
+        return path(for: item.rawValue)
+    }
+
+    public func absoluteURL(for path: String) -> String {
+        self.path.isEmpty ? "\(url):\(path)" : "\(url)/\(path)"
     }
 }
 
@@ -110,7 +124,7 @@ extension SSHClient {
     ) async throws -> T {
         let sshClient = try await connect(config: config)
         do {
-            let result = try await sshClient.withSftp() { sftpClient in
+            let result = try await sshClient.withSftp { sftpClient in
                 try await perform(sshClient, sftpClient)
             }
             await sshClient.close()
