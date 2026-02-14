@@ -6,19 +6,7 @@ import Testing
 
 struct ConnectionTesterTests {
     @Test func testConnectionSucceeds() async throws {
-        let config = try ConnectionConfig(
-            id: UUID(),
-            name: "test",
-            host: "localhost",
-            port: 2248,
-            user: NSUserName(),
-            path: "Public",
-            authMethod: .privateKey(
-                base64PrivateKey: getPrivateKey(),
-                passphrase: nil
-            ),
-        )
-
+        let config = try TestData.getConnectionConfig()
         try await SSHClient.withSession(config: config) {
             _,
             sftpClient in
@@ -67,9 +55,4 @@ struct ConnectionTesterTests {
             )
         }
     }
-}
-
-func getPrivateKey() throws -> String {
-    let privateKeyURL = URL(filePath: "/tmp/id_ed25519")
-    return try Data(contentsOf: privateKeyURL).decoded(as: .utf8)
 }
