@@ -189,6 +189,7 @@
 		73D94BC82F41216200CF7891 /* Exceptions for "CommonTests" folder in "ExtensionTests" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				id_ed25519,
 				TestData.swift,
 			);
 			target = 738D63AB2F3FD1F100FED311 /* ExtensionTests */;

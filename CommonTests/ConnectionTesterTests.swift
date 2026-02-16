@@ -7,10 +7,8 @@ import Testing
 struct ConnectionTesterTests {
     @Test func testConnectionSucceeds() async throws {
         let config = try TestData.getConnectionConfig()
-        try await SSHClient.withSession(config: config) {
-            _,
-            sftpClient in
-            try await sftpClient.withDirectory(atPath: "media") { dir in
+        try await SSHClient.withSession(config: config) { _, sftp in
+            try await sftp.withDirectory(atPath: config.path) { dir in
                 for try await attr in dir {
                     if let name = attr.name {
                         print("\(name)")

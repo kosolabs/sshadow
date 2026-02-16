@@ -79,7 +79,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         }
 
         let attrs = try await SSHClient.withSession(config: config) { _, sftp in
-            try await sftp.attributes(atPath: itemIdentifier.rawValue)
+            try await sftp.attributes(atPath: config.path(for: itemIdentifier))
         }
 
         return Item(
