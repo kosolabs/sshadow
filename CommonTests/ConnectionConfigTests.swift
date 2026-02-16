@@ -4,7 +4,7 @@ import Foundation
 import FileProvider
 
 struct ConnectionConfigTests {
-    @Test func testPathForWithEmptyConfigPath() {
+    @Test func testPathWithEmptyConfigPath() {
         let config = ConnectionConfig(
             id: UUID(),
             name: "test",
@@ -18,7 +18,7 @@ struct ConnectionConfigTests {
         #expect(config.path(for: "file.txt") == "file.txt")
     }
 
-    @Test func testPathForWithNonEmptyConfigPath() {
+    @Test func testPathWithNonEmptyConfigPath() {
         let config = ConnectionConfig(
             id: UUID(),
             name: "test",
@@ -30,6 +30,34 @@ struct ConnectionConfigTests {
         )
         
         #expect(config.path(for: "file.txt") == "base/file.txt")
+    }
+    
+    @Test func testPathWithSlashSuffixInConfigPath() {
+        let config = ConnectionConfig(
+            id: UUID(),
+            name: "test",
+            host: "host",
+            port: 22,
+            user: "user",
+            path: "base/",
+            authMethod: .none
+        )
+        
+        #expect(config.path(for: "file.txt") == "base/file.txt")
+    }
+    
+    @Test func testPathWithSlashPrefixInConfigPath() {
+        let config = ConnectionConfig(
+            id: UUID(),
+            name: "test",
+            host: "host",
+            port: 22,
+            user: "user",
+            path: "/base",
+            authMethod: .none
+        )
+        
+        #expect(config.path(for: "file.txt") == "/base/file.txt")
     }
     
     @Test func testEmptyPathForRootContainerItem() {
@@ -86,7 +114,7 @@ struct ConnectionConfigTests {
         #expect(configWithBasePath.path(for: item) == "base/folder/file.txt")
     }
 
-    @Test func testAbsoluteURLForWithEmptyConfigPath() {
+    @Test func testAbsoluteURLWithEmptyConfigPath() {
         let config = ConnectionConfig(
             id: UUID(),
             name: "test",
@@ -99,7 +127,7 @@ struct ConnectionConfigTests {
         #expect(config.absoluteURL(for: "file.txt") == "user@host:file.txt")
     }
 
-    @Test func testAbsoluteURLForWithNonEmptyConfigPath() {
+    @Test func testAbsoluteURLWithNonEmptyConfigPath() {
          let config = ConnectionConfig(
             id: UUID(),
             name: "test",
@@ -112,7 +140,33 @@ struct ConnectionConfigTests {
         #expect(config.absoluteURL(for: "file.txt") == "user@host:base/file.txt")
     }
     
-    @Test func testAbsoluteURLForWithEmptyConfigPathAndPort() {
+    @Test func testAbsoluteURLWithSlashSuffixConfigPath() {
+         let config = ConnectionConfig(
+            id: UUID(),
+            name: "test",
+            host: "host",
+            port: 22,
+            user: "user",
+            path: "base/",
+            authMethod: .none
+        )
+        #expect(config.absoluteURL(for: "file.txt") == "user@host:base/file.txt")
+    }
+    
+    @Test func testAbsoluteURLWithSlashPrefixConfigPath() {
+         let config = ConnectionConfig(
+            id: UUID(),
+            name: "test",
+            host: "host",
+            port: 22,
+            user: "user",
+            path: "/base",
+            authMethod: .none
+        )
+        #expect(config.absoluteURL(for: "file.txt") == "user@host:/base/file.txt")
+    }
+    
+    @Test func testAbsoluteURLWithEmptyConfigPathAndPort() {
         let config = ConnectionConfig(
             id: UUID(),
             name: "test",
