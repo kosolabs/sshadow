@@ -57,7 +57,7 @@ public struct ConnectionConfig:
         self.host = host
         self.port = port
         self.user = user
-        self.path = path
+        self.path = path.hasSuffix("/") ? String(path.dropLast()) : path
         self.authMethod = authMethod
     }
 
@@ -77,7 +77,7 @@ public struct ConnectionConfig:
     }
 
     public func path(for subpath: String) -> String {
-        self.path.isEmpty ? subpath : "\(self.path)/\(subpath)"
+        path.isEmpty ? subpath : "\(path)/\(subpath)"
     }
 
     public func path(for item: NSFileProviderItemIdentifier) -> String {

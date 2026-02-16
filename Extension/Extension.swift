@@ -40,7 +40,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
 
         // TODO: implement the actual lookup
 
-        logger.debug("item: \(itemIdentifier.rawValue, privacy: .public)")
         let progress = Progress()
 
         Task {
@@ -67,6 +66,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         guard let config = self.config else {
             throw NSFileProviderError(.notAuthenticated)
         }
+
+        logger.debug(
+            "Item: \(config.path(for: itemIdentifier), privacy: .public)"
+        )
 
         if itemIdentifier == .rootContainer
             || itemIdentifier == .trashContainer
@@ -97,9 +100,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
     ) -> Progress {
         // TODO: implement fetching of the contents for the itemIdentifier at the specified version
 
-        logger.debug(
-            "fetchContents: \(itemIdentifier.rawValue, privacy: .public)"
-        )
         let progress = Progress()
 
         Task {
@@ -157,17 +157,14 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 accessType: .readOnly
             ) { file in
                 let attrs = try await file.attributes()
-                logger.debug("fetching \(attrs.size) bytes")
                 progress.totalUnitCount = Int64(attrs.size)
                 for try await data in file.stream() {
-                    logger.debug("fetched \(data.count) bytes")
                     if progress.isCancelled {
                         throw CocoaError(.userCancelled)
                     }
                     try handle.write(contentsOf: data)
                     progress.completedUnitCount += Int64(data.count)
                 }
-                logger.debug("finished fetching")
                 return attrs
             }
         }
