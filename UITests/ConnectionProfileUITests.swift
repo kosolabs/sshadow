@@ -1,6 +1,6 @@
 import XCTest
 
-final class SSHadowUITests: XCTestCase {
+final class ConnectionProfileUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
     }

@@ -65,31 +65,9 @@
             parallelizable = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "73A183212F32E5F40004D288"
-               BuildableName = "SSHadowTests.xctest"
-               BlueprintName = "SSHadowTests"
-               ReferencedContainer = "container:SSHadow.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "738D63AB2F3FD1F100FED311"
                BuildableName = "ExtensionTests.xctest"
                BlueprintName = "ExtensionTests"
-               ReferencedContainer = "container:SSHadow.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "738D63D42F3FD3BD00FED311"
-               BuildableName = "DemoTests.xctest"
-               BlueprintName = "DemoTests"
                ReferencedContainer = "container:SSHadow.xcodeproj">
             </BuildableReference>
          </TestableReference>
