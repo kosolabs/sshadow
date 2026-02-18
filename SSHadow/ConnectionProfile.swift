@@ -218,7 +218,14 @@ private let logger = Logger(
                 throw ValidationError.privateKeyReadFailed
             }
             defer { url.stopAccessingSecurityScopedResource() }
-            let base64PrivateKey = try Data(contentsOf: url).decoded(as: .utf8)
+            guard
+                let base64PrivateKey = try? String(
+                    data: Data(contentsOf: url),
+                    encoding: .utf8
+                )
+            else {
+                throw ValidationError.privateKeyReadFailed
+            }
             let passphrase = getPrivateKeyPassphrase()
             return .privateKey(
                 base64PrivateKey: base64PrivateKey,

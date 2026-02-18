@@ -41,7 +41,7 @@ public struct DefaultConnectionTester: ConnectionTester {
             }
 
             switch sshError {
-            case .connectFailed(let message):
+            case .connectionFailed(let message):
                 if message.contains("Failed to resolve hostname") {
                     throw ConnectionTestError.unknownHost
                 }
@@ -54,27 +54,19 @@ public struct DefaultConnectionTester: ConnectionTester {
                 if message.contains("Timeout") {
                     throw ConnectionTestError.timeout
                 }
-            case .userauthPasswordFailed:
+            case .authenticationFailed:
                 throw ConnectionTestError.userauthPasswordFailed
-            case .sftpStatFailed(let message):
-                if message.contains("No such file") {
+            case .sftpError(let sftpError, _):
+                switch sftpError{
+                case .noSuchFile:
                     throw ConnectionTestError.pathNotFound
+                default:
+                    throw error
                 }
             default:
                 throw error
             }
             throw error
         }
-    }
-}
-
-extension Data {
-    public func decoded(as encoding: String.Encoding) throws -> String {
-        guard let str = String(data: self, encoding: encoding) else {
-            throw SSHClientError.decodeFailed(
-                "Failed to decode data as \(encoding)"
-            )
-        }
-        return str
     }
 }

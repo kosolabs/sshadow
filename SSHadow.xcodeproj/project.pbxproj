@@ -16,6 +16,7 @@
 		730981202F3188DA009F7AA2 /* Common.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		7322A9222F2857C700D8117D /* SSHadow.icon in Resources */ = {isa = PBXBuildFile; fileRef = 7322A9212F2857C700D8117D /* SSHadow.icon */; };
 		7322A9282F294D5400D8117D /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 7322A9272F294D5400D8117D /* SwiftLibSSH */; };
+		7369DF3F2F45513300F709F8 /* UnitTests.xctestplan in Resources */ = {isa = PBXBuildFile; fileRef = 7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */; };
 		736F08DA2F3D7B7C009669F4 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 736F08D92F3D7B7C009669F4 /* SwiftLibSSH */; };
 		7386D8862F3FDB59004DF22F /* Extension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 738D63A22F3FD1F100FED311 /* Extension.framework */; };
 		7386D8872F3FDB59004DF22F /* Extension.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 738D63A22F3FD1F100FED311 /* Extension.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -165,7 +166,8 @@
 		7322A9212F2857C700D8117D /* SSHadow.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = SSHadow.icon; sourceTree = "<group>"; };
 		7322A92E2F2957AF00D8117D /* UniformTypeIdentifiers.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UniformTypeIdentifiers.framework; path = System/Library/Frameworks/UniformTypeIdentifiers.framework; sourceTree = SDKROOT; };
 		733470892F22037100B8181D /* SSHadow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SSHadow.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		738D63342F3FAFEA00FED311 /* SSHadow.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = SSHadow.xctestplan; sourceTree = "<group>"; };
+		7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = UnitTests.xctestplan; sourceTree = "<group>"; };
+		738D63342F3FAFEA00FED311 /* UITests.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = UITests.xctestplan; sourceTree = "<group>"; };
 		738D63A22F3FD1F100FED311 /* Extension.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Extension.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		738D63AC2F3FD1F100FED311 /* ExtensionTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ExtensionTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7393A9C02F3134FB00213730 /* Provider.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Provider.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -322,7 +324,8 @@
 				7381F0C32F22B3C5005F4099 /* Frameworks */,
 				7334708A2F22037100B8181D /* Products */,
 				7322A9212F2857C700D8117D /* SSHadow.icon */,
-				738D63342F3FAFEA00FED311 /* SSHadow.xctestplan */,
+				738D63342F3FAFEA00FED311 /* UITests.xctestplan */,
+				7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */,
 			);
 			sourceTree = "<group>";
 		};
@@ -634,6 +637,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7322A9222F2857C700D8117D /* SSHadow.icon in Resources */,
+				7369DF3F2F45513300F709F8 /* UnitTests.xctestplan in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1426,7 +1430,7 @@
 			repositoryURL = "https://github.com/kosolabs/swift-lib-ssh.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.7.0;
+				minimumVersion = 1.7.1;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

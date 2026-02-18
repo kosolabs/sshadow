@@ -135,12 +135,22 @@ extension ConnectionConfig {
                 bookmarkDataIsStale: &isStale
             )
             guard url.startAccessingSecurityScopedResource() else {
-                throw SSHClientError.authenticationFailed(
-                    "Failed to read private key from URL: \(url)"
+                throw SSHError.authenticationFailed(
+                    message: "Failed to read private key from URL: \(url)"
                 )
             }
             defer { url.stopAccessingSecurityScopedResource() }
-            let base64PrivateKey = try Data(contentsOf: url).decoded(as: .utf8)
+            guard
+                let base64PrivateKey = try? String(
+                    data: Data(contentsOf: url),
+                    encoding: .utf8
+                )
+            else {
+                throw SSHError.authenticationFailed(
+                    message:
+                        "Failed to decode private key data as UTF-8 string from URL: \(url)"
+                )
+            }
             let passphrase = try userInfo.getPrivateKeyPassphrase()
             configAuthMethod = .privateKey(
                 base64PrivateKey: base64PrivateKey,

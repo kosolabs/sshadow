@@ -51,14 +51,14 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 )
                 completionHandler(item, nil)
             } catch {
-                completionHandler(nil, error)
+                completionHandler(nil, remap(error: error))
             }
         }
 
         return progress
     }
 
-    func item(
+    private func item(
         for itemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest,
         progress: Progress,
@@ -126,7 +126,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         return progress
     }
 
-    func fetchContents(
+    private func fetchContents(
         for itemIdentifier: NSFileProviderItemIdentifier,
         version requestedVersion: NSFileProviderItemVersion?,
         request: NSFileProviderRequest,
