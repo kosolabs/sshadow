@@ -15,10 +15,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         config: ConnectionConfig,
         itemIdentifier: NSFileProviderItemIdentifier
     ) {
-        logger = Logger(
-            subsystem: Bundle.main.bundleIdentifier!,
-            category: "Enumerator.\(config.name)"
-        )
+        logger = getLogger(category: "Enumerator.\(config.name)")
         logger.debug(
             "init: \(itemIdentifier.rawValue, privacy: .public)"
         )

@@ -30,7 +30,10 @@
       shouldUseLaunchSchemeArgsEnv = "YES">
       <TestPlans>
          <TestPlanReference
-            reference = "container:SSHadow.xctestplan"
+            reference = "container:UITests.xctestplan">
+         </TestPlanReference>
+         <TestPlanReference
+            reference = "container:UnitTests.xctestplan"
             default = "YES">
          </TestPlanReference>
       </TestPlans>

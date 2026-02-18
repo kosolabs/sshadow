@@ -1,0 +1,31 @@
+{
+  "configurations" : [
+    {
+      "id" : "E9F153CC-EBC7-4FE9-AB14-9336131D137E",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:SSHadow.xcodeproj",
+        "identifier" : "730981082F318825009F7AA2",
+        "name" : "CommonTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:SSHadow.xcodeproj",
+        "identifier" : "738D63AB2F3FD1F100FED311",
+        "name" : "ExtensionTests"
+      }
+    }
+  ],
+  "version" : 1
+}

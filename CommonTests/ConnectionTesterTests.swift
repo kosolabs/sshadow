@@ -9,11 +9,7 @@ struct ConnectionTesterTests {
         let config = try TestData.getConnectionConfig()
         try await SSHClient.withSession(config: config) { _, sftp in
             try await sftp.withDirectory(atPath: config.path) { dir in
-                for try await attr in dir {
-                    if let name = attr.name {
-                        print("\(name)")
-                    }
-                }
+                for try await attr in dir {}
             }
         }
     }
