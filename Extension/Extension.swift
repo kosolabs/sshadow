@@ -3,16 +3,14 @@ import FileProvider
 import OSLog
 import SwiftData
 import SwiftLibSSH
+import UniformTypeIdentifiers
 
 public class Extension: NSObject, NSFileProviderReplicatedExtension {
     let logger: Logger
     let config: ConnectionConfig?
 
     required public init(domain: NSFileProviderDomain) {
-        // TODO: The containing application must create a domain using `NSFileProviderManager.add(_:, completionHandler:)`. The system will then launch the application extension process, call `FileProviderExtension.init(domain:)` to instantiate the extension for that domain, and call methods on the instance.
-        logger = getLogger(
-            category: "Extension.\(domain.displayName)"
-        )
+        logger = getLogger(category: "Extension.\(domain.displayName)")
 
         if let userInfo = try? UserInfo.fromDictionary(domain.userInfo),
             let config = try? ConnectionConfig(from: userInfo)
@@ -36,10 +34,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         request: NSFileProviderRequest,
         completionHandler: @escaping (NSFileProviderItem?, Error?) -> Void
     ) -> Progress {
-        // resolve the given identifier to a record in the model
-
-        // TODO: implement the actual lookup
-
         let progress = Progress()
 
         Task {
@@ -98,8 +92,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         request: NSFileProviderRequest,
         completionHandler: @escaping (URL?, NSFileProviderItem?, Error?) -> Void
     ) -> Progress {
-        // TODO: implement fetching of the contents for the itemIdentifier at the specified version
-
         let progress = Progress()
 
         Task {
@@ -136,10 +128,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             throw NSFileProviderError(.notAuthenticated)
         }
         logger.debug(
-            """
-            Fetching contents of \
-            \(config.path(for: itemIdentifier.rawValue), privacy: .public)
-            """
+            "fetch: \(config.path(for: itemIdentifier), privacy: .public)"
         )
 
         let url = FileManager.default.temporaryDirectory
@@ -192,8 +181,75 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
     ) -> Progress {
         // TODO: a new item was created on disk, process the item's creation
 
-        completionHandler(itemTemplate, [], false, nil)
+        //        completionHandler(itemTemplate, [], false, nil)
+        let progress = Progress()
+
+        Task {
+            do {
+                let (item, fields, bool) = try await createItem(
+                    basedOn: itemTemplate,
+                    fields: fields,
+                    contents: url,
+                    options: options,
+                    request: request,
+                    progress: progress
+                )
+                completionHandler(item, fields, bool, nil)
+            } catch {
+                logger.error(
+                    """
+                    Failed to create item for \
+                    \(itemTemplate.filename, privacy: .public): \
+                    \(error, privacy: .public)
+                    """
+                )
+                completionHandler(nil, [], false, remap(error: error))
+            }
+        }
+
         return Progress()
+    }
+
+    private func createItem(
+        basedOn itemTemplate: NSFileProviderItem,
+        fields: NSFileProviderItemFields,
+        contents url: URL?,
+        options: NSFileProviderCreateItemOptions = [],
+        request: NSFileProviderRequest,
+        progress: Progress,
+    ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
+        guard let config = self.config else {
+            throw NSFileProviderError(.notAuthenticated)
+        }
+        logger.debug(
+            "create item (\(type(of: itemTemplate), privacy: .public)): \(itemTemplate.description, privacy: .public)"
+        )
+        logItem(item: itemTemplate, fields: fields)
+        
+        let itemIdentifier = itemTemplate.parentItemIdentifier
+            .child(name: itemTemplate.filename)
+        let remotePath = config.path(for: itemIdentifier)
+
+        let item = try await SSHClient.withSession(config: config) { _, sftp in
+            if itemTemplate.contentType == .folder {
+                progress.totalUnitCount = 1
+                logger.debug(
+                    "create folder: \(remotePath, privacy: .public)"
+                )
+                try await sftp.createDirectory(atPath: remotePath)
+                let attrs = try await sftp.attributes(atPath: remotePath)
+                progress.completedUnitCount = 1
+                return Item(
+                    domainName: config.name,
+                    itemIdentifier: itemIdentifier,
+                    itemAttributes: attrs
+                )
+            }
+            
+            throw CocoaError(.featureUnsupported)
+        }
+
+        return (item, [], false)
     }
 
     public func modifyItem(
@@ -230,16 +286,57 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         request: NSFileProviderRequest,
         completionHandler: @escaping (Error?) -> Void
     ) -> Progress {
-        // TODO: an item was deleted on disk, process the item's deletion
+        let progress = Progress()
 
-        completionHandler(
-            NSError(
-                domain: NSCocoaErrorDomain,
-                code: NSFeatureUnsupportedError,
-                userInfo: [:]
-            )
+        Task {
+            do {
+                try await deleteItem(
+                    identifier: identifier,
+                    baseVersion: version,
+                    options: options,
+                    request: request,
+                    progress: progress
+                )
+                completionHandler(nil)
+            } catch {
+                logger.error(
+                    """
+                    Failed to delete item \
+                    \(identifier.rawValue, privacy: .public): \
+                    \(error, privacy: .public)
+                    """
+                )
+                completionHandler(remap(error: error))
+            }
+        }
+
+        return progress
+    }
+    
+    private func deleteItem(
+        identifier: NSFileProviderItemIdentifier,
+        baseVersion version: NSFileProviderItemVersion,
+        options: NSFileProviderDeleteItemOptions = [],
+        request: NSFileProviderRequest,
+        progress: Progress,
+    ) async throws {
+        guard let config = self.config else {
+            throw NSFileProviderError(.notAuthenticated)
+        }
+        logger.debug(
+            "delete item: \(config.path(for: identifier), privacy: .public)"
         )
-        return Progress()
+        
+        try await SSHClient.withSession(config: config) { _, sftp in
+            let attrs = try await sftp.attributes(atPath: config.path(for: identifier))
+            if case .directory = attrs.type {
+                progress.totalUnitCount = 1
+                try await sftp.removeDirectory(atPath: config.path(for: identifier))
+                progress.completedUnitCount = 1
+                return
+            }
+            throw CocoaError(.featureUnsupported)
+        }
     }
 
     public func enumerator(
@@ -254,5 +351,49 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             config: config,
             itemIdentifier: containerItemIdentifier
         )
+    }
+
+    private func logItem(
+        item: NSFileProviderItem,
+        fields: NSFileProviderItemFields
+    ) {
+        let allFields: [(NSFileProviderItemFields, String, Any?)] = [
+            (
+                .filename, "filename", item.filename
+            ),
+            (
+                .parentItemIdentifier, "parentItemIdentifier",
+                item.parentItemIdentifier
+            ),
+            (
+                .lastUsedDate, "lastUsedDate", item.lastUsedDate as Any?
+            ),
+            (
+                .tagData, "tagData", item.tagData as Any?
+            ),
+            (
+                .creationDate, "creationDate", item.creationDate as Any?
+            ),
+            (
+                .contentModificationDate, "contentModificationDate",
+                item.contentModificationDate as Any?
+            ),
+            (
+                .fileSystemFlags, "fileSystemFlags", item.fileSystemFlags
+            ),
+            (
+                .extendedAttributes, "extendedAttributes",
+                item.extendedAttributes
+            ),
+            (
+                .typeAndCreator, "typeAndCreator", item.typeAndCreator
+            ),
+        ]
+
+        for (field, name, value) in allFields where fields.contains(field) {
+            logger.debug(
+                "Field \(name, privacy: .public): \(String(describing: value), privacy: .public)"
+            )
+        }
     }
 }
