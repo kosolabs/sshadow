@@ -180,6 +180,91 @@ struct ExtensionTests {
             try await fetchTask.value
         }
     }
+
+    @Test func createItemFolder() async throws {
+        let ext = try getExtension()
+
+        let testURL = try TestData.createTestFolder(path: "create-item")
+        let expectedFolderURL = testURL.appending(path: "folder")
+        if FileManager.default.fileExists(atPath: expectedFolderURL.path()) {
+            try FileManager.default.removeItem(at: expectedFolderURL)
+        }
+
+        let itemTemplate = ItemTemplate(
+            filename: expectedFolderURL.lastPathComponent,
+            contentType: .folder,
+            parentItemIdentifier: .rootContainer
+                .child(name: testURL.lastPathComponent)
+        )
+        let fields: NSFileProviderItemFields = [
+            .filename, .parentItemIdentifier, .creationDate,
+            .contentModificationDate, .fileSystemFlags, .typeAndCreator,
+        ]
+        let progress = Progress()
+
+        _ = try await ext.createItem(
+            basedOn: itemTemplate,
+            fields: fields,
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: progress
+        )
+
+        #expect(
+            FileManager.default.fileExists(atPath: expectedFolderURL.path())
+        )
+    }
+
+    @Test func deleteItemFolder() async throws {
+        let ext = try getExtension()
+
+        let path = "delete-item/folder"
+        let folderToDeleteURL = try TestData.createTestFolder(path: path)
+        let version = NSFileProviderItemVersion()
+        let request = NSFileProviderRequest()
+        let progress = Progress()
+
+        try await ext.deleteItem(
+            identifier: .rootContainer.child(name: path),
+            baseVersion: version,
+            request: request,
+            progress: progress
+        )
+
+        #expect(
+            !FileManager.default.fileExists(atPath: folderToDeleteURL.path())
+        )
+    }
+}
+
+final class ItemTemplate: NSObject, NSFileProviderItem {
+    var itemIdentifier: NSFileProviderItemIdentifier =
+        NSFileProviderItemIdentifier(UUID().uuidString)
+    var parentItemIdentifier: NSFileProviderItemIdentifier
+    var filename: String
+    var contentType: UTType
+    var creationDate: Date?
+    var contentModificationDate: Date?
+    var fileSystemFlags: NSFileProviderFileSystemFlags
+
+    init(
+        filename: String,
+        contentType: UTType,
+        parentItemIdentifier: NSFileProviderItemIdentifier = .rootContainer,
+        creationDate: Date? = nil,
+        contentModificationDate: Date? = nil,
+        fileSystemFlags: NSFileProviderFileSystemFlags = [
+            .userExecutable, .userReadable, .userWritable,
+        ]
+    ) {
+        self.filename = filename
+        self.contentType = contentType
+        self.parentItemIdentifier = parentItemIdentifier
+        self.creationDate = creationDate
+        self.contentModificationDate = contentModificationDate
+        self.fileSystemFlags = fileSystemFlags
+    }
 }
 
 extension Extension {
@@ -214,6 +299,59 @@ extension Extension {
                     continuation.resume(throwing: error)
                 } else if let url, let item {
                     continuation.resume(returning: (url, item))
+                }
+            }
+
+            progress.addChild(operationProgress, withPendingUnitCount: 1)
+        }
+    }
+
+    func createItem(
+        basedOn itemTemplate: NSFileProviderItem,
+        fields: NSFileProviderItemFields,
+        contents url: URL?,
+        options: NSFileProviderCreateItemOptions = [],
+        request: NSFileProviderRequest,
+        progress: Progress,
+    ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
+        try await withCheckedThrowingContinuation { continuation in
+            let operationProgress = self.createItem(
+                basedOn: itemTemplate,
+                fields: fields,
+                contents: url,
+                options: options,
+                request: request
+            ) { item, fields, blah, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let item {
+                    continuation.resume(returning: (item, fields, blah))
+                }
+            }
+
+            progress.addChild(operationProgress, withPendingUnitCount: 1)
+        }
+    }
+
+    func deleteItem(
+        identifier: NSFileProviderItemIdentifier,
+        baseVersion version: NSFileProviderItemVersion,
+        options: NSFileProviderDeleteItemOptions = [],
+        request: NSFileProviderRequest,
+        progress: Progress
+    ) async throws {
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, Error>) in
+            let operationProgress = self.deleteItem(
+                identifier: identifier,
+                baseVersion: version,
+                options: options,
+                request: request
+            ) { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: ())
                 }
             }
 

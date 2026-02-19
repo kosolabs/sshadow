@@ -64,10 +64,14 @@ struct TestData {
 
         return url
     }
-    
+
+    static func getTestURL(path: String) -> URL {
+        FileManager.default.temporaryDirectory.appending(path: path)
+    }
+
     @discardableResult
     static func createTestFolder(path: String) throws -> URL {
-        let folder = FileManager.default.temporaryDirectory.appending(path: path)
+        let folder = getTestURL(path: path)
         try FileManager.default.createDirectory(
             at: folder,
             withIntermediateDirectories: true
@@ -92,7 +96,7 @@ struct TestData {
 
     @discardableResult
     static func createTestFile(path: String, data: Data) throws -> URL {
-        let file = FileManager.default.temporaryDirectory.appending(path: path)
+        let file = getTestURL(path: path)
         let folder = file.deletingLastPathComponent()
 
         try FileManager.default.createDirectory(
