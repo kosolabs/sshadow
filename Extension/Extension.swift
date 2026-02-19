@@ -179,9 +179,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 NSFileProviderItem?, NSFileProviderItemFields, Bool, Error?
             ) -> Void
     ) -> Progress {
-        // TODO: a new item was created on disk, process the item's creation
-
-        //        completionHandler(itemTemplate, [], false, nil)
         let progress = Progress()
 
         Task {
@@ -231,6 +228,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         let remotePath = config.path(for: itemIdentifier)
 
         let item = try await SSHClient.withSession(config: config) { _, sftp in
+            // TODO: Set create and modify timestamps
             if itemTemplate.contentType == .folder {
                 progress.totalUnitCount = 1
                 logger.debug(
