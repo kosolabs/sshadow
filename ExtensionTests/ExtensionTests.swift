@@ -310,6 +310,29 @@ struct ExtensionTests {
                     .fileExists(atPath: fileToDeleteURL.path())
             )
         }
+        
+        @Test func deleteMissingItemThrows() async throws {
+            let ext = try getExtension()
+
+            let path = "\(testFolderPath)/missing.txt"
+            #expect(
+                !FileManager.default
+                    .fileExists(atPath: TestData.getTestURL(path: path).path())
+            )
+
+            let version = NSFileProviderItemVersion()
+            let request = NSFileProviderRequest()
+            let progress = Progress()
+
+            await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+                try await ext.deleteItem(
+                    identifier: .rootContainer.child(name: path),
+                    baseVersion: version,
+                    request: request,
+                    progress: progress
+                )
+            }
+        }
     }
 }
 
