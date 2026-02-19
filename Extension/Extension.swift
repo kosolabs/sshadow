@@ -225,7 +225,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             "create item (\(type(of: itemTemplate), privacy: .public)): \(itemTemplate.description, privacy: .public)"
         )
         logItem(item: itemTemplate, fields: fields)
-        
+
         let itemIdentifier = itemTemplate.parentItemIdentifier
             .child(name: itemTemplate.filename)
         let remotePath = config.path(for: itemIdentifier)
@@ -245,8 +245,44 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                     itemAttributes: attrs
                 )
             }
-            
-            throw CocoaError(.featureUnsupported)
+
+            guard let url = url,
+                let documentSize = itemTemplate.documentSize,
+                let documentSize = documentSize
+            else {
+                logger.error(
+                    """
+                    Missing contents URL or document size for \
+                    \(itemTemplate.filename, privacy: .public)
+                    """
+                )
+                throw CocoaError(.fileReadUnsupportedScheme)
+            }
+            progress.totalUnitCount = Int64(truncating: documentSize)
+
+            let fp = try FileHandle(forReadingFrom: url)
+            defer { try? fp.close() }
+
+            try await sftp.withSftpFile(
+                atPath: remotePath,
+                accessType: .writeOnly
+            ) { file in
+                try await file.withAsyncWriter { writer in
+                    while let data = try fp.read(upToCount: 102400) {
+                        if progress.isCancelled {
+                            throw CocoaError(.userCancelled)
+                        }
+                        try await writer.write(data: data)
+                        progress.completedUnitCount += Int64(data.count)
+                    }
+                }
+            }
+            let attrs = try await sftp.attributes(atPath: remotePath)
+            return Item(
+                domainName: config.name,
+                itemIdentifier: itemIdentifier,
+                itemAttributes: attrs
+            )
         }
 
         return (item, [], false)
@@ -312,7 +348,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
 
         return progress
     }
-    
+
     private func deleteItem(
         identifier: NSFileProviderItemIdentifier,
         baseVersion version: NSFileProviderItemVersion,
@@ -326,12 +362,16 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         logger.debug(
             "delete item: \(config.path(for: identifier), privacy: .public)"
         )
-        
+
         try await SSHClient.withSession(config: config) { _, sftp in
-            let attrs = try await sftp.attributes(atPath: config.path(for: identifier))
+            let attrs = try await sftp.attributes(
+                atPath: config.path(for: identifier)
+            )
             progress.totalUnitCount = 1
             if case .directory = attrs.type {
-                try await sftp.removeDirectory(atPath: config.path(for: identifier))
+                try await sftp.removeDirectory(
+                    atPath: config.path(for: identifier)
+                )
             } else {
                 try await sftp.removeFile(atPath: config.path(for: identifier))
             }
@@ -392,8 +432,24 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
 
         for (field, name, value) in allFields where fields.contains(field) {
             logger.debug(
-                "Field \(name, privacy: .public): \(String(describing: value), privacy: .public)"
+                """
+                Field \
+                \(name, privacy: .public): \
+                \(String(describing: value), privacy: .public)
+                """
             )
         }
+        logger.debug(
+            """
+            Field contentType: \
+            \(String(describing: item.contentType), privacy: .public)
+            """
+        )
+        logger.debug(
+            """
+            Field documentSize: \
+            \(String(describing: item.documentSize), privacy: .public)
+            """
+        )
     }
 }
