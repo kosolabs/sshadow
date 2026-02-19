@@ -329,13 +329,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         
         try await SSHClient.withSession(config: config) { _, sftp in
             let attrs = try await sftp.attributes(atPath: config.path(for: identifier))
+            progress.totalUnitCount = 1
             if case .directory = attrs.type {
-                progress.totalUnitCount = 1
                 try await sftp.removeDirectory(atPath: config.path(for: identifier))
-                progress.completedUnitCount = 1
-                return
+            } else {
+                try await sftp.removeFile(atPath: config.path(for: identifier))
             }
-            throw CocoaError(.featureUnsupported)
+            progress.completedUnitCount = 1
         }
     }
 

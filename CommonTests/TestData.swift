@@ -68,6 +68,13 @@ struct TestData {
     static func getTestURL(path: String) -> URL {
         FileManager.default.temporaryDirectory.appending(path: path)
     }
+    
+    static func removeTestItem(path: String) throws {
+        let url = getTestURL(path: path)
+        if FileManager.default.fileExists(atPath: url.path()) {
+            try FileManager.default.removeItem(at: url)
+        }
+    }
 
     @discardableResult
     static func createTestFolder(path: String) throws -> URL {
