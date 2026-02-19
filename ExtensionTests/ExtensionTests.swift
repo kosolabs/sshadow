@@ -5,19 +5,19 @@ import UniformTypeIdentifiers
 
 @testable import Extension
 
-struct ExtensionTests {
-    private func getExtension(id: UUID = UUID()) throws -> Extension {
-        let domain = NSFileProviderDomain(
-            identifier: NSFileProviderDomainIdentifier(
-                rawValue: id.uuidString
-            ),
-            displayName: "test"
-        )
-        let userInfo = try TestData.getUserInfo(id: id)
-        domain.userInfo = try userInfo.toDictionary()
-        return Extension(domain: domain)
-    }
+private func getExtension(id: UUID = UUID()) throws -> Extension {
+    let domain = NSFileProviderDomain(
+        identifier: NSFileProviderDomainIdentifier(
+            rawValue: id.uuidString
+        ),
+        displayName: "test"
+    )
+    let userInfo = try TestData.getUserInfo(id: id)
+    domain.userInfo = try userInfo.toDictionary()
+    return Extension(domain: domain)
+}
 
+struct ExtensionTests {
     @Test func initializeValidConfigSucceeds() throws {
         let ext = try getExtension()
         let actualConfig = ext.config
@@ -27,214 +27,312 @@ struct ExtensionTests {
 
         #expect(actualConfig == expectedConfig)
     }
+    
+    struct ItemTests {
+        let testFolderPath = "item"
+        let testFolderURL: URL
 
-    @Test func itemForFileSucceeds() async throws {
-        let ext = try getExtension()
-
-        let path = "item/file.txt"
-        let contents = "Hello, World!"
-        try TestData.createTestFile(path: path, contents: contents)
-
-        let item = try await ext.item(for: .rootContainer.child(name: path))
-
-        #expect(item.filename == "file.txt")
-        #expect(item.contentType == .text)
-        #expect(item.documentSize??.intValue == contents.count)
-    }
-
-    @Test func itemForFolderSucceeds() async throws {
-        let ext = try getExtension()
-
-        let path = "item"
-        try TestData.createTestFolder(path: path)
-
-        let item = try await ext.item(for: .rootContainer.child(name: path))
-
-        #expect(item.filename == "item")
-        #expect(item.contentType == .folder)
-    }
-
-    @Test func itemForRootSucceeds() async throws {
-        let ext = try getExtension()
-
-        let item = try await ext.item(for: .rootContainer)
-
-        #expect(item.filename == "NSFileProviderRootContainerItemIdentifier")
-        #expect(item.contentType == .folder)
-    }
-
-    @Test func itemForMissingFileThrows() async throws {
-        let ext = try getExtension()
-
-        let path = "item/missing.txt"
-
-        await #expect(throws: NSFileProviderError(.noSuchItem).self) {
-            try await ext.item(for: .rootContainer.child(name: path))
+        init() throws {
+            testFolderURL = try TestData.createTestFolder(path: testFolderPath)
         }
-    }
+        
+        @Test func itemForFileSucceeds() async throws {
+            let ext = try getExtension()
 
-    @Test func itemForInvalidConfigThrows() async throws {
-        let domain = NSFileProviderDomain(
-            identifier: NSFileProviderDomainIdentifier(rawValue: "id"),
-            displayName: "test"
-        )
-        let ext = Extension(domain: domain)
+            let path = "\(testFolderPath)/file.txt"
+            let contents = "Hello, World!"
+            try TestData.createTestFile(path: path, contents: contents)
 
-        await #expect(throws: NSFileProviderError(.notAuthenticated).self) {
-            try await ext.item(for: .rootContainer)
+            let item = try await ext.item(for: .rootContainer.child(name: path))
+
+            #expect(item.filename == "file.txt")
+            #expect(item.contentType == .text)
+            #expect(item.documentSize??.intValue == contents.count)
         }
-    }
 
-    @Test func itemForUnreachableServerThrows() async throws {
-        let id = UUID()
-        let domain = NSFileProviderDomain(
-            identifier: NSFileProviderDomainIdentifier(rawValue: id.uuidString),
-            displayName: "test"
-        )
-        let userInfo = try UserInfo(
-            id: id,
-            name: "unreachable",
-            host: "unreachable",
-            port: 22,
-            user: NSUserName(),
-            path: "",
-            authMethod: .privateKey(
-                bookmark: TestData.getPrivateKeyURL().bookmarkData()
+        @Test func itemForFolderSucceeds() async throws {
+            let ext = try getExtension()
+
+            let path = "\(testFolderPath)/folder"
+            try TestData.createTestFolder(path: path)
+
+            let item = try await ext.item(for: .rootContainer.child(name: path))
+
+            #expect(item.filename == "folder")
+            #expect(item.contentType == .folder)
+        }
+
+        @Test func itemForRootSucceeds() async throws {
+            let ext = try getExtension()
+
+            let item = try await ext.item(for: .rootContainer)
+
+            #expect(item.filename == "NSFileProviderRootContainerItemIdentifier")
+            #expect(item.contentType == .folder)
+        }
+
+        @Test func itemForMissingFileThrows() async throws {
+            let ext = try getExtension()
+
+            let path = "\(testFolderPath)/missing.txt"
+
+            await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+                try await ext.item(for: .rootContainer.child(name: path))
+            }
+        }
+
+        @Test func itemForInvalidConfigThrows() async throws {
+            let domain = NSFileProviderDomain(
+                identifier: NSFileProviderDomainIdentifier(rawValue: "id"),
+                displayName: "test"
             )
-        )
-        domain.userInfo = try userInfo.toDictionary()
-        let ext = Extension(domain: domain)
+            let ext = Extension(domain: domain)
 
-        await #expect(throws: NSFileProviderError(.serverUnreachable).self) {
-            try await ext.item(for: .rootContainer.child(name: "unreachable"))
+            await #expect(throws: NSFileProviderError(.notAuthenticated).self) {
+                try await ext.item(for: .rootContainer)
+            }
+        }
+
+        @Test func itemForUnreachableServerThrows() async throws {
+            let id = UUID()
+            let domain = NSFileProviderDomain(
+                identifier: NSFileProviderDomainIdentifier(rawValue: id.uuidString),
+                displayName: "test"
+            )
+            let userInfo = try UserInfo(
+                id: id,
+                name: "unreachable",
+                host: "unreachable",
+                port: 22,
+                user: NSUserName(),
+                path: "",
+                authMethod: .privateKey(
+                    bookmark: TestData.getPrivateKeyURL().bookmarkData()
+                )
+            )
+            domain.userInfo = try userInfo.toDictionary()
+            let ext = Extension(domain: domain)
+
+            await #expect(throws: NSFileProviderError(.serverUnreachable).self) {
+                try await ext.item(for: .rootContainer.child(name: "unreachable"))
+            }
         }
     }
 
-    @Test func fetchContentsOfSmallFile() async throws {
-        let ext = try getExtension()
 
-        let path = "fetch-contents/small-file.txt"
-        let contents = "Hello, World!"
-        try TestData.createTestFile(path: path, contents: contents)
+    struct FetchContentsTests {
+        let testFolderPath = "fetch-contents"
+        let testFolderURL: URL
 
-        let progress = Progress()
-        let (url, item) = try await ext.fetchContents(
-            for: .rootContainer.child(name: path),
-            version: nil,
-            request: NSFileProviderRequest(),
-            progress: progress
-        )
+        init() throws {
+            testFolderURL = try TestData.createTestFolder(path: testFolderPath)
+        }
+        
+        @Test func fetchSmallFileSucceeds() async throws {
+            let ext = try getExtension()
 
-        #expect(item.filename == "small-file.txt")
-        #expect(item.contentType == .text)
-        #expect(item.documentSize??.intValue == contents.count)
+            let path = "\(testFolderPath)/small-file.txt"
+            let contents = "Hello, World!"
+            try TestData.createTestFile(path: path, contents: contents)
 
-        let actualContents = try String(contentsOf: url, encoding: .utf8)
-        #expect(actualContents == contents)
-    }
-
-    @Test func fetchContentsOfLargeFile() async throws {
-        let ext = try getExtension()
-
-        let path = "fetch-contents/large-file.txt"
-        let contents = String(repeating: "A", count: 10_000_000)
-        try TestData.createTestFile(path: path, contents: contents)
-
-        let progress = Progress()
-        let (url, item) = try await ext.fetchContents(
-            for: .rootContainer.child(name: path),
-            version: nil,
-            request: NSFileProviderRequest(),
-            progress: progress
-        )
-
-        #expect(item.filename == "large-file.txt")
-        #expect(item.contentType == .text)
-        #expect(item.documentSize??.intValue == contents.count)
-
-        let actualContents = try String(contentsOf: url, encoding: .utf8)
-        #expect(actualContents == contents)
-    }
-
-    @Test func fetchContentsWithCancellation() async throws {
-        let ext = try getExtension()
-
-        let path = "fetch-contents/cancellable-file.txt"
-        let contents = String(repeating: "A", count: 10_000_000)
-        try TestData.createTestFile(path: path, contents: contents)
-
-        let progress = Progress()
-
-        let fetchTask = Task {
-            try await ext.fetchContents(
+            let progress = Progress()
+            let (url, item) = try await ext.fetchContents(
                 for: .rootContainer.child(name: path),
                 version: nil,
                 request: NSFileProviderRequest(),
                 progress: progress
             )
+
+            #expect(item.filename == "small-file.txt")
+            #expect(item.contentType == .text)
+            #expect(item.documentSize??.intValue == contents.count)
+
+            let actualContents = try String(contentsOf: url, encoding: .utf8)
+            #expect(actualContents == contents)
         }
 
-        progress.cancel()
+        @Test func fetchLargeFileSucceeds() async throws {
+            let ext = try getExtension()
 
-        await #expect(throws: CocoaError(.userCancelled).self) {
-            try await fetchTask.value
+            let path = "\(testFolderPath)/large-file.txt"
+            let contents = String(repeating: "A", count: 10_000_000)
+            try TestData.createTestFile(path: path, contents: contents)
+
+            let progress = Progress()
+            let (url, item) = try await ext.fetchContents(
+                for: .rootContainer.child(name: path),
+                version: nil,
+                request: NSFileProviderRequest(),
+                progress: progress
+            )
+
+            #expect(item.filename == "large-file.txt")
+            #expect(item.contentType == .text)
+            #expect(item.documentSize??.intValue == contents.count)
+
+            let actualContents = try String(contentsOf: url, encoding: .utf8)
+            #expect(actualContents == contents)
+        }
+
+        @Test func fetchFileWithCancellation() async throws {
+            let ext = try getExtension()
+
+            let path = "\(testFolderPath)/cancellable-file.txt"
+            let contents = String(repeating: "A", count: 10_000_000)
+            try TestData.createTestFile(path: path, contents: contents)
+
+            let progress = Progress()
+
+            let fetchTask = Task {
+                try await ext.fetchContents(
+                    for: .rootContainer.child(name: path),
+                    version: nil,
+                    request: NSFileProviderRequest(),
+                    progress: progress
+                )
+            }
+
+            progress.cancel()
+
+            await #expect(throws: CocoaError(.userCancelled).self) {
+                try await fetchTask.value
+            }
         }
     }
 
-    @Test func createItemFolder() async throws {
-        let ext = try getExtension()
+    struct CreateItemTests {
+        let testFolderPath = "create-item"
+        let testFolderURL: URL
 
-        let testURL = try TestData.createTestFolder(path: "create-item")
-        let expectedFolderURL = testURL.appending(path: "folder")
-        if FileManager.default.fileExists(atPath: expectedFolderURL.path()) {
-            try FileManager.default.removeItem(at: expectedFolderURL)
+        init() throws {
+            testFolderURL = try TestData.createTestFolder(path: testFolderPath)
         }
 
-        let itemTemplate = ItemTemplate(
-            filename: expectedFolderURL.lastPathComponent,
-            contentType: .folder,
-            parentItemIdentifier: .rootContainer
-                .child(name: testURL.lastPathComponent)
-        )
-        let fields: NSFileProviderItemFields = [
-            .filename, .parentItemIdentifier, .creationDate,
-            .contentModificationDate, .fileSystemFlags, .typeAndCreator,
-        ]
-        let progress = Progress()
+        @Test func createFolderSucceeds() async throws {
+            let ext = try getExtension()
 
-        _ = try await ext.createItem(
-            basedOn: itemTemplate,
-            fields: fields,
-            contents: nil,
-            options: [],
-            request: NSFileProviderRequest(),
-            progress: progress
-        )
+            let path = "\(testFolderPath)/folder"
+            try TestData.removeTestItem(path: path)
+            let expectedFolderURL = TestData.getTestURL(path: path)
+            #expect(
+                !FileManager.default
+                    .fileExists(atPath: expectedFolderURL.path())
+            )
 
-        #expect(
-            FileManager.default.fileExists(atPath: expectedFolderURL.path())
-        )
+            let itemTemplate = ItemTemplate(
+                filename: expectedFolderURL.lastPathComponent,
+                contentType: .folder,
+                parentItemIdentifier: .rootContainer.child(name: testFolderPath)
+            )
+            let fields: NSFileProviderItemFields = [
+                .filename, .parentItemIdentifier, .creationDate,
+                .contentModificationDate, .fileSystemFlags, .typeAndCreator,
+            ]
+            let progress = Progress()
+
+            _ = try await ext.createItem(
+                basedOn: itemTemplate,
+                fields: fields,
+                contents: nil,
+                options: [],
+                request: NSFileProviderRequest(),
+                progress: progress
+            )
+
+            #expect(
+                FileManager.default
+                    .fileExists(atPath: expectedFolderURL.path())
+            )
+        }
     }
 
-    @Test func deleteItemFolder() async throws {
-        let ext = try getExtension()
+    struct DeleteItemTests {
+        let testFolderPath = "delete-item"
+        let testFolderURL: URL
 
-        let path = "delete-item/folder"
-        let folderToDeleteURL = try TestData.createTestFolder(path: path)
-        let version = NSFileProviderItemVersion()
-        let request = NSFileProviderRequest()
-        let progress = Progress()
+        init() throws {
+            testFolderURL = try TestData.createTestFolder(path: testFolderPath)
+        }
 
-        try await ext.deleteItem(
-            identifier: .rootContainer.child(name: path),
-            baseVersion: version,
-            request: request,
-            progress: progress
-        )
+        @Test func deleteFolderSucceeds() async throws {
+            let ext = try getExtension()
 
-        #expect(
-            !FileManager.default.fileExists(atPath: folderToDeleteURL.path())
-        )
+            let path = "\(testFolderPath)/folder"
+            let folderToDeleteURL = try TestData.createTestFolder(path: path)
+            #expect(
+                FileManager.default
+                    .fileExists(atPath: folderToDeleteURL.path())
+            )
+
+            let version = NSFileProviderItemVersion()
+            let request = NSFileProviderRequest()
+            let progress = Progress()
+
+            try await ext.deleteItem(
+                identifier: .rootContainer.child(name: path),
+                baseVersion: version,
+                request: request,
+                progress: progress
+            )
+
+            #expect(
+                !FileManager.default
+                    .fileExists(atPath: folderToDeleteURL.path())
+            )
+        }
+
+        @Test func deleteFileSucceeds() async throws {
+            let ext = try getExtension()
+
+            let path = "\(testFolderPath)/file.txt"
+            let fileToDeleteURL = try TestData.createTestFile(
+                path: path,
+                contents: "data"
+            )
+            #expect(
+                FileManager.default
+                    .fileExists(atPath: fileToDeleteURL.path())
+            )
+
+            let version = NSFileProviderItemVersion()
+            let request = NSFileProviderRequest()
+            let progress = Progress()
+
+            try await ext.deleteItem(
+                identifier: .rootContainer.child(name: path),
+                baseVersion: version,
+                request: request,
+                progress: progress
+            )
+
+            #expect(
+                !FileManager.default
+                    .fileExists(atPath: fileToDeleteURL.path())
+            )
+        }
+        
+        @Test func deleteMissingItemThrows() async throws {
+            let ext = try getExtension()
+
+            let path = "\(testFolderPath)/missing.txt"
+            #expect(
+                !FileManager.default
+                    .fileExists(atPath: TestData.getTestURL(path: path).path())
+            )
+
+            let version = NSFileProviderItemVersion()
+            let request = NSFileProviderRequest()
+            let progress = Progress()
+
+            await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+                try await ext.deleteItem(
+                    identifier: .rootContainer.child(name: path),
+                    baseVersion: version,
+                    request: request,
+                    progress: progress
+                )
+            }
+        }
     }
 }
 
