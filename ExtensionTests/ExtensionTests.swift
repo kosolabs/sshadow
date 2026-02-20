@@ -27,7 +27,7 @@ struct ExtensionTests {
 
         #expect(actualConfig == expectedConfig)
     }
-    
+
     struct ItemTests {
         let testFolderPath = "item"
         let testFolderURL: URL
@@ -35,7 +35,7 @@ struct ExtensionTests {
         init() throws {
             testFolderURL = try TestData.createTestFolder(path: testFolderPath)
         }
-        
+
         @Test func itemForFileSucceeds() async throws {
             let ext = try getExtension()
 
@@ -67,7 +67,9 @@ struct ExtensionTests {
 
             let item = try await ext.item(for: .rootContainer)
 
-            #expect(item.filename == "NSFileProviderRootContainerItemIdentifier")
+            #expect(
+                item.filename == "NSFileProviderRootContainerItemIdentifier"
+            )
             #expect(item.contentType == .folder)
         }
 
@@ -96,7 +98,9 @@ struct ExtensionTests {
         @Test func itemForUnreachableServerThrows() async throws {
             let id = UUID()
             let domain = NSFileProviderDomain(
-                identifier: NSFileProviderDomainIdentifier(rawValue: id.uuidString),
+                identifier: NSFileProviderDomainIdentifier(
+                    rawValue: id.uuidString
+                ),
                 displayName: "test"
             )
             let userInfo = try UserInfo(
@@ -113,12 +117,14 @@ struct ExtensionTests {
             domain.userInfo = try userInfo.toDictionary()
             let ext = Extension(domain: domain)
 
-            await #expect(throws: NSFileProviderError(.serverUnreachable).self) {
-                try await ext.item(for: .rootContainer.child(name: "unreachable"))
+            await #expect(throws: NSFileProviderError(.serverUnreachable).self)
+            {
+                try await ext.item(
+                    for: .rootContainer.child(name: "unreachable")
+                )
             }
         }
     }
-
 
     struct FetchContentsTests {
         let testFolderPath = "fetch-contents"
@@ -127,7 +133,7 @@ struct ExtensionTests {
         init() throws {
             testFolderURL = try TestData.createTestFolder(path: testFolderPath)
         }
-        
+
         @Test func fetchSmallFileSucceeds() async throws {
             let ext = try getExtension()
 
@@ -219,29 +225,117 @@ struct ExtensionTests {
                     .fileExists(atPath: expectedFolderURL.path())
             )
 
-            let itemTemplate = ItemTemplate(
-                filename: expectedFolderURL.lastPathComponent,
-                contentType: .folder,
-                parentItemIdentifier: .rootContainer.child(name: testFolderPath)
-            )
-            let fields: NSFileProviderItemFields = [
-                .filename, .parentItemIdentifier, .creationDate,
-                .contentModificationDate, .fileSystemFlags, .typeAndCreator,
-            ]
-            let progress = Progress()
-
             _ = try await ext.createItem(
-                basedOn: itemTemplate,
-                fields: fields,
+                basedOn: ItemTemplate(
+                    filename: expectedFolderURL.lastPathComponent,
+                    contentType: .folder,
+                    parentItemIdentifier: .rootContainer.child(
+                        name: testFolderPath
+                    )
+                ),
+                fields: [
+                    .filename, .parentItemIdentifier, .creationDate,
+                    .contentModificationDate, .fileSystemFlags, .typeAndCreator,
+                ],
                 contents: nil,
                 options: [],
                 request: NSFileProviderRequest(),
-                progress: progress
+                progress: Progress()
             )
 
             #expect(
                 FileManager.default
                     .fileExists(atPath: expectedFolderURL.path())
+            )
+        }
+
+        @Test func createSmallFileSucceeds() async throws {
+            let ext = try getExtension()
+
+            let path = "\(testFolderPath)/small-file.txt"
+            try TestData.removeTestItem(path: path)
+            let expectedFileURL = TestData.getTestURL(path: path)
+            #expect(
+                !FileManager.default
+                    .fileExists(atPath: expectedFileURL.path())
+            )
+
+            let fileToUploadURL = FileManager.default.temporaryDirectory
+                .appending(path: UUID().uuidString)
+            let content = "Hello, World!"
+            try content.write(
+                to: fileToUploadURL,
+                atomically: false,
+                encoding: .utf8
+            )
+
+            _ = try await ext.createItem(
+                basedOn: ItemTemplate(
+                    filename: expectedFileURL.lastPathComponent,
+                    contentType: .text,
+                    parentItemIdentifier: .rootContainer.child(
+                        name: testFolderPath
+                    ),
+                    documentSize: NSNumber(value: content.count)
+                ),
+                fields: [
+                    .filename, .parentItemIdentifier, .creationDate,
+                    .contentModificationDate, .fileSystemFlags, .typeAndCreator,
+                ],
+                contents: fileToUploadURL,
+                options: [],
+                request: NSFileProviderRequest(),
+                progress: Progress()
+            )
+
+            #expect(
+                FileManager.default
+                    .fileExists(atPath: expectedFileURL.path())
+            )
+        }
+        
+        @Test func createLargeFileSucceeds() async throws {
+            let ext = try getExtension()
+
+            let path = "\(testFolderPath)/large-file.txt"
+            try TestData.removeTestItem(path: path)
+            let expectedFileURL = TestData.getTestURL(path: path)
+            #expect(
+                !FileManager.default
+                    .fileExists(atPath: expectedFileURL.path())
+            )
+
+            let fileToUploadURL = FileManager.default.temporaryDirectory
+                .appending(path: UUID().uuidString)
+            let content = String(repeating: "A", count: 10_000_000)
+            try content.write(
+                to: fileToUploadURL,
+                atomically: false,
+                encoding: .utf8
+            )
+
+            _ = try await ext.createItem(
+                basedOn: ItemTemplate(
+                    filename: expectedFileURL.lastPathComponent,
+                    contentType: .text,
+                    parentItemIdentifier: .rootContainer.child(
+                        name: testFolderPath
+                    ),
+                    documentSize: NSNumber(value: content.count)
+                ),
+                fields: [
+                    .filename, .parentItemIdentifier, .creationDate,
+                    .contentModificationDate, .fileSystemFlags, .typeAndCreator,
+                ],
+                contents: fileToUploadURL,
+                options: [],
+                request: NSFileProviderRequest(),
+                progress: Progress()
+            )
+
+            #expect(
+                FileManager.default
+                    .fileExists(atPath: expectedFileURL.path())
             )
         }
     }
@@ -310,7 +404,7 @@ struct ExtensionTests {
                     .fileExists(atPath: fileToDeleteURL.path())
             )
         }
-        
+
         @Test func deleteMissingItemThrows() async throws {
             let ext = try getExtension()
 
@@ -345,6 +439,7 @@ final class ItemTemplate: NSObject, NSFileProviderItem {
     var creationDate: Date?
     var contentModificationDate: Date?
     var fileSystemFlags: NSFileProviderFileSystemFlags
+    var documentSize: NSNumber?
 
     init(
         filename: String,
@@ -354,7 +449,8 @@ final class ItemTemplate: NSObject, NSFileProviderItem {
         contentModificationDate: Date? = nil,
         fileSystemFlags: NSFileProviderFileSystemFlags = [
             .userExecutable, .userReadable, .userWritable,
-        ]
+        ],
+        documentSize: NSNumber? = nil,
     ) {
         self.filename = filename
         self.contentType = contentType
@@ -362,6 +458,7 @@ final class ItemTemplate: NSObject, NSFileProviderItem {
         self.creationDate = creationDate
         self.contentModificationDate = contentModificationDate
         self.fileSystemFlags = fileSystemFlags
+        self.documentSize = documentSize
     }
 }
 

@@ -6,10 +6,11 @@ struct TestData {
     static let host = "localhost"
     static let port: UInt16 = 2248
     static let user = NSUserName()
+    static let mount: URL = FileManager.default.temporaryDirectory
 
     static func getConnectionConfig(
         id: UUID = UUID(),
-        url: URL = FileManager.default.temporaryDirectory,
+        url: URL = mount
     ) throws -> ConnectionConfig {
         try ConnectionConfig(
             id: id,
@@ -27,7 +28,7 @@ struct TestData {
 
     static func getUserInfo(
         id: UUID = UUID(),
-        url: URL = FileManager.default.temporaryDirectory,
+        url: URL = mount,
     ) throws -> UserInfo {
         try UserInfo(
             id: id,
@@ -66,9 +67,9 @@ struct TestData {
     }
 
     static func getTestURL(path: String) -> URL {
-        FileManager.default.temporaryDirectory.appending(path: path)
+        mount.appending(path: path)
     }
-    
+
     static func removeTestItem(path: String) throws {
         let url = getTestURL(path: path)
         if FileManager.default.fileExists(atPath: url.path()) {
