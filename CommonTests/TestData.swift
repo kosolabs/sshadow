@@ -1,12 +1,24 @@
 import Common
 import Foundation
+import OSLog
+
+let logger = getLogger(category: "TestData")
 
 struct TestData {
     static let name = "test"
     static let host = "localhost"
     static let port: UInt16 = 2248
     static let user = NSUserName()
-    static let mount: URL = FileManager.default.temporaryDirectory
+    static let mount: URL = {
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        try? FileManager.default.createDirectory(
+            at: url,
+            withIntermediateDirectories: true
+        )
+        logger.notice("Test server mount path: \(url.path())")
+        return url
+    }()
 
     static func getConnectionConfig(
         id: UUID = UUID(),
