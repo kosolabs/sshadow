@@ -6,8 +6,12 @@ struct TestData {
     static let host = "localhost"
     static let port: UInt16 = 2248
     static let user = NSUserName()
-    static let mount: URL = FileManager.default.temporaryDirectory
-        .appending(path: "mount")
+    static let mount: URL = try! FileManager.default.url(
+        for: .itemReplacementDirectory,
+        in: .userDomainMask,
+        appropriateFor: FileManager.default.temporaryDirectory,
+        create: true
+    )
 
     static func getConnectionConfig(
         id: UUID = UUID(),
