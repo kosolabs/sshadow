@@ -293,7 +293,7 @@ struct ExtensionTests {
                     .fileExists(atPath: expectedFileURL.path())
             )
         }
-        
+
         @Test func createLargeFileSucceeds() async throws {
             let ext = try getExtension()
 
@@ -336,6 +336,103 @@ struct ExtensionTests {
             #expect(
                 FileManager.default
                     .fileExists(atPath: expectedFileURL.path())
+            )
+        }
+    }
+
+    struct ModifyItemTests {
+        let testFolderPath = "modify-item"
+        let testFolderURL: URL
+
+        init() throws {
+            testFolderURL = try TestData.createTestFolder(path: testFolderPath)
+        }
+
+        @Test func renameFileSucceeds() async throws {
+            let ext = try getExtension()
+
+            let sourcePath = "\(testFolderPath)/source-file.txt"
+            try TestData.createTestFile(path: sourcePath, contents: "data")
+
+            let destinationPath = "\(testFolderPath)/destination-file.txt"
+            try TestData.removeTestItem(path: destinationPath)
+            let destinationURL = TestData.getTestURL(path: destinationPath)
+
+            let progress = Progress()
+            let (item, _, _) = try await ext.modifyItem(
+                ItemTemplate(
+                    itemIdentifier: .rootContainer.child(name: sourcePath),
+                    filename: destinationURL.lastPathComponent,
+                    contentType: .text,
+                    parentItemIdentifier: .rootContainer.child(
+                        name: testFolderPath
+                    )
+                ),
+                baseVersion: NSFileProviderItemVersion(),
+                changedFields: [.filename],
+                contents: nil,
+                options: [],
+                request: NSFileProviderRequest(),
+                progress: progress
+            )
+
+            #expect(item?.filename == "destination-file.txt")
+            #expect(
+                FileManager.default
+                    .fileExists(atPath: destinationURL.path())
+            )
+            #expect(
+                !FileManager.default
+                    .fileExists(
+                        atPath: TestData.getTestURL(path: sourcePath).path()
+                    )
+            )
+        }
+
+        @Test func moveFileSucceeds() async throws {
+            let ext = try getExtension()
+
+            let sourceFolderPath = "\(testFolderPath)/source-folder"
+            try TestData.createTestFolder(path: sourceFolderPath)
+            let sourceFilePath = "\(sourceFolderPath)/file.txt"
+            try TestData.createTestFile(path: sourceFilePath, contents: "data")
+
+            let destinationFolderPath = "\(testFolderPath)/destination-folder"
+            try TestData.createTestFolder(path: destinationFolderPath)
+            let destinationFilePath = "\(destinationFolderPath)/file.txt"
+            try TestData.removeTestItem(path: destinationFilePath)
+
+            let progress = Progress()
+            let (item, _, _) = try await ext.modifyItem(
+                ItemTemplate(
+                    itemIdentifier: .rootContainer.child(name: sourceFilePath),
+                    filename: "file.txt",
+                    contentType: .text,
+                    parentItemIdentifier: .rootContainer.child(
+                        name: destinationFolderPath
+                    )
+                ),
+                baseVersion: NSFileProviderItemVersion(),
+                changedFields: [.parentItemIdentifier],
+                contents: nil,
+                options: [],
+                request: NSFileProviderRequest(),
+                progress: progress
+            )
+
+            #expect(item?.filename == "file.txt")
+            #expect(
+                FileManager.default
+                    .fileExists(
+                        atPath: TestData.getTestURL(path: destinationFilePath)
+                            .path()
+                    )
+            )
+            #expect(
+                !FileManager.default
+                    .fileExists(
+                        atPath: TestData.getTestURL(path: sourceFilePath).path()
+                    )
             )
         }
     }
@@ -431,17 +528,18 @@ struct ExtensionTests {
 }
 
 final class ItemTemplate: NSObject, NSFileProviderItem {
-    var itemIdentifier: NSFileProviderItemIdentifier =
-        NSFileProviderItemIdentifier(UUID().uuidString)
-    var parentItemIdentifier: NSFileProviderItemIdentifier
+    var itemIdentifier: NSFileProviderItemIdentifier
     var filename: String
     var contentType: UTType
+    var parentItemIdentifier: NSFileProviderItemIdentifier
     var creationDate: Date?
     var contentModificationDate: Date?
     var fileSystemFlags: NSFileProviderFileSystemFlags
     var documentSize: NSNumber?
 
     init(
+        itemIdentifier: NSFileProviderItemIdentifier =
+            NSFileProviderItemIdentifier(UUID().uuidString),
         filename: String,
         contentType: UTType,
         parentItemIdentifier: NSFileProviderItemIdentifier = .rootContainer,
@@ -452,6 +550,7 @@ final class ItemTemplate: NSObject, NSFileProviderItem {
         ],
         documentSize: NSNumber? = nil,
     ) {
+        self.itemIdentifier = itemIdentifier
         self.filename = filename
         self.contentType = contentType
         self.parentItemIdentifier = parentItemIdentifier
@@ -521,6 +620,35 @@ extension Extension {
                     continuation.resume(throwing: error)
                 } else if let item {
                     continuation.resume(returning: (item, fields, blah))
+                }
+            }
+
+            progress.addChild(operationProgress, withPendingUnitCount: 1)
+        }
+    }
+
+    func modifyItem(
+        _ item: NSFileProviderItem,
+        baseVersion version: NSFileProviderItemVersion,
+        changedFields: NSFileProviderItemFields,
+        contents newContents: URL?,
+        options: NSFileProviderModifyItemOptions = [],
+        request: NSFileProviderRequest,
+        progress: Progress,
+    ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
+        try await withCheckedThrowingContinuation { continuation in
+            let operationProgress = self.modifyItem(
+                item,
+                baseVersion: version,
+                changedFields: changedFields,
+                contents: newContents,
+                options: options,
+                request: request
+            ) { item, fields, bool, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: (item, fields, bool))
                 }
             }
 

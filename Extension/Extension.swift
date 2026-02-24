@@ -37,14 +37,42 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         let progress = Progress()
 
         Task {
+            guard let config = self.config else {
+                return completionHandler(
+                    nil,
+                    NSFileProviderError(.notAuthenticated)
+                )
+            }
+
+            logger.debug(
+                "Get item: \(config.path(for: itemIdentifier), privacy: .public)"
+            )
             do {
                 let item = try await item(
                     for: itemIdentifier,
                     request: request,
-                    progress: progress
+                    progress: progress,
+                    config: config,
                 )
+                logger.notice("Got item: \(item.description, privacy: .public)")
                 completionHandler(item, nil)
             } catch {
+                if let sshError = error as? SSHError,
+                    case .sftpError(let sftpError, _) = sshError,
+                    sftpError == .noSuchFile
+                {
+                    logger.notice(
+                        "No such item: \(config.path(for: itemIdentifier), privacy: .public)"
+                    )
+                } else {
+                    logger.fault(
+                        """
+                        Failed to get item \
+                        \(itemIdentifier.rawValue, privacy: .public): \
+                        \(error, privacy: .public)
+                        """
+                    )
+                }
                 completionHandler(nil, remap(error: error))
             }
         }
@@ -56,15 +84,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         for itemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest,
         progress: Progress,
+        config: ConnectionConfig,
     ) async throws -> NSFileProviderItem {
-        guard let config = self.config else {
-            throw NSFileProviderError(.notAuthenticated)
-        }
-
-        logger.debug(
-            "Item: \(config.path(for: itemIdentifier), privacy: .public)"
-        )
-
         if itemIdentifier == .rootContainer
             || itemIdentifier == .trashContainer
             || itemIdentifier == .workingSet
@@ -95,16 +116,25 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         let progress = Progress()
 
         Task {
+            guard let config = self.config else {
+                return completionHandler(
+                    nil,
+                    nil,
+                    NSFileProviderError(.notAuthenticated)
+                )
+            }
+
             do {
                 let (url, item) = try await fetchContents(
                     for: itemIdentifier,
                     version: requestedVersion,
                     request: request,
-                    progress: progress
+                    progress: progress,
+                    config: config,
                 )
                 completionHandler(url, item, nil)
             } catch {
-                logger.error(
+                logger.fault(
                     """
                     Failed to fetch contents of \
                     \(itemIdentifier.rawValue, privacy: .public): \
@@ -123,12 +153,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         version requestedVersion: NSFileProviderItemVersion?,
         request: NSFileProviderRequest,
         progress: Progress,
+        config: ConnectionConfig,
     ) async throws -> (URL, NSFileProviderItem) {
-        guard let config = self.config else {
-            throw NSFileProviderError(.notAuthenticated)
-        }
         logger.debug(
-            "fetch: \(config.path(for: itemIdentifier), privacy: .public)"
+            """
+            Fetch contents: \
+            \(config.path(for: itemIdentifier), privacy: .public)
+            """
         )
 
         let url = FileManager.default.temporaryDirectory
@@ -182,6 +213,15 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         let progress = Progress()
 
         Task {
+            guard let config = self.config else {
+                return completionHandler(
+                    nil,
+                    [],
+                    false,
+                    NSFileProviderError(.notAuthenticated)
+                )
+            }
+
             do {
                 let (item, fields, bool) = try await createItem(
                     basedOn: itemTemplate,
@@ -189,13 +229,14 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                     contents: url,
                     options: options,
                     request: request,
-                    progress: progress
+                    progress: progress,
+                    config: config,
                 )
                 completionHandler(item, fields, bool, nil)
             } catch {
-                logger.error(
+                logger.fault(
                     """
-                    Failed to create item for \
+                    Failed to create item \
                     \(itemTemplate.filename, privacy: .public): \
                     \(error, privacy: .public)
                     """
@@ -214,12 +255,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         options: NSFileProviderCreateItemOptions = [],
         request: NSFileProviderRequest,
         progress: Progress,
+        config: ConnectionConfig,
     ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
-        guard let config = self.config else {
-            throw NSFileProviderError(.notAuthenticated)
-        }
         logger.debug(
-            "create item (\(type(of: itemTemplate), privacy: .public)): \(itemTemplate.description, privacy: .public)"
+            """
+            Create item: \
+            \(itemTemplate.description, privacy: .public)
+            """
         )
         logItem(item: itemTemplate, fields: fields)
 
@@ -248,7 +290,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 let documentSize = itemTemplate.documentSize,
                 let documentSize = documentSize
             else {
-                logger.error(
+                logger.fault(
                     """
                     Missing contents URL or document size for \
                     \(itemTemplate.filename, privacy: .public)
@@ -298,19 +340,99 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 NSFileProviderItem?, NSFileProviderItemFields, Bool, Error?
             ) -> Void
     ) -> Progress {
-        // TODO: an item was modified on disk, process the item's modification
+        let progress = Progress()
 
-        completionHandler(
-            nil,
-            [],
-            false,
-            NSError(
-                domain: NSCocoaErrorDomain,
-                code: NSFeatureUnsupportedError,
-                userInfo: [:]
+        Task {
+            guard let config = self.config else {
+                return completionHandler(
+                    nil,
+                    [],
+                    false,
+                    NSFileProviderError(.notAuthenticated)
+                )
+            }
+            logger.debug(
+                """
+                Modify \
+                \(config.path(for: item.itemIdentifier), privacy: .public) \
+                \(item.description, privacy: .public)
+                """
             )
-        )
+            do {
+                let (item, fields, bool) = try await modifyItem(
+                    item,
+                    baseVersion: version,
+                    changedFields: changedFields,
+                    contents: newContents,
+                    options: options,
+                    request: request,
+                    progress: progress,
+                    config: config,
+                )
+                completionHandler(item, fields, bool, nil)
+            } catch {
+                logger.fault(
+                    """
+                    Failed to modify item \
+                    \(item.filename, privacy: .public): \
+                    \(error, privacy: .public)
+                    """
+                )
+                completionHandler(nil, [], false, remap(error: error))
+            }
+        }
+
         return Progress()
+    }
+
+    private func modifyItem(
+        _ item: NSFileProviderItem,
+        baseVersion version: NSFileProviderItemVersion,
+        changedFields: NSFileProviderItemFields,
+        contents newContents: URL?,
+        options: NSFileProviderModifyItemOptions = [],
+        request: NSFileProviderRequest,
+        progress: Progress,
+        config: ConnectionConfig,
+    ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
+        let moveFields: NSFileProviderItemFields =
+            [.parentItemIdentifier, .filename]
+        logItem(item: item, fields: changedFields)
+
+        if !changedFields.intersection(moveFields).isEmpty {
+            let fromItemID = item.itemIdentifier
+            let toItemID = item.parentItemIdentifier.child(name: item.filename)
+            logger.debug(
+                """
+                Move \
+                \(config.path(for: fromItemID), privacy: .public) \
+                to \
+                \(config.path(for: toItemID), privacy: .public)
+                """
+            )
+            let item = try await SSHClient.withSession(config: config) {
+                _,
+                sftp in
+                progress.totalUnitCount = 1
+                try await sftp.move(
+                    from: config.path(for: fromItemID),
+                    to: config.path(for: toItemID)
+                )
+                let attrs = try await sftp.attributes(
+                    atPath: config.path(for: toItemID)
+                )
+                progress.completedUnitCount = 1
+                return Item(
+                    domainName: config.name,
+                    itemIdentifier: toItemID,
+                    itemAttributes: attrs
+                )
+            }
+
+            return (item, changedFields.subtracting(moveFields), false)
+        }
+        
+        throw CocoaError(.featureUnsupported)
     }
 
     public func deleteItem(
@@ -323,17 +445,21 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         let progress = Progress()
 
         Task {
+            guard let config = self.config else {
+                return completionHandler(NSFileProviderError(.notAuthenticated))
+            }
             do {
                 try await deleteItem(
                     identifier: identifier,
                     baseVersion: version,
                     options: options,
                     request: request,
-                    progress: progress
+                    progress: progress,
+                    config: config,
                 )
                 completionHandler(nil)
             } catch {
-                logger.error(
+                logger.fault(
                     """
                     Failed to delete item \
                     \(identifier.rawValue, privacy: .public): \
@@ -353,10 +479,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         options: NSFileProviderDeleteItemOptions = [],
         request: NSFileProviderRequest,
         progress: Progress,
+        config: ConnectionConfig,
     ) async throws {
-        guard let config = self.config else {
-            throw NSFileProviderError(.notAuthenticated)
-        }
         logger.debug(
             "delete item: \(config.path(for: identifier), privacy: .public)"
         )
@@ -437,17 +561,5 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 """
             )
         }
-        logger.debug(
-            """
-            Field contentType: \
-            \(String(describing: item.contentType), privacy: .public)
-            """
-        )
-        logger.debug(
-            """
-            Field documentSize: \
-            \(String(describing: item.documentSize), privacy: .public)
-            """
-        )
     }
 }
