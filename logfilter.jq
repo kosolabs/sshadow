@@ -11,6 +11,20 @@ def gray:       "\u001b[90m";
 # High-Intensity / Bright
 def bright_white:  "\u001b[97m";
 
+# Thread ID color palette (cycled by threadID % length)
+def thread_colors: [
+  "\u001b[32m",   # green
+  "\u001b[33m",   # yellow
+  "\u001b[34m",   # blue
+  "\u001b[35m",   # magenta
+  "\u001b[36m",   # cyan
+  "\u001b[92m",   # bright green
+  "\u001b[93m",   # bright yellow
+  "\u001b[94m",   # bright blue
+  "\u001b[95m",   # bright magenta
+  "\u001b[96m"    # bright cyan
+];
+
 try (
   fromjson | 
   
@@ -26,10 +40,11 @@ try (
   # Format the specific parts
   (gray + .timestamp[11:26] + reset) as $time |
   ($lvl_color + .messageType + reset) as $level |
+  (.threadID as $tid | (thread_colors | .[$tid % length]) + ($tid | tostring) + reset) as $threadID |
   (.subsystem | split(".") | .[-1]) as $subsystem |
   (bold + .category + reset) as $category |
   ($lvl_color + .eventMessage + reset) as $message |
   
   # Assemble
-  "\($time) \($level) [\($subsystem):\($category)] \($message)"
-) catch empty
+  "\($time) \($threadID) \($level) \($subsystem):\($category) \($message)"
+) catch ("ERROR: " + .)

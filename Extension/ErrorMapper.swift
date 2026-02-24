@@ -27,7 +27,7 @@ func remap(error: Error) -> Error {
         }
     }
 
-    logger.error("Remapping error: \(error, privacy: .public)")
+    logger.fault("Remapping error: \(error, privacy: .public)")
     return NSFileProviderError(
         .cannotSynchronize,
         userInfo: [
