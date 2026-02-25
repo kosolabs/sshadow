@@ -435,6 +435,50 @@ struct ExtensionTests {
                     )
             )
         }
+
+        @Test func setModifyTimeSucceeds() async throws {
+            let ext = try getExtension()
+
+            let path = "\(testFolderPath)/modify-time-file.txt"
+            try TestData.createTestFile(path: path, contents: "data")
+
+            let newModifyTime = Date(timeIntervalSince1970: 1_000_000)
+
+            let progress = Progress()
+            let (item, remainingFields, _) = try await ext.modifyItem(
+                ItemTemplate(
+                    itemIdentifier: .rootContainer.child(name: path),
+                    filename: "modify-time-file.txt",
+                    contentType: .text,
+                    parentItemIdentifier: .rootContainer.child(
+                        name: testFolderPath
+                    ),
+                    contentModificationDate: newModifyTime
+                ),
+                baseVersion: NSFileProviderItemVersion(),
+                changedFields: [.contentModificationDate],
+                contents: nil,
+                options: [],
+                request: NSFileProviderRequest(),
+                progress: progress
+            )
+
+            // The returned item should be the original item (unchanged identity)
+            #expect(item?.filename == "modify-time-file.txt")
+            // The contentModificationDate field should be consumed
+            #expect(!remainingFields.contains(.contentModificationDate))
+
+            // Verify the mtime was actually set on the remote file
+            let fileURL = TestData.getTestURL(path: path)
+            let attrs = try FileManager.default.attributesOfItem(
+                atPath: fileURL.path()
+            )
+            let actualModifyTime = attrs[.modificationDate] as? Date
+            #expect(
+                actualModifyTime?.timeIntervalSince1970
+                    == newModifyTime.timeIntervalSince1970
+            )
+        }
     }
 
     struct DeleteItemTests {
