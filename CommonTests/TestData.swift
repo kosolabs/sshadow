@@ -1,8 +1,7 @@
 import Common
 import Foundation
-import OSLog
 
-let logger = getLogger(category: "TestData")
+let logger = Logger(category: "TestData")
 
 struct TestData {
     static let name = "test"

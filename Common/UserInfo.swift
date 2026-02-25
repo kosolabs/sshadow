@@ -1,13 +1,9 @@
 import FileProvider
-import OSLog
 import SwiftData
 import SwiftLibSSH
 import SwiftUI
 
-private let logger = Logger(
-    subsystem: Bundle.main.bundleIdentifier!,
-    category: "UserInfo"
-)
+private let logger = Logger(category: "UserInfo")
 
 public struct UserInfo: Codable, CustomStringConvertible, Sendable {
     public enum AuthMethod: Codable, CustomStringConvertible, Sendable {

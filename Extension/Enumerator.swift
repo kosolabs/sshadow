@@ -1,6 +1,5 @@
 import Common
 import FileProvider
-import OSLog
 import SwiftLibSSH
 
 public class Enumerator: NSObject, NSFileProviderEnumerator {
@@ -15,9 +14,9 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         config: ConnectionConfig,
         itemIdentifier: NSFileProviderItemIdentifier
     ) {
-        logger = getLogger(category: "Enumerator.\(config.name)")
+        logger = Logger(category: "Enumerator.\(config.name)")
         logger.debug(
-            "init: \(itemIdentifier.rawValue, privacy: .public)"
+            "init: \(itemIdentifier.rawValue)"
         )
         self.config = config
         self.itemIdentifier = itemIdentifier
@@ -53,7 +52,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
                 observer.finishEnumerating(upTo: upTo)
             } catch {
                 logger.error(
-                    "Failed to enumerate items for \(self.config.name, privacy: .public): \(error, privacy: .public)"
+                    "Failed to enumerate items for \(self.config.name): \(error)"
                 )
                 observer.finishEnumeratingWithError(error)
             }
@@ -74,7 +73,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
 
         try await SSHClient.withSession(config: config) { _, sftp in
             let path = config.path(for: itemIdentifier)
-            logger.debug("Enumerating items at: \(path, privacy: .public)")
+            logger.debug("Enumerating items at: \(path)")
             try await sftp.withDirectory(atPath: path) { dir in
                 for try await attrs in dir {
                     if let name = attrs.name {

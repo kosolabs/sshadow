@@ -1,12 +1,8 @@
 import Common
-import OSLog
 import SwiftData
 import SwiftUI
 
-private let logger = Logger(
-    subsystem: Bundle.main.bundleIdentifier!,
-    category: "SSHadowApp"
-)
+private let logger = Logger(category: "SSHadowApp")
 
 @main
 struct SSHadowApp: App {

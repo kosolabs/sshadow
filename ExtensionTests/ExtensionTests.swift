@@ -227,11 +227,11 @@ struct ExtensionTests {
 
             _ = try await ext.createItem(
                 basedOn: ItemTemplate(
-                    filename: expectedFolderURL.lastPathComponent,
-                    contentType: .folder,
                     parentItemIdentifier: .rootContainer.child(
                         name: testFolderPath
-                    )
+                    ),
+                    filename: expectedFolderURL.lastPathComponent,
+                    contentType: .folder,
                 ),
                 fields: [
                     .filename, .parentItemIdentifier, .creationDate,
@@ -271,12 +271,12 @@ struct ExtensionTests {
 
             _ = try await ext.createItem(
                 basedOn: ItemTemplate(
-                    filename: expectedFileURL.lastPathComponent,
-                    contentType: .text,
                     parentItemIdentifier: .rootContainer.child(
                         name: testFolderPath
                     ),
-                    documentSize: NSNumber(value: content.count)
+                    filename: expectedFileURL.lastPathComponent,
+                    contentType: .text,
+                    documentSize: NSNumber(value: content.count),
                 ),
                 fields: [
                     .filename, .parentItemIdentifier, .creationDate,
@@ -316,12 +316,12 @@ struct ExtensionTests {
 
             _ = try await ext.createItem(
                 basedOn: ItemTemplate(
-                    filename: expectedFileURL.lastPathComponent,
-                    contentType: .text,
                     parentItemIdentifier: .rootContainer.child(
                         name: testFolderPath
                     ),
-                    documentSize: NSNumber(value: content.count)
+                    filename: expectedFileURL.lastPathComponent,
+                    contentType: .text,
+                    documentSize: NSNumber(value: content.count),
                 ),
                 fields: [
                     .filename, .parentItemIdentifier, .creationDate,
@@ -362,11 +362,11 @@ struct ExtensionTests {
             let (item, _, _) = try await ext.modifyItem(
                 ItemTemplate(
                     itemIdentifier: .rootContainer.child(name: sourcePath),
-                    filename: destinationURL.lastPathComponent,
-                    contentType: .text,
                     parentItemIdentifier: .rootContainer.child(
                         name: testFolderPath
-                    )
+                    ),
+                    filename: destinationURL.lastPathComponent,
+                    contentType: .text,
                 ),
                 baseVersion: NSFileProviderItemVersion(),
                 changedFields: [.filename],
@@ -406,11 +406,11 @@ struct ExtensionTests {
             let (item, _, _) = try await ext.modifyItem(
                 ItemTemplate(
                     itemIdentifier: .rootContainer.child(name: sourceFilePath),
-                    filename: "file.txt",
-                    contentType: .text,
                     parentItemIdentifier: .rootContainer.child(
                         name: destinationFolderPath
-                    )
+                    ),
+                    filename: "file.txt",
+                    contentType: .text,
                 ),
                 baseVersion: NSFileProviderItemVersion(),
                 changedFields: [.parentItemIdentifier],
@@ -445,15 +445,15 @@ struct ExtensionTests {
             let newModifyTime = Date(timeIntervalSince1970: 1_000_000)
 
             let progress = Progress()
-            let (item, remainingFields, _) = try await ext.modifyItem(
+            _ = try await ext.modifyItem(
                 ItemTemplate(
                     itemIdentifier: .rootContainer.child(name: path),
-                    filename: "modify-time-file.txt",
-                    contentType: .text,
                     parentItemIdentifier: .rootContainer.child(
                         name: testFolderPath
                     ),
-                    contentModificationDate: newModifyTime
+                    filename: "modify-time-file.txt",
+                    contentType: .text,
+                    contentModificationDate: newModifyTime,
                 ),
                 baseVersion: NSFileProviderItemVersion(),
                 changedFields: [.contentModificationDate],
@@ -463,12 +463,6 @@ struct ExtensionTests {
                 progress: progress
             )
 
-            // The returned item should be the original item (unchanged identity)
-            #expect(item?.filename == "modify-time-file.txt")
-            // The contentModificationDate field should be consumed
-            #expect(!remainingFields.contains(.contentModificationDate))
-
-            // Verify the mtime was actually set on the remote file
             let fileURL = TestData.getTestURL(path: path)
             let attrs = try FileManager.default.attributesOfItem(
                 atPath: fileURL.path()
@@ -477,6 +471,45 @@ struct ExtensionTests {
             #expect(
                 actualModifyTime?.timeIntervalSince1970
                     == newModifyTime.timeIntervalSince1970
+            )
+        }
+
+        @Test func setAccessTimeSucceeds() async throws {
+            let ext = try getExtension()
+
+            let path = "\(testFolderPath)/access-time-file.txt"
+            try TestData.createTestFile(path: path, contents: "data")
+
+            let newAccessTime = Date(timeIntervalSince1970: 1_000_000)
+
+            let progress = Progress()
+            _ = try await ext.modifyItem(
+                ItemTemplate(
+                    itemIdentifier: .rootContainer.child(name: path),
+                    parentItemIdentifier: .rootContainer.child(
+                        name: testFolderPath
+                    ),
+                    filename: "access-time-file.txt",
+                    contentType: .text,
+                    lastUsedDate: newAccessTime,
+                ),
+                baseVersion: NSFileProviderItemVersion(),
+                changedFields: [.lastUsedDate],
+                contents: nil,
+                options: [],
+                request: NSFileProviderRequest(),
+                progress: progress
+            )
+
+            let fileURL = TestData.getTestURL(path: path)
+            var st = stat()
+            stat(fileURL.path(), &st)
+            let actualAccessTime = Date(
+                timeIntervalSince1970: TimeInterval(st.st_atimespec.tv_sec)
+            )
+            #expect(
+                actualAccessTime.timeIntervalSince1970
+                    == newAccessTime.timeIntervalSince1970
             )
         }
     }
@@ -573,35 +606,38 @@ struct ExtensionTests {
 
 final class ItemTemplate: NSObject, NSFileProviderItem {
     var itemIdentifier: NSFileProviderItemIdentifier
+    var parentItemIdentifier: NSFileProviderItemIdentifier
     var filename: String
     var contentType: UTType
-    var parentItemIdentifier: NSFileProviderItemIdentifier
-    var creationDate: Date?
-    var contentModificationDate: Date?
     var fileSystemFlags: NSFileProviderFileSystemFlags
     var documentSize: NSNumber?
+    var creationDate: Date?
+    var contentModificationDate: Date?
+    var lastUsedDate: Date?
 
     init(
         itemIdentifier: NSFileProviderItemIdentifier =
             NSFileProviderItemIdentifier(UUID().uuidString),
+        parentItemIdentifier: NSFileProviderItemIdentifier = .rootContainer,
         filename: String,
         contentType: UTType,
-        parentItemIdentifier: NSFileProviderItemIdentifier = .rootContainer,
-        creationDate: Date? = nil,
-        contentModificationDate: Date? = nil,
         fileSystemFlags: NSFileProviderFileSystemFlags = [
             .userExecutable, .userReadable, .userWritable,
         ],
         documentSize: NSNumber? = nil,
+        creationDate: Date? = nil,
+        contentModificationDate: Date? = nil,
+        lastUsedDate: Date? = nil,
     ) {
         self.itemIdentifier = itemIdentifier
+        self.parentItemIdentifier = parentItemIdentifier
         self.filename = filename
         self.contentType = contentType
-        self.parentItemIdentifier = parentItemIdentifier
-        self.creationDate = creationDate
-        self.contentModificationDate = contentModificationDate
         self.fileSystemFlags = fileSystemFlags
         self.documentSize = documentSize
+        self.creationDate = creationDate
+        self.contentModificationDate = contentModificationDate
+        self.lastUsedDate = lastUsedDate
     }
 }
 

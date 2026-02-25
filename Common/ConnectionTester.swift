@@ -1,11 +1,7 @@
 import Foundation
-import OSLog
 import SwiftLibSSH
 
-private let logger = Logger(
-    subsystem: Bundle.main.bundleIdentifier!,
-    category: "ConnectionTester"
-)
+private let logger = Logger(category: "ConnectionTester")
 
 public enum ConnectionTestError: Error, Equatable {
     case unknownHost
@@ -26,7 +22,8 @@ public struct DefaultConnectionTester: ConnectionTester {
     public func test(config: ConnectionConfig) async throws {
         do {
             try await SSHClient.withSession(config: config) {
-                _, sftpClient in
+                _,
+                sftpClient in
                 let attrs = try await sftpClient.attributes(
                     atPath: config.path
                 )
@@ -35,7 +32,7 @@ public struct DefaultConnectionTester: ConnectionTester {
                 }
             }
         } catch {
-            logger.notice("Error while testing connection: \(error)")
+            logger.error("Error while testing connection: \(error)")
             guard let sshError = error as? SSHError else {
                 throw error
             }
@@ -57,7 +54,7 @@ public struct DefaultConnectionTester: ConnectionTester {
             case .authenticationFailed:
                 throw ConnectionTestError.userauthPasswordFailed
             case .sftpError(let sftpError, _):
-                switch sftpError{
+                switch sftpError {
                 case .noSuchFile:
                     throw ConnectionTestError.pathNotFound
                 default:
