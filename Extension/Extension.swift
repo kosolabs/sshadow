@@ -397,17 +397,17 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
     ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
         let moveFields: NSFileProviderItemFields =
             [.parentItemIdentifier, .filename]
+        let modifyTimeFields: NSFileProviderItemFields =
+            [.contentModificationDate]
         logItem(item: item, fields: changedFields)
 
         if !changedFields.intersection(moveFields).isEmpty {
             let fromItemID = item.itemIdentifier
             let toItemID = item.parentItemIdentifier.child(name: item.filename)
-            logger.debug(
+            logger.notice(
                 """
-                Move \
-                \(config.path(for: fromItemID), privacy: .public) \
-                to \
-                \(config.path(for: toItemID), privacy: .public)
+                Move \(config.path(for: fromItemID), privacy: .public) \
+                to \(config.path(for: toItemID), privacy: .public)
                 """
             )
             let item = try await SSHClient.withSession(config: config) {
@@ -431,7 +431,28 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
 
             return (item, changedFields.subtracting(moveFields), false)
         }
-        
+
+        if !changedFields.intersection(modifyTimeFields).isEmpty,
+            let modifyTime = item.contentModificationDate
+        {
+            logger.notice(
+                """
+                Set modify time of \(config.path(for: item.itemIdentifier), privacy: .public) \
+                to \(String(describing: modifyTime), privacy: .public)
+                """
+            )
+            try await SSHClient.withSession(config: config) {
+                _,
+                sftp in
+                try await sftp.setAttributes(
+                    atPath: config.path(for: item.itemIdentifier),
+                    modifyTime: modifyTime
+                )
+            }
+
+            return (item, changedFields.subtracting(modifyTimeFields), false)
+        }
+
         throw CocoaError(.featureUnsupported)
     }
 
