@@ -1,6 +1,5 @@
 import Common
 import FileProvider
-import OSLog
 import SwiftData
 import SwiftLibSSH
 import UniformTypeIdentifiers
@@ -10,13 +9,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
     let config: ConnectionConfig?
 
     required public init(domain: NSFileProviderDomain) {
-        logger = getLogger(category: "Extension.\(domain.displayName)")
+        logger = Logger(category: "Extension.\(domain.displayName)")
 
         if let userInfo = try? UserInfo.fromDictionary(domain.userInfo),
             let config = try? ConnectionConfig(from: userInfo)
         {
             self.config = config
-            logger.debug("init: \(config, privacy: .public)")
+            logger.debug("init: \(config)")
         } else {
             self.config = nil
             logger.fault("Failed to retrieve connection config")
@@ -44,9 +43,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 )
             }
 
-            logger.debug(
-                "Get item: \(config.path(for: itemIdentifier), privacy: .public)"
-            )
+            logger.debug("Get item: \(config.path(for: itemIdentifier))")
             do {
                 let item = try await item(
                     for: itemIdentifier,
@@ -54,7 +51,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                     progress: progress,
                     config: config,
                 )
-                logger.notice("Got item: \(item.description, privacy: .public)")
+                logger.notice("Got item: \(item.description)")
                 completionHandler(item, nil)
             } catch {
                 if let sshError = error as? SSHError,
@@ -62,15 +59,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                     sftpError == .noSuchFile
                 {
                     logger.notice(
-                        "No such item: \(config.path(for: itemIdentifier), privacy: .public)"
+                        "No such item: \(config.path(for: itemIdentifier))"
                     )
                 } else {
                     logger.fault(
-                        """
-                        Failed to get item \
-                        \(itemIdentifier.rawValue, privacy: .public): \
-                        \(error, privacy: .public)
-                        """
+                        "Failed to get item \(itemIdentifier.rawValue): \(error)"
                     )
                 }
                 completionHandler(nil, remap(error: error))
@@ -135,11 +128,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 completionHandler(url, item, nil)
             } catch {
                 logger.fault(
-                    """
-                    Failed to fetch contents of \
-                    \(itemIdentifier.rawValue, privacy: .public): \
-                    \(error, privacy: .public)
-                    """
+                    "Failed to fetch contents of \(itemIdentifier.rawValue): \(error)"
                 )
                 completionHandler(nil, nil, error)
             }
@@ -158,7 +147,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         logger.debug(
             """
             Fetch contents: \
-            \(config.path(for: itemIdentifier), privacy: .public)
+            \(config.path(for: itemIdentifier))
             """
         )
 
@@ -235,11 +224,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 completionHandler(item, fields, bool, nil)
             } catch {
                 logger.fault(
-                    """
-                    Failed to create item \
-                    \(itemTemplate.filename, privacy: .public): \
-                    \(error, privacy: .public)
-                    """
+                    "Failed to create item \(itemTemplate.filename): \(error)"
                 )
                 completionHandler(nil, [], false, remap(error: error))
             }
@@ -257,12 +242,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         progress: Progress,
         config: ConnectionConfig,
     ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
-        logger.debug(
-            """
-            Create item: \
-            \(itemTemplate.description, privacy: .public)
-            """
-        )
+        logger.debug("Create item: \(itemTemplate.description)")
         logItem(item: itemTemplate, fields: fields)
 
         let itemIdentifier = itemTemplate.parentItemIdentifier
@@ -273,9 +253,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             // TODO: Set create and modify timestamps
             if itemTemplate.contentType == .folder {
                 progress.totalUnitCount = 1
-                logger.debug(
-                    "create folder: \(remotePath, privacy: .public)"
-                )
+                logger.debug("create folder: \(remotePath)")
                 try await sftp.createDirectory(atPath: remotePath)
                 let attrs = try await sftp.attributes(atPath: remotePath)
                 progress.completedUnitCount = 1
@@ -291,10 +269,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 let documentSize = documentSize
             else {
                 logger.fault(
-                    """
-                    Missing contents URL or document size for \
-                    \(itemTemplate.filename, privacy: .public)
-                    """
+                    "Missing contents URL or document size for \(itemTemplate.filename)"
                 )
                 throw CocoaError(.fileReadUnsupportedScheme)
             }
@@ -352,11 +327,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 )
             }
             logger.debug(
-                """
-                Modify \
-                \(config.path(for: item.itemIdentifier), privacy: .public) \
-                \(item.description, privacy: .public)
-                """
+                "Modify \(config.path(for: item.itemIdentifier)) \(item.description)"
             )
             do {
                 let (item, fields, bool) = try await modifyItem(
@@ -372,11 +343,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 completionHandler(item, fields, bool, nil)
             } catch {
                 logger.fault(
-                    """
-                    Failed to modify item \
-                    \(item.filename, privacy: .public): \
-                    \(error, privacy: .public)
-                    """
+                    "Failed to modify item \(item.filename): \(error)"
                 )
                 completionHandler(nil, [], false, remap(error: error))
             }
@@ -397,18 +364,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
     ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
         let moveFields: NSFileProviderItemFields =
             [.parentItemIdentifier, .filename]
-        let modifyTimeFields: NSFileProviderItemFields =
-            [.contentModificationDate]
         logItem(item: item, fields: changedFields)
 
         if !changedFields.intersection(moveFields).isEmpty {
             let fromItemID = item.itemIdentifier
             let toItemID = item.parentItemIdentifier.child(name: item.filename)
             logger.notice(
-                """
-                Move \(config.path(for: fromItemID), privacy: .public) \
-                to \(config.path(for: toItemID), privacy: .public)
-                """
+                "Move \(config.path(for: fromItemID)) to \(config.path(for: toItemID))"
             )
             let item = try await SSHClient.withSession(config: config) {
                 _,
@@ -429,17 +391,18 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 )
             }
 
-            return (item, changedFields.subtracting(moveFields), false)
+            let remaining = changedFields.subtracting(moveFields)
+            if !remaining.isEmpty {
+                logger.error("Remaining fields: \(remaining)")
+            }
+            return (item, remaining, false)
         }
 
-        if !changedFields.intersection(modifyTimeFields).isEmpty,
+        if changedFields.contains(.contentModificationDate),
             let modifyTime = item.contentModificationDate
         {
             logger.notice(
-                """
-                Set modify time of \(config.path(for: item.itemIdentifier), privacy: .public) \
-                to \(String(describing: modifyTime), privacy: .public)
-                """
+                "Set modify time of \(config.path(for: item.itemIdentifier)) to \(String(describing: modifyTime))"
             )
             try await SSHClient.withSession(config: config) {
                 _,
@@ -450,8 +413,38 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 )
             }
 
-            return (item, changedFields.subtracting(modifyTimeFields), false)
+            let remaining = changedFields.subtracting([.contentModificationDate]
+            )
+            if !remaining.isEmpty {
+                logger.error("Remaining fields: \(remaining)")
+            }
+            return (item, remaining, false)
         }
+
+        if changedFields.contains(.lastUsedDate),
+            let accessTime = item.lastUsedDate
+        {
+            logger.notice(
+                "Set access time of \(config.path(for: item.itemIdentifier)) to \(String(describing: accessTime))"
+            )
+            try await SSHClient.withSession(config: config) {
+                _,
+                sftp in
+                try await sftp.setAttributes(
+                    atPath: config.path(for: item.itemIdentifier),
+                    accessTime: accessTime
+                )
+            }
+
+            let remaining = changedFields.subtracting([.lastUsedDate]
+            )
+            if !remaining.isEmpty {
+                logger.error("Remaining fields: \(remaining)")
+            }
+            return (item, remaining, false)
+        }
+
+        logger.fault("Unhandled fields: \(changedFields)")
 
         throw CocoaError(.featureUnsupported)
     }
@@ -481,11 +474,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 completionHandler(nil)
             } catch {
                 logger.fault(
-                    """
-                    Failed to delete item \
-                    \(identifier.rawValue, privacy: .public): \
-                    \(error, privacy: .public)
-                    """
+                    "Failed to delete item \(identifier.rawValue): \(error)"
                 )
                 completionHandler(remap(error: error))
             }
@@ -503,7 +492,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         config: ConnectionConfig,
     ) async throws {
         logger.debug(
-            "delete item: \(config.path(for: identifier), privacy: .public)"
+            "delete item: \(config.path(for: identifier))"
         )
 
         try await SSHClient.withSession(config: config) { _, sftp in
@@ -535,52 +524,52 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             itemIdentifier: containerItemIdentifier
         )
     }
+}
 
-    private func logItem(
-        item: NSFileProviderItem,
-        fields: NSFileProviderItemFields
-    ) {
-        let allFields: [(NSFileProviderItemFields, String, Any?)] = [
-            (
-                .filename, "filename", item.filename
-            ),
-            (
-                .parentItemIdentifier, "parentItemIdentifier",
-                item.parentItemIdentifier
-            ),
-            (
-                .lastUsedDate, "lastUsedDate", item.lastUsedDate as Any?
-            ),
-            (
-                .tagData, "tagData", item.tagData as Any?
-            ),
-            (
-                .creationDate, "creationDate", item.creationDate as Any?
-            ),
-            (
-                .contentModificationDate, "contentModificationDate",
-                item.contentModificationDate as Any?
-            ),
-            (
-                .fileSystemFlags, "fileSystemFlags", item.fileSystemFlags
-            ),
-            (
-                .extendedAttributes, "extendedAttributes",
-                item.extendedAttributes
-            ),
-            (
-                .typeAndCreator, "typeAndCreator", item.typeAndCreator
-            ),
-        ]
+private func logItem(
+    item: NSFileProviderItem,
+    fields: NSFileProviderItemFields
+) {
+    let allFields: [(NSFileProviderItemFields, String, Any?)] = [
+        (
+            .filename, "filename", item.filename
+        ),
+        (
+            .parentItemIdentifier, "parentItemIdentifier",
+            item.parentItemIdentifier
+        ),
+        (
+            .lastUsedDate, "lastUsedDate", item.lastUsedDate as Any?
+        ),
+        (
+            .tagData, "tagData", item.tagData as Any?
+        ),
+        (
+            .creationDate, "creationDate", item.creationDate as Any?
+        ),
+        (
+            .contentModificationDate, "contentModificationDate",
+            item.contentModificationDate as Any?
+        ),
+        (
+            .fileSystemFlags, "fileSystemFlags", item.fileSystemFlags
+        ),
+        (
+            .extendedAttributes, "extendedAttributes",
+            item.extendedAttributes
+        ),
+        (
+            .typeAndCreator, "typeAndCreator", item.typeAndCreator
+        ),
+    ]
 
-        for (field, name, value) in allFields where fields.contains(field) {
-            logger.debug(
-                """
-                Field \
-                \(name, privacy: .public): \
-                \(String(describing: value), privacy: .public)
-                """
-            )
-        }
+    for (field, name, value) in allFields where fields.contains(field) {
+        logger.debug(
+            """
+            Field \
+            \(name): \
+            \(String(describing: value))
+            """
+        )
     }
 }

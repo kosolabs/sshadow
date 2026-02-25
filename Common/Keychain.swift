@@ -1,11 +1,7 @@
 import Foundation
-import OSLog
 import Security
 
-private let logger = Logger(
-    subsystem: Bundle.main.bundleIdentifier!,
-    category: "Keychain"
-)
+private let logger = Logger(category: "Keychain")
 
 public final class Keychain {
     public static var shared = Keychain()
@@ -33,7 +29,7 @@ public final class Keychain {
         let status = SecItemDelete(query as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             logger.error(
-                "SecItemDelete failed for key \(key, privacy: .public) with status: \(status)"
+                "SecItemDelete failed for key \(key) with status: \(status)"
             )
             return
         }
@@ -57,7 +53,7 @@ public final class Keychain {
         let status = SecItemAdd(attributes as CFDictionary, nil)
         guard status == errSecSuccess else {
             logger.error(
-                "SecItemAdd failed for key \(key, privacy: .public) with status: \(status)"
+                "SecItemAdd failed for key \(key) with status: \(status)"
             )
             return
         }
@@ -66,7 +62,7 @@ public final class Keychain {
     public func set(_ key: String, to string: String) {
         guard let data = string.data(using: .utf8) else {
             logger.error(
-                "Failed to encode string as UTF-8 for key \(key, privacy: .public)"
+                "Failed to encode string as UTF-8 for key \(key)"
             )
             return
         }
@@ -92,7 +88,7 @@ public final class Keychain {
         }
         guard status == errSecSuccess else {
             logger.error(
-                "SecItemCopyMatching failed for key \(key, privacy: .public) with status: \(status)"
+                "SecItemCopyMatching failed for key \(key) with status: \(status)"
             )
             return nil
         }
@@ -105,17 +101,17 @@ public final class Keychain {
         }
         guard let value = String(data: data, encoding: .utf8) else {
             logger.error(
-                "Failed to decode data as UTF-8 for key \(key, privacy: .public)'"
+                "Failed to decode data as UTF-8 for key \(key)'"
             )
             return nil
         }
         return value
     }
-    
+
     public func getPasswordKey(id: UUID) -> String {
         "password.\(id.uuidString)"
     }
-    
+
     public func getPrivateKeyPassphraseKey(id: UUID) -> String {
         "privateKeyPassphrase.\(id.uuidString)"
     }

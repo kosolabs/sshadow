@@ -1,13 +1,9 @@
 import FileProvider
-import OSLog
 import SwiftData
 import SwiftLibSSH
 import SwiftUI
 
-private let logger = Logger(
-    subsystem: Bundle.main.bundleIdentifier!,
-    category: "ConnectionConfig"
-)
+private let logger = Logger(category: "ConnectionConfig")
 
 public struct ConnectionConfig:
     Codable, CustomStringConvertible, Equatable, Sendable

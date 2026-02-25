@@ -1,6 +1,5 @@
 import Common
 import FileProvider
-import OSLog
 import SwiftLibSSH
 import UniformTypeIdentifiers
 
@@ -18,8 +17,8 @@ public class Item: NSObject, NSFileProviderItem {
         itemIdentifier: NSFileProviderItemIdentifier,
         itemAttributes: SFTPAttributes,
     ) {
-        logger = getLogger(category: "Item.\(domainName)")
-        logger.debug("init: \(itemIdentifier.rawValue, privacy: .public)")
+        logger = Logger(category: "Item.\(domainName)")
+        logger.debug("init: \(itemIdentifier.rawValue)")
         self.itemIdentifier = itemIdentifier
         self.itemAttributes = itemAttributes
     }

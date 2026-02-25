@@ -1,13 +1,9 @@
 import Common
 import FileProvider
-import OSLog
 import SwiftData
 import SwiftUI
 
-private let logger = Logger(
-    subsystem: Bundle.main.bundleIdentifier!,
-    category: "ConnectionProfile"
-)
+private let logger = Logger(category: "ConnectionProfile")
 
 @Model class ConnectionProfile: CustomStringConvertible {
     enum ValidationError: Error {
@@ -107,17 +103,16 @@ private let logger = Logger(
     }
 
     func enable() async throws {
-        await logger.log("Enabling: \(self)")
         let config = try await ConnectionConfig(from: self)
         try await tester.test(config: config)
         let userInfo = try await UserInfo(from: self)
         let domain = try getDomain(with: userInfo)
         try await NSFileProviderManager.add(domain)
         self.enabled = true
+        await logger.notice("Enabled: \(self)")
     }
 
     func disable() {
-        logger.log("Disabling: \(self)")
         NSFileProviderManager.remove(getDomain()) { error in
             if let error = error {
                 logger.error(
@@ -125,6 +120,7 @@ private let logger = Logger(
                 )
             } else {
                 self.enabled = false
+                logger.notice("Disabled: \(self)")
             }
         }
     }
@@ -159,7 +155,7 @@ private let logger = Logger(
             )
         } catch {
             logger.error(
-                "Failed to resolve bookmark data for id: \(self.id, privacy: .public), error: \(error, privacy: .public)"
+                "Failed to resolve bookmark data for id: \(self.id), error: \(error)"
             )
             return nil
         }

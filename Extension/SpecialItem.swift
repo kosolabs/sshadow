@@ -1,6 +1,5 @@
 import Common
 import FileProvider
-import OSLog
 import SwiftLibSSH
 import UniformTypeIdentifiers
 
@@ -12,8 +11,8 @@ public class SpecialItem: NSObject, NSFileProviderItem {
         domainName: String,
         itemIdentifier: NSFileProviderItemIdentifier,
     ) {
-        logger = getLogger(category: "Item.\(domainName)")
-        logger.debug("init: \(itemIdentifier.rawValue, privacy: .public)")
+        logger = Logger(category: "Item.\(domainName)")
+        logger.debug("init: \(itemIdentifier.rawValue)")
         self.itemIdentifier = itemIdentifier
     }
 

@@ -1,9 +1,8 @@
 import Common
 import FileProvider
-import OSLog
 import SwiftLibSSH
 
-let logger = getLogger(category: "ErrorMapper")
+let logger = Logger(category: "ErrorMapper")
 
 func remap(error: Error) -> Error {
     let nsError = error as NSError
@@ -27,7 +26,7 @@ func remap(error: Error) -> Error {
         }
     }
 
-    logger.fault("Remapping error: \(error, privacy: .public)")
+    logger.fault("Remapping error: \(error)")
     return NSFileProviderError(
         .cannotSynchronize,
         userInfo: [
