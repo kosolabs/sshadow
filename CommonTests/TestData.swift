@@ -1,7 +1,7 @@
 import Common
 import Foundation
 
-let logger = Logger(category: "TestData")
+private let logger = Logger(category: "TestData")
 
 struct TestData {
     static let name = "test"

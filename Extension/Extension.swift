@@ -249,50 +249,24 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             .child(name: itemTemplate.filename)
         let remotePath = config.path(for: itemIdentifier)
 
+        if itemTemplate.contentType != .folder {
+            let item = try await writeFile(
+                basedOn: itemTemplate,
+                contents: url,
+                progress: progress,
+                config: config
+            )
+
+            return (item, [], false)
+        }
+
         let item = try await SSHClient.withSession(config: config) { _, sftp in
             // TODO: Set create and modify timestamps
-            if itemTemplate.contentType == .folder {
-                progress.totalUnitCount = 1
-                logger.debug("create folder: \(remotePath)")
-                try await sftp.createDirectory(atPath: remotePath)
-                let attrs = try await sftp.attributes(atPath: remotePath)
-                progress.completedUnitCount = 1
-                return Item(
-                    domainName: config.name,
-                    itemIdentifier: itemIdentifier,
-                    itemAttributes: attrs
-                )
-            }
-
-            guard let url = url,
-                let documentSize = itemTemplate.documentSize,
-                let documentSize = documentSize
-            else {
-                logger.fault(
-                    "Missing contents URL or document size for \(itemTemplate.filename)"
-                )
-                throw CocoaError(.fileReadUnsupportedScheme)
-            }
-            progress.totalUnitCount = Int64(truncating: documentSize)
-
-            let fp = try FileHandle(forReadingFrom: url)
-            defer { try? fp.close() }
-
-            try await sftp.withSftpFile(
-                atPath: remotePath,
-                accessType: .writeOnly
-            ) { file in
-                try await file.withAsyncWriter { writer in
-                    while let data = try fp.read(upToCount: 102400) {
-                        if progress.isCancelled {
-                            throw CocoaError(.userCancelled)
-                        }
-                        try await writer.write(data: data)
-                        progress.completedUnitCount += Int64(data.count)
-                    }
-                }
-            }
+            progress.totalUnitCount = 1
+            logger.debug("create folder: \(remotePath)")
+            try await sftp.createDirectory(atPath: remotePath)
             let attrs = try await sftp.attributes(atPath: remotePath)
+            progress.completedUnitCount = 1
             return Item(
                 domainName: config.name,
                 itemIdentifier: itemIdentifier,
@@ -365,6 +339,21 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         let moveFields: NSFileProviderItemFields =
             [.parentItemIdentifier, .filename]
         logItem(item: item, fields: changedFields)
+
+        if changedFields.contains(.contents) {
+            let item = try await writeFile(
+                basedOn: item,
+                contents: newContents,
+                progress: progress,
+                config: config
+            )
+            
+            let remaining = changedFields.subtracting([.contents])
+            if !remaining.isEmpty {
+                logger.error("Remaining fields: \(remaining)")
+            }
+            return (item, remaining, false)
+        }
 
         if !changedFields.intersection(moveFields).isEmpty {
             let fromItemID = item.itemIdentifier
@@ -524,52 +513,101 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             itemIdentifier: containerItemIdentifier
         )
     }
-}
 
-private func logItem(
-    item: NSFileProviderItem,
-    fields: NSFileProviderItemFields
-) {
-    let allFields: [(NSFileProviderItemFields, String, Any?)] = [
-        (
-            .filename, "filename", item.filename
-        ),
-        (
-            .parentItemIdentifier, "parentItemIdentifier",
-            item.parentItemIdentifier
-        ),
-        (
-            .lastUsedDate, "lastUsedDate", item.lastUsedDate as Any?
-        ),
-        (
-            .tagData, "tagData", item.tagData as Any?
-        ),
-        (
-            .creationDate, "creationDate", item.creationDate as Any?
-        ),
-        (
-            .contentModificationDate, "contentModificationDate",
-            item.contentModificationDate as Any?
-        ),
-        (
-            .fileSystemFlags, "fileSystemFlags", item.fileSystemFlags
-        ),
-        (
-            .extendedAttributes, "extendedAttributes",
-            item.extendedAttributes
-        ),
-        (
-            .typeAndCreator, "typeAndCreator", item.typeAndCreator
-        ),
-    ]
+    private func writeFile(
+        basedOn itemTemplate: NSFileProviderItem,
+        contents url: URL?,
+        progress: Progress,
+        config: ConnectionConfig,
+    ) async throws -> Item {
+        let itemIdentifier = itemTemplate.parentItemIdentifier
+            .child(name: itemTemplate.filename)
+        let remotePath = config.path(for: itemIdentifier)
 
-    for (field, name, value) in allFields where fields.contains(field) {
-        logger.debug(
-            """
-            Field \
-            \(name): \
-            \(String(describing: value))
-            """
-        )
+        return try await SSHClient.withSession(config: config) { _, sftp in
+            guard let url = url,
+                let documentSize = itemTemplate.documentSize,
+                let documentSize = documentSize
+            else {
+                logger.fault(
+                    "Missing contents URL or document size for \(itemTemplate.filename)"
+                )
+                throw CocoaError(.fileReadUnsupportedScheme)
+            }
+            progress.totalUnitCount = Int64(truncating: documentSize)
+
+            let fp = try FileHandle(forReadingFrom: url)
+            defer { try? fp.close() }
+
+            try await sftp.withSftpFile(
+                atPath: remotePath,
+                accessType: .writeOnly
+            ) { file in
+                try await file.withAsyncWriter { writer in
+                    while let data = try fp.read(upToCount: 102400) {
+                        if progress.isCancelled {
+                            throw CocoaError(.userCancelled)
+                        }
+                        try await writer.write(data: data)
+                        progress.completedUnitCount += Int64(data.count)
+                    }
+                }
+            }
+            let attrs = try await sftp.attributes(atPath: remotePath)
+            return Item(
+                domainName: config.name,
+                itemIdentifier: itemIdentifier,
+                itemAttributes: attrs
+            )
+        }
     }
+    
+    private func logItem(
+        item: NSFileProviderItem,
+        fields: NSFileProviderItemFields
+    ) {
+        let allFields: [(NSFileProviderItemFields, String, Any?)] = [
+            (
+                .filename, "filename", item.filename
+            ),
+            (
+                .parentItemIdentifier, "parentItemIdentifier",
+                item.parentItemIdentifier
+            ),
+            (
+                .lastUsedDate, "lastUsedDate", item.lastUsedDate as Any?
+            ),
+            (
+                .tagData, "tagData", item.tagData as Any?
+            ),
+            (
+                .creationDate, "creationDate", item.creationDate as Any?
+            ),
+            (
+                .contentModificationDate, "contentModificationDate",
+                item.contentModificationDate as Any?
+            ),
+            (
+                .fileSystemFlags, "fileSystemFlags", item.fileSystemFlags
+            ),
+            (
+                .extendedAttributes, "extendedAttributes",
+                item.extendedAttributes
+            ),
+            (
+                .typeAndCreator, "typeAndCreator", item.typeAndCreator
+            ),
+        ]
+
+        for (field, name, value) in allFields where fields.contains(field) {
+            logger.debug(
+                """
+                Field \
+                \(name): \
+                \(String(describing: value))
+                """
+            )
+        }
+    }
+
 }
