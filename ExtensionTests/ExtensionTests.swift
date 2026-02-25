@@ -436,6 +436,46 @@ struct ExtensionTests {
             )
         }
 
+        @Test func editFileSucceeds() async throws {
+            let ext = try getExtension()
+
+            let path = "\(testFolderPath)/edit-file.txt"
+            try TestData.createTestFile(path: path, contents: "original")
+
+            let newContent = "updated content"
+            let newContentURL = FileManager.default.temporaryDirectory
+                .appending(path: UUID().uuidString)
+            try newContent.write(to: newContentURL, atomically: false, encoding: .utf8)
+
+            let progress = Progress()
+            let (item, remainingFields, _) = try await ext.modifyItem(
+                ItemTemplate(
+                    itemIdentifier: .rootContainer.child(name: path),
+                    parentItemIdentifier: .rootContainer.child(
+                        name: testFolderPath
+                    ),
+                    filename: "edit-file.txt",
+                    contentType: .text,
+                    documentSize: NSNumber(value: newContent.count),
+                ),
+                baseVersion: NSFileProviderItemVersion(),
+                changedFields: [.contents],
+                contents: newContentURL,
+                options: [],
+                request: NSFileProviderRequest(),
+                progress: progress
+            )
+
+            #expect(item?.filename == "edit-file.txt")
+            #expect(!remainingFields.contains(.contents))
+
+            let actualContent = try String(
+                contentsOf: TestData.getTestURL(path: path),
+                encoding: .utf8
+            )
+            #expect(actualContent == newContent)
+        }
+
         @Test func setModifyTimeSucceeds() async throws {
             let ext = try getExtension()
 
@@ -512,6 +552,8 @@ struct ExtensionTests {
                     == newAccessTime.timeIntervalSince1970
             )
         }
+        
+        
     }
 
     struct DeleteItemTests {

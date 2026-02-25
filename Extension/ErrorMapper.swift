@@ -2,7 +2,7 @@ import Common
 import FileProvider
 import SwiftLibSSH
 
-let logger = Logger(category: "ErrorMapper")
+private let logger = Logger(category: "ErrorMapper")
 
 func remap(error: Error) -> Error {
     let nsError = error as NSError
