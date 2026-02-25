@@ -11,19 +11,19 @@ def gray:       "\u001b[90m";
 # High-Intensity / Bright
 def bright_white:  "\u001b[97m";
 
-# Thread ID color palette (cycled by threadID % length)
-def thread_colors: [
-  "\u001b[32m",   # green
-  "\u001b[33m",   # yellow
-  "\u001b[34m",   # blue
-  "\u001b[35m",   # magenta
-  "\u001b[36m",   # cyan
-  "\u001b[92m",   # bright green
-  "\u001b[93m",   # bright yellow
-  "\u001b[94m",   # bright blue
-  "\u001b[95m",   # bright magenta
-  "\u001b[96m"    # bright cyan
-];
+# Thread ID color palette — generated from the 256-color 6×6×6 cube (indices 16–231).
+# Each color is decomposed into r/g/b components (0–5); colors whose component
+# sum falls outside [4, 11] are excluded to avoid near-black and near-white hues.
+def thread_colors:
+  [
+    range(16; 232) |
+    . as $i |
+    (($i - 16) / 36 | floor) as $r |
+    ((($i - 16) % 36) / 6 | floor) as $g |
+    (($i - 16) % 6) as $b |
+    select(($r + $g + $b) >= 4 and ($r + $g + $b) <= 11) |
+    "\u001b[38;5;\($i)m"
+  ];
 
 try (
   fromjson | 
@@ -32,8 +32,8 @@ try (
   (
     if .messageType == "Fault" then red
     elif .messageType == "Error" then yellow
-    elif .messageType == "Default" then green 
-    elif .messageType == "Debug" then gray 
+    elif .messageType == "Default" then green
+    elif .messageType == "Debug" then gray
     else reset end
   ) as $lvl_color |
   
