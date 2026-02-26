@@ -6,26 +6,46 @@ import UniformTypeIdentifiers
 
 public class Extension: NSObject, NSFileProviderReplicatedExtension {
     let logger: Logger
-    let config: ConnectionConfig?
+    let manager: SessionManager
 
     required public init(domain: NSFileProviderDomain) {
         logger = Logger(category: "Extension.\(domain.displayName)")
 
-        if let userInfo = try? UserInfo.fromDictionary(domain.userInfo),
-            let config = try? ConnectionConfig(from: userInfo)
-        {
-            self.config = config
+        do {
+            let userInfo = try UserInfo.fromDictionary(domain.userInfo)
+            let config = try ConnectionConfig(from: userInfo)
+            manager = SessionManager(name: domain.displayName, config: config)
             logger.debug("init: \(config)")
-        } else {
-            self.config = nil
-            logger.fault("Failed to retrieve connection config")
+        } catch {
+            manager = SessionManager(name: domain.displayName, config: nil)
+            logger.fault("Failed to retrieve connection config: \(error)")
         }
 
         super.init()
     }
 
     public func invalidate() {
-        // TODO: cleanup any resources
+        Task {
+            await manager.close()
+        }
+    }
+
+    private func withSession<T>(
+        progress: Progress = Progress(),
+        _ perform: @escaping (Session, Progress) async throws -> T,
+        onSuccess: @escaping (T) -> Void,
+        onError: @escaping (Error) -> Void,
+    ) -> Progress {
+        Task {
+            do {
+                let session = try await manager.getSession()
+                let result = try await perform(session, progress)
+                onSuccess(result)
+            } catch {
+                onError(remap(error: error))
+            }
+        }
+        return progress
     }
 
     public func item(
@@ -33,68 +53,57 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         request: NSFileProviderRequest,
         completionHandler: @escaping (NSFileProviderItem?, Error?) -> Void
     ) -> Progress {
-        let progress = Progress()
-
-        Task {
-            guard let config = self.config else {
-                return completionHandler(
-                    nil,
-                    NSFileProviderError(.notAuthenticated)
+        withSession { session, progress in
+            try await self.item(
+                for: itemIdentifier,
+                request: request,
+                progress: progress,
+                session: session,
+            )
+        } onSuccess: { item in
+            self.logger.notice("Got item: \(item.description)")
+            completionHandler(item, nil)
+        } onError: { error in
+            if let sshError = error as? SSHError,
+                case .sftpError(let sftpError, _) = sshError,
+                sftpError == .noSuchFile
+            {
+                self.logger.notice(
+                    "No such item: \(itemIdentifier.rawValue)"
+                )
+            } else {
+                self.logger.fault(
+                    "Failed to get item \(itemIdentifier.rawValue): \(error)"
                 )
             }
-
-            logger.debug("Get item: \(config.path(for: itemIdentifier))")
-            do {
-                let item = try await item(
-                    for: itemIdentifier,
-                    request: request,
-                    progress: progress,
-                    config: config,
-                )
-                logger.notice("Got item: \(item.description)")
-                completionHandler(item, nil)
-            } catch {
-                if let sshError = error as? SSHError,
-                    case .sftpError(let sftpError, _) = sshError,
-                    sftpError == .noSuchFile
-                {
-                    logger.notice(
-                        "No such item: \(config.path(for: itemIdentifier))"
-                    )
-                } else {
-                    logger.fault(
-                        "Failed to get item \(itemIdentifier.rawValue): \(error)"
-                    )
-                }
-                completionHandler(nil, remap(error: error))
-            }
+            completionHandler(nil, error)
         }
-
-        return progress
     }
 
     private func item(
         for itemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest,
         progress: Progress,
-        config: ConnectionConfig,
+        session: Session,
     ) async throws -> NSFileProviderItem {
+        logger.debug("Get item: \(session.path(for: itemIdentifier))")
+
         if itemIdentifier == .rootContainer
             || itemIdentifier == .trashContainer
             || itemIdentifier == .workingSet
         {
             return SpecialItem(
-                domainName: config.name,
+                domainName: session.config.name,
                 itemIdentifier: itemIdentifier
             )
         }
 
-        let attrs = try await SSHClient.withSession(config: config) { _, sftp in
-            try await sftp.attributes(atPath: config.path(for: itemIdentifier))
-        }
+        let attrs = try await session.sftp.attributes(
+            atPath: session.path(for: itemIdentifier)
+        )
 
         return Item(
-            domainName: config.name,
+            domainName: session.name,
             itemIdentifier: itemIdentifier,
             itemAttributes: attrs
         )
@@ -106,35 +115,22 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         request: NSFileProviderRequest,
         completionHandler: @escaping (URL?, NSFileProviderItem?, Error?) -> Void
     ) -> Progress {
-        let progress = Progress()
-
-        Task {
-            guard let config = self.config else {
-                return completionHandler(
-                    nil,
-                    nil,
-                    NSFileProviderError(.notAuthenticated)
-                )
-            }
-
-            do {
-                let (url, item) = try await fetchContents(
-                    for: itemIdentifier,
-                    version: requestedVersion,
-                    request: request,
-                    progress: progress,
-                    config: config,
-                )
-                completionHandler(url, item, nil)
-            } catch {
-                logger.fault(
-                    "Failed to fetch contents of \(itemIdentifier.rawValue): \(error)"
-                )
-                completionHandler(nil, nil, error)
-            }
+        withSession { session, progress in
+            try await self.fetchContents(
+                for: itemIdentifier,
+                version: requestedVersion,
+                request: request,
+                progress: progress,
+                session: session,
+            )
+        } onSuccess: { url, item in
+            completionHandler(url, item, nil)
+        } onError: { error in
+            self.logger.fault(
+                "Failed to fetch contents of \(itemIdentifier.rawValue): \(error)"
+            )
+            completionHandler(nil, nil, error)
         }
-
-        return progress
     }
 
     private func fetchContents(
@@ -142,14 +138,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         version requestedVersion: NSFileProviderItemVersion?,
         request: NSFileProviderRequest,
         progress: Progress,
-        config: ConnectionConfig,
+        session: Session,
     ) async throws -> (URL, NSFileProviderItem) {
-        logger.debug(
-            """
-            Fetch contents: \
-            \(config.path(for: itemIdentifier))
-            """
-        )
+        logger.debug("Fetch contents: \(session.path(for: itemIdentifier))")
 
         let url = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString)
@@ -160,28 +151,26 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         let handle = try FileHandle(forWritingTo: url)
         defer { try? handle.close() }
 
-        let attrs = try await SSHClient.withSession(config: config) { _, sftp in
-            try await sftp.withSftpFile(
-                atPath: config.path(for: itemIdentifier),
-                accessType: .readOnly
-            ) { file in
-                let attrs = try await file.attributes()
-                progress.totalUnitCount = Int64(attrs.size)
-                for try await data in file.stream() {
-                    if progress.isCancelled {
-                        throw CocoaError(.userCancelled)
-                    }
-                    try handle.write(contentsOf: data)
-                    progress.completedUnitCount += Int64(data.count)
+        let attrs = try await session.sftp.withSftpFile(
+            atPath: session.path(for: itemIdentifier),
+            accessType: .readOnly
+        ) { file in
+            let attrs = try await file.attributes()
+            progress.totalUnitCount = Int64(attrs.size)
+            for try await data in file.stream() {
+                if progress.isCancelled {
+                    throw CocoaError(.userCancelled)
                 }
-                return attrs
+                try handle.write(contentsOf: data)
+                progress.completedUnitCount += Int64(data.count)
             }
+            return attrs
         }
 
         return (
             url,
             Item(
-                domainName: config.name,
+                domainName: session.name,
                 itemIdentifier: itemIdentifier,
                 itemAttributes: attrs
             )
@@ -199,38 +188,24 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 NSFileProviderItem?, NSFileProviderItemFields, Bool, Error?
             ) -> Void
     ) -> Progress {
-        let progress = Progress()
-
-        Task {
-            guard let config = self.config else {
-                return completionHandler(
-                    nil,
-                    [],
-                    false,
-                    NSFileProviderError(.notAuthenticated)
-                )
-            }
-
-            do {
-                let (item, fields, bool) = try await createItem(
-                    basedOn: itemTemplate,
-                    fields: fields,
-                    contents: url,
-                    options: options,
-                    request: request,
-                    progress: progress,
-                    config: config,
-                )
-                completionHandler(item, fields, bool, nil)
-            } catch {
-                logger.fault(
-                    "Failed to create item \(itemTemplate.filename): \(error)"
-                )
-                completionHandler(nil, [], false, remap(error: error))
-            }
+        withSession { session, progress in
+            try await self.createItem(
+                basedOn: itemTemplate,
+                fields: fields,
+                contents: url,
+                options: options,
+                request: request,
+                progress: progress,
+                session: session,
+            )
+        } onSuccess: { item, fields, shouldFetchContent in
+            completionHandler(item, fields, shouldFetchContent, nil)
+        } onError: { error in
+            self.logger.fault(
+                "Failed to create item \(itemTemplate.filename): \(error)"
+            )
+            completionHandler(nil, [], false, error)
         }
-
-        return Progress()
     }
 
     private func createItem(
@@ -240,41 +215,39 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         options: NSFileProviderCreateItemOptions = [],
         request: NSFileProviderRequest,
         progress: Progress,
-        config: ConnectionConfig,
+        session: Session,
     ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
         logger.debug("Create item: \(itemTemplate.description)")
         logItem(item: itemTemplate, fields: fields)
 
         let itemIdentifier = itemTemplate.parentItemIdentifier
             .child(name: itemTemplate.filename)
-        let remotePath = config.path(for: itemIdentifier)
+        let remotePath = session.path(for: itemIdentifier)
 
         if itemTemplate.contentType != .folder {
             let item = try await writeFile(
                 basedOn: itemTemplate,
                 contents: url,
                 progress: progress,
-                config: config
+                session: session
             )
 
             return (item, [], false)
         }
 
-        let item = try await SSHClient.withSession(config: config) { _, sftp in
-            // TODO: Set create and modify timestamps
-            progress.totalUnitCount = 1
-            logger.debug("create folder: \(remotePath)")
-            try await sftp.createDirectory(atPath: remotePath)
-            let attrs = try await sftp.attributes(atPath: remotePath)
-            progress.completedUnitCount = 1
-            return Item(
-                domainName: config.name,
+        // TODO: Set create and modify timestamps
+        progress.totalUnitCount = 1
+        logger.debug("create folder: \(remotePath)")
+        try await session.sftp.createDirectory(atPath: remotePath)
+        let attrs = try await session.sftp.attributes(atPath: remotePath)
+        progress.completedUnitCount = 1
+        return (
+            Item(
+                domainName: session.name,
                 itemIdentifier: itemIdentifier,
                 itemAttributes: attrs
-            )
-        }
-
-        return (item, [], false)
+            ), [], false
+        )
     }
 
     public func modifyItem(
@@ -289,41 +262,25 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 NSFileProviderItem?, NSFileProviderItemFields, Bool, Error?
             ) -> Void
     ) -> Progress {
-        let progress = Progress()
-
-        Task {
-            guard let config = self.config else {
-                return completionHandler(
-                    nil,
-                    [],
-                    false,
-                    NSFileProviderError(.notAuthenticated)
-                )
-            }
-            logger.debug(
-                "Modify \(config.path(for: item.itemIdentifier)) \(item.description)"
+        withSession { session, progress in
+            try await self.modifyItem(
+                item,
+                baseVersion: version,
+                changedFields: changedFields,
+                contents: newContents,
+                options: options,
+                request: request,
+                progress: progress,
+                session: session,
             )
-            do {
-                let (item, fields, bool) = try await modifyItem(
-                    item,
-                    baseVersion: version,
-                    changedFields: changedFields,
-                    contents: newContents,
-                    options: options,
-                    request: request,
-                    progress: progress,
-                    config: config,
-                )
-                completionHandler(item, fields, bool, nil)
-            } catch {
-                logger.fault(
-                    "Failed to modify item \(item.filename): \(error)"
-                )
-                completionHandler(nil, [], false, remap(error: error))
-            }
+        } onSuccess: { item, fields, shouldFetchContent in
+            completionHandler(item, fields, shouldFetchContent, nil)
+        } onError: { error in
+            self.logger.fault(
+                "Failed to modify item \(item.filename): \(error)"
+            )
+            completionHandler(nil, [], false, error)
         }
-
-        return Progress()
     }
 
     private func modifyItem(
@@ -334,8 +291,12 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         options: NSFileProviderModifyItemOptions = [],
         request: NSFileProviderRequest,
         progress: Progress,
-        config: ConnectionConfig,
+        session: Session,
     ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
+        logger.debug(
+            "Modify \(session.path(for: item.itemIdentifier)) \(item.description)"
+        )
+
         let moveFields: NSFileProviderItemFields =
             [.parentItemIdentifier, .filename]
         logItem(item: item, fields: changedFields)
@@ -345,9 +306,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 basedOn: item,
                 contents: newContents,
                 progress: progress,
-                config: config
+                session: session
             )
-            
+
             let remaining = changedFields.subtracting([.contents])
             if !remaining.isEmpty {
                 logger.error("Remaining fields: \(remaining)")
@@ -359,26 +320,22 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             let fromItemID = item.itemIdentifier
             let toItemID = item.parentItemIdentifier.child(name: item.filename)
             logger.notice(
-                "Move \(config.path(for: fromItemID)) to \(config.path(for: toItemID))"
+                "Move \(session.path(for: fromItemID)) to \(session.path(for: toItemID))"
             )
-            let item = try await SSHClient.withSession(config: config) {
-                _,
-                sftp in
-                progress.totalUnitCount = 1
-                try await sftp.move(
-                    from: config.path(for: fromItemID),
-                    to: config.path(for: toItemID)
-                )
-                let attrs = try await sftp.attributes(
-                    atPath: config.path(for: toItemID)
-                )
-                progress.completedUnitCount = 1
-                return Item(
-                    domainName: config.name,
-                    itemIdentifier: toItemID,
-                    itemAttributes: attrs
-                )
-            }
+            progress.totalUnitCount = 1
+            try await session.sftp.move(
+                from: session.path(for: fromItemID),
+                to: session.path(for: toItemID)
+            )
+            let attrs = try await session.sftp.attributes(
+                atPath: session.path(for: toItemID)
+            )
+            progress.completedUnitCount = 1
+            let item = Item(
+                domainName: session.name,
+                itemIdentifier: toItemID,
+                itemAttributes: attrs
+            )
 
             let remaining = changedFields.subtracting(moveFields)
             if !remaining.isEmpty {
@@ -391,16 +348,12 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             let modifyTime = item.contentModificationDate
         {
             logger.notice(
-                "Set modify time of \(config.path(for: item.itemIdentifier)) to \(String(describing: modifyTime))"
+                "Set modify time of \(session.path(for: item.itemIdentifier)) to \(String(describing: modifyTime))"
             )
-            try await SSHClient.withSession(config: config) {
-                _,
-                sftp in
-                try await sftp.setAttributes(
-                    atPath: config.path(for: item.itemIdentifier),
-                    modifyTime: modifyTime
-                )
-            }
+            try await session.sftp.setAttributes(
+                atPath: session.path(for: item.itemIdentifier),
+                modifyTime: modifyTime
+            )
 
             let remaining = changedFields.subtracting([.contentModificationDate]
             )
@@ -414,19 +367,14 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             let accessTime = item.lastUsedDate
         {
             logger.notice(
-                "Set access time of \(config.path(for: item.itemIdentifier)) to \(String(describing: accessTime))"
+                "Set access time of \(session.path(for: item.itemIdentifier)) to \(String(describing: accessTime))"
             )
-            try await SSHClient.withSession(config: config) {
-                _,
-                sftp in
-                try await sftp.setAttributes(
-                    atPath: config.path(for: item.itemIdentifier),
-                    accessTime: accessTime
-                )
-            }
+            try await session.sftp.setAttributes(
+                atPath: session.path(for: item.itemIdentifier),
+                accessTime: accessTime
+            )
 
-            let remaining = changedFields.subtracting([.lastUsedDate]
-            )
+            let remaining = changedFields.subtracting([.lastUsedDate])
             if !remaining.isEmpty {
                 logger.error("Remaining fields: \(remaining)")
             }
@@ -445,31 +393,23 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         request: NSFileProviderRequest,
         completionHandler: @escaping (Error?) -> Void
     ) -> Progress {
-        let progress = Progress()
-
-        Task {
-            guard let config = self.config else {
-                return completionHandler(NSFileProviderError(.notAuthenticated))
-            }
-            do {
-                try await deleteItem(
-                    identifier: identifier,
-                    baseVersion: version,
-                    options: options,
-                    request: request,
-                    progress: progress,
-                    config: config,
-                )
-                completionHandler(nil)
-            } catch {
-                logger.fault(
-                    "Failed to delete item \(identifier.rawValue): \(error)"
-                )
-                completionHandler(remap(error: error))
-            }
+        withSession { session, progress in
+            try await self.deleteItem(
+                identifier: identifier,
+                baseVersion: version,
+                options: options,
+                request: request,
+                progress: progress,
+                session: session,
+            )
+        } onSuccess: {
+            completionHandler(nil)
+        } onError: { error in
+            self.logger.fault(
+                "Failed to delete item \(identifier.rawValue): \(error)"
+            )
+            completionHandler(error)
         }
-
-        return progress
     }
 
     private func deleteItem(
@@ -478,38 +418,32 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         options: NSFileProviderDeleteItemOptions = [],
         request: NSFileProviderRequest,
         progress: Progress,
-        config: ConnectionConfig,
+        session: Session,
     ) async throws {
-        logger.debug(
-            "delete item: \(config.path(for: identifier))"
-        )
+        logger.debug("delete item: \(session.path(for: identifier))")
 
-        try await SSHClient.withSession(config: config) { _, sftp in
-            let attrs = try await sftp.attributes(
-                atPath: config.path(for: identifier)
+        let attrs = try await session.sftp.attributes(
+            atPath: session.path(for: identifier)
+        )
+        progress.totalUnitCount = 1
+        if case .directory = attrs.type {
+            try await session.sftp.removeDirectory(
+                atPath: session.path(for: identifier)
             )
-            progress.totalUnitCount = 1
-            if case .directory = attrs.type {
-                try await sftp.removeDirectory(
-                    atPath: config.path(for: identifier)
-                )
-            } else {
-                try await sftp.removeFile(atPath: config.path(for: identifier))
-            }
-            progress.completedUnitCount = 1
+        } else {
+            try await session.sftp.removeFile(
+                atPath: session.path(for: identifier)
+            )
         }
+        progress.completedUnitCount = 1
     }
 
     public func enumerator(
         for containerItemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest
     ) throws -> NSFileProviderEnumerator {
-        guard let config = self.config else {
-            throw NSFileProviderError(.notAuthenticated)
-        }
-
         return Enumerator(
-            config: config,
+            manager: manager,
             itemIdentifier: containerItemIdentifier
         )
     }
@@ -518,50 +452,48 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         basedOn itemTemplate: NSFileProviderItem,
         contents url: URL?,
         progress: Progress,
-        config: ConnectionConfig,
+        session: Session,
     ) async throws -> Item {
         let itemIdentifier = itemTemplate.parentItemIdentifier
             .child(name: itemTemplate.filename)
-        let remotePath = config.path(for: itemIdentifier)
+        let remotePath = session.path(for: itemIdentifier)
 
-        return try await SSHClient.withSession(config: config) { _, sftp in
-            guard let url = url,
-                let documentSize = itemTemplate.documentSize,
-                let documentSize = documentSize
-            else {
-                logger.fault(
-                    "Missing contents URL or document size for \(itemTemplate.filename)"
-                )
-                throw CocoaError(.fileReadUnsupportedScheme)
-            }
-            progress.totalUnitCount = Int64(truncating: documentSize)
+        guard let url = url,
+            let documentSize = itemTemplate.documentSize,
+            let documentSize = documentSize
+        else {
+            logger.fault(
+                "Missing contents URL or document size for \(itemTemplate.filename)"
+            )
+            throw CocoaError(.fileReadUnsupportedScheme)
+        }
+        progress.totalUnitCount = Int64(truncating: documentSize)
 
-            let fp = try FileHandle(forReadingFrom: url)
-            defer { try? fp.close() }
+        let fp = try FileHandle(forReadingFrom: url)
+        defer { try? fp.close() }
 
-            try await sftp.withSftpFile(
-                atPath: remotePath,
-                accessType: .writeOnly
-            ) { file in
-                try await file.withAsyncWriter { writer in
-                    while let data = try fp.read(upToCount: 102400) {
-                        if progress.isCancelled {
-                            throw CocoaError(.userCancelled)
-                        }
-                        try await writer.write(data: data)
-                        progress.completedUnitCount += Int64(data.count)
+        try await session.sftp.withSftpFile(
+            atPath: remotePath,
+            accessType: .writeOnly
+        ) { file in
+            try await file.withAsyncWriter { writer in
+                while let data = try fp.read(upToCount: 102400) {
+                    if progress.isCancelled {
+                        throw CocoaError(.userCancelled)
                     }
+                    try await writer.write(data: data)
+                    progress.completedUnitCount += Int64(data.count)
                 }
             }
-            let attrs = try await sftp.attributes(atPath: remotePath)
-            return Item(
-                domainName: config.name,
-                itemIdentifier: itemIdentifier,
-                itemAttributes: attrs
-            )
         }
+        let attrs = try await session.sftp.attributes(atPath: remotePath)
+        return Item(
+            domainName: session.name,
+            itemIdentifier: itemIdentifier,
+            itemAttributes: attrs
+        )
     }
-    
+
     private func logItem(
         item: NSFileProviderItem,
         fields: NSFileProviderItemFields

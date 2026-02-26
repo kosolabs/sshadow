@@ -3,8 +3,8 @@ import Security
 
 private let logger = Logger(category: "Keychain")
 
-public final class Keychain {
-    public static var shared = Keychain()
+public struct Keychain: Sendable {
+    public static let shared = Keychain()
 
     private let service: String
     private let accessGroup: String

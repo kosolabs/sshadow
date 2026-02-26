@@ -46,5 +46,5 @@ try (
   ($lvl_color + .eventMessage + reset) as $message |
   
   # Assemble
-  "\($time) \($threadID) \($level) \($subsystem):\($category) \($message)"
+  "\($time) \($threadID) \($level)\t\($subsystem):\($category) \($message)"
 ) catch ("ERROR: " + .)
