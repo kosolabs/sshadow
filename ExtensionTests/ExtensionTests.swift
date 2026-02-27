@@ -18,11 +18,12 @@ private func getExtension(id: UUID = UUID()) throws -> Extension {
 }
 
 struct ExtensionTests {
-    @Test func initializeValidConfigSucceeds() throws {
+    @Test func initializeValidConfigSucceeds() async throws {
         let ext = try getExtension()
-        let actualConfig = ext.config
+        let session = try await ext.manager.getSession()
+        let actualConfig = session.config
 
-        let id = try #require(actualConfig?.id)
+        let id = actualConfig.id
         let expectedConfig = try TestData.getConnectionConfig(id: id)
 
         #expect(actualConfig == expectedConfig)
@@ -445,7 +446,11 @@ struct ExtensionTests {
             let newContent = "updated content"
             let newContentURL = FileManager.default.temporaryDirectory
                 .appending(path: UUID().uuidString)
-            try newContent.write(to: newContentURL, atomically: false, encoding: .utf8)
+            try newContent.write(
+                to: newContentURL,
+                atomically: false,
+                encoding: .utf8
+            )
 
             let progress = Progress()
             let (item, remainingFields, _) = try await ext.modifyItem(
@@ -552,8 +557,7 @@ struct ExtensionTests {
                     == newAccessTime.timeIntervalSince1970
             )
         }
-        
-        
+
     }
 
     struct DeleteItemTests {

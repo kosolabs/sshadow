@@ -3,7 +3,7 @@ import os
 
 private typealias OSLogger = os.Logger
 
-public class Logger {
+public struct Logger: Sendable {
     private let logger: OSLogger
 
     public init(

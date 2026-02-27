@@ -4,21 +4,21 @@ import SwiftLibSSH
 
 public class Enumerator: NSObject, NSFileProviderEnumerator {
     private let logger: Logger
-    private let config: ConnectionConfig
+    private let manager: SessionManager
     private let itemIdentifier: NSFileProviderItemIdentifier
     private let anchor = NSFileProviderSyncAnchor(
         "an anchor".data(using: .utf8)!
     )
 
     init(
-        config: ConnectionConfig,
+        manager: SessionManager,
         itemIdentifier: NSFileProviderItemIdentifier
     ) {
-        logger = Logger(category: "Enumerator.\(config.name)")
+        logger = Logger(category: "Enumerator.\(manager.name)")
         logger.debug(
             "init: \(itemIdentifier.rawValue)"
         )
-        self.config = config
+        self.manager = manager
         self.itemIdentifier = itemIdentifier
         super.init()
     }
@@ -46,22 +46,27 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
 
         Task {
             do {
-                let upTo = try await enumerateItems(startingAt: page) { items in
+                let session = try await manager.getSession()
+                let upTo = try await enumerateItems(
+                    startingAt: page,
+                    session: session
+                ) { items in
                     observer.didEnumerate(items)
                 }
                 observer.finishEnumerating(upTo: upTo)
             } catch {
                 logger.error(
-                    "Failed to enumerate items for \(self.config.name): \(error)"
+                    "Failed to enumerate items for \(itemIdentifier): \(error)"
                 )
-                observer.finishEnumeratingWithError(error)
+                observer.finishEnumeratingWithError(remap(error: error))
             }
         }
     }
 
-    func enumerateItems(
+    private func enumerateItems(
         startingAt page: NSFileProviderPage,
-        yield: ([any NSFileProviderItemProtocol]) -> Void
+        session: Session,
+        yield: @Sendable ([any NSFileProviderItemProtocol]) -> Void,
     ) async throws -> NSFileProviderPage? {
         if itemIdentifier == .trashContainer {
             return nil
@@ -71,19 +76,17 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
             return nil
         }
 
-        try await SSHClient.withSession(config: config) { _, sftp in
-            let path = config.path(for: itemIdentifier)
-            logger.debug("Enumerating items at: \(path)")
-            try await sftp.withDirectory(atPath: path) { dir in
-                for try await attrs in dir {
-                    if let name = attrs.name {
-                        let item = Item(
-                            domainName: config.name,
-                            itemIdentifier: itemIdentifier.child(name: name),
-                            itemAttributes: attrs
-                        )
-                        yield([item])
-                    }
+        let path = session.path(for: itemIdentifier)
+        logger.debug("Enumerating items at: \(path)")
+        try await session.sftp.withDirectory(atPath: path) { dir in
+            for try await attrs in dir {
+                if let name = attrs.name {
+                    let item = Item(
+                        domainName: session.name,
+                        itemIdentifier: itemIdentifier.child(name: name),
+                        itemAttributes: attrs
+                    )
+                    yield([item])
                 }
             }
         }
@@ -113,3 +116,4 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         completionHandler(anchor)
     }
 }
+
