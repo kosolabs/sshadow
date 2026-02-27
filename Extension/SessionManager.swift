@@ -2,6 +2,8 @@ import Common
 import FileProvider
 import SwiftLibSSH
 
+private let logger = Logger(category: "SessionManager")
+
 struct Session {
     let name: String
     let config: ConnectionConfig
@@ -33,7 +35,7 @@ actor SessionManager {
         }
         let ssh = try await SSHClient.connect(config: config)
         let sftp = try await ssh.sftp()
-        
+
         let session = Session(
             name: name,
             config: config,
@@ -50,5 +52,28 @@ actor SessionManager {
         await session.sftp.close()
         await session.ssh.close()
         self.session = nil
+    }
+
+    nonisolated func withSession<T>(
+        progress: Progress = Progress(),
+        _ perform: @escaping (Session, Progress) async throws -> T,
+        onSuccess: @escaping (T) -> Void,
+        onError: @escaping (Error) -> Void,
+        file: String = #fileID,
+        line: Int = #line,
+    ) -> Progress {
+        let trace = StackTrace.capture(file: file, line: line)
+
+        Task {
+            do {
+                let session = try await self.getSession()
+                let result = try await perform(session, progress)
+                onSuccess(result)
+            } catch {
+                logger.debug("Error at \(trace.caller): \(error)")
+                onError(remap(error: error))
+            }
+        }
+        return progress
     }
 }
