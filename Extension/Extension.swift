@@ -30,30 +30,12 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         }
     }
 
-    private func withSession<T>(
-        progress: Progress = Progress(),
-        _ perform: @escaping (Session, Progress) async throws -> T,
-        onSuccess: @escaping (T) -> Void,
-        onError: @escaping (Error) -> Void,
-    ) -> Progress {
-        Task {
-            do {
-                let session = try await manager.getSession()
-                let result = try await perform(session, progress)
-                onSuccess(result)
-            } catch {
-                onError(remap(error: error))
-            }
-        }
-        return progress
-    }
-
     public func item(
         for itemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest,
         completionHandler: @escaping (NSFileProviderItem?, Error?) -> Void
     ) -> Progress {
-        withSession { session, progress in
+        manager.withSession { session, progress in
             try await self.item(
                 for: itemIdentifier,
                 request: request,
@@ -61,21 +43,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 session: session,
             )
         } onSuccess: { item in
-            self.logger.notice("Got item: \(item.description)")
             completionHandler(item, nil)
         } onError: { error in
-            if let sshError = error as? SSHError,
-                case .sftpError(let sftpError, _) = sshError,
-                sftpError == .noSuchFile
-            {
-                self.logger.notice(
-                    "No such item: \(itemIdentifier.rawValue)"
-                )
-            } else {
-                self.logger.fault(
-                    "Failed to get item \(itemIdentifier.rawValue): \(error)"
-                )
-            }
             completionHandler(nil, error)
         }
     }
@@ -115,7 +84,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         request: NSFileProviderRequest,
         completionHandler: @escaping (URL?, NSFileProviderItem?, Error?) -> Void
     ) -> Progress {
-        withSession { session, progress in
+        manager.withSession { session, progress in
             try await self.fetchContents(
                 for: itemIdentifier,
                 version: requestedVersion,
@@ -127,7 +96,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             completionHandler(url, item, nil)
         } onError: { error in
             self.logger.fault(
-                "Failed to fetch contents of \(itemIdentifier.rawValue): \(error)"
+                "Failed to fetch contents of \(itemIdentifier)"
             )
             completionHandler(nil, nil, error)
         }
@@ -188,7 +157,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 NSFileProviderItem?, NSFileProviderItemFields, Bool, Error?
             ) -> Void
     ) -> Progress {
-        withSession { session, progress in
+        manager.withSession { session, progress in
             try await self.createItem(
                 basedOn: itemTemplate,
                 fields: fields,
@@ -202,7 +171,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             completionHandler(item, fields, shouldFetchContent, nil)
         } onError: { error in
             self.logger.fault(
-                "Failed to create item \(itemTemplate.filename): \(error)"
+                "Failed to create item \(itemTemplate.itemIdentifier)"
             )
             completionHandler(nil, [], false, error)
         }
@@ -262,7 +231,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 NSFileProviderItem?, NSFileProviderItemFields, Bool, Error?
             ) -> Void
     ) -> Progress {
-        withSession { session, progress in
+        manager.withSession { session, progress in
             try await self.modifyItem(
                 item,
                 baseVersion: version,
@@ -277,7 +246,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             completionHandler(item, fields, shouldFetchContent, nil)
         } onError: { error in
             self.logger.fault(
-                "Failed to modify item \(item.filename): \(error)"
+                "Failed to modify item \(item.itemIdentifier)"
             )
             completionHandler(nil, [], false, error)
         }
@@ -393,7 +362,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         request: NSFileProviderRequest,
         completionHandler: @escaping (Error?) -> Void
     ) -> Progress {
-        withSession { session, progress in
+        manager.withSession { session, progress in
             try await self.deleteItem(
                 identifier: identifier,
                 baseVersion: version,
@@ -406,7 +375,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             completionHandler(nil)
         } onError: { error in
             self.logger.fault(
-                "Failed to delete item \(identifier.rawValue): \(error)"
+                "Failed to delete item \(identifier)"
             )
             completionHandler(error)
         }
