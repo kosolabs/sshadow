@@ -44,7 +44,12 @@ struct ExtensionTests {
             let contents = "Hello, World!"
             try TestData.createTestFile(path: path, contents: contents)
 
-            let item = try await ext.item(for: .rootContainer.child(name: path))
+            let item = try await ext.item(
+                for: .rootContainer.child(name: path),
+                request: NSFileProviderRequest(),
+                progress: Progress(),
+                session: try await ext.manager.getSession(),
+            )
 
             #expect(item.filename == "file.txt")
             #expect(item.contentType == .text)
@@ -57,7 +62,12 @@ struct ExtensionTests {
             let path = "\(testFolderPath)/folder"
             try TestData.createTestFolder(path: path)
 
-            let item = try await ext.item(for: .rootContainer.child(name: path))
+            let item = try await ext.item(
+                for: .rootContainer.child(name: path),
+                request: NSFileProviderRequest(),
+                progress: Progress(),
+                session: try await ext.manager.getSession(),
+            )
 
             #expect(item.filename == "folder")
             #expect(item.contentType == .folder)
@@ -66,7 +76,12 @@ struct ExtensionTests {
         @Test func itemForRootSucceeds() async throws {
             let ext = try getExtension()
 
-            let item = try await ext.item(for: .rootContainer)
+            let item = try await ext.item(
+                for: .rootContainer,
+                request: NSFileProviderRequest(),
+                progress: Progress(),
+                session: try await ext.manager.getSession(),
+            )
 
             #expect(
                 item.filename == "NSFileProviderRootContainerItemIdentifier"
@@ -80,7 +95,12 @@ struct ExtensionTests {
             let path = "\(testFolderPath)/missing.txt"
 
             await #expect(throws: NSFileProviderError(.noSuchItem).self) {
-                try await ext.item(for: .rootContainer.child(name: path))
+                try await ext.item(
+                    for: .rootContainer.child(name: path),
+                    request: NSFileProviderRequest(),
+                    progress: Progress(),
+                    session: try await ext.manager.getSession(),
+                )
             }
         }
 
@@ -92,7 +112,12 @@ struct ExtensionTests {
             let ext = Extension(domain: domain)
 
             await #expect(throws: NSFileProviderError(.notAuthenticated).self) {
-                try await ext.item(for: .rootContainer)
+                try await ext.item(
+                    for: .rootContainer,
+                    request: NSFileProviderRequest(),
+                    progress: Progress(),
+                    session: try await ext.manager.getSession(),
+                )
             }
         }
 
@@ -121,7 +146,10 @@ struct ExtensionTests {
             await #expect(throws: NSFileProviderError(.serverUnreachable).self)
             {
                 try await ext.item(
-                    for: .rootContainer.child(name: "unreachable")
+                    for: .rootContainer.child(name: "unreachable"),
+                    request: NSFileProviderRequest(),
+                    progress: Progress(),
+                    session: try await ext.manager.getSession(),
                 )
             }
         }
@@ -147,7 +175,8 @@ struct ExtensionTests {
                 for: .rootContainer.child(name: path),
                 version: nil,
                 request: NSFileProviderRequest(),
-                progress: progress
+                progress: progress,
+                session: try await ext.manager.getSession(),
             )
 
             #expect(item.filename == "small-file.txt")
@@ -170,7 +199,8 @@ struct ExtensionTests {
                 for: .rootContainer.child(name: path),
                 version: nil,
                 request: NSFileProviderRequest(),
-                progress: progress
+                progress: progress,
+                session: try await ext.manager.getSession(),
             )
 
             #expect(item.filename == "large-file.txt")
@@ -195,7 +225,8 @@ struct ExtensionTests {
                     for: .rootContainer.child(name: path),
                     version: nil,
                     request: NSFileProviderRequest(),
-                    progress: progress
+                    progress: progress,
+                    session: try await ext.manager.getSession(),
                 )
             }
 
@@ -241,7 +272,8 @@ struct ExtensionTests {
                 contents: nil,
                 options: [],
                 request: NSFileProviderRequest(),
-                progress: Progress()
+                progress: Progress(),
+                session: try await ext.manager.getSession(),
             )
 
             #expect(
@@ -286,7 +318,8 @@ struct ExtensionTests {
                 contents: fileToUploadURL,
                 options: [],
                 request: NSFileProviderRequest(),
-                progress: Progress()
+                progress: Progress(),
+                session: try await ext.manager.getSession(),
             )
 
             #expect(
@@ -331,7 +364,8 @@ struct ExtensionTests {
                 contents: fileToUploadURL,
                 options: [],
                 request: NSFileProviderRequest(),
-                progress: Progress()
+                progress: Progress(),
+                session: try await ext.manager.getSession(),
             )
 
             #expect(
@@ -359,7 +393,6 @@ struct ExtensionTests {
             try TestData.removeTestItem(path: destinationPath)
             let destinationURL = TestData.getTestURL(path: destinationPath)
 
-            let progress = Progress()
             let (item, _, _) = try await ext.modifyItem(
                 ItemTemplate(
                     itemIdentifier: .rootContainer.child(name: sourcePath),
@@ -374,7 +407,8 @@ struct ExtensionTests {
                 contents: nil,
                 options: [],
                 request: NSFileProviderRequest(),
-                progress: progress
+                progress: Progress(),
+                session: try await ext.manager.getSession(),
             )
 
             #expect(item?.filename == "destination-file.txt")
@@ -403,7 +437,6 @@ struct ExtensionTests {
             let destinationFilePath = "\(destinationFolderPath)/file.txt"
             try TestData.removeTestItem(path: destinationFilePath)
 
-            let progress = Progress()
             let (item, _, _) = try await ext.modifyItem(
                 ItemTemplate(
                     itemIdentifier: .rootContainer.child(name: sourceFilePath),
@@ -418,7 +451,8 @@ struct ExtensionTests {
                 contents: nil,
                 options: [],
                 request: NSFileProviderRequest(),
-                progress: progress
+                progress: Progress(),
+                session: try await ext.manager.getSession(),
             )
 
             #expect(item?.filename == "file.txt")
@@ -452,7 +486,6 @@ struct ExtensionTests {
                 encoding: .utf8
             )
 
-            let progress = Progress()
             let (item, remainingFields, _) = try await ext.modifyItem(
                 ItemTemplate(
                     itemIdentifier: .rootContainer.child(name: path),
@@ -468,7 +501,8 @@ struct ExtensionTests {
                 contents: newContentURL,
                 options: [],
                 request: NSFileProviderRequest(),
-                progress: progress
+                progress: Progress(),
+                session: try await ext.manager.getSession(),
             )
 
             #expect(item?.filename == "edit-file.txt")
@@ -489,7 +523,6 @@ struct ExtensionTests {
 
             let newModifyTime = Date(timeIntervalSince1970: 1_000_000)
 
-            let progress = Progress()
             _ = try await ext.modifyItem(
                 ItemTemplate(
                     itemIdentifier: .rootContainer.child(name: path),
@@ -505,7 +538,8 @@ struct ExtensionTests {
                 contents: nil,
                 options: [],
                 request: NSFileProviderRequest(),
-                progress: progress
+                progress: Progress(),
+                session: try await ext.manager.getSession(),
             )
 
             let fileURL = TestData.getTestURL(path: path)
@@ -527,7 +561,6 @@ struct ExtensionTests {
 
             let newAccessTime = Date(timeIntervalSince1970: 1_000_000)
 
-            let progress = Progress()
             _ = try await ext.modifyItem(
                 ItemTemplate(
                     itemIdentifier: .rootContainer.child(name: path),
@@ -543,7 +576,8 @@ struct ExtensionTests {
                 contents: nil,
                 options: [],
                 request: NSFileProviderRequest(),
-                progress: progress
+                progress: Progress(),
+                session: try await ext.manager.getSession(),
             )
 
             let fileURL = TestData.getTestURL(path: path)
@@ -578,15 +612,12 @@ struct ExtensionTests {
                     .fileExists(atPath: folderToDeleteURL.path())
             )
 
-            let version = NSFileProviderItemVersion()
-            let request = NSFileProviderRequest()
-            let progress = Progress()
-
             try await ext.deleteItem(
                 identifier: .rootContainer.child(name: path),
-                baseVersion: version,
-                request: request,
-                progress: progress
+                baseVersion: NSFileProviderItemVersion(),
+                request: NSFileProviderRequest(),
+                progress: Progress(),
+                session: try await ext.manager.getSession(),
             )
 
             #expect(
@@ -608,15 +639,12 @@ struct ExtensionTests {
                     .fileExists(atPath: fileToDeleteURL.path())
             )
 
-            let version = NSFileProviderItemVersion()
-            let request = NSFileProviderRequest()
-            let progress = Progress()
-
             try await ext.deleteItem(
                 identifier: .rootContainer.child(name: path),
-                baseVersion: version,
-                request: request,
-                progress: progress
+                baseVersion: NSFileProviderItemVersion(),
+                request: NSFileProviderRequest(),
+                progress: Progress(),
+                session: try await ext.manager.getSession(),
             )
 
             #expect(
@@ -634,16 +662,13 @@ struct ExtensionTests {
                     .fileExists(atPath: TestData.getTestURL(path: path).path())
             )
 
-            let version = NSFileProviderItemVersion()
-            let request = NSFileProviderRequest()
-            let progress = Progress()
-
             await #expect(throws: NSFileProviderError(.noSuchItem).self) {
                 try await ext.deleteItem(
                     identifier: .rootContainer.child(name: path),
-                    baseVersion: version,
-                    request: request,
-                    progress: progress
+                    baseVersion: NSFileProviderItemVersion(),
+                    request: NSFileProviderRequest(),
+                    progress: Progress(),
+                    session: try await ext.manager.getSession(),
                 )
             }
         }
@@ -684,127 +709,5 @@ final class ItemTemplate: NSObject, NSFileProviderItem {
         self.creationDate = creationDate
         self.contentModificationDate = contentModificationDate
         self.lastUsedDate = lastUsedDate
-    }
-}
-
-extension Extension {
-    func item(
-        for identifier: NSFileProviderItemIdentifier,
-        request: NSFileProviderRequest = NSFileProviderRequest(),
-    ) async throws -> NSFileProviderItem {
-        try await withCheckedThrowingContinuation { continuation in
-            _ = self.item(for: identifier, request: request) { item, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let item {
-                    continuation.resume(returning: item)
-                }
-            }
-        }
-    }
-
-    func fetchContents(
-        for itemIdentifier: NSFileProviderItemIdentifier,
-        version requestedVersion: NSFileProviderItemVersion? = nil,
-        request: NSFileProviderRequest = NSFileProviderRequest(),
-        progress: Progress,
-    ) async throws -> (URL, NSFileProviderItem) {
-        try await withCheckedThrowingContinuation { continuation in
-            let operationProgress = self.fetchContents(
-                for: itemIdentifier,
-                version: requestedVersion,
-                request: request
-            ) { url, item, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let url, let item {
-                    continuation.resume(returning: (url, item))
-                }
-            }
-
-            progress.addChild(operationProgress, withPendingUnitCount: 1)
-        }
-    }
-
-    func createItem(
-        basedOn itemTemplate: NSFileProviderItem,
-        fields: NSFileProviderItemFields,
-        contents url: URL?,
-        options: NSFileProviderCreateItemOptions = [],
-        request: NSFileProviderRequest,
-        progress: Progress,
-    ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
-        try await withCheckedThrowingContinuation { continuation in
-            let operationProgress = self.createItem(
-                basedOn: itemTemplate,
-                fields: fields,
-                contents: url,
-                options: options,
-                request: request
-            ) { item, fields, blah, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let item {
-                    continuation.resume(returning: (item, fields, blah))
-                }
-            }
-
-            progress.addChild(operationProgress, withPendingUnitCount: 1)
-        }
-    }
-
-    func modifyItem(
-        _ item: NSFileProviderItem,
-        baseVersion version: NSFileProviderItemVersion,
-        changedFields: NSFileProviderItemFields,
-        contents newContents: URL?,
-        options: NSFileProviderModifyItemOptions = [],
-        request: NSFileProviderRequest,
-        progress: Progress,
-    ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
-        try await withCheckedThrowingContinuation { continuation in
-            let operationProgress = self.modifyItem(
-                item,
-                baseVersion: version,
-                changedFields: changedFields,
-                contents: newContents,
-                options: options,
-                request: request
-            ) { item, fields, bool, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: (item, fields, bool))
-                }
-            }
-
-            progress.addChild(operationProgress, withPendingUnitCount: 1)
-        }
-    }
-
-    func deleteItem(
-        identifier: NSFileProviderItemIdentifier,
-        baseVersion version: NSFileProviderItemVersion,
-        options: NSFileProviderDeleteItemOptions = [],
-        request: NSFileProviderRequest,
-        progress: Progress
-    ) async throws {
-        try await withCheckedThrowingContinuation {
-            (continuation: CheckedContinuation<Void, Error>) in
-            let operationProgress = self.deleteItem(
-                identifier: identifier,
-                baseVersion: version,
-                options: options,
-                request: request
-            ) { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: ())
-                }
-            }
-
-            progress.addChild(operationProgress, withPendingUnitCount: 1)
-        }
     }
 }

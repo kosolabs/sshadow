@@ -49,7 +49,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         }
     }
 
-    private func item(
+    func item(
         for itemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest,
         progress: Progress,
@@ -67,15 +67,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             )
         }
 
-        let attrs = try await session.sftp.attributes(
-            atPath: session.path(for: itemIdentifier)
-        )
-
-        return Item(
-            domainName: session.name,
-            itemIdentifier: itemIdentifier,
-            itemAttributes: attrs
-        )
+        return try await session.item(for: itemIdentifier)
     }
 
     public func fetchContents(
@@ -102,7 +94,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         }
     }
 
-    private func fetchContents(
+    func fetchContents(
         for itemIdentifier: NSFileProviderItemIdentifier,
         version requestedVersion: NSFileProviderItemVersion?,
         request: NSFileProviderRequest,
@@ -120,12 +112,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         let handle = try FileHandle(forWritingTo: url)
         defer { try? handle.close() }
 
-        let attrs = try await session.sftp.withSftpFile(
-            atPath: session.path(for: itemIdentifier),
+        let item = try await session.item(for: itemIdentifier)
+        progress.totalUnitCount = Int64(item.size)
+
+        try await session.withFile(
+            for: itemIdentifier,
             accessType: .readOnly
         ) { file in
-            let attrs = try await file.attributes()
-            progress.totalUnitCount = Int64(attrs.size)
             for try await data in file.stream() {
                 if progress.isCancelled {
                     throw CocoaError(.userCancelled)
@@ -133,17 +126,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 try handle.write(contentsOf: data)
                 progress.completedUnitCount += Int64(data.count)
             }
-            return attrs
         }
 
-        return (
-            url,
-            Item(
-                domainName: session.name,
-                itemIdentifier: itemIdentifier,
-                itemAttributes: attrs
-            )
-        )
+        return (url, item)
     }
 
     public func createItem(
@@ -177,7 +162,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         }
     }
 
-    private func createItem(
+    func createItem(
         basedOn itemTemplate: NSFileProviderItem,
         fields: NSFileProviderItemFields,
         contents url: URL?,
@@ -191,8 +176,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
 
         let itemIdentifier = itemTemplate.parentItemIdentifier
             .child(name: itemTemplate.filename)
-        let remotePath = session.path(for: itemIdentifier)
-
+        
         if itemTemplate.contentType != .folder {
             let item = try await writeFile(
                 basedOn: itemTemplate,
@@ -206,17 +190,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
 
         // TODO: Set create and modify timestamps
         progress.totalUnitCount = 1
-        logger.debug("create folder: \(remotePath)")
-        try await session.sftp.createDirectory(atPath: remotePath)
-        let attrs = try await session.sftp.attributes(atPath: remotePath)
+        try await session.createDirectory(for: itemIdentifier)
+        let item = try await session.item(for: itemIdentifier)
         progress.completedUnitCount = 1
-        return (
-            Item(
-                domainName: session.name,
-                itemIdentifier: itemIdentifier,
-                itemAttributes: attrs
-            ), [], false
-        )
+        return (item, [], false)
     }
 
     public func modifyItem(
@@ -252,7 +229,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         }
     }
 
-    private func modifyItem(
+    func modifyItem(
         _ item: NSFileProviderItem,
         baseVersion version: NSFileProviderItemVersion,
         changedFields: NSFileProviderItemFields,
@@ -292,19 +269,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 "Move \(session.path(for: fromItemID)) to \(session.path(for: toItemID))"
             )
             progress.totalUnitCount = 1
-            try await session.sftp.move(
-                from: session.path(for: fromItemID),
-                to: session.path(for: toItemID)
-            )
-            let attrs = try await session.sftp.attributes(
-                atPath: session.path(for: toItemID)
-            )
+            try await session.move(from: fromItemID, to: toItemID)
+            let item = try await session.item(for: toItemID)
             progress.completedUnitCount = 1
-            let item = Item(
-                domainName: session.name,
-                itemIdentifier: toItemID,
-                itemAttributes: attrs
-            )
 
             let remaining = changedFields.subtracting(moveFields)
             if !remaining.isEmpty {
@@ -319,8 +286,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             logger.notice(
                 "Set modify time of \(session.path(for: item.itemIdentifier)) to \(String(describing: modifyTime))"
             )
-            try await session.sftp.setAttributes(
-                atPath: session.path(for: item.itemIdentifier),
+            try await session.setAttributes(
+                for: item.itemIdentifier,
                 modifyTime: modifyTime
             )
 
@@ -338,8 +305,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             logger.notice(
                 "Set access time of \(session.path(for: item.itemIdentifier)) to \(String(describing: accessTime))"
             )
-            try await session.sftp.setAttributes(
-                atPath: session.path(for: item.itemIdentifier),
+            try await session.setAttributes(
+                for: item.itemIdentifier,
                 accessTime: accessTime
             )
 
@@ -381,7 +348,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         }
     }
 
-    private func deleteItem(
+    func deleteItem(
         identifier: NSFileProviderItemIdentifier,
         baseVersion version: NSFileProviderItemVersion,
         options: NSFileProviderDeleteItemOptions = [],
@@ -391,18 +358,12 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
     ) async throws {
         logger.debug("delete item: \(session.path(for: identifier))")
 
-        let attrs = try await session.sftp.attributes(
-            atPath: session.path(for: identifier)
-        )
         progress.totalUnitCount = 1
+        let attrs = try await session.attributes(for: identifier)
         if case .directory = attrs.type {
-            try await session.sftp.removeDirectory(
-                atPath: session.path(for: identifier)
-            )
+            try await session.removeDirectory(for: identifier)
         } else {
-            try await session.sftp.removeFile(
-                atPath: session.path(for: identifier)
-            )
+            try await session.removeFile(for: identifier)
         }
         progress.completedUnitCount = 1
     }
@@ -425,7 +386,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
     ) async throws -> Item {
         let itemIdentifier = itemTemplate.parentItemIdentifier
             .child(name: itemTemplate.filename)
-        let remotePath = session.path(for: itemIdentifier)
 
         guard let url = url,
             let documentSize = itemTemplate.documentSize,
@@ -441,8 +401,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         let fp = try FileHandle(forReadingFrom: url)
         defer { try? fp.close() }
 
-        try await session.sftp.withSftpFile(
-            atPath: remotePath,
+        try await session.withFile(
+            for: itemIdentifier,
             accessType: .writeOnly
         ) { file in
             try await file.withAsyncWriter { writer in
@@ -455,12 +415,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 }
             }
         }
-        let attrs = try await session.sftp.attributes(atPath: remotePath)
-        return Item(
-            domainName: session.name,
-            itemIdentifier: itemIdentifier,
-            itemAttributes: attrs
-        )
+
+        return try await session.item(for: itemIdentifier)
     }
 
     private func logItem(

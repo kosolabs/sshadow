@@ -44,9 +44,13 @@ public class Item: NSObject, NSFileProviderItem {
     public var filename: String {
         itemIdentifier.file
     }
+    
+    public var size: UInt64 {
+        itemAttributes.size
+    }
 
     public var documentSize: NSNumber? {
-        return itemAttributes.size as NSNumber
+        itemAttributes.size as NSNumber
     }
 
     public var lastUsedDate: Date? {
