@@ -4,17 +4,6 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "SessionManager")
 
-struct Session {
-    let name: String
-    let config: ConnectionConfig
-    let ssh: SSHClient
-    let sftp: SFTPClient
-
-    func path(for itemIdentifier: NSFileProviderItemIdentifier) -> String {
-        config.path(for: itemIdentifier)
-    }
-}
-
 actor SessionManager {
     let name: String
     let config: ConnectionConfig?
@@ -33,8 +22,16 @@ actor SessionManager {
         guard let config = self.config else {
             throw NSFileProviderError(.notAuthenticated)
         }
-        let ssh = try await SSHClient.connect(config: config)
-        let sftp = try await ssh.sftp()
+        let ssh: SSHClient
+        let sftp: SFTPClient
+        do {
+            ssh = try await SSHClient.connect(config: config)
+            sftp = try await ssh.sftp()
+        } catch SSHError.authenticationFailed(_) {
+            throw NSFileProviderError(.notAuthenticated)
+        } catch SSHError.connectionFailed(_) {
+            throw NSFileProviderError(.serverUnreachable)
+        }
 
         let session = Session(
             name: name,
@@ -70,8 +67,8 @@ actor SessionManager {
                 let result = try await perform(session, progress)
                 onSuccess(result)
             } catch {
-                logger.debug("Error at \(trace.caller): \(error)")
-                onError(remap(error: error))
+                trace.log(logger, error: error)
+                onError(error)
             }
         }
         return progress

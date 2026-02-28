@@ -25,7 +25,7 @@ public struct StackTrace: CustomStringConvertible {
         let demangled = demangle(symbol: _frames[2])
         return cleanFunctionName(from: demangled)
     }
-    
+
     public var origin: String {
         "\(caller) (\(source))"
     }
