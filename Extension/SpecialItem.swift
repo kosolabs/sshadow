@@ -11,8 +11,8 @@ public class SpecialItem: NSObject, NSFileProviderItem {
         domainName: String,
         itemIdentifier: NSFileProviderItemIdentifier,
     ) {
-        logger = Logger(category: "Item.\(domainName)")
-        logger.debug("init: \(itemIdentifier.rawValue)")
+        logger = Logger(category: "\(domainName):Item")
+        logger.debug("Init \(itemIdentifier.desc)")
         self.itemIdentifier = itemIdentifier
     }
 

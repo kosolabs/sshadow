@@ -14,9 +14,9 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         manager: SessionManager,
         itemIdentifier: NSFileProviderItemIdentifier
     ) {
-        logger = Logger(category: "Enumerator.\(manager.name)")
+        logger = Logger(category: "\(manager.name):Enumerator")
         logger.debug(
-            "init: \(itemIdentifier.rawValue)"
+            "Init \(itemIdentifier.desc)"
         )
         self.manager = manager
         self.itemIdentifier = itemIdentifier

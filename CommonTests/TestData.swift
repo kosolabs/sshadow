@@ -81,25 +81,40 @@ struct TestData {
         mount.appending(path: path)
     }
 
-    static func removeTestItem(path: String) throws {
+    @discardableResult
+    static func removeTestItem(path: String) throws -> URL {
         let url = getTestURL(path: path)
         if FileManager.default.fileExists(atPath: url.path()) {
             try FileManager.default.removeItem(at: url)
         }
+        return url
     }
 
     @discardableResult
-    static func createTestFolder(path: String) throws -> URL {
+    static func createTestFolder(
+        path: String,
+        modifyDate: Date? = nil
+    ) throws -> URL {
         let folder = getTestURL(path: path)
         try FileManager.default.createDirectory(
             at: folder,
             withIntermediateDirectories: true
         )
+        if let modifyDate {
+            try FileManager.default.setAttributes(
+                [FileAttributeKey.modificationDate: modifyDate],
+                ofItemAtPath: folder.path()
+            )
+        }
         return folder
     }
 
     @discardableResult
-    static func createTestFile(path: String, contents: String) throws -> URL {
+    static func createTestFile(
+        path: String,
+        contents: String,
+        modifyDate: Date? = nil
+    ) throws -> URL {
         guard let data = contents.data(using: .utf8) else {
             throw NSError(
                 domain: "TestData",
@@ -110,11 +125,19 @@ struct TestData {
             )
         }
 
-        return try createTestFile(path: path, data: data)
+        return try createTestFile(
+            path: path,
+            data: data,
+            modifyDate: modifyDate
+        )
     }
 
     @discardableResult
-    static func createTestFile(path: String, data: Data) throws -> URL {
+    static func createTestFile(
+        path: String,
+        data: Data,
+        modifyDate: Date? = nil
+    ) throws -> URL {
         let file = getTestURL(path: path)
         let folder = file.deletingLastPathComponent()
 
@@ -124,6 +147,13 @@ struct TestData {
         )
 
         FileManager.default.createFile(atPath: file.path(), contents: data)
+
+        if let modifyDate {
+            try FileManager.default.setAttributes(
+                [FileAttributeKey.modificationDate: modifyDate],
+                ofItemAtPath: file.path()
+            )
+        }
 
         return file
     }
