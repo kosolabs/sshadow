@@ -9,7 +9,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
     let manager: SessionManager
 
     required public init(domain: NSFileProviderDomain) {
-        logger = Logger(category: "Extension.\(domain.displayName)")
+        logger = Logger(category: "\(domain.displayName):Extension")
 
         do {
             let userInfo = try UserInfo.fromDictionary(domain.userInfo)
@@ -55,7 +55,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         progress: Progress,
         session: Session,
     ) async throws -> NSFileProviderItem {
-        logger.debug("Get item: \(session.path(for: itemIdentifier))")
+        logger.debug("Item \(itemIdentifier.desc)")
 
         if itemIdentifier == .rootContainer
             || itemIdentifier == .trashContainer
@@ -101,7 +101,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         progress: Progress,
         session: Session,
     ) async throws -> (URL, NSFileProviderItem) {
-        logger.debug("Fetch contents: \(session.path(for: itemIdentifier))")
+        logger.debug("Fetch \(itemIdentifier.desc)")
 
         let url = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString)
@@ -171,28 +171,30 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         progress: Progress,
         session: Session,
     ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
-        logger.debug("Create item: \(itemTemplate.description)")
-        logItem(item: itemTemplate, fields: fields)
+        logger.debug(
+            "Create \(itemTemplate.desc) for \(fields.desc)"
+        )
 
         let itemIdentifier = itemTemplate.parentItemIdentifier
             .child(name: itemTemplate.filename)
-        
+
         if itemTemplate.contentType != .folder {
-            let item = try await writeFile(
+            try await writeFile(
+                itemIdentifier,
                 basedOn: itemTemplate,
                 contents: url,
                 progress: progress,
                 session: session
             )
-
-            return (item, [], false)
+        } else {
+            progress.totalUnitCount = 1
+            try await session.createDirectory(for: itemIdentifier)
+            let item = try await session.item(for: itemIdentifier)
+            progress.completedUnitCount = 1
         }
 
         // TODO: Set create and modify timestamps
-        progress.totalUnitCount = 1
-        try await session.createDirectory(for: itemIdentifier)
         let item = try await session.item(for: itemIdentifier)
-        progress.completedUnitCount = 1
         return (item, [], false)
     }
 
@@ -240,86 +242,63 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         session: Session,
     ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
         logger.debug(
-            "Modify \(session.path(for: item.itemIdentifier)) \(item.description)"
+            "Modify \(item.desc) for \(changedFields.desc)"
         )
 
-        let moveFields: NSFileProviderItemFields =
-            [.parentItemIdentifier, .filename]
-        logItem(item: item, fields: changedFields)
+        let itemIdentifier = item.parentItemIdentifier
+            .child(name: item.filename)
+        var remaining = changedFields
 
-        if changedFields.contains(.contents) {
-            let item = try await writeFile(
+        if remaining.contains(.contents) {
+            try await writeFile(
+                itemIdentifier,
                 basedOn: item,
                 contents: newContents,
                 progress: progress,
                 session: session
             )
-
-            let remaining = changedFields.subtracting([.contents])
-            if !remaining.isEmpty {
-                logger.error("Remaining fields: \(remaining)")
-            }
-            return (item, remaining, false)
+            remaining = remaining.subtracting([.contents])
         }
 
-        if !changedFields.intersection(moveFields).isEmpty {
-            let fromItemID = item.itemIdentifier
-            let toItemID = item.parentItemIdentifier.child(name: item.filename)
+        let moveFields: NSFileProviderItemFields =
+            [.parentItemIdentifier, .filename]
+        if !remaining.intersection(moveFields).isEmpty {
             logger.notice(
-                "Move \(session.path(for: fromItemID)) to \(session.path(for: toItemID))"
+                "Move \(session.path(for: item.itemIdentifier)) to \(session.path(for: itemIdentifier))"
             )
-            progress.totalUnitCount = 1
-            try await session.move(from: fromItemID, to: toItemID)
-            let item = try await session.item(for: toItemID)
-            progress.completedUnitCount = 1
-
-            let remaining = changedFields.subtracting(moveFields)
-            if !remaining.isEmpty {
-                logger.error("Remaining fields: \(remaining)")
-            }
-            return (item, remaining, false)
+            try await session.move(
+                from: item.itemIdentifier,
+                to: itemIdentifier
+            )
+            remaining = remaining.subtracting(moveFields)
         }
 
-        if changedFields.contains(.contentModificationDate),
-            let modifyTime = item.contentModificationDate
-        {
-            logger.notice(
-                "Set modify time of \(session.path(for: item.itemIdentifier)) to \(String(describing: modifyTime))"
-            )
+        let attrFields: NSFileProviderItemFields =
+            [.contentModificationDate, .lastUsedDate]
+        if !remaining.intersection(attrFields).isEmpty {
+            if let accessTime = item.lastUsedDate {
+                logger.notice(
+                    "Set access time of \(session.path(for: item.itemIdentifier)) to \(String(describing: accessTime))"
+                )
+            }
+            if let modifyTime = item.contentModificationDate {
+                logger.notice(
+                    "Set modify time of \(session.path(for: item.itemIdentifier)) to \(String(describing: modifyTime))"
+                )
+            }
             try await session.setAttributes(
-                for: item.itemIdentifier,
-                modifyTime: modifyTime
+                for: itemIdentifier,
+                accessTime: item.lastUsedDate ?? nil,
+                modifyTime: item.contentModificationDate ?? nil,
             )
-
-            let remaining = changedFields.subtracting([.contentModificationDate]
-            )
-            if !remaining.isEmpty {
-                logger.error("Remaining fields: \(remaining)")
-            }
-            return (item, remaining, false)
+            remaining = remaining.subtracting(attrFields)
         }
 
-        if changedFields.contains(.lastUsedDate),
-            let accessTime = item.lastUsedDate
-        {
-            logger.notice(
-                "Set access time of \(session.path(for: item.itemIdentifier)) to \(String(describing: accessTime))"
-            )
-            try await session.setAttributes(
-                for: item.itemIdentifier,
-                accessTime: accessTime
-            )
-
-            let remaining = changedFields.subtracting([.lastUsedDate])
-            if !remaining.isEmpty {
-                logger.error("Remaining fields: \(remaining)")
-            }
-            return (item, remaining, false)
+        if !remaining.isEmpty {
+            logger.fault("Unhandled fields: \(remaining)")
         }
-
-        logger.fault("Unhandled fields: \(changedFields)")
-
-        throw CocoaError(.featureUnsupported)
+        let item = try await session.item(for: itemIdentifier)
+        return (item, [], false)
     }
 
     public func deleteItem(
@@ -379,14 +358,12 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
     }
 
     private func writeFile(
+        _ itemIdentifier: NSFileProviderItemIdentifier,
         basedOn itemTemplate: NSFileProviderItem,
         contents url: URL?,
         progress: Progress,
         session: Session,
-    ) async throws -> Item {
-        let itemIdentifier = itemTemplate.parentItemIdentifier
-            .child(name: itemTemplate.filename)
-
+    ) async throws {
         guard let url = url,
             let documentSize = itemTemplate.documentSize,
             let documentSize = documentSize
@@ -415,56 +392,5 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 }
             }
         }
-
-        return try await session.item(for: itemIdentifier)
     }
-
-    private func logItem(
-        item: NSFileProviderItem,
-        fields: NSFileProviderItemFields
-    ) {
-        let allFields: [(NSFileProviderItemFields, String, Any?)] = [
-            (
-                .filename, "filename", item.filename
-            ),
-            (
-                .parentItemIdentifier, "parentItemIdentifier",
-                item.parentItemIdentifier
-            ),
-            (
-                .lastUsedDate, "lastUsedDate", item.lastUsedDate as Any?
-            ),
-            (
-                .tagData, "tagData", item.tagData as Any?
-            ),
-            (
-                .creationDate, "creationDate", item.creationDate as Any?
-            ),
-            (
-                .contentModificationDate, "contentModificationDate",
-                item.contentModificationDate as Any?
-            ),
-            (
-                .fileSystemFlags, "fileSystemFlags", item.fileSystemFlags
-            ),
-            (
-                .extendedAttributes, "extendedAttributes",
-                item.extendedAttributes
-            ),
-            (
-                .typeAndCreator, "typeAndCreator", item.typeAndCreator
-            ),
-        ]
-
-        for (field, name, value) in allFields where fields.contains(field) {
-            logger.debug(
-                """
-                Field \
-                \(name): \
-                \(String(describing: value))
-                """
-            )
-        }
-    }
-
 }

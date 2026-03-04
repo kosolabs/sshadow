@@ -5,6 +5,8 @@ import UniformTypeIdentifiers
 
 @testable import Extension
 
+private let root = NSFileProviderItemIdentifier.rootContainer
+
 private func getExtension(id: UUID = UUID()) throws -> Extension {
     let domain = NSFileProviderDomain(
         identifier: NSFileProviderDomainIdentifier(
@@ -30,7 +32,7 @@ struct ExtensionTests {
     }
 
     struct ItemTests {
-        let testFolderPath = "item"
+        let testFolderPath = "extension-item"
         let testFolderURL: URL
 
         init() throws {
@@ -45,7 +47,7 @@ struct ExtensionTests {
             try TestData.createTestFile(path: path, contents: contents)
 
             let item = try await ext.item(
-                for: .rootContainer.child(name: path),
+                for: root.child(name: path),
                 request: NSFileProviderRequest(),
                 progress: Progress(),
                 session: try await ext.manager.getSession(),
@@ -63,7 +65,7 @@ struct ExtensionTests {
             try TestData.createTestFolder(path: path)
 
             let item = try await ext.item(
-                for: .rootContainer.child(name: path),
+                for: root.child(name: path),
                 request: NSFileProviderRequest(),
                 progress: Progress(),
                 session: try await ext.manager.getSession(),
@@ -77,7 +79,7 @@ struct ExtensionTests {
             let ext = try getExtension()
 
             let item = try await ext.item(
-                for: .rootContainer,
+                for: root,
                 request: NSFileProviderRequest(),
                 progress: Progress(),
                 session: try await ext.manager.getSession(),
@@ -89,21 +91,6 @@ struct ExtensionTests {
             #expect(item.contentType == .folder)
         }
 
-        @Test func itemForMissingFileThrows() async throws {
-            let ext = try getExtension()
-
-            let path = "\(testFolderPath)/missing.txt"
-
-            await #expect(throws: NSFileProviderError(.noSuchItem).self) {
-                try await ext.item(
-                    for: .rootContainer.child(name: path),
-                    request: NSFileProviderRequest(),
-                    progress: Progress(),
-                    session: try await ext.manager.getSession(),
-                )
-            }
-        }
-
         @Test func itemForInvalidConfigThrows() async throws {
             let domain = NSFileProviderDomain(
                 identifier: NSFileProviderDomainIdentifier(rawValue: "id"),
@@ -113,7 +100,7 @@ struct ExtensionTests {
 
             await #expect(throws: NSFileProviderError(.notAuthenticated).self) {
                 try await ext.item(
-                    for: .rootContainer,
+                    for: root,
                     request: NSFileProviderRequest(),
                     progress: Progress(),
                     session: try await ext.manager.getSession(),
@@ -146,7 +133,7 @@ struct ExtensionTests {
             await #expect(throws: NSFileProviderError(.serverUnreachable).self)
             {
                 try await ext.item(
-                    for: .rootContainer.child(name: "unreachable"),
+                    for: root.child(name: "unreachable"),
                     request: NSFileProviderRequest(),
                     progress: Progress(),
                     session: try await ext.manager.getSession(),
@@ -156,7 +143,7 @@ struct ExtensionTests {
     }
 
     struct FetchContentsTests {
-        let testFolderPath = "fetch-contents"
+        let testFolderPath = "extension-fetch-contents"
         let testFolderURL: URL
 
         init() throws {
@@ -172,7 +159,7 @@ struct ExtensionTests {
 
             let progress = Progress()
             let (url, item) = try await ext.fetchContents(
-                for: .rootContainer.child(name: path),
+                for: root.child(name: path),
                 version: nil,
                 request: NSFileProviderRequest(),
                 progress: progress,
@@ -196,7 +183,7 @@ struct ExtensionTests {
 
             let progress = Progress()
             let (url, item) = try await ext.fetchContents(
-                for: .rootContainer.child(name: path),
+                for: root.child(name: path),
                 version: nil,
                 request: NSFileProviderRequest(),
                 progress: progress,
@@ -222,7 +209,7 @@ struct ExtensionTests {
 
             let fetchTask = Task {
                 try await ext.fetchContents(
-                    for: .rootContainer.child(name: path),
+                    for: root.child(name: path),
                     version: nil,
                     request: NSFileProviderRequest(),
                     progress: progress,
@@ -239,7 +226,7 @@ struct ExtensionTests {
     }
 
     struct CreateItemTests {
-        let testFolderPath = "create-item"
+        let testFolderPath = "extension-create-item"
         let testFolderURL: URL
 
         init() throws {
@@ -259,9 +246,7 @@ struct ExtensionTests {
 
             _ = try await ext.createItem(
                 basedOn: ItemTemplate(
-                    parentItemIdentifier: .rootContainer.child(
-                        name: testFolderPath
-                    ),
+                    parentItemIdentifier: root.child(name: testFolderPath),
                     filename: expectedFolderURL.lastPathComponent,
                     contentType: .folder,
                 ),
@@ -304,9 +289,7 @@ struct ExtensionTests {
 
             _ = try await ext.createItem(
                 basedOn: ItemTemplate(
-                    parentItemIdentifier: .rootContainer.child(
-                        name: testFolderPath
-                    ),
+                    parentItemIdentifier: root.child(name: testFolderPath),
                     filename: expectedFileURL.lastPathComponent,
                     contentType: .text,
                     documentSize: NSNumber(value: content.count),
@@ -350,9 +333,7 @@ struct ExtensionTests {
 
             _ = try await ext.createItem(
                 basedOn: ItemTemplate(
-                    parentItemIdentifier: .rootContainer.child(
-                        name: testFolderPath
-                    ),
+                    parentItemIdentifier: root.child(name: testFolderPath),
                     filename: expectedFileURL.lastPathComponent,
                     contentType: .text,
                     documentSize: NSNumber(value: content.count),
@@ -375,227 +356,310 @@ struct ExtensionTests {
         }
     }
 
-    struct ModifyItemTests {
-        let testFolderPath = "modify-item"
-        let testFolderURL: URL
+    @Test func renameFileSucceeds() async throws {
+        // mv extension-rename-file/src.txt extension-rename-file/dest.txt
+        let startModifyDate = Date(timeIntervalSince1970: 1_750_000_000)
+        let endModifyDate = Date(timeIntervalSince1970: 1_760_000_000)
 
-        init() throws {
-            testFolderURL = try TestData.createTestFolder(path: testFolderPath)
-        }
+        let folderPath = "extension-rename-file"
+        let folderURL = try TestData.createTestFolder(
+            path: folderPath,
+            modifyDate: startModifyDate
+        )
+        let folderID = root.child(name: folderPath)
 
-        @Test func renameFileSucceeds() async throws {
-            let ext = try getExtension()
+        let srcPath = "\(folderPath)/src.txt"
+        let srcURL = try TestData.createTestFile(
+            path: srcPath,
+            contents: "data",
+            modifyDate: startModifyDate
+        )
+        let srcID = root.child(name: srcPath)
 
-            let sourcePath = "\(testFolderPath)/source-file.txt"
-            try TestData.createTestFile(path: sourcePath, contents: "data")
+        let destPath = "\(folderPath)/dest.txt"
+        let destURL = try TestData.removeTestItem(path: destPath)
 
-            let destinationPath = "\(testFolderPath)/destination-file.txt"
-            try TestData.removeTestItem(path: destinationPath)
-            let destinationURL = TestData.getTestURL(path: destinationPath)
+        let ext = try getExtension()
 
-            let (item, _, _) = try await ext.modifyItem(
-                ItemTemplate(
-                    itemIdentifier: .rootContainer.child(name: sourcePath),
-                    parentItemIdentifier: .rootContainer.child(
-                        name: testFolderPath
-                    ),
-                    filename: destinationURL.lastPathComponent,
-                    contentType: .text,
-                ),
-                baseVersion: NSFileProviderItemVersion(),
-                changedFields: [.filename],
-                contents: nil,
-                options: [],
+        // Modify FPItem(id: FPItemID(extension-rename-file/src.txt), parentId: FPItemID(extension-rename-file), filename: dest.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 2, filename)
+        _ = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: srcID,
+                parentItemIdentifier: folderID,
+                filename: destURL.lastPathComponent,
+                contentType: .text,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [
+                    .userReadable, .userWritable, .pathExtensionHidden,
+                ],
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true,
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.filename],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: Progress(),
+            session: try await ext.manager.getSession(),
+        )
+
+        #expect(FileManager.default.fileExists(at: destURL))
+        #expect(!FileManager.default.fileExists(at: srcURL))
+
+        // Modify FPItem(id: FPItemID(extension-rename-file), parentId: FPItemID.rootContainer, filename: extension-rename-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-03 20:18:28 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        _ = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: folderID,
+                parentItemIdentifier: folderID.parent,
+                filename: folderID.name,
+                contentType: .directory,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [
+                    .userReadable, .userWritable, .pathExtensionHidden,
+                ],
+                contentModificationDate: endModifyDate,
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true,
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.contentModificationDate],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: Progress(),
+            session: try await ext.manager.getSession(),
+        )
+
+        let actualModifyDate = try FileManager.default.modifyDate(of: folderURL)
+        #expect(actualModifyDate == endModifyDate)
+
+        // Item FPItemID(extension-rename-file/src.txt)
+        await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+            try await ext.item(
+                for: srcID,
                 request: NSFileProviderRequest(),
                 progress: Progress(),
-                session: try await ext.manager.getSession(),
-            )
-
-            #expect(item?.filename == "destination-file.txt")
-            #expect(
-                FileManager.default
-                    .fileExists(atPath: destinationURL.path())
-            )
-            #expect(
-                !FileManager.default
-                    .fileExists(
-                        atPath: TestData.getTestURL(path: sourcePath).path()
-                    )
+                session: try await ext.manager.getSession()
             )
         }
+    }
 
-        @Test func moveFileSucceeds() async throws {
-            let ext = try getExtension()
+    @Test func moveFileSucceeds() async throws {
+        // mv extension-move-file/src/file.txt extension-move-file/dest/
+        let startModifyDate = Date(timeIntervalSince1970: 1_750_000_000)
+        let endModifyDate = Date(timeIntervalSince1970: 1_760_000_000)
 
-            let sourceFolderPath = "\(testFolderPath)/source-folder"
-            try TestData.createTestFolder(path: sourceFolderPath)
-            let sourceFilePath = "\(sourceFolderPath)/file.txt"
-            try TestData.createTestFile(path: sourceFilePath, contents: "data")
+        let srcFolderPath = "extension-move-file/src"
+        let srcFolderURL = try TestData.createTestFolder(
+            path: srcFolderPath,
+            modifyDate: startModifyDate
+        )
+        let srcFolderID = root.child(name: srcFolderPath)
 
-            let destinationFolderPath = "\(testFolderPath)/destination-folder"
-            try TestData.createTestFolder(path: destinationFolderPath)
-            let destinationFilePath = "\(destinationFolderPath)/file.txt"
-            try TestData.removeTestItem(path: destinationFilePath)
+        let srcPath = "\(srcFolderPath)/file.txt"
+        let srcURL = try TestData.createTestFile(
+            path: srcPath,
+            contents: "data",
+            modifyDate: startModifyDate
+        )
+        let srcID = root.child(name: srcPath)
 
-            let (item, _, _) = try await ext.modifyItem(
-                ItemTemplate(
-                    itemIdentifier: .rootContainer.child(name: sourceFilePath),
-                    parentItemIdentifier: .rootContainer.child(
-                        name: destinationFolderPath
-                    ),
-                    filename: "file.txt",
-                    contentType: .text,
-                ),
-                baseVersion: NSFileProviderItemVersion(),
-                changedFields: [.parentItemIdentifier],
-                contents: nil,
-                options: [],
+        let destFolderPath = "extension-move-file/dest"
+        let destFolderURL = try TestData.createTestFolder(
+            path: destFolderPath,
+            modifyDate: startModifyDate
+        )
+        let destFolderID = root.child(name: destFolderPath)
+
+        let destPath = "\(destFolderPath)/file.txt"
+        let destURL = TestData.getTestURL(path: destPath)
+
+        let ext = try getExtension()
+
+        // Modify FPItem(id: FPItemID(extension-move-file/src/file.txt), parentId: FPItemID(extension-move-file/dest), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 4, parentItemIdentifier)
+        _ = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: srcID,
+                parentItemIdentifier: destFolderID,
+                filename: srcURL.lastPathComponent,
+                contentType: .text,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [
+                    .userReadable, .userWritable, .pathExtensionHidden,
+                ],
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.parentItemIdentifier],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: Progress(),
+            session: try await ext.manager.getSession(),
+        )
+
+        #expect(FileManager.default.fileExists(at: destURL))
+        #expect(!FileManager.default.fileExists(at: srcURL))
+
+        // Modify FPItem(id: FPItemID(extension-move-file/dest), parentId: FPItemID(extension-move-file), filename: dest, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-03 21:30:15 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        _ = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: destFolderID,
+                parentItemIdentifier: destFolderID.parent,
+                filename: destFolderID.name,
+                contentType: .directory,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [
+                    .userReadable, .userWritable, .pathExtensionHidden,
+                ],
+                contentModificationDate: endModifyDate,
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true,
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.contentModificationDate],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: Progress(),
+            session: try await ext.manager.getSession(),
+        )
+
+        let actualDestModifyDate = try FileManager.default.modifyDate(
+            of: destFolderURL
+        )
+        #expect(actualDestModifyDate == endModifyDate)
+
+        // Modify FPItem(id: FPItemID(extension-move-file/src), parentId: FPItemID(extension-move-file), filename: src, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-03 21:30:15 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        _ = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: srcFolderID,
+                parentItemIdentifier: srcFolderID.parent,
+                filename: srcFolderID.name,
+                contentType: .directory,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [
+                    .userReadable, .userWritable, .pathExtensionHidden,
+                ],
+                contentModificationDate: endModifyDate,
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true,
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.contentModificationDate],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: Progress(),
+            session: try await ext.manager.getSession(),
+        )
+
+        let actualSrcModifyDate = try FileManager.default.modifyDate(
+            of: srcFolderURL
+        )
+        #expect(actualSrcModifyDate == endModifyDate)
+
+        // Item FPItemID(extension-move-file/src/file.txt)
+        await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+            try await ext.item(
+                for: srcID,
                 request: NSFileProviderRequest(),
                 progress: Progress(),
-                session: try await ext.manager.getSession(),
-            )
-
-            #expect(item?.filename == "file.txt")
-            #expect(
-                FileManager.default
-                    .fileExists(
-                        atPath: TestData.getTestURL(path: destinationFilePath)
-                            .path()
-                    )
-            )
-            #expect(
-                !FileManager.default
-                    .fileExists(
-                        atPath: TestData.getTestURL(path: sourceFilePath).path()
-                    )
+                session: try await ext.manager.getSession()
             )
         }
+    }
 
-        @Test func editFileSucceeds() async throws {
-            let ext = try getExtension()
+    @Test func editFileSucceeds() async throws {
+        // echo "World!" >> extension-edit-file/file.txt
+        let oldModifyDate = Date(timeIntervalSince1970: 1_750_000_000)
+        let newModifyDate = Date(timeIntervalSince1970: 1_760_000_000)
 
-            let path = "\(testFolderPath)/edit-file.txt"
-            try TestData.createTestFile(path: path, contents: "original")
+        let folderPath = "extension-edit-file"
+        try TestData.createTestFolder(
+            path: folderPath,
+            modifyDate: oldModifyDate
+        )
+        let folderID = root.child(name: folderPath)
 
-            let newContent = "updated content"
-            let newContentURL = FileManager.default.temporaryDirectory
-                .appending(path: UUID().uuidString)
-            try newContent.write(
-                to: newContentURL,
-                atomically: false,
-                encoding: .utf8
-            )
+        let oldContent = "Hello, "
+        let filePath = "\(folderPath)/file.txt"
+        let fileURL = try TestData.createTestFile(
+            path: filePath,
+            contents: oldContent,
+            modifyDate: oldModifyDate
+        )
+        let fileID = root.child(name: filePath)
 
-            let (item, remainingFields, _) = try await ext.modifyItem(
-                ItemTemplate(
-                    itemIdentifier: .rootContainer.child(name: path),
-                    parentItemIdentifier: .rootContainer.child(
-                        name: testFolderPath
-                    ),
-                    filename: "edit-file.txt",
-                    contentType: .text,
-                    documentSize: NSNumber(value: newContent.count),
-                ),
-                baseVersion: NSFileProviderItemVersion(),
-                changedFields: [.contents],
-                contents: newContentURL,
-                options: [],
-                request: NSFileProviderRequest(),
-                progress: Progress(),
-                session: try await ext.manager.getSession(),
-            )
+        let ext = try getExtension()
 
-            #expect(item?.filename == "edit-file.txt")
-            #expect(!remainingFields.contains(.contents))
+        // Fetch FPItemID(extension-edit-file/file.txt)
+        let (oldURL, oldItem) = try await ext.fetchContents(
+            for: fileID,
+            version: nil,
+            request: NSFileProviderRequest(),
+            progress: Progress(),
+            session: try await ext.manager.getSession(),
+        )
 
-            let actualContent = try String(
-                contentsOf: TestData.getTestURL(path: path),
-                encoding: .utf8
-            )
-            #expect(actualContent == newContent)
-        }
+        #expect(oldItem.filename == "file.txt")
+        #expect(oldItem.contentType == .text)
+        #expect(try String(contentsOf: oldURL, encoding: .utf8) == oldContent)
 
-        @Test func setModifyTimeSucceeds() async throws {
-            let ext = try getExtension()
+        // Modify FPItem(id: FPItemID(extension-edit-file/file.txt), parentId: FPItemID(extension-edit-file), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), size: 14, modifyTime: 2026-03-03 22:20:44 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 129, contents, contentModificationDate)
+        let newContent = "Hello, World!\n"
+        let newContentURL = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        try newContent.write(
+            to: newContentURL,
+            atomically: false,
+            encoding: .utf8
+        )
 
-            let path = "\(testFolderPath)/modify-time-file.txt"
-            try TestData.createTestFile(path: path, contents: "data")
+        _ = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: fileID,
+                parentItemIdentifier: folderID,
+                filename: "file.txt",
+                contentType: .text,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [
+                    .userReadable, .userWritable, .pathExtensionHidden,
+                ],
+                documentSize: NSNumber(value: newContent.count),
+                contentModificationDate: newModifyDate,
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.contents, .contentModificationDate],
+            contents: newContentURL,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: Progress(),
+            session: try await ext.manager.getSession(),
+        )
 
-            let newModifyTime = Date(timeIntervalSince1970: 1_000_000)
+        let actualModifyDate = try FileManager.default.modifyDate(of: fileURL)
+        #expect(actualModifyDate == newModifyDate)
+        #expect(try String(contentsOf: fileURL, encoding: .utf8) == newContent)
 
-            _ = try await ext.modifyItem(
-                ItemTemplate(
-                    itemIdentifier: .rootContainer.child(name: path),
-                    parentItemIdentifier: .rootContainer.child(
-                        name: testFolderPath
-                    ),
-                    filename: "modify-time-file.txt",
-                    contentType: .text,
-                    contentModificationDate: newModifyTime,
-                ),
-                baseVersion: NSFileProviderItemVersion(),
-                changedFields: [.contentModificationDate],
-                contents: nil,
-                options: [],
-                request: NSFileProviderRequest(),
-                progress: Progress(),
-                session: try await ext.manager.getSession(),
-            )
+        // Fetch FPItemID(extension-edit-file/file.txt)
+        let (newURL, newItem) = try await ext.fetchContents(
+            for: fileID,
+            version: nil,
+            request: NSFileProviderRequest(),
+            progress: Progress(),
+            session: try await ext.manager.getSession(),
+        )
 
-            let fileURL = TestData.getTestURL(path: path)
-            let attrs = try FileManager.default.attributesOfItem(
-                atPath: fileURL.path()
-            )
-            let actualModifyTime = attrs[.modificationDate] as? Date
-            #expect(
-                actualModifyTime?.timeIntervalSince1970
-                    == newModifyTime.timeIntervalSince1970
-            )
-        }
-
-        @Test func setAccessTimeSucceeds() async throws {
-            let ext = try getExtension()
-
-            let path = "\(testFolderPath)/access-time-file.txt"
-            try TestData.createTestFile(path: path, contents: "data")
-
-            let newAccessTime = Date(timeIntervalSince1970: 1_000_000)
-
-            _ = try await ext.modifyItem(
-                ItemTemplate(
-                    itemIdentifier: .rootContainer.child(name: path),
-                    parentItemIdentifier: .rootContainer.child(
-                        name: testFolderPath
-                    ),
-                    filename: "access-time-file.txt",
-                    contentType: .text,
-                    lastUsedDate: newAccessTime,
-                ),
-                baseVersion: NSFileProviderItemVersion(),
-                changedFields: [.lastUsedDate],
-                contents: nil,
-                options: [],
-                request: NSFileProviderRequest(),
-                progress: Progress(),
-                session: try await ext.manager.getSession(),
-            )
-
-            let fileURL = TestData.getTestURL(path: path)
-            var st = stat()
-            stat(fileURL.path(), &st)
-            let actualAccessTime = Date(
-                timeIntervalSince1970: TimeInterval(st.st_atimespec.tv_sec)
-            )
-            #expect(
-                actualAccessTime.timeIntervalSince1970
-                    == newAccessTime.timeIntervalSince1970
-            )
-        }
-
+        #expect(newItem.filename == "file.txt")
+        #expect(newItem.contentType == .text)
+        #expect(try String(contentsOf: newURL, encoding: .utf8) == newContent)
     }
 
     struct DeleteItemTests {
-        let testFolderPath = "delete-item"
+        let testFolderPath = "extension-delete-item"
         let testFolderURL: URL
 
         init() throws {
@@ -613,7 +677,7 @@ struct ExtensionTests {
             )
 
             try await ext.deleteItem(
-                identifier: .rootContainer.child(name: path),
+                identifier: root.child(name: path),
                 baseVersion: NSFileProviderItemVersion(),
                 request: NSFileProviderRequest(),
                 progress: Progress(),
@@ -640,7 +704,7 @@ struct ExtensionTests {
             )
 
             try await ext.deleteItem(
-                identifier: .rootContainer.child(name: path),
+                identifier: root.child(name: path),
                 baseVersion: NSFileProviderItemVersion(),
                 request: NSFileProviderRequest(),
                 progress: Progress(),
@@ -664,7 +728,7 @@ struct ExtensionTests {
 
             await #expect(throws: NSFileProviderError(.noSuchItem).self) {
                 try await ext.deleteItem(
-                    identifier: .rootContainer.child(name: path),
+                    identifier: root.child(name: path),
                     baseVersion: NSFileProviderItemVersion(),
                     request: NSFileProviderRequest(),
                     progress: Progress(),
@@ -680,11 +744,15 @@ final class ItemTemplate: NSObject, NSFileProviderItem {
     var parentItemIdentifier: NSFileProviderItemIdentifier
     var filename: String
     var contentType: UTType
+    var typeAndCreator: NSFileProviderTypeAndCreator
+    var capabilities: NSFileProviderItemCapabilities
     var fileSystemFlags: NSFileProviderFileSystemFlags
     var documentSize: NSNumber?
     var creationDate: Date?
     var contentModificationDate: Date?
     var lastUsedDate: Date?
+    var isDownloaded: Bool
+    var isMostRecentVersionDownloaded: Bool
 
     init(
         itemIdentifier: NSFileProviderItemIdentifier =
@@ -692,6 +760,9 @@ final class ItemTemplate: NSObject, NSFileProviderItem {
         parentItemIdentifier: NSFileProviderItemIdentifier = .rootContainer,
         filename: String,
         contentType: UTType,
+        typeAndCreator: NSFileProviderTypeAndCreator =
+            NSFileProviderTypeAndCreator(),
+        capabilities: NSFileProviderItemCapabilities = [],
         fileSystemFlags: NSFileProviderFileSystemFlags = [
             .userExecutable, .userReadable, .userWritable,
         ],
@@ -699,15 +770,21 @@ final class ItemTemplate: NSObject, NSFileProviderItem {
         creationDate: Date? = nil,
         contentModificationDate: Date? = nil,
         lastUsedDate: Date? = nil,
+        isDownloaded: Bool = false,
+        isMostRecentVersionDownloaded: Bool = false,
     ) {
         self.itemIdentifier = itemIdentifier
         self.parentItemIdentifier = parentItemIdentifier
         self.filename = filename
         self.contentType = contentType
+        self.typeAndCreator = typeAndCreator
+        self.capabilities = capabilities
         self.fileSystemFlags = fileSystemFlags
         self.documentSize = documentSize
         self.creationDate = creationDate
         self.contentModificationDate = contentModificationDate
         self.lastUsedDate = lastUsedDate
+        self.isDownloaded = isDownloaded
+        self.isMostRecentVersionDownloaded = isMostRecentVersionDownloaded
     }
 }

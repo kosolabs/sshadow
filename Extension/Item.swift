@@ -17,14 +17,14 @@ public class Item: NSObject, NSFileProviderItem {
         itemIdentifier: NSFileProviderItemIdentifier,
         itemAttributes: SFTPAttributes,
     ) {
-        logger = Logger(category: "Item.\(domainName)")
-        logger.debug("init: \(itemIdentifier.rawValue)")
+        logger = Logger(category: "\(domainName):Item")
+        logger.debug("Init \(itemIdentifier.desc)")
         self.itemIdentifier = itemIdentifier
         self.itemAttributes = itemAttributes
     }
 
     public var parentItemIdentifier: NSFileProviderItemIdentifier {
-        return itemIdentifier.parent()
+        return itemIdentifier.parent
     }
 
     public var capabilities: NSFileProviderItemCapabilities {
@@ -42,7 +42,7 @@ public class Item: NSObject, NSFileProviderItem {
     }
 
     public var filename: String {
-        itemIdentifier.file
+        itemIdentifier.name
     }
     
     public var size: UInt64 {
