@@ -52,6 +52,17 @@ struct SessionTests {
             #expect(item.contentType == .folder)
         }
 
+        @Test func itemForRootSucceeds() async throws {
+            let session = try await getSession()
+
+            let item = try await session.item(for: .rootContainer)
+
+            #expect(
+                item.filename == "NSFileProviderRootContainerItemIdentifier"
+            )
+            #expect(item.contentType == .folder)
+        }
+
         @Test func itemForMissingFileThrowsNoSuchItem() async throws {
             let session = try await getSession()
 

@@ -1,10 +1,26 @@
 import FileProvider
 
 extension NSFileProviderItem {
+    var id: NSFileProviderItemIdentifier {
+        itemIdentifier
+    }
+
+    var parentId: NSFileProviderItemIdentifier {
+        parentItemIdentifier
+    }
+
+    var expectedId: NSFileProviderItemIdentifier {
+        expectedIdentifier
+    }
+    
+    var expectedIdentifier: NSFileProviderItemIdentifier {
+        parentItemIdentifier.child(name: filename)
+    }
+
     var desc: String {
         var components: [String] = []
-        components.append("id: \(itemIdentifier.desc)")
-        components.append("parentId: \(parentItemIdentifier.desc)")
+        components.append("id: \(id.desc)")
+        components.append("parentId: \(parentId.desc)")
         components.append("filename: \(filename)")
 
         if let contentType = contentType {
@@ -121,6 +137,7 @@ extension NSFileProviderItemIdentifier {
         let childRawValue = rawValue + "/" + name
         return NSFileProviderItemIdentifier(childRawValue)
     }
+    
 }
 
 let allItemFields: [(NSFileProviderItemFields, String)] = [
@@ -178,6 +195,20 @@ extension NSFileProviderItemCapabilities {
 }
 
 extension NSFileProviderFileSystemFlags {
+    var permissions: mode_t {
+        var mode: mode_t = 0
+        if contains(.userExecutable) {
+            mode |= S_IXUSR
+        }
+        if contains(.userReadable) {
+            mode |= S_IRUSR
+        }
+        if contains(.userWritable) {
+            mode |= S_IWUSR
+        }
+        return mode
+    }
+    
     var desc: String {
         var flags = [String]()
         flags.append("rawValue: \(rawValue)")
