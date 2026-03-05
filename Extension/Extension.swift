@@ -178,10 +178,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         )
 
         let itemIdentifier = itemTemplate.expectedIdentifier
-        var remaining = fields.subtracting([.filename, .parentItemIdentifier])
+        var remaining = fields.subtracting(.nameFields)
+        progress.totalUnitCount =
+            (2 + (fields.intersects(with: .attrFields) ? 1 : 0))
 
-        if remaining.contains(.contents) {
-            progress.totalUnitCount = remaining.count + 1
+        if fields.intersects(with: .writeFields) {
             try await progress.withChild { subprogress in
                 try await writeFile(
                     itemIdentifier,
@@ -190,21 +191,16 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                     progress: subprogress,
                     session: session
                 )
-                remaining = remaining.subtracting([.contents])
+                remaining = remaining.subtracting(.writeFields)
             }
         } else if itemTemplate.contentType == .folder {
-            progress.totalUnitCount = remaining.count
             try await progress.withChild {
                 try await session.createDirectory(for: itemIdentifier)
             }
         }
 
-        let attrFields: NSFileProviderItemFields = [
-            .creationDate, .contentModificationDate, .lastUsedDate,
-            .fileSystemFlags, .typeAndCreator,
-        ]
-        if !remaining.intersection(attrFields).isEmpty {
-            try await progress.withChild(pendingUnitCount: attrFields.count) {
+        if fields.intersects(with: .attrFields) {
+            try await progress.withChild {
                 var changes: [String] = []
                 if let at = itemTemplate.lastUsedDate, let accessTime = at {
                     changes.append("accessTime: \(accessTime)")
@@ -231,7 +227,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                     accessTime: itemTemplate.lastUsedDate ?? nil,
                     modifyTime: itemTemplate.contentModificationDate ?? nil,
                 )
-                remaining = remaining.subtracting(attrFields)
+                remaining = remaining.subtracting(.attrFields)
             }
         }
 
@@ -292,10 +288,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         )
 
         let itemIdentifier = item.expectedIdentifier
-        progress.totalUnitCount = changedFields.count
         var remaining = changedFields
+        progress.totalUnitCount =
+            (1 + (changedFields.intersects(with: .writeFields) ? 1 : 0)
+                + (changedFields.intersects(with: .nameFields) ? 1 : 0)
+                + (changedFields.intersects(with: .attrFields) ? 1 : 0))
 
-        if remaining.contains(.contents) {
+        if changedFields.intersects(with: .writeFields) {
             try await progress.withChild { subprogress in
                 try await writeFile(
                     itemIdentifier,
@@ -304,14 +303,12 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                     progress: subprogress,
                     session: session
                 )
-                remaining = remaining.subtracting([.contents])
+                remaining = remaining.subtracting(.writeFields)
             }
         }
 
-        let moveFields: NSFileProviderItemFields =
-            [.parentItemIdentifier, .filename]
-        if !remaining.intersection(moveFields).isEmpty {
-            try await progress.withChild(pendingUnitCount: moveFields.count) {
+        if changedFields.intersects(with: .nameFields) {
+            try await progress.withChild {
                 logger.notice(
                     "Move \(session.path(for: item.itemIdentifier)) to \(session.path(for: itemIdentifier))"
                 )
@@ -319,13 +316,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                     from: item.itemIdentifier,
                     to: itemIdentifier
                 )
-                remaining = remaining.subtracting(moveFields)
+                remaining = remaining.subtracting(.nameFields)
             }
         }
 
-        let attrFields: NSFileProviderItemFields =
-            [.contentModificationDate, .lastUsedDate]
-        if !remaining.intersection(attrFields).isEmpty {
+        if changedFields.intersects(with: .attrFields) {
             try await progress.withChild {
                 if let accessTime = item.lastUsedDate, accessTime != nil {
                     logger.notice(
@@ -344,14 +339,16 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                     accessTime: item.lastUsedDate ?? nil,
                     modifyTime: item.contentModificationDate ?? nil,
                 )
-                remaining = remaining.subtracting(attrFields)
+                remaining = remaining.subtracting(.attrFields)
             }
         }
 
         if !remaining.isEmpty {
             logger.fault("Unhandled fields: \(remaining.desc)")
         }
-        let item = try await session.item(for: itemIdentifier)
+        try await progress.withChild {
+            let item = try await session.item(for: itemIdentifier)
+        }
         return (item, [], false)
     }
 
@@ -418,9 +415,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         progress: Progress,
         session: Session,
     ) async throws {
-        guard let url = url,
-            let documentSize = itemTemplate.documentSize,
-            let documentSize = documentSize
+        guard let url = url, let ds = itemTemplate.documentSize,
+            let documentSize = ds
         else {
             logger.fault(
                 "Missing contents URL or document size for \(itemTemplate.filename)"
