@@ -155,6 +155,19 @@ let allItemFields: [(NSFileProviderItemFields, String)] = [
 ]
 
 extension NSFileProviderItemFields {
+    static let nameFields: NSFileProviderItemFields = [
+        .parentItemIdentifier, .filename,
+    ]
+
+    static let attrFields: NSFileProviderItemFields = [
+        .creationDate, .contentModificationDate, .lastUsedDate,
+        .fileSystemFlags, .typeAndCreator,
+    ]
+
+    static let writeFields: NSFileProviderItemFields = [
+        .contents
+    ]
+
     var desc: String {
         var result: [String] = []
         result.append("rawValue: \(rawValue)")
@@ -164,10 +177,8 @@ extension NSFileProviderItemFields {
         return "FPItemFields(\(result.joined(separator: ", ")))"
     }
     
-    var count: Int64 {
-        allItemFields.reduce(0) { count, field in
-            self.contains(field.0) ? count + 1 : count
-        }
+    func intersects(with members: NSFileProviderItemFields) -> Bool {
+        return !intersection(members).isEmpty
     }
 }
 
