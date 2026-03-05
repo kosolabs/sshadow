@@ -79,11 +79,12 @@ struct ExtensionTests {
         try TestData.createTestFile(path: path, contents: contents)
 
         // Fetch FPItemID(extension-read-file/small-file.txt)
+        let readProgress = Progress()
         let (url, item) = try await ext.fetchContents(
             for: root.child(name: path),
             version: nil,
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: readProgress,
             session: try await ext.manager.getSession(),
         )
 
@@ -91,6 +92,7 @@ struct ExtensionTests {
         #expect(item.contentType == .text)
         #expect(item.documentSize??.intValue == contents.count)
         #expect(try String(contentsOf: url, encoding: .utf8) == contents)
+        #expect(readProgress.isFinished)
     }
 
     @Test func readLargeFileSucceeds() async throws {
@@ -102,11 +104,12 @@ struct ExtensionTests {
         try TestData.createTestFile(path: path, data: data)
 
         // Fetch FPItemID(extension-read-file/large-file.txt)
+        let readProgress = Progress()
         let (url, item) = try await ext.fetchContents(
             for: root.child(name: path),
             version: nil,
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: readProgress,
             session: try await ext.manager.getSession(),
         )
 
@@ -114,6 +117,7 @@ struct ExtensionTests {
         #expect(item.contentType == .text)
         #expect(item.documentSize??.intValue == data.count)
         #expect(try Data(contentsOf: url) == data)
+        #expect(readProgress.isFinished)
     }
 
     @Test func readFileWithCancellation() async throws {
@@ -160,6 +164,7 @@ struct ExtensionTests {
         let ext = try getExtension()
 
         // Create FPItem(id: FPItemID(__fp/fs/fileID(17967944)), parentId: FPItemID(extension-create-folder), filename: folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), createTime: 2026-03-04 07:05:26 +0000, modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1478, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        let createFolderProgress = Progress()
         _ = try await ext.createItem(
             basedOn: ItemTemplate(
                 parentItemIdentifier: folderID.parent,
@@ -181,14 +186,16 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: createFolderProgress,
             session: try await ext.manager.getSession(),
         )
 
         #expect(FileManager.default.fileExists(at: folderURL))
         #expect(try FileManager.default.modifyDate(of: folderURL) == newDate)
+        #expect(createFolderProgress.isFinished)
 
         // Modify FPItem(id: FPItemID(extension-create-folder), parentId: FPItemID.rootContainer, filename: extension-create-folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        let updateFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: testID,
@@ -208,12 +215,13 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: updateFolderProgress,
             session: try await ext.manager.getSession(),
         )
 
         let actualModifyDate = try FileManager.default.modifyDate(of: testURL)
         #expect(actualModifyDate == newDate)
+        #expect(updateFolderProgress.isFinished)
     }
 
     @Test func createFileSucceeds() async throws {
@@ -244,6 +252,7 @@ struct ExtensionTests {
             atomically: false,
             encoding: .utf8
         )
+        let uploadProgress = Progress()
         _ = try await ext.createItem(
             basedOn: ItemTemplate(
                 parentItemIdentifier: fileID.parent,
@@ -266,15 +275,17 @@ struct ExtensionTests {
             contents: fileToUploadURL,
             options: [],
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: uploadProgress,
             session: try await ext.manager.getSession(),
         )
 
         #expect(FileManager.default.fileExists(at: fileURL))
         #expect(try FileManager.default.modifyDate(of: fileURL) == newDate)
         #expect(try String(contentsOf: fileURL, encoding: .utf8) == content)
+        #expect(uploadProgress.isFinished)
 
         // Modify FPItem(id: FPItemID(extension-create-file), parentId: FPItemID.rootContainer, filename: extension-create-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 21:51:16 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        let updateFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: testID,
@@ -294,12 +305,13 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: updateFolderProgress,
             session: try await ext.manager.getSession(),
         )
 
         let actualModifyDate = try FileManager.default.modifyDate(of: testURL)
         #expect(actualModifyDate == newDate)
+        #expect(updateFolderProgress.isFinished)
     }
 
     @Test func createLargeFileSucceeds() async throws {
@@ -326,7 +338,7 @@ struct ExtensionTests {
             .appending(path: UUID().uuidString)
         let content = Data(count: 10_485_760)
         try content.write(to: fileToUploadURL)
-
+        let uploadProgress = Progress()
         _ = try await ext.createItem(
             basedOn: ItemTemplate(
                 parentItemIdentifier: fileID.parent,
@@ -349,15 +361,17 @@ struct ExtensionTests {
             contents: fileToUploadURL,
             options: [],
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: uploadProgress,
             session: try await ext.manager.getSession(),
         )
 
         #expect(FileManager.default.fileExists(at: fileURL))
         #expect(try FileManager.default.modifyDate(of: fileURL) == newDate)
         #expect(try Data(contentsOf: fileURL) == content)
+        #expect(uploadProgress.isFinished)
 
         // Modify FPItem(id: FPItemID(extension-create-large-file), parentId: FPItemID.rootContainer, filename: extension-create-large-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 22:15:29 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        let updateFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: testID,
@@ -377,12 +391,13 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: updateFolderProgress,
             session: try await ext.manager.getSession(),
         )
 
         let actualModifyDate = try FileManager.default.modifyDate(of: testURL)
         #expect(actualModifyDate == newDate)
+        #expect(updateFolderProgress.isFinished)
     }
 
     @Test func renameFileSucceeds() async throws {
@@ -411,6 +426,7 @@ struct ExtensionTests {
         let ext = try getExtension()
 
         // Modify FPItem(id: FPItemID(extension-rename-file/src.txt), parentId: FPItemID(extension-rename-file), filename: dest.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 2, filename)
+        let renameProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: srcID,
@@ -429,14 +445,16 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: renameProgress,
             session: try await ext.manager.getSession(),
         )
 
         #expect(FileManager.default.fileExists(at: destURL))
         #expect(!FileManager.default.fileExists(at: srcURL))
+        #expect(renameProgress.isFinished)
 
         // Modify FPItem(id: FPItemID(extension-rename-file), parentId: FPItemID.rootContainer, filename: extension-rename-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-03 20:18:28 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        let updateFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: folderID,
@@ -456,22 +474,26 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: updateFolderProgress,
             session: try await ext.manager.getSession(),
         )
 
         let actualModifyDate = try FileManager.default.modifyDate(of: folderURL)
         #expect(actualModifyDate == newDate)
+        #expect(updateFolderProgress.isFinished)
 
         // Item FPItemID(extension-rename-file/src.txt)
+        let getOriginalItemProgress = Progress()
         await #expect(throws: NSFileProviderError(.noSuchItem).self) {
             try await ext.item(
                 for: srcID,
                 request: NSFileProviderRequest(),
-                progress: Progress(),
+                progress: getOriginalItemProgress,
                 session: try await ext.manager.getSession()
             )
         }
+
+        #expect(getOriginalItemProgress.isFinished)
     }
 
     @Test func moveFileSucceeds() async throws {
@@ -507,6 +529,7 @@ struct ExtensionTests {
         let ext = try getExtension()
 
         // Modify FPItem(id: FPItemID(extension-move-file/src/file.txt), parentId: FPItemID(extension-move-file/dest), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 4, parentItemIdentifier)
+        let moveProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: srcID,
@@ -525,14 +548,16 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: moveProgress,
             session: try await ext.manager.getSession(),
         )
 
         #expect(FileManager.default.fileExists(at: destURL))
         #expect(!FileManager.default.fileExists(at: srcURL))
+        #expect(moveProgress.isFinished)
 
         // Modify FPItem(id: FPItemID(extension-move-file/dest), parentId: FPItemID(extension-move-file), filename: dest, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-03 21:30:15 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        let updateDestFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: destFolderID,
@@ -552,7 +577,7 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: updateDestFolderProgress,
             session: try await ext.manager.getSession(),
         )
 
@@ -560,8 +585,10 @@ struct ExtensionTests {
             of: destFolderURL
         )
         #expect(actualDestModifyDate == newDate)
+        #expect(updateDestFolderProgress.isFinished)
 
         // Modify FPItem(id: FPItemID(extension-move-file/src), parentId: FPItemID(extension-move-file), filename: src, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-03 21:30:15 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        let updateSrcFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: srcFolderID,
@@ -581,7 +608,7 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: updateSrcFolderProgress,
             session: try await ext.manager.getSession(),
         )
 
@@ -589,16 +616,20 @@ struct ExtensionTests {
             of: srcFolderURL
         )
         #expect(actualSrcModifyDate == newDate)
+        #expect(updateSrcFolderProgress.isFinished)
 
         // Item FPItemID(extension-move-file/src/file.txt)
+        let getOriginalItemProgress = Progress()
         await #expect(throws: NSFileProviderError(.noSuchItem).self) {
             try await ext.item(
                 for: srcID,
                 request: NSFileProviderRequest(),
-                progress: Progress(),
+                progress: getOriginalItemProgress,
                 session: try await ext.manager.getSession()
             )
         }
+
+        #expect(getOriginalItemProgress.isFinished)
     }
 
     @Test func editFileSucceeds() async throws {
@@ -625,17 +656,19 @@ struct ExtensionTests {
         let ext = try getExtension()
 
         // Fetch FPItemID(extension-edit-file/file.txt)
+        let fetchOldProgress = Progress()
         let (oldURL, oldItem) = try await ext.fetchContents(
             for: fileID,
             version: nil,
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: fetchOldProgress,
             session: try await ext.manager.getSession(),
         )
 
         #expect(oldItem.filename == "file.txt")
         #expect(oldItem.contentType == .text)
         #expect(try String(contentsOf: oldURL, encoding: .utf8) == oldContent)
+        #expect(fetchOldProgress.isFinished)
 
         // Modify FPItem(id: FPItemID(extension-edit-file/file.txt), parentId: FPItemID(extension-edit-file), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), size: 14, modifyTime: 2026-03-03 22:20:44 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 129, contents, contentModificationDate)
         let newContent = "Hello, World!\n"
@@ -647,6 +680,7 @@ struct ExtensionTests {
             encoding: .utf8
         )
 
+        let modifyProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: fileID,
@@ -665,26 +699,29 @@ struct ExtensionTests {
             contents: newContentURL,
             options: [],
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: modifyProgress,
             session: try await ext.manager.getSession(),
         )
 
         let actualModifyDate = try FileManager.default.modifyDate(of: fileURL)
         #expect(actualModifyDate == newDate)
         #expect(try String(contentsOf: fileURL, encoding: .utf8) == newContent)
+        #expect(modifyProgress.isFinished)
 
         // Fetch FPItemID(extension-edit-file/file.txt)
+        let fetchNewProgress = Progress()
         let (newURL, newItem) = try await ext.fetchContents(
             for: fileID,
             version: nil,
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: fetchNewProgress,
             session: try await ext.manager.getSession(),
         )
 
         #expect(newItem.filename == "file.txt")
         #expect(newItem.contentType == .text)
         #expect(try String(contentsOf: newURL, encoding: .utf8) == newContent)
+        #expect(fetchNewProgress.isFinished)
     }
 
     @Test func deleteFolderSucceeds() async throws {
@@ -698,15 +735,17 @@ struct ExtensionTests {
         let ext = try getExtension()
 
         // Delete FPItemID(extension-delete-item/folder)
+        let progress = Progress()
         try await ext.deleteItem(
             identifier: folderID,
             baseVersion: NSFileProviderItemVersion(),
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: progress,
             session: try await ext.manager.getSession(),
         )
 
         #expect(!FileManager.default.fileExists(at: folderURL))
+        #expect(progress.isFinished)
     }
 
     @Test func deleteFileSucceeds() async throws {
@@ -724,15 +763,17 @@ struct ExtensionTests {
         let ext = try getExtension()
 
         // Delete FPItemID(extension-delete-item/file.txt)
+        let progress = Progress()
         try await ext.deleteItem(
             identifier: fileID,
             baseVersion: NSFileProviderItemVersion(),
             request: NSFileProviderRequest(),
-            progress: Progress(),
+            progress: progress,
             session: try await ext.manager.getSession(),
         )
 
         #expect(!FileManager.default.fileExists(at: fileURL))
+        #expect(progress.isFinished)
     }
 }
 

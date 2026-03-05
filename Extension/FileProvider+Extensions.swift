@@ -155,13 +155,19 @@ let allItemFields: [(NSFileProviderItemFields, String)] = [
 ]
 
 extension NSFileProviderItemFields {
-    public var desc: String {
+    var desc: String {
         var result: [String] = []
         result.append("rawValue: \(rawValue)")
         for (field, name) in allItemFields where self.contains(field) {
             result.append(name)
         }
         return "FPItemFields(\(result.joined(separator: ", ")))"
+    }
+    
+    var count: Int64 {
+        allItemFields.reduce(0) { count, field in
+            self.contains(field.0) ? count + 1 : count
+        }
     }
 }
 

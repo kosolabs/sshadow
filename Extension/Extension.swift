@@ -57,17 +57,19 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
     ) async throws -> NSFileProviderItem {
         logger.debug("Item \(itemIdentifier.desc)")
 
-        if itemIdentifier == .rootContainer
-            || itemIdentifier == .trashContainer
-            || itemIdentifier == .workingSet
-        {
-            return SpecialItem(
-                domainName: session.config.name,
-                itemIdentifier: itemIdentifier
-            )
-        }
+        return try await progress.withChild {
+            if itemIdentifier == .rootContainer
+                || itemIdentifier == .trashContainer
+                || itemIdentifier == .workingSet
+            {
+                return SpecialItem(
+                    domainName: session.config.name,
+                    itemIdentifier: itemIdentifier
+                )
+            }
 
-        return try await session.item(for: itemIdentifier)
+            return try await session.item(for: itemIdentifier)
+        }
     }
 
     public func fetchContents(
@@ -175,29 +177,26 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             "Create \(itemTemplate.desc) for \(fields.desc)"
         )
 
-        var remaining = fields
-
         let itemIdentifier = itemTemplate.expectedIdentifier
-        remaining = remaining.subtracting([.filename, .parentItemIdentifier])
+        var remaining = fields.subtracting([.filename, .parentItemIdentifier])
 
-        if itemTemplate.contentType == .folder {
-            let subprogress = Progress(totalUnitCount: 1)
-            progress.addChild(subprogress, withPendingUnitCount: 1)
-            try await session.createDirectory(for: itemIdentifier)
-            subprogress.completedUnitCount = 1
-        }
-        
         if remaining.contains(.contents) {
-            let subprogress = Progress(totalUnitCount: 1)
-            progress.addChild(subprogress, withPendingUnitCount: 1)
-            try await writeFile(
-                itemIdentifier,
-                basedOn: itemTemplate,
-                contents: url,
-                progress: subprogress,
-                session: session
-            )
-            remaining = remaining.subtracting([.contents])
+            progress.totalUnitCount = remaining.count + 1
+            try await progress.withChild { subprogress in
+                try await writeFile(
+                    itemIdentifier,
+                    basedOn: itemTemplate,
+                    contents: url,
+                    progress: subprogress,
+                    session: session
+                )
+                remaining = remaining.subtracting([.contents])
+            }
+        } else if itemTemplate.contentType == .folder {
+            progress.totalUnitCount = remaining.count
+            try await progress.withChild {
+                try await session.createDirectory(for: itemIdentifier)
+            }
         }
 
         let attrFields: NSFileProviderItemFields = [
@@ -205,40 +204,43 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             .fileSystemFlags, .typeAndCreator,
         ]
         if !remaining.intersection(attrFields).isEmpty {
-            let subprogress = Progress(totalUnitCount: 1)
-            progress.addChild(subprogress, withPendingUnitCount: 1)
-            var changes: [String] = []
-            if let at = itemTemplate.lastUsedDate, let accessTime = at {
-                changes.append("accessTime: \(accessTime)")
+            try await progress.withChild(pendingUnitCount: attrFields.count) {
+                var changes: [String] = []
+                if let at = itemTemplate.lastUsedDate, let accessTime = at {
+                    changes.append("accessTime: \(accessTime)")
+                }
+                if let mt = itemTemplate.contentModificationDate,
+                    let modifyTime = mt
+                {
+                    changes.append("modifyTime: \(modifyTime)")
+                }
+                if let fileSystemFlags = itemTemplate.fileSystemFlags {
+                    changes.append(
+                        "permissions: \(fileSystemFlags.permissions)"
+                    )
+                }
+                if let typeAndCreator = itemTemplate.typeAndCreator {
+                    changes.append("typeAndCreator: \(typeAndCreator)")
+                }
+                logger.notice(
+                    "Set attributes of \(itemIdentifier.desc): \(changes.joined(separator: ", "))"
+                )
+                try await session.setAttributes(
+                    for: itemIdentifier,
+                    permissions: itemTemplate.fileSystemFlags?.permissions,
+                    accessTime: itemTemplate.lastUsedDate ?? nil,
+                    modifyTime: itemTemplate.contentModificationDate ?? nil,
+                )
+                remaining = remaining.subtracting(attrFields)
             }
-            if let mt = itemTemplate.contentModificationDate,
-                let modifyTime = mt
-            {
-                changes.append("modifyTime: \(modifyTime)")
-            }
-            if let fileSystemFlags = itemTemplate.fileSystemFlags {
-                changes.append("permissions: \(fileSystemFlags.permissions)")
-            }
-            if let typeAndCreator = itemTemplate.typeAndCreator {
-                changes.append("typeAndCreator: \(typeAndCreator)")
-            }
-            logger.notice(
-                "Set attributes of \(itemIdentifier.desc): \(changes.joined(separator: ", "))"
-            )
-            try await session.setAttributes(
-                for: itemIdentifier,
-                permissions: itemTemplate.fileSystemFlags?.permissions,
-                accessTime: itemTemplate.lastUsedDate ?? nil,
-                modifyTime: itemTemplate.contentModificationDate ?? nil,
-            )
-            remaining = remaining.subtracting(attrFields)
-            subprogress.completedUnitCount = 1
         }
 
         if !remaining.isEmpty {
             logger.fault("Unhandled fields: \(remaining.desc)")
         }
-        let item = try await session.item(for: itemIdentifier)
+        let item = try await progress.withChild {
+            try await session.item(for: itemIdentifier)
+        }
         return (item, [], false)
     }
 
@@ -289,62 +291,61 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             "Modify \(item.desc) for \(changedFields.desc)"
         )
 
-        let itemIdentifier = item.parentItemIdentifier
-            .child(name: item.filename)
+        let itemIdentifier = item.expectedIdentifier
+        progress.totalUnitCount = changedFields.count
         var remaining = changedFields
 
         if remaining.contains(.contents) {
-            let subprogress = Progress(totalUnitCount: 1)
-            progress.addChild(subprogress, withPendingUnitCount: 1)
-            try await writeFile(
-                itemIdentifier,
-                basedOn: item,
-                contents: newContents,
-                progress: subprogress,
-                session: session
-            )
-            remaining = remaining.subtracting([.contents])
+            try await progress.withChild { subprogress in
+                try await writeFile(
+                    itemIdentifier,
+                    basedOn: item,
+                    contents: newContents,
+                    progress: subprogress,
+                    session: session
+                )
+                remaining = remaining.subtracting([.contents])
+            }
         }
 
         let moveFields: NSFileProviderItemFields =
             [.parentItemIdentifier, .filename]
         if !remaining.intersection(moveFields).isEmpty {
-            let subprogress = Progress(totalUnitCount: 1)
-            progress.addChild(subprogress, withPendingUnitCount: 1)
-            logger.notice(
-                "Move \(session.path(for: item.itemIdentifier)) to \(session.path(for: itemIdentifier))"
-            )
-            try await session.move(
-                from: item.itemIdentifier,
-                to: itemIdentifier
-            )
-            remaining = remaining.subtracting(moveFields)
-            subprogress.completedUnitCount = 1
+            try await progress.withChild(pendingUnitCount: moveFields.count) {
+                logger.notice(
+                    "Move \(session.path(for: item.itemIdentifier)) to \(session.path(for: itemIdentifier))"
+                )
+                try await session.move(
+                    from: item.itemIdentifier,
+                    to: itemIdentifier
+                )
+                remaining = remaining.subtracting(moveFields)
+            }
         }
 
         let attrFields: NSFileProviderItemFields =
             [.contentModificationDate, .lastUsedDate]
         if !remaining.intersection(attrFields).isEmpty {
-            let subprogress = Progress(totalUnitCount: 1)
-            progress.addChild(subprogress, withPendingUnitCount: 1)
-            if let accessTime = item.lastUsedDate, accessTime != nil {
-                logger.notice(
-                    "Set access time of \(session.path(for: item.itemIdentifier)) to \(String(describing: accessTime))"
+            try await progress.withChild {
+                if let accessTime = item.lastUsedDate, accessTime != nil {
+                    logger.notice(
+                        "Set access time of \(session.path(for: item.itemIdentifier)) to \(String(describing: accessTime))"
+                    )
+                }
+                if let modifyTime = item.contentModificationDate,
+                    modifyTime != nil
+                {
+                    logger.notice(
+                        "Set modify time of \(session.path(for: item.itemIdentifier)) to \(String(describing: modifyTime))"
+                    )
+                }
+                try await session.setAttributes(
+                    for: itemIdentifier,
+                    accessTime: item.lastUsedDate ?? nil,
+                    modifyTime: item.contentModificationDate ?? nil,
                 )
+                remaining = remaining.subtracting(attrFields)
             }
-            if let modifyTime = item.contentModificationDate, modifyTime != nil
-            {
-                logger.notice(
-                    "Set modify time of \(session.path(for: item.itemIdentifier)) to \(String(describing: modifyTime))"
-                )
-            }
-            try await session.setAttributes(
-                for: itemIdentifier,
-                accessTime: item.lastUsedDate ?? nil,
-                modifyTime: item.contentModificationDate ?? nil,
-            )
-            remaining = remaining.subtracting(attrFields)
-            subprogress.completedUnitCount = 1
         }
 
         if !remaining.isEmpty {
@@ -390,14 +391,14 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
     ) async throws {
         logger.debug("Delete \(identifier.desc)")
 
-        progress.totalUnitCount = 1
-        let attrs = try await session.attributes(for: identifier)
-        if case .directory = attrs.type {
-            try await session.removeDirectory(for: identifier)
-        } else {
-            try await session.removeFile(for: identifier)
+        return try await progress.withChild {
+            let attrs = try await session.attributes(for: identifier)
+            if case .directory = attrs.type {
+                try await session.removeDirectory(for: identifier)
+            } else {
+                try await session.removeFile(for: identifier)
+            }
         }
-        progress.completedUnitCount = 1
     }
 
     public func enumerator(
