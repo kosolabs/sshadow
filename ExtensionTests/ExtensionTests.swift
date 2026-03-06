@@ -192,7 +192,8 @@ struct ExtensionTests {
 
         #expect(FileManager.default.fileExists(at: folderURL))
         #expect(try FileManager.default.modifyDate(of: folderURL) == newDate)
-        #expect(createFolderProgress.isFinished)
+        let permissions = try FileManager.default.permissions(of: folderURL)
+        #expect(permissions == 0o700)
 
         // Modify FPItem(id: FPItemID(extension-create-folder), parentId: FPItemID.rootContainer, filename: extension-create-folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
@@ -722,6 +723,97 @@ struct ExtensionTests {
         #expect(newItem.contentType == .text)
         #expect(try String(contentsOf: newURL, encoding: .utf8) == newContent)
         #expect(fetchNewProgress.isFinished)
+    }
+
+    @Test func setFileReadWriteSucceeds() async throws {
+        // chmod 600 extension-permissions/file.txt
+        let testPath = "extension-permissions"
+
+        let filePath = "\(testPath)/file.txt"
+        let fileURL = try TestData.createTestFile(
+            path: filePath,
+            contents: "data",
+            permissions: 0o000
+        )
+        let fileID = root.child(name: filePath)
+
+        let ext = try getExtension()
+
+        // Modify FPItem(id: FPItemID(extension-permissions/file.txt), parentId: FPItemID(extension-permissions), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 256, fileSystemFlags)
+        let modifyProgress = Progress()
+        _ = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: fileID,
+                parentItemIdentifier: fileID.parent,
+                filename: fileID.name,
+                contentType: .text,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [
+                    .userReadable, .userWritable, .pathExtensionHidden,
+                ]
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.fileSystemFlags],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: modifyProgress,
+            session: try await ext.manager.getSession(),
+        )
+
+        let attributes = try FileManager.default.attributesOfItem(
+            atPath: fileURL.path
+        )
+        let permissions = try #require(
+            attributes[.posixPermissions] as? NSNumber
+        )
+        #expect(permissions.intValue == 0o600)
+        #expect(modifyProgress.isFinished)
+    }
+
+    @Test func setFolderReadWriteExecuteSucceeds() async throws {
+        // chmod 700 extension-permissions/folder
+        let testPath = "extension-permissions"
+
+        let folderPath = "\(testPath)/folder"
+        let folderURL = try TestData.createTestFolder(
+            path: folderPath,
+            permissions: 0o000
+        )
+        let folderID = root.child(name: folderPath)
+
+        let ext = try getExtension()
+
+        // Modify FPItem(id: FPItemID(extension-permissions/folder), parentId: FPItemID(extension-permissions), filename: folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 256, fileSystemFlags)
+        let modifyProgress = Progress()
+        _ = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: folderID,
+                parentItemIdentifier: folderID.parent,
+                filename: folderID.name,
+                contentType: .text,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [
+                    .userReadable, .userWritable, .userExecutable,
+                ]
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.fileSystemFlags],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: modifyProgress,
+            session: try await ext.manager.getSession(),
+        )
+
+        let attributes = try FileManager.default.attributesOfItem(
+            atPath: folderURL.path
+        )
+        let permissions = try #require(
+            attributes[.posixPermissions] as? NSNumber
+        )
+        #expect(permissions.intValue == 0o700)
+        #expect(modifyProgress.isFinished)
     }
 
     @Test func deleteFolderSucceeds() async throws {
