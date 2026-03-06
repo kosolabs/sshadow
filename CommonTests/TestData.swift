@@ -93,6 +93,7 @@ struct TestData {
     @discardableResult
     static func createTestFolder(
         path: String,
+        permissions: mode_t? = nil,
         modifyDate: Date? = nil
     ) throws -> URL {
         let folder = getTestURL(path: path)
@@ -100,12 +101,24 @@ struct TestData {
             at: folder,
             withIntermediateDirectories: true
         )
+
+        var attributes: [FileAttributeKey: Any] = [:]
+
+        if let permissions {
+            attributes[FileAttributeKey.posixPermissions] = permissions
+        }
+
         if let modifyDate {
+            attributes[FileAttributeKey.modificationDate] = modifyDate
+        }
+
+        if !attributes.isEmpty {
             try FileManager.default.setAttributes(
-                [FileAttributeKey.modificationDate: modifyDate],
+                attributes,
                 ofItemAtPath: folder.path()
             )
         }
+
         return folder
     }
 
@@ -113,6 +126,7 @@ struct TestData {
     static func createTestFile(
         path: String,
         contents: String,
+        permissions: mode_t? = nil,
         modifyDate: Date? = nil
     ) throws -> URL {
         guard let data = contents.data(using: .utf8) else {
@@ -128,6 +142,7 @@ struct TestData {
         return try createTestFile(
             path: path,
             data: data,
+            permissions: permissions,
             modifyDate: modifyDate
         )
     }
@@ -136,6 +151,7 @@ struct TestData {
     static func createTestFile(
         path: String,
         data: Data,
+        permissions: mode_t? = nil,
         modifyDate: Date? = nil
     ) throws -> URL {
         let file = getTestURL(path: path)
@@ -148,9 +164,19 @@ struct TestData {
 
         FileManager.default.createFile(atPath: file.path(), contents: data)
 
+        var attributes: [FileAttributeKey: Any] = [:]
+
+        if let permissions {
+            attributes[FileAttributeKey.posixPermissions] = permissions
+        }
+
         if let modifyDate {
+            attributes[FileAttributeKey.modificationDate] = modifyDate
+        }
+
+        if !attributes.isEmpty {
             try FileManager.default.setAttributes(
-                [FileAttributeKey.modificationDate: modifyDate],
+                attributes,
                 ofItemAtPath: file.path()
             )
         }

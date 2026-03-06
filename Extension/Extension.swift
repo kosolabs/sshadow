@@ -165,7 +165,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
     }
 
     func createItem(
-        basedOn itemTemplate: NSFileProviderItem,
+        basedOn item: NSFileProviderItem,
         fields: NSFileProviderItemFields,
         contents url: URL?,
         options: NSFileProviderCreateItemOptions = [],
@@ -174,10 +174,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         session: Session,
     ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
         logger.debug(
-            "Create \(itemTemplate.desc) for \(fields.desc)"
+            "Create \(item.desc) for \(fields.desc)"
         )
 
-        let itemIdentifier = itemTemplate.expectedIdentifier
+        let itemIdentifier = item.expectedIdentifier
         var remaining = fields.subtracting(.nameFields)
         progress.totalUnitCount =
             (2 + (fields.intersects(with: .attrFields) ? 1 : 0))
@@ -186,14 +186,14 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
             try await progress.withChild { subprogress in
                 try await writeFile(
                     itemIdentifier,
-                    basedOn: itemTemplate,
+                    basedOn: item,
                     contents: url,
                     progress: subprogress,
                     session: session
                 )
                 remaining = remaining.subtracting(.writeFields)
             }
-        } else if itemTemplate.contentType == .folder {
+        } else if item.contentType == .folder {
             try await progress.withChild {
                 try await session.createDirectory(for: itemIdentifier)
             }
@@ -201,31 +201,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
 
         if fields.intersects(with: .attrFields) {
             try await progress.withChild {
-                var changes: [String] = []
-                if let at = itemTemplate.lastUsedDate, let accessTime = at {
-                    changes.append("accessTime: \(accessTime)")
-                }
-                if let mt = itemTemplate.contentModificationDate,
-                    let modifyTime = mt
-                {
-                    changes.append("modifyTime: \(modifyTime)")
-                }
-                if let fileSystemFlags = itemTemplate.fileSystemFlags {
-                    changes.append(
-                        "permissions: \(fileSystemFlags.permissions)"
-                    )
-                }
-                if let typeAndCreator = itemTemplate.typeAndCreator {
-                    changes.append("typeAndCreator: \(typeAndCreator)")
-                }
-                logger.notice(
-                    "Set attributes of \(itemIdentifier.desc): \(changes.joined(separator: ", "))"
-                )
-                try await session.setAttributes(
-                    for: itemIdentifier,
-                    permissions: itemTemplate.fileSystemFlags?.permissions,
-                    accessTime: itemTemplate.lastUsedDate ?? nil,
-                    modifyTime: itemTemplate.contentModificationDate ?? nil,
+                try await setAttributes(
+                    item,
+                    fields: fields,
+                    session: session
                 )
                 remaining = remaining.subtracting(.attrFields)
             }
@@ -322,22 +301,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
 
         if changedFields.intersects(with: .attrFields) {
             try await progress.withChild {
-                if let accessTime = item.lastUsedDate, accessTime != nil {
-                    logger.notice(
-                        "Set access time of \(session.path(for: item.itemIdentifier)) to \(String(describing: accessTime))"
-                    )
-                }
-                if let modifyTime = item.contentModificationDate,
-                    modifyTime != nil
-                {
-                    logger.notice(
-                        "Set modify time of \(session.path(for: item.itemIdentifier)) to \(String(describing: modifyTime))"
-                    )
-                }
-                try await session.setAttributes(
-                    for: itemIdentifier,
-                    accessTime: item.lastUsedDate ?? nil,
-                    modifyTime: item.contentModificationDate ?? nil,
+                try await setAttributes(
+                    item,
+                    fields: changedFields,
+                    session: session
                 )
                 remaining = remaining.subtracting(.attrFields)
             }
@@ -442,5 +409,49 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
                 }
             }
         }
+    }
+
+    private func setAttributes(
+        _ item: NSFileProviderItem,
+        fields: NSFileProviderItemFields,
+        session: Session
+    ) async throws {
+        var changes: [String] = []
+
+        let accessTime =
+            fields.contains(.lastUsedDate)
+            ? item.lastUsedDate ?? nil : nil
+        if let accessTime = accessTime {
+            changes.append("accessTime: \(accessTime)")
+        }
+
+        let modifyTime =
+            fields.contains(.contentModificationDate)
+            ? item.contentModificationDate ?? nil : nil
+        if let modifyTime = modifyTime {
+            changes.append("modifyTime: \(modifyTime)")
+        }
+
+        let permissions =
+            fields.contains(.fileSystemFlags)
+            ? item.fileSystemFlags?.permissions : nil
+        if let permissions = permissions {
+            changes.append(
+                "permissions: \(String(permissions, radix: 8))"
+            )
+        }
+        if let typeAndCreator = item.typeAndCreator {
+            changes.append("typeAndCreator: \(typeAndCreator)")
+        }
+        logger.notice(
+            "Set attributes of \(item.expectedId.desc): \(changes.joined(separator: ", "))"
+        )
+        try await session.setAttributes(
+            for: item.expectedId,
+            permissions: permissions,
+            accessTime: accessTime,
+            modifyTime: modifyTime,
+        )
+
     }
 }
