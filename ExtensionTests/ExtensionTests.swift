@@ -96,14 +96,14 @@ struct ExtensionTests {
     }
 
     @Test func readLargeFileSucceeds() async throws {
-        // cat extension-read-file/large-file.txt
+        // cat extension-read-file/large-file.dat
         let ext = try getExtension()
 
-        let path = "extension-read-file/large-file.txt"
+        let path = "extension-read-file/large-file.dat"
         let data = Data(count: 10_485_760)
         try TestData.createTestFile(path: path, data: data)
 
-        // Fetch FPItemID(extension-read-file/large-file.txt)
+        // Fetch FPItemID(extension-read-file/large-file.dat)
         let readProgress = Progress()
         let (url, item) = try await ext.fetchContents(
             for: root.child(name: path),
@@ -113,10 +113,48 @@ struct ExtensionTests {
             session: try await ext.manager.getSession(),
         )
 
-        #expect(item.filename == "large-file.txt")
-        #expect(item.contentType == .text)
+        #expect(item.filename == "large-file.dat")
         #expect(item.documentSize??.intValue == data.count)
         #expect(try Data(contentsOf: url) == data)
+        #expect(readProgress.isFinished)
+    }
+
+    @Test func readPartialFileSucceeds() async throws {
+        // dd if=extension-read-file/partial-file.dat bs=1m skip=5 count=1
+        let ext = try getExtension()
+
+        let path = "extension-read-file/partial-file.dat"
+        let data = (0..<256).reduce(into: Data()) { data, i in
+            data.append(contentsOf: repeatElement(UInt8(i), count: 1024))
+        }
+        try TestData.createTestFile(path: path, data: data)
+
+        // Read FPItemID(extension-read-file/partial-file.dat) with range Optional({10240, 10240})
+        let requestedRange = NSRange(location: 10 * 1024, length: 10 * 1024)
+        let readProgress = Progress()
+        let (url, item, returnedRange) = try await ext.fetchPartialContents(
+            for: root.child(name: path),
+            version: NSFileProviderItemVersion(),
+            request: NSFileProviderRequest(),
+            minimalRange: requestedRange,
+            aligningTo: 16384,
+            progress: readProgress,
+            session: try await ext.manager.getSession(),
+        )
+
+        #expect(item.filename == "partial-file.dat")
+        #expect(item.documentSize??.intValue == data.count)
+        #expect(returnedRange == NSRange(0..<32768))
+
+        let handle = try FileHandle(forReadingFrom: url)
+        try handle.seek(toOffset: UInt64(requestedRange.location))
+        let actual = try handle.read(upToCount: requestedRange.length)
+
+        let expected = (10..<20).reduce(into: Data()) { data, i in
+            data.append(contentsOf: repeatElement(UInt8(i), count: 1024))
+        }
+
+        #expect(actual == expected)
         #expect(readProgress.isFinished)
     }
 
