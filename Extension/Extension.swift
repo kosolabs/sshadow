@@ -4,7 +4,9 @@ import SwiftData
 import SwiftLibSSH
 import UniformTypeIdentifiers
 
-public class Extension: NSObject, NSFileProviderReplicatedExtension {
+public class Extension: NSObject, NSFileProviderReplicatedExtension,
+    NSFileProviderPartialContentFetching
+{
     let logger: Logger
     let manager: SessionManager
 
@@ -103,34 +105,69 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         progress: Progress,
         session: Session,
     ) async throws -> (URL, NSFileProviderItem) {
-        logger.debug("Fetch \(itemIdentifier.desc)")
-
-        let url = FileManager.default.temporaryDirectory
-            .appending(path: UUID().uuidString)
-        guard FileManager.default.createFile(atPath: url.path(), contents: nil)
-        else {
-            throw NSFileProviderError(.insufficientQuota)
-        }
-        let handle = try FileHandle(forWritingTo: url)
-        defer { try? handle.close() }
-
-        let item = try await session.item(for: itemIdentifier)
-        progress.totalUnitCount = Int64(item.size)
-
-        try await session.withFile(
-            for: itemIdentifier,
-            accessType: .readOnly
-        ) { file in
-            for try await data in file.stream() {
-                if progress.isCancelled {
-                    throw CocoaError(.userCancelled)
-                }
-                try handle.write(contentsOf: data)
-                progress.completedUnitCount += Int64(data.count)
-            }
-        }
-
+        let (url, item, _) = try await read(
+            itemIdentifier,
+            progress: progress,
+            session: session
+        )
         return (url, item)
+    }
+
+    public func fetchPartialContents(
+        for itemIdentifier: NSFileProviderItemIdentifier,
+        version requestedVersion: NSFileProviderItemVersion,
+        request: NSFileProviderRequest,
+        minimalRange range: NSRange,
+        aligningTo alignment: Int,
+        options: NSFileProviderFetchContentsOptions = [],
+        completionHandler:
+            @escaping (
+                URL?, NSFileProviderItem?, NSRange,
+                NSFileProviderMaterializationFlags, (any Error)?
+            ) -> Void
+    ) -> Progress {
+        manager.withSession { session, progress in
+            try await self.fetchPartialContents(
+                for: itemIdentifier,
+                version: requestedVersion,
+                request: request,
+                minimalRange: range,
+                aligningTo: alignment,
+                options: options,
+                progress: progress,
+                session: session
+            )
+        } onSuccess: { url, item, range in
+            completionHandler(url, item, range, [], nil)
+        } onError: { error in
+            completionHandler(nil, nil, range, [], error)
+        }
+    }
+
+    func fetchPartialContents(
+        for itemIdentifier: NSFileProviderItemIdentifier,
+        version requestedVersion: NSFileProviderItemVersion,
+        request: NSFileProviderRequest,
+        minimalRange range: NSRange,
+        aligningTo alignment: Int,
+        options: NSFileProviderFetchContentsOptions = [],
+        progress: Progress,
+        session: Session,
+    ) async throws -> (URL, NSFileProviderItem, NSRange) {
+        logger.debug(
+            """
+            Fetch partial contents of \(itemIdentifier.desc) \
+            with range(\(range.location), \(range.length)) \
+            aligned to \(alignment)
+            """
+        )
+
+        return try await read(
+            itemIdentifier,
+            range: range.aligned(to: alignment),
+            progress: progress,
+            session: session
+        )
     }
 
     public func createItem(
@@ -184,7 +221,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
 
         if fields.intersects(with: .writeFields) {
             try await progress.withChild { subprogress in
-                try await writeFile(
+                try await write(
                     itemIdentifier,
                     basedOn: item,
                     contents: url,
@@ -275,7 +312,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
 
         if changedFields.intersects(with: .writeFields) {
             try await progress.withChild { subprogress in
-                try await writeFile(
+                try await write(
                     itemIdentifier,
                     basedOn: item,
                     contents: newContents,
@@ -313,8 +350,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         if !remaining.isEmpty {
             logger.fault("Unhandled fields: \(remaining.desc)")
         }
-        try await progress.withChild {
-            let item = try await session.item(for: itemIdentifier)
+        let item = try await progress.withChild {
+            try await session.item(for: itemIdentifier)
         }
         return (item, [], false)
     }
@@ -375,7 +412,53 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension {
         )
     }
 
-    private func writeFile(
+    private func read(
+        _ itemIdentifier: NSFileProviderItemIdentifier,
+        range: NSRange? = nil,
+        progress: Progress,
+        session: Session
+    ) async throws -> (URL, NSFileProviderItem, NSRange) {
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        guard FileManager.default.createFile(atPath: url.path(), contents: nil)
+        else {
+            throw NSFileProviderError(.insufficientQuota)
+        }
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+
+        let item = try await session.item(for: itemIdentifier)
+        let range = range.clamped(to: Int(item.size))
+        logger.debug(
+            """
+            Read contents of \(itemIdentifier.desc) \
+            with range(\(range.location), \(range.length)) \
+            into \(url.path())
+            """
+        )
+        
+        progress.totalUnitCount = Int64(range.length)
+        try handle.seek(toOffset: UInt64(range.location))
+        try await session.withFile(
+            for: itemIdentifier,
+            accessType: .readOnly
+        ) { file in
+            for try await data in file.stream(
+                offset: UInt64(range.location),
+                length: UInt64(range.length)
+            ) {
+                if progress.isCancelled {
+                    throw CocoaError(.userCancelled)
+                }
+                try handle.write(contentsOf: data)
+                progress.completedUnitCount += Int64(data.count)
+            }
+        }
+
+        return (url, item, range)
+    }
+
+    private func write(
         _ itemIdentifier: NSFileProviderItemIdentifier,
         basedOn itemTemplate: NSFileProviderItem,
         contents url: URL?,
