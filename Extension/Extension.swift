@@ -217,14 +217,20 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         let itemIdentifier = item.expectedIdentifier
         var remaining = fields.subtracting(.nameFields)
         progress.totalUnitCount =
-            (2 + (fields.intersects(with: .attrFields) ? 1 : 0))
+            (2 + (remaining.intersects(with: .attrFields) ? 1 : 0))
 
-        if fields.intersects(with: .writeFields) {
+        if remaining.intersects(with: .writeFields) {
+            let fileSystemFlags =
+                remaining.contains(.fileSystemFlags)
+                ? item.fileSystemFlags ?? [] : []
+            remaining = remaining.subtracting([.fileSystemFlags])
+
             try await progress.withChild { subprogress in
                 try await write(
                     itemIdentifier,
                     basedOn: item,
                     contents: url,
+                    fileSystemFlags: fileSystemFlags,
                     progress: subprogress,
                     session: session
                 )
@@ -236,7 +242,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             }
         }
 
-        if fields.intersects(with: .attrFields) {
+        if remaining.intersects(with: .attrFields) {
             try await progress.withChild {
                 try await setAttributes(
                     item,
@@ -306,16 +312,22 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         let itemIdentifier = item.expectedIdentifier
         var remaining = changedFields
         progress.totalUnitCount =
-            (1 + (changedFields.intersects(with: .writeFields) ? 1 : 0)
-                + (changedFields.intersects(with: .nameFields) ? 1 : 0)
-                + (changedFields.intersects(with: .attrFields) ? 1 : 0))
+            (1 + (remaining.intersects(with: .writeFields) ? 1 : 0)
+                + (remaining.intersects(with: .nameFields) ? 1 : 0)
+                + (remaining.intersects(with: .attrFields) ? 1 : 0))
 
-        if changedFields.intersects(with: .writeFields) {
+        if remaining.intersects(with: .writeFields) {
+            let fileSystemFlags =
+                remaining.contains(.fileSystemFlags)
+                ? item.fileSystemFlags ?? [] : []
+            remaining = remaining.subtracting([.fileSystemFlags])
+
             try await progress.withChild { subprogress in
                 try await write(
                     itemIdentifier,
                     basedOn: item,
                     contents: newContents,
+                    fileSystemFlags: fileSystemFlags,
                     progress: subprogress,
                     session: session
                 )
@@ -323,7 +335,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             }
         }
 
-        if changedFields.intersects(with: .nameFields) {
+        if remaining.intersects(with: .nameFields) {
             try await progress.withChild {
                 logger.notice(
                     "Move \(session.path(for: item.itemIdentifier)) to \(session.path(for: itemIdentifier))"
@@ -336,7 +348,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             }
         }
 
-        if changedFields.intersects(with: .attrFields) {
+        if remaining.intersects(with: .attrFields) {
             try await progress.withChild {
                 try await setAttributes(
                     item,
@@ -431,13 +443,17 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         let range = range.clamped(to: Int(item.size))
         logger.debug(
             """
-            Read contents of \(itemIdentifier.desc) \
+            Download \(itemIdentifier.desc) \
             with range(\(range.location), \(range.length)) \
             into \(url.path())
             """
         )
-        
+
+        progress.kind = .file
+        progress.fileOperationKind = .downloading
         progress.totalUnitCount = Int64(range.length)
+        let speedometer = Speedometer(progress: progress)
+
         try handle.seek(toOffset: UInt64(range.location))
         try await session.withFile(
             for: itemIdentifier,
@@ -451,10 +467,17 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     throw CocoaError(.userCancelled)
                 }
                 try handle.write(contentsOf: data)
-                progress.completedUnitCount += Int64(data.count)
+                if let progress = speedometer.update(delta: data.count) {
+                    logger.debug(
+                        "Downloading \(itemIdentifier.desc): \(progress)"
+                    )
+                }
             }
         }
 
+        logger.debug(
+            "Downloaded \(itemIdentifier.desc): \(speedometer.finalize())"
+        )
         return (url, item, range)
     }
 
@@ -462,6 +485,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         _ itemIdentifier: NSFileProviderItemIdentifier,
         basedOn itemTemplate: NSFileProviderItem,
         contents url: URL?,
+        fileSystemFlags: NSFileProviderFileSystemFlags = [],
         progress: Progress,
         session: Session,
     ) async throws {
@@ -473,14 +497,21 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             )
             throw CocoaError(.fileReadUnsupportedScheme)
         }
-        progress.totalUnitCount = Int64(truncating: documentSize)
 
         let fp = try FileHandle(forReadingFrom: url)
         defer { try? fp.close() }
 
+        logger.debug("Upload \(itemIdentifier.desc) from \(url.path())")
+
+        progress.kind = .file
+        progress.fileOperationKind = .downloading
+        progress.totalUnitCount = Int64(truncating: documentSize)
+        let speedometer = Speedometer(progress: progress)
+
         try await session.withFile(
             for: itemIdentifier,
-            accessType: .writeOnly
+            accessType: .writeOnly,
+            mode: fileSystemFlags.permissions,
         ) { file in
             try await file.withAsyncWriter { writer in
                 while let data = try fp.read(upToCount: 102400) {
@@ -488,10 +519,18 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                         throw CocoaError(.userCancelled)
                     }
                     try await writer.write(data: data)
-                    progress.completedUnitCount += Int64(data.count)
+                    if let progress = speedometer.update(delta: data.count) {
+                        logger.debug(
+                            "Uploading \(itemIdentifier.desc): \(progress)"
+                        )
+                    }
                 }
             }
         }
+
+        logger.debug(
+            "Uploaded \(itemIdentifier.desc): \(speedometer.finalize())"
+        )
     }
 
     private func setAttributes(
@@ -535,6 +574,5 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             accessTime: accessTime,
             modifyTime: modifyTime,
         )
-
     }
 }
