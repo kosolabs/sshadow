@@ -230,8 +230,7 @@ struct ExtensionTests {
 
         #expect(FileManager.default.fileExists(at: folderURL))
         #expect(try FileManager.default.modifyDate(of: folderURL) == newDate)
-        let permissions = try FileManager.default.permissions(of: folderURL)
-        #expect(permissions == 0o700)
+        #expect(try FileManager.default.permissions(of: folderURL) == 0o700)
 
         // Modify FPItem(id: FPItemID(extension-create-folder), parentId: FPItemID.rootContainer, filename: extension-create-folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
@@ -322,6 +321,7 @@ struct ExtensionTests {
         #expect(try FileManager.default.modifyDate(of: fileURL) == newDate)
         #expect(try String(contentsOf: fileURL, encoding: .utf8) == content)
         #expect(uploadProgress.isFinished)
+        #expect(try FileManager.default.permissions(of: fileURL) == 0o600)
 
         // Modify FPItem(id: FPItemID(extension-create-file), parentId: FPItemID.rootContainer, filename: extension-create-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 21:51:16 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
@@ -384,9 +384,7 @@ struct ExtensionTests {
                 filename: fileID.name,
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable,
-                ],
+                fileSystemFlags: [.userReadable, .userWritable],
                 documentSize: NSNumber(value: content.count),
                 creationDate: newDate,
                 contentModificationDate: newDate,
@@ -408,6 +406,7 @@ struct ExtensionTests {
         #expect(try FileManager.default.modifyDate(of: fileURL) == newDate)
         #expect(try Data(contentsOf: fileURL) == content)
         #expect(uploadProgress.isFinished)
+        #expect(try FileManager.default.permissions(of: fileURL) == 0o600)
 
         // Modify FPItem(id: FPItemID(extension-create-large-file), parentId: FPItemID.rootContainer, filename: extension-create-large-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 22:15:29 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
@@ -799,13 +798,7 @@ struct ExtensionTests {
             session: try await ext.manager.getSession(),
         )
 
-        let attributes = try FileManager.default.attributesOfItem(
-            atPath: fileURL.path
-        )
-        let permissions = try #require(
-            attributes[.posixPermissions] as? NSNumber
-        )
-        #expect(permissions.intValue == 0o600)
+        #expect(try FileManager.default.permissions(of: fileURL) == 0o600)
         #expect(modifyProgress.isFinished)
     }
 
@@ -844,13 +837,7 @@ struct ExtensionTests {
             session: try await ext.manager.getSession(),
         )
 
-        let attributes = try FileManager.default.attributesOfItem(
-            atPath: folderURL.path
-        )
-        let permissions = try #require(
-            attributes[.posixPermissions] as? NSNumber
-        )
-        #expect(permissions.intValue == 0o700)
+        #expect(try FileManager.default.permissions(of: folderURL) == 0o700)
         #expect(modifyProgress.isFinished)
     }
 

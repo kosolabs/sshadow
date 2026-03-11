@@ -9,9 +9,9 @@ extension StackTrace {
         if nsError.domain == NSFileProviderErrorDomain
             || nsError.domain == NSCocoaErrorDomain
         {
-            logger.debug("Error at \(self.caller): \(error)")
+            logger.debug("Error at \(caller): \(error)")
         } else {
-            logger.fault("Unmapped error at \(self.caller): \(error)")
+            logger.fault("Unmapped error at \(caller): \(error)\n\(description)")
         }
     }
 }

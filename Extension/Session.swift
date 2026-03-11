@@ -70,10 +70,14 @@ struct Session {
     }
 
     func createDirectory(
-        for identifier: NSFileProviderItemIdentifier
+        for identifier: NSFileProviderItemIdentifier,
+        mode: mode_t = 0,
     ) async throws {
         try await mapError {
-            try await sftp.createDirectory(atPath: path(for: identifier))
+            try await sftp.createDirectory(
+                atPath: path(for: identifier),
+                mode: mode
+            )
         }
     }
 
@@ -95,6 +99,7 @@ struct Session {
             try await sftp.withSftpFile(
                 atPath: path(for: identifier),
                 accessType: accessType,
+                mode: mode,
                 perform: perform
             )
         }

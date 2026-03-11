@@ -16,6 +16,10 @@ public struct Logger: Sendable {
         )
     }
 
+    public func log(level: OSLogType = .default, _ message: String) {
+        logger.log(level: level, "\(message, privacy: .public)")
+    }
+
     public func debug(_ message: String) {
         logger.debug("\(message, privacy: .public)")
     }
