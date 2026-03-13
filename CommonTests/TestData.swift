@@ -15,7 +15,7 @@ struct TestData {
             at: url,
             withIntermediateDirectories: true
         )
-        logger.notice("Test server mount path: \(url.path())")
+        logger.info("Test server mount path: \(url.path())")
         return url
     }()
 

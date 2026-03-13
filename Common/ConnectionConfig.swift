@@ -73,14 +73,7 @@ public struct ConnectionConfig:
     }
 
     public func path(for subpath: String) -> String {
-        path.isEmpty ? subpath : "\(path)/\(subpath)"
-    }
-
-    public func path(for item: NSFileProviderItemIdentifier) -> String {
-        if item == .rootContainer {
-            return self.path
-        }
-        return path(for: item.rawValue)
+        [path, subpath].filter { !$0.isEmpty }.joined(separator: "/")
     }
 
     public func absoluteURL(for path: String) -> String {

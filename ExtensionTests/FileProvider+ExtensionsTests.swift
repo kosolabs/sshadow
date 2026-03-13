@@ -24,22 +24,32 @@ struct ItemIdentifierExtensionsTests {
 
     // MARK: - Parent Tests
 
-    @Test func rootContainerParentIsRootContainer() {
+    @Test func parentOfRootContainerIsRootContainer() {
         let rootContainer: NSFileProviderItemIdentifier = .rootContainer
         #expect(rootContainer.parent == .rootContainer)
     }
 
-    @Test func topLevelItemParentIsRootContainer() {
+    @Test func parentOfTopLevelItemIsRootContainer() {
         let topLevel = NSFileProviderItemIdentifier("folder")
         #expect(topLevel.parent == .rootContainer)
     }
+    
+    @Test func parentOfTrashContainerIsRootContainer() {
+        let trashContainer: NSFileProviderItemIdentifier = .trashContainer
+        #expect(trashContainer.parent == .rootContainer)
+    }
+    
+    @Test func parentOfItemInTrashIsTrashContainer() {
+        let itemInTrashes = NSFileProviderItemIdentifier(".Trashes/file")
+        #expect(itemInTrashes.parent == .trashContainer)
+    }
 
-    @Test func nestedItemParentIsParentFolder() {
+    @Test func parentOfNestedItemIsParentFolder() {
         let nested = NSFileProviderItemIdentifier("folder/file")
         #expect(nested.parent == NSFileProviderItemIdentifier("folder"))
     }
 
-    @Test func deeplyNestedItemParentIsImmediateParent() {
+    @Test func parentOfDeeplyNestedItemIsImmediateParent() {
         let deeplyNested = NSFileProviderItemIdentifier("a/b/c")
         #expect(deeplyNested.parent == NSFileProviderItemIdentifier("a/b"))
     }
@@ -50,6 +60,18 @@ struct ItemIdentifierExtensionsTests {
         let root = NSFileProviderItemIdentifier.rootContainer
         let childOfRoot = root.child(name: "folder")
         #expect(childOfRoot == NSFileProviderItemIdentifier("folder"))
+    }
+    
+    @Test func childOfRootContainerWithNameTrashesIsTrashContainer() {
+        let root = NSFileProviderItemIdentifier.rootContainer
+        let childOfRoot = root.child(name: ".Trashes")
+        #expect(childOfRoot == .trashContainer)
+    }
+    
+    @Test func childOfTrashContainerReturnsItemInTrashes() {
+        let trash = NSFileProviderItemIdentifier.trashContainer
+        let childOfTrash = trash.child(name: "file")
+        #expect(childOfTrash == NSFileProviderItemIdentifier(".Trashes/file"))
     }
 
     @Test func childOfItemReturnsNestedItem() {

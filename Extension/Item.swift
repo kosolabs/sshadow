@@ -6,9 +6,6 @@ import UniformTypeIdentifiers
 public class Item: NSObject, NSFileProviderItem {
     private let logger: Logger
 
-    // TODO: implement an initializer to create an item from your extension's backing model
-    // TODO: implement the accessors to return the values from your extension's backing model
-
     public let itemIdentifier: NSFileProviderItemIdentifier
     private let itemAttributes: SFTPAttributes
 

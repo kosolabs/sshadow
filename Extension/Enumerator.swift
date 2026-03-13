@@ -67,10 +67,6 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         session: Session,
         yield: @Sendable ([any NSFileProviderItemProtocol]) -> Void,
     ) async throws -> NSFileProviderPage? {
-        if itemIdentifier == .trashContainer {
-            return nil
-        }
-
         if itemIdentifier == .workingSet {
             return nil
         }
@@ -115,4 +111,3 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         completionHandler(anchor)
     }
 }
-
