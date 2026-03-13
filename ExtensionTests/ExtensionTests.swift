@@ -669,6 +669,49 @@ struct ExtensionTests {
 
         #expect(getOriginalItemProgress.isFinished)
     }
+    
+    @Test func trashFileSucceeds() async throws {
+        // mv extension-trash-file/file.txt .Trashes/file.txt
+        let filePath = "extension-trash-file/file.txt"
+        let fileURL = try TestData.createTestFile(
+            path: filePath,
+            contents: "data"
+        )
+        let fileID = root.child(name: filePath)
+
+        try TestData.removeTestItem(path: ".Trashes")
+        let trashedURL = TestData.getTestURL(path: ".Trashes/file.txt")
+
+        let ext = try getExtension()
+
+        // Modify FPItem(id: FPItemID(extension-trash-file/file.txt), parentId: FPItemID.trashContainer, filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 4, parentItemIdentifier)
+        let trashProgress = Progress()
+        _ = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: fileID,
+                parentItemIdentifier: .trashContainer,
+                filename: fileID.name,
+                contentType: .text,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [
+                    .userReadable, .userWritable, .pathExtensionHidden,
+                ],
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true,
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.parentItemIdentifier],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: trashProgress,
+            session: try await ext.manager.getSession(),
+        )
+
+        #expect(FileManager.default.fileExists(at: trashedURL))
+        #expect(!FileManager.default.fileExists(at: fileURL))
+        #expect(trashProgress.isFinished)
+    }
 
     @Test func editFileSucceeds() async throws {
         // echo "World!" >> extension-edit-file/file.txt

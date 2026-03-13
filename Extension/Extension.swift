@@ -60,9 +60,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         logger.debug("Item \(itemIdentifier.desc)")
 
         return try await progress.withChild {
-            if itemIdentifier == .rootContainer
-                || itemIdentifier == .trashContainer
-                || itemIdentifier == .workingSet
+            if itemIdentifier == .rootContainer || itemIdentifier == .workingSet
             {
                 return SpecialItem(
                     domainName: session.config.name,
@@ -337,12 +335,14 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
         if remaining.intersects(with: .nameFields) {
             try await progress.withChild {
-                logger.notice(
+                logger.info(
                     "Move \(session.path(for: item.itemIdentifier)) to \(session.path(for: itemIdentifier))"
                 )
                 try await session.move(
                     from: item.itemIdentifier,
-                    to: itemIdentifier
+                    to: itemIdentifier,
+                    ifParentNotExists:
+                        item.parentId == .trashContainer ? .create : .fail
                 )
                 remaining = remaining.subtracting(.nameFields)
             }
@@ -565,7 +565,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         if let typeAndCreator = item.typeAndCreator {
             changes.append("typeAndCreator: \(typeAndCreator)")
         }
-        logger.notice(
+        logger.info(
             "Set attributes of \(item.expectedId.desc): \(changes.joined(separator: ", "))"
         )
         try await session.setAttributes(

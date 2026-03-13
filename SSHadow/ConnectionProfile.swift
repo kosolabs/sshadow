@@ -109,7 +109,7 @@ private let logger = Logger(category: "ConnectionProfile")
         let domain = try getDomain(with: userInfo)
         try await NSFileProviderManager.add(domain)
         self.enabled = true
-        await logger.notice("Enabled: \(self)")
+        await logger.info("Enabled: \(self)")
     }
 
     func disable() {
@@ -120,7 +120,7 @@ private let logger = Logger(category: "ConnectionProfile")
                 )
             } else {
                 self.enabled = false
-                logger.notice("Disabled: \(self)")
+                logger.info("Disabled: \(self)")
             }
         }
     }

@@ -12,7 +12,7 @@ extension NSFileProviderItem {
     var expectedId: NSFileProviderItemIdentifier {
         expectedIdentifier
     }
-    
+
     var expectedIdentifier: NSFileProviderItemIdentifier {
         parentItemIdentifier.child(name: filename)
     }
@@ -98,46 +98,55 @@ extension NSFileProviderItem {
 }
 
 extension NSFileProviderItemIdentifier {
+    init(path: String) {
+        switch path {
+        case "":
+            self = .rootContainer
+        case ".Trashes":
+            self = .trashContainer
+        default:
+            self = NSFileProviderItemIdentifier(path)
+        }
+    }
+
     var desc: String {
-        if self == .rootContainer {
+        switch self {
+        case .rootContainer:
             return "FPItemID.rootContainer"
-        }
-        if self == .workingSet {
+        case .workingSet:
             return "FPItemID.workingSet"
-        }
-        if self == .trashContainer {
+        case .trashContainer:
             return "FPItemID.trashContainer"
+        default:
+            return "FPItemID(\(rawValue))"
         }
-        return "FPItemID(\(rawValue))"
     }
 
     var name: String {
         rawValue.split(separator: "/").last.map(String.init) ?? ""
     }
 
+    var path: String {
+        switch self {
+        case .rootContainer:
+            return ""
+        case .trashContainer:
+            return ".Trashes"
+        default:
+            return rawValue
+        }
+    }
+
     var parent: NSFileProviderItemIdentifier {
-        if self == .rootContainer {
-            return .rootContainer
-        }
-
         let parts = rawValue.split(separator: "/").dropLast()
-        if parts.isEmpty {
-            return .rootContainer
-        }
-
-        let parentRawValue = parts.joined(separator: "/")
-        return NSFileProviderItemIdentifier(parentRawValue)
+        let parentPath = parts.joined(separator: "/")
+        return NSFileProviderItemIdentifier(path: parentPath)
     }
 
     func child(name: String) -> NSFileProviderItemIdentifier {
-        if self == .rootContainer {
-            return NSFileProviderItemIdentifier(name)
-        }
-
-        let childRawValue = rawValue + "/" + name
-        return NSFileProviderItemIdentifier(childRawValue)
+        let path = [path, name].filter { !$0.isEmpty }.joined(separator: "/")
+        return NSFileProviderItemIdentifier(path: path)
     }
-    
 }
 
 let allItemFields: [(NSFileProviderItemFields, String)] = [
@@ -176,7 +185,7 @@ extension NSFileProviderItemFields {
         }
         return "FPItemFields(\(result.joined(separator: ", ")))"
     }
-    
+
     func intersects(with members: NSFileProviderItemFields) -> Bool {
         return !intersection(members).isEmpty
     }
@@ -225,7 +234,7 @@ extension NSFileProviderFileSystemFlags {
         }
         return mode
     }
-    
+
     var desc: String {
         var flags = [String]()
         flags.append("rawValue: \(rawValue)")

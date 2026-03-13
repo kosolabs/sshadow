@@ -211,6 +211,38 @@ struct SessionTests {
                 FileManager.default.fileExists(atPath: directoryURL.path())
             )
         }
+
+        @Test func createExistingDirectoryIfExistsSetSucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/existing-directory"
+            try TestData.createTestFolder(path: path)
+            let directoryURL = TestData.getTestURL(path: path)
+
+            try await session.createDirectory(
+                for: .rootContainer.child(name: path),
+                ifExists: .succeed
+            )
+
+            #expect(
+                FileManager.default.fileExists(atPath: directoryURL.path())
+            )
+        }
+
+        @Test func createExistingDirectoryIfExistsNotSetThrows() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/existing-directory"
+            try TestData.createTestFolder(path: path)
+
+            await #expect(throws: NSFileProviderError(.filenameCollision).self)
+            {
+                try await session.createDirectory(
+                    for: .rootContainer.child(name: path),
+                    ifExists: .fail
+                )
+            }
+        }
     }
 
     struct MoveTests {
@@ -261,6 +293,58 @@ struct SessionTests {
                 )
             }
         }
+
+        @Test func moveToMissingParentThrowsNoSuchItem() async throws {
+            let session = try await getSession()
+
+            let sourcePath = "\(testFolderPath)/source-missing-parent-fail.txt"
+            try TestData.createTestFile(path: sourcePath, contents: "data")
+
+            let destinationPath =
+                "\(testFolderPath)/missing-parent-fail/destination.txt"
+            try TestData.removeTestItem(
+                path: "\(testFolderPath)/missing-parent-fail"
+            )
+
+            await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+                try await session.move(
+                    from: .rootContainer.child(name: sourcePath),
+                    to: .rootContainer.child(name: destinationPath),
+                    ifParentNotExists: .fail
+                )
+            }
+        }
+
+        @Test func moveToMissingParentForceCreateSucceeds() async throws {
+            let session = try await getSession()
+
+            let sourcePath = "\(testFolderPath)/source-missing-parent.txt"
+            try TestData.createTestFile(path: sourcePath, contents: "data")
+
+            let destinationPath =
+                "\(testFolderPath)/missing-parent/destination.txt"
+            try TestData.removeTestItem(
+                path: "\(testFolderPath)/missing-parent"
+            )
+
+            try await session.move(
+                from: .rootContainer.child(name: sourcePath),
+                to: .rootContainer.child(name: destinationPath),
+                ifParentNotExists: .create
+            )
+
+            #expect(
+                FileManager.default.fileExists(
+                    atPath: TestData.getTestURL(path: destinationPath).path()
+                )
+            )
+            #expect(
+                !FileManager.default.fileExists(
+                    atPath: TestData.getTestURL(path: sourcePath).path()
+                )
+            )
+        }
+
     }
 
     struct RemoveFileTests {
