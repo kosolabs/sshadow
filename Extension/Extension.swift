@@ -17,7 +17,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             let userInfo = try UserInfo.fromDictionary(domain.userInfo)
             let config = try ConnectionConfig(from: userInfo)
             manager = SessionManager(name: domain.displayName, config: config)
-            logger.debug("init: \(config)")
+            logger.debug("Init \(config)")
         } catch {
             manager = SessionManager(name: domain.displayName, config: nil)
             logger.fault("Failed to retrieve connection config: \(error)")
@@ -89,9 +89,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         } onSuccess: { url, item in
             completionHandler(url, item, nil)
         } onError: { error in
-            self.logger.fault(
-                "Failed to fetch contents of \(itemIdentifier)"
-            )
             completionHandler(nil, nil, error)
         }
     }
@@ -192,9 +189,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         } onSuccess: { item, fields, shouldFetchContent in
             completionHandler(item, fields, shouldFetchContent, nil)
         } onError: { error in
-            self.logger.fault(
-                "Failed to create item \(itemTemplate.itemIdentifier)"
-            )
             completionHandler(nil, [], false, error)
         }
     }
@@ -208,56 +202,62 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         progress: Progress,
         session: Session,
     ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
-        logger.debug(
-            "Create \(item.desc) for \(fields.desc)"
-        )
+        logger.debug("Create \(item.desc) for \(fields.desc)")
 
         let itemIdentifier = item.expectedIdentifier
         var remaining = fields.subtracting(.nameFields)
-        progress.totalUnitCount =
-            (2 + (remaining.intersects(with: .attrFields) ? 1 : 0))
+        let steps = progress.steps()
 
         if remaining.intersects(with: .writeFields) {
+            guard let url = url else {
+                logger.fault("Missing contents URL for \(item.desc)")
+                throw CocoaError(.fileReadUnsupportedScheme)
+            }
+
+            let fileSize = try FileManager.default.size(of: url)
+            let bufferSize = session.sftp.limits.writeLength()
+            let fileTransferUnits = Int64(
+                (fileSize + bufferSize - 1) / bufferSize
+            )
             let fileSystemFlags =
                 remaining.contains(.fileSystemFlags)
                 ? item.fileSystemFlags ?? [] : []
-            remaining = remaining.subtracting([.fileSystemFlags])
+            remaining.subtract([.fileSystemFlags, .contents])
 
-            try await progress.withChild { subprogress in
-                try await write(
+            steps.add(weight: fileTransferUnits) { subprogress in
+                try await self.write(
                     itemIdentifier,
-                    basedOn: item,
                     contents: url,
                     fileSystemFlags: fileSystemFlags,
+                    bufferSize: bufferSize,
                     progress: subprogress,
                     session: session
                 )
-                remaining = remaining.subtracting(.writeFields)
             }
         } else if item.contentType == .folder {
-            try await progress.withChild {
+            steps.add {
                 try await session.createDirectory(for: itemIdentifier)
             }
         }
 
         if remaining.intersects(with: .attrFields) {
-            try await progress.withChild {
-                try await setAttributes(
-                    item,
-                    fields: fields,
-                    session: session
-                )
-                remaining = remaining.subtracting(.attrFields)
+            remaining.subtract(.attrFields)
+            steps.add {
+                try await self.setAttributes(item, fields: fields, session: session)
             }
         }
 
         if !remaining.isEmpty {
             logger.fault("Unhandled fields: \(remaining.desc)")
         }
-        let item = try await progress.withChild {
-            try await session.item(for: itemIdentifier)
+
+        var createdItem: NSFileProviderItem?
+        steps.add {
+            createdItem = try await session.item(for: itemIdentifier)
         }
-        return (item, [], false)
+
+        try await steps.execute()
+        return (createdItem!, [], false)
     }
 
     public func modifyItem(
@@ -303,69 +303,70 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         progress: Progress,
         session: Session,
     ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
-        logger.debug(
-            "Modify \(item.desc) for \(changedFields.desc)"
-        )
+        logger.debug("Modify \(item.desc) for \(changedFields.desc)")
 
         let itemIdentifier = item.expectedIdentifier
         var remaining = changedFields
-        progress.totalUnitCount =
-            (1 + (remaining.intersects(with: .writeFields) ? 1 : 0)
-                + (remaining.intersects(with: .nameFields) ? 1 : 0)
-                + (remaining.intersects(with: .attrFields) ? 1 : 0))
+        let steps = progress.steps()
 
         if remaining.intersects(with: .writeFields) {
+            guard let newContents = newContents else {
+                logger.fault("Missing URL for \(item.desc)")
+                throw CocoaError(.fileReadUnsupportedScheme)
+            }
+
+            let fileSize = try FileManager.default.size(of: newContents)
+            let bufferSize = session.sftp.limits.writeLength()
+            let fileTransferUnits = Int64(
+                (fileSize + bufferSize - 1) / bufferSize
+            )
             let fileSystemFlags =
                 remaining.contains(.fileSystemFlags)
                 ? item.fileSystemFlags ?? [] : []
-            remaining = remaining.subtracting([.fileSystemFlags])
+            remaining.subtract([.fileSystemFlags, .contents])
 
-            try await progress.withChild { subprogress in
-                try await write(
+            steps.add(weight: fileTransferUnits) { subprogress in
+                try await self.write(
                     itemIdentifier,
-                    basedOn: item,
                     contents: newContents,
                     fileSystemFlags: fileSystemFlags,
+                    bufferSize: bufferSize,
                     progress: subprogress,
                     session: session
                 )
-                remaining = remaining.subtracting(.writeFields)
             }
         }
 
         if remaining.intersects(with: .nameFields) {
-            try await progress.withChild {
-                logger.info(
-                    "Move \(session.path(for: item.itemIdentifier)) to \(session.path(for: itemIdentifier))"
-                )
+            remaining.subtract(.nameFields)
+            steps.add {
                 try await session.move(
                     from: item.itemIdentifier,
                     to: itemIdentifier,
                     ifParentNotExists:
                         item.parentId == .trashContainer ? .create : .fail
                 )
-                remaining = remaining.subtracting(.nameFields)
             }
         }
 
         if remaining.intersects(with: .attrFields) {
-            try await progress.withChild {
-                try await setAttributes(
-                    item,
-                    fields: changedFields,
-                    session: session
-                )
-                remaining = remaining.subtracting(.attrFields)
+            remaining.subtract(.attrFields)
+            steps.add {
+                try await self.setAttributes(item, fields: changedFields, session: session)
             }
         }
 
         if !remaining.isEmpty {
             logger.fault("Unhandled fields: \(remaining.desc)")
         }
-        let item = try await progress.withChild {
-            try await session.item(for: itemIdentifier)
+
+        var modifiedItem: NSFileProviderItem?
+        steps.add {
+            modifiedItem = try await session.item(for: itemIdentifier)
         }
-        return (item, [], false)
+
+        try await steps.execute()
+        return (modifiedItem, [], false)
     }
 
     public func deleteItem(
@@ -441,7 +442,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
         let item = try await session.item(for: itemIdentifier)
         let range = range.clamped(to: Int(item.size))
-        logger.debug(
+        logger.info(
             """
             Download \(itemIdentifier.desc) \
             with range(\(range.location), \(range.length)) \
@@ -475,7 +476,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             }
         }
 
-        logger.debug(
+        logger.info(
             "Downloaded \(itemIdentifier.desc): \(speedometer.finalize())"
         )
         return (url, item, range)
@@ -483,29 +484,21 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
     private func write(
         _ itemIdentifier: NSFileProviderItemIdentifier,
-        basedOn itemTemplate: NSFileProviderItem,
-        contents url: URL?,
+        contents url: URL,
         fileSystemFlags: NSFileProviderFileSystemFlags = [],
+        bufferSize: UInt64,
         progress: Progress,
         session: Session,
     ) async throws {
-        guard let url = url, let ds = itemTemplate.documentSize,
-            let documentSize = ds
-        else {
-            logger.fault(
-                "Missing contents URL or document size for \(itemTemplate.filename)"
-            )
-            throw CocoaError(.fileReadUnsupportedScheme)
-        }
-
         let fp = try FileHandle(forReadingFrom: url)
         defer { try? fp.close() }
 
-        logger.debug("Upload \(itemIdentifier.desc) from \(url.path())")
+        logger.info("Upload \(itemIdentifier.desc) from \(url.path())")
+        let size = try FileManager.default.size(of: url)
 
         progress.kind = .file
         progress.fileOperationKind = .downloading
-        progress.totalUnitCount = Int64(truncating: documentSize)
+        progress.totalUnitCount = Int64(size)
         let speedometer = Speedometer(progress: progress)
 
         try await session.withFile(
@@ -514,7 +507,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             mode: fileSystemFlags.permissions,
         ) { file in
             try await file.withAsyncWriter { writer in
-                while let data = try fp.read(upToCount: 102400) {
+                while let data = try fp.read(upToCount: Int(bufferSize)) {
                     if progress.isCancelled {
                         throw CocoaError(.userCancelled)
                     }
@@ -528,7 +521,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             }
         }
 
-        logger.debug(
+        logger.info(
             "Uploaded \(itemIdentifier.desc): \(speedometer.finalize())"
         )
     }
@@ -538,41 +531,14 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         fields: NSFileProviderItemFields,
         session: Session
     ) async throws {
-        var changes: [String] = []
-
-        let accessTime =
-            fields.contains(.lastUsedDate)
-            ? item.lastUsedDate ?? nil : nil
-        if let accessTime = accessTime {
-            changes.append("accessTime: \(accessTime)")
-        }
-
-        let modifyTime =
-            fields.contains(.contentModificationDate)
-            ? item.contentModificationDate ?? nil : nil
-        if let modifyTime = modifyTime {
-            changes.append("modifyTime: \(modifyTime)")
-        }
-
-        let permissions =
-            fields.contains(.fileSystemFlags)
-            ? item.fileSystemFlags?.permissions : nil
-        if let permissions = permissions {
-            changes.append(
-                "permissions: \(String(permissions, radix: 8))"
-            )
-        }
-        if let typeAndCreator = item.typeAndCreator {
-            changes.append("typeAndCreator: \(typeAndCreator)")
-        }
-        logger.info(
-            "Set attributes of \(item.expectedId.desc): \(changes.joined(separator: ", "))"
-        )
         try await session.setAttributes(
             for: item.expectedId,
-            permissions: permissions,
-            accessTime: accessTime,
-            modifyTime: modifyTime,
+            permissions: fields.contains(.fileSystemFlags)
+                ? item.fileSystemFlags?.permissions : nil,
+            accessTime: fields.contains(.lastUsedDate)
+                ? item.lastUsedDate ?? nil : nil,
+            modifyTime: fields.contains(.contentModificationDate)
+                ? item.contentModificationDate ?? nil : nil,
         )
     }
 }

@@ -9,7 +9,7 @@ class Session {
     let sftp: SFTPClient
 
     private let logger: Logger
-    
+
     init(
         name: String,
         config: ConnectionConfig,
@@ -41,33 +41,40 @@ class Session {
     func attributes(
         for identifier: NSFileProviderItemIdentifier
     ) async throws -> SFTPAttributes {
-        try await mapError {
+        try await mapError(with: identifier) {
             try await sftp.attributes(atPath: path(for: identifier))
         }
     }
 
     func setAttributes(
         for identifier: NSFileProviderItemIdentifier,
-        size: UInt64? = nil,
-        uid: UInt32? = nil,
-        gid: UInt32? = nil,
         permissions: mode_t? = nil,
         accessTime: Date? = nil,
         modifyTime: Date? = nil,
     ) async throws {
-        try await mapError {
+        var changes: [String] = []
+        if let accessTime = accessTime {
+            changes.append("accessTime: \(accessTime)")
+        }
+        if let modifyTime = modifyTime {
+            changes.append("modifyTime: \(modifyTime)")
+        }
+        if let permissions = permissions {
+            changes.append("permissions: \(String(permissions, radix: 8))")
+        }
+        logger.info(
+            "Set attributes of \(identifier.desc): \(changes.joined(separator: ", "))"
+        )
+        try await mapError(with: identifier) {
             try await sftp.setAttributes(
                 atPath: path(for: identifier),
-                size: size,
-                uid: uid,
-                gid: gid,
                 permissions: permissions,
                 accessTime: accessTime,
                 modifyTime: modifyTime
             )
         }
     }
-    
+
     enum OnParentNotExists {
         case fail
         case create
@@ -78,11 +85,16 @@ class Session {
         to new: NSFileProviderItemIdentifier,
         ifParentNotExists: OnParentNotExists = .fail
     ) async throws {
+        logger.info("Move \(old.desc) to \(new.desc)")
         try await mapError {
             do {
                 try await sftp.move(from: path(for: old), to: path(for: new))
-            } catch SSHError.sftpError(.noSuchFile, _) where ifParentNotExists == .create {
-                logger.info("Parent directory does not exist for \(new.desc), creating it")
+            } catch SSHError.sftpError(.noSuchFile, _)
+                where ifParentNotExists == .create
+            {
+                logger.info(
+                    "Parent directory does not exist for \(new.desc), creating it"
+                )
                 try await createDirectory(for: new.parent, ifExists: .succeed)
                 try await sftp.move(from: path(for: old), to: path(for: new))
             }
@@ -92,37 +104,44 @@ class Session {
     func removeFile(
         for identifier: NSFileProviderItemIdentifier
     ) async throws {
-        try await mapError {
+        logger.info("Remove \(identifier.desc)")
+        try await mapError(with: identifier) {
             try await sftp.removeFile(atPath: path(for: identifier))
         }
     }
-    
+
     enum OnExists {
         case fail
         case succeed
     }
-    
+
     func createDirectory(
         for identifier: NSFileProviderItemIdentifier,
         mode: mode_t = 0o700,
         ifExists: OnExists = .fail
     ) async throws {
-        try await mapError {
+        logger.info(
+            "Create directory \(identifier.desc) with permissions \(String(mode, radix: 8))"
+        )
+        try await mapError(with: identifier) {
             do {
                 try await sftp.createDirectory(
                     atPath: path(for: identifier),
                     mode: mode
                 )
-            } catch SSHError.sftpError(.fileAlreadyExists, _) where ifExists == .succeed {
+            } catch SSHError.sftpError(.fileAlreadyExists, _)
+                where ifExists == .succeed
+            {
                 logger.info("Directory already exists for \(identifier.desc)")
             }
         }
     }
-    
+
     func removeDirectory(
         for identifier: NSFileProviderItemIdentifier
     ) async throws {
-        try await mapError {
+        logger.info("Remove directory \(identifier.desc)")
+        try await mapError(with: identifier) {
             try await sftp.removeDirectory(atPath: path(for: identifier))
         }
     }
@@ -133,7 +152,7 @@ class Session {
         mode: mode_t = 0o600,
         perform: @Sendable (SFTPFile) async throws -> T
     ) async throws -> T {
-        try await mapError {
+        try await mapError(with: identifier) {
             try await sftp.withSftpFile(
                 atPath: path(for: identifier),
                 accessType: accessType,
@@ -147,8 +166,27 @@ class Session {
         do {
             return try await operation()
         } catch SSHError.sftpError(.noSuchFile, _) {
+            logger.fault("No such file")
             throw NSFileProviderError(.noSuchItem)
         } catch SSHError.sftpError(.fileAlreadyExists, _) {
+            logger.fault("File already exists")
+            throw NSFileProviderError(.filenameCollision)
+        }
+    }
+
+    func mapError<T>(
+        with identifier: NSFileProviderItemIdentifier,
+        _ operation: () async throws -> T
+    ) async throws -> T {
+        do {
+            return try await operation()
+        } catch SSHError.sftpError(.noSuchFile, _) {
+            logger.debug("\(identifier.desc) doesn't exist")
+            throw NSError.fileProviderErrorForNonExistentItem(
+                withIdentifier: identifier
+            )
+        } catch SSHError.sftpError(.fileAlreadyExists, _) {
+            logger.debug("\(identifier.desc) already exists")
             throw NSFileProviderError(.filenameCollision)
         }
     }

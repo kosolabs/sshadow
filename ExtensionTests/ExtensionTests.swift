@@ -522,14 +522,14 @@ struct ExtensionTests {
 
         // Item FPItemID(extension-rename-file/src.txt)
         let getOriginalItemProgress = Progress()
-        await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+        await #expect {
             try await ext.item(
                 for: srcID,
                 request: NSFileProviderRequest(),
                 progress: getOriginalItemProgress,
                 session: try await ext.manager.getSession()
             )
-        }
+        } throws: { error in isNoSuchItemError(error) }
 
         #expect(getOriginalItemProgress.isFinished)
     }
@@ -658,14 +658,14 @@ struct ExtensionTests {
 
         // Item FPItemID(extension-move-file/src/file.txt)
         let getOriginalItemProgress = Progress()
-        await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+        await #expect {
             try await ext.item(
                 for: srcID,
                 request: NSFileProviderRequest(),
                 progress: getOriginalItemProgress,
                 session: try await ext.manager.getSession()
             )
-        }
+        } throws: { error in isNoSuchItemError(error) }
 
         #expect(getOriginalItemProgress.isFinished)
     }

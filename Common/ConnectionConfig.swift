@@ -56,12 +56,17 @@ public struct ConnectionConfig:
         self.path = path.hasSuffix("/") ? String(path.dropLast()) : path
         self.authMethod = authMethod
     }
-
-    public var url: String {
-        var result = "\(user)@\(host)"
+    
+    public var socket: String {
+        var result = "\(host)"
         if port != 22 {
             result += ":\(port)"
         }
+        return result
+    }
+
+    public var url: String {
+        var result = "\(user)@\(socket)"
         if !path.isEmpty {
             result += ":\(path)"
         }
