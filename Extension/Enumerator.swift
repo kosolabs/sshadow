@@ -65,13 +65,19 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         session: Session,
         yield: @Sendable ([any NSFileProviderItemProtocol]) -> Void,
     ) async throws -> NSFileProviderPage? {
+        logger.info("Enumerating \(itemIdentifier.desc)")
+
         if itemIdentifier == .workingSet {
             return nil
         }
 
-        logger.info("Enumerating \(itemIdentifier.desc)")
-        let path = session.path(for: itemIdentifier)
-        try await session.sftp.withDirectory(atPath: path) { dir in
+        if itemIdentifier == .trashContainer {
+            if await !session.exists(for: .trashContainer) {
+                return nil
+            }
+        }
+
+        try await session.withDirectory(for: itemIdentifier) { dir in
             for try await attrs in dir {
                 if let name = attrs.name {
                     let item = Item(

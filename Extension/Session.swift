@@ -46,6 +46,15 @@ class Session {
         }
     }
 
+    func exists(for identifier: NSFileProviderItemIdentifier) async -> Bool {
+        do {
+            _ = try await sftp.attributes(atPath: path(for: identifier))
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func setAttributes(
         for identifier: NSFileProviderItemIdentifier,
         permissions: mode_t? = nil,
@@ -92,9 +101,7 @@ class Session {
             } catch SSHError.sftpError(.noSuchFile, _)
                 where ifParentNotExists == .create
             {
-                logger.info(
-                    "Parent directory does not exist for \(new.desc), creating it"
-                )
+                logger.info("Parent of \(new.desc) doesn't exist")
                 try await createDirectory(for: new.parent, ifExists: .succeed)
                 try await sftp.move(from: path(for: old), to: path(for: new))
             }
@@ -157,6 +164,18 @@ class Session {
                 atPath: path(for: identifier),
                 accessType: accessType,
                 mode: mode,
+                perform: perform
+            )
+        }
+    }
+
+    func withDirectory<T: Sendable>(
+        for identifier: NSFileProviderItemIdentifier,
+        perform: @Sendable (SFTPDirectory) async throws -> T
+    ) async throws -> T {
+        try await mapError(with: identifier) {
+            try await sftp.withDirectory(
+                atPath: path(for: identifier),
                 perform: perform
             )
         }
