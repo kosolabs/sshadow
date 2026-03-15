@@ -66,13 +66,13 @@ struct SessionTests {
         @Test func itemForMissingFileThrowsNoSuchItem() async throws {
             let session = try await getSession()
 
-            await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+            await #expect {
                 try await session.item(
                     for: .rootContainer.child(
                         name: "\(testFolderPath)/missing.txt"
                     )
                 )
-            }
+            } throws: { error in isNoSuchItemError(error) }
         }
     }
 
@@ -115,13 +115,13 @@ struct SessionTests {
         @Test func attributesForMissingFileThrowsNoSuchItem() async throws {
             let session = try await getSession()
 
-            await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+            await #expect {
                 try await session.attributes(
                     for: .rootContainer.child(
                         name: "\(testFolderPath)/missing.txt"
                     )
                 )
-            }
+            } throws: { error in isNoSuchItemError(error) }
         }
 
         @Test func setModifyTimeSucceeds() async throws {
@@ -174,14 +174,14 @@ struct SessionTests {
         @Test func setAttributesForMissingFileThrowsNoSuchItem() async throws {
             let session = try await getSession()
 
-            await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+            await #expect {
                 try await session.setAttributes(
                     for: .rootContainer.child(
                         name: "\(testFolderPath)/missing.txt"
                     ),
                     modifyTime: Date()
                 )
-            }
+            } throws: { error in isNoSuchItemError(error) }
         }
     }
 
@@ -235,12 +235,15 @@ struct SessionTests {
             let path = "\(testFolderPath)/existing-directory"
             try TestData.createTestFolder(path: path)
 
-            await #expect(throws: NSFileProviderError(.filenameCollision).self)
-            {
+            await #expect {
                 try await session.createDirectory(
                     for: .rootContainer.child(name: path),
                     ifExists: .fail
                 )
+            } throws: { error in
+                (error as NSError).code
+                    == NSFileProviderError.filenameCollision.rawValue
+                    && (error as NSError).domain == NSFileProviderErrorDomain
             }
         }
     }
@@ -282,7 +285,7 @@ struct SessionTests {
         @Test func moveMissingFileThrowsNoSuchItem() async throws {
             let session = try await getSession()
 
-            await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+            await #expect {
                 try await session.move(
                     from: .rootContainer.child(
                         name: "\(testFolderPath)/missing.txt"
@@ -291,7 +294,7 @@ struct SessionTests {
                         name: "\(testFolderPath)/destination.txt"
                     )
                 )
-            }
+            } throws: { error in isNoSuchItemError(error) }
         }
 
         @Test func moveToMissingParentThrowsNoSuchItem() async throws {
@@ -306,13 +309,13 @@ struct SessionTests {
                 path: "\(testFolderPath)/missing-parent-fail"
             )
 
-            await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+            await #expect {
                 try await session.move(
                     from: .rootContainer.child(name: sourcePath),
                     to: .rootContainer.child(name: destinationPath),
                     ifParentNotExists: .fail
                 )
-            }
+            } throws: { error in isNoSuchItemError(error) }
         }
 
         @Test func moveToMissingParentForceCreateSucceeds() async throws {
@@ -375,13 +378,13 @@ struct SessionTests {
         @Test func removeMissingFileThrowsNoSuchItem() async throws {
             let session = try await getSession()
 
-            await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+            await #expect {
                 try await session.removeFile(
                     for: .rootContainer.child(
                         name: "\(testFolderPath)/missing.txt"
                     )
                 )
-            }
+            } throws: { error in isNoSuchItemError(error) }
         }
     }
 
@@ -410,13 +413,13 @@ struct SessionTests {
         @Test func removeMissingDirectoryThrowsNoSuchItem() async throws {
             let session = try await getSession()
 
-            await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+            await #expect {
                 try await session.removeDirectory(
                     for: .rootContainer.child(
                         name: "\(testFolderPath)/missing"
                     )
                 )
-            }
+            } throws: { error in isNoSuchItemError(error) }
         }
     }
 
@@ -448,14 +451,14 @@ struct SessionTests {
         @Test func withFileMissingFileThrowsNoSuchItem() async throws {
             let session = try await getSession()
 
-            await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+            await #expect {
                 try await session.withFile(
                     for: .rootContainer.child(
                         name: "\(testFolderPath)/missing.txt"
                     ),
                     accessType: .readOnly
                 ) { _ in }
-            }
+            } throws: { error in isNoSuchItemError(error) }
         }
     }
 
@@ -469,11 +472,11 @@ struct SessionTests {
         @Test func mapErrorConvertsNoSuchFileToNoSuchItem() async throws {
             let session = try await getSession()
 
-            await #expect(throws: NSFileProviderError(.noSuchItem).self) {
+            await #expect {
                 try await session.mapError {
                     throw SSHError.sftpError(.noSuchFile, message: "not found")
                 }
-            }
+            } throws: { error in isNoSuchItemError(error) }
         }
 
         @Test func mapErrorPassesThroughOtherErrors() async throws {
@@ -489,4 +492,9 @@ struct SessionTests {
             }
         }
     }
+}
+
+func isNoSuchItemError(_ error: any Error) -> Bool {
+    (error as NSError).code == NSFileProviderError.noSuchItem.rawValue
+        && (error as NSError).domain == NSFileProviderErrorDomain
 }

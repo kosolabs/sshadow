@@ -21,10 +21,9 @@ public struct DefaultConnectionTester: ConnectionTester {
 
     public func test(config: ConnectionConfig) async throws {
         do {
-            try await SSHClient.withSession(config: config) {
-                _,
-                sftpClient in
-                let attrs = try await sftpClient.attributes(
+            try await SSHClient.withSession(config: config) { _, sftp in
+                logger.debug("SFTP Limits for \(config.socket): \(sftp.limits)")
+                let attrs = try await sftp.attributes(
                     atPath: config.path
                 )
                 if attrs.type != .directory {

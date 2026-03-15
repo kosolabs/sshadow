@@ -3,10 +3,12 @@ def reset:      "\u001b[0m";
 def bold:       "\u001b[1m";
 
 # Standard Colors
+def black:      "\u001b[30m";
 def red:        "\u001b[31m";
 def green:      "\u001b[32m";
 def yellow:     "\u001b[33m";
 def blue:       "\u001b[34m";
+def magenta:    "\u001b[35m";
 def gray:       "\u001b[90m";
 
 # High-Intensity / Bright
@@ -33,8 +35,8 @@ try (
   (
     if .messageType == "Fault" then red
     elif .messageType == "Error" then yellow
-    elif .messageType == "Default" then green
-    elif .messageType == "Info" then blue
+    elif .messageType == "Default" then blue
+    elif .messageType == "Info" then green
     elif .messageType == "Debug" then gray
     else reset end
   ) as $lvl_color |

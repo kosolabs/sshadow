@@ -15,9 +15,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         itemIdentifier: NSFileProviderItemIdentifier
     ) {
         logger = Logger(category: "\(manager.name):Enumerator")
-        logger.debug(
-            "Init \(itemIdentifier.desc)"
-        )
+        logger.debug("Init \(itemIdentifier.desc)")
         self.manager = manager
         self.itemIdentifier = itemIdentifier
         super.init()
@@ -71,8 +69,8 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
             return nil
         }
 
+        logger.info("Enumerating \(itemIdentifier.desc)")
         let path = session.path(for: itemIdentifier)
-        logger.debug("Enumerating items at: \(path)")
         try await session.sftp.withDirectory(atPath: path) { dir in
             for try await attrs in dir {
                 if let name = attrs.name {
