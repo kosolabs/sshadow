@@ -149,7 +149,9 @@ class Session {
     ) async throws {
         logger.info("Remove directory \(identifier.desc)")
         try await mapError(with: identifier) {
-            try await sftp.removeDirectory(atPath: path(for: identifier))
+            try await sftp.removeDirectoryRecursively(
+                atPath: path(for: identifier)
+            )
         }
     }
 

@@ -39,6 +39,9 @@ actor SessionManager {
             ssh: ssh,
             sftp: sftp
         )
+
+        self.session = session
+        logger.info("Connected: \(session.config.url)")
         return session
     }
 
@@ -46,9 +49,12 @@ actor SessionManager {
         guard let session = self.session else {
             return
         }
+
         await session.sftp.close()
         await session.ssh.close()
+
         self.session = nil
+        logger.info("Disconnected: \(session.config.url)")
     }
 
     nonisolated func withSession<T>(
