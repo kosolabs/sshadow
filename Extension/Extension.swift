@@ -243,7 +243,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         if remaining.intersects(with: .attrFields) {
             remaining.subtract(.attrFields)
             steps.add {
-                try await self.setAttributes(item, fields: fields, session: session)
+                try await self.setAttributes(
+                    item,
+                    fields: fields,
+                    session: session
+                )
             }
         }
 
@@ -352,7 +356,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         if remaining.intersects(with: .attrFields) {
             remaining.subtract(.attrFields)
             steps.add {
-                try await self.setAttributes(item, fields: changedFields, session: session)
+                try await self.setAttributes(
+                    item,
+                    fields: changedFields,
+                    session: session
+                )
             }
         }
 
@@ -419,6 +427,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         for containerItemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest
     ) throws -> NSFileProviderEnumerator {
+        logger.debug("Create enumerator for \(containerItemIdentifier.desc)")
         return Enumerator(
             manager: manager,
             itemIdentifier: containerItemIdentifier

@@ -22,7 +22,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
     }
 
     public func invalidate() {
-        // TODO: perform invalidation of server connection if necessary
+        logger.debug("Invalidate \(itemIdentifier.desc)")
     }
 
     public func enumerateItems(
@@ -106,12 +106,14 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
          - inform the observer about item deletions and updates (modifications + insertions)
          - inform the observer when you have finished enumerating up to a subsequent sync anchor
          */
+        logger.debug("Enumerating changes for \(itemIdentifier.desc)")
         observer.finishEnumeratingChanges(upTo: anchor, moreComing: false)
     }
 
     public func currentSyncAnchor(
         completionHandler: @escaping (NSFileProviderSyncAnchor?) -> Void
     ) {
+        logger.debug("Current sync anchor for \(itemIdentifier.desc)")
         completionHandler(anchor)
     }
 }

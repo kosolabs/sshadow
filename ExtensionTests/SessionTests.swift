@@ -410,6 +410,29 @@ struct SessionTests {
             #expect(!FileManager.default.fileExists(atPath: folderURL.path()))
         }
 
+        @Test func removeNonEmptyDirectorySucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/non-empty-folder"
+            let folderURL = try TestData.createTestFolder(path: path)
+            try TestData.createTestFile(
+                path: "\(path)/file.txt",
+                contents: "data"
+            )
+            try TestData.createTestFolder(path: "\(path)/subfolder")
+            try TestData.createTestFile(
+                path: "\(path)/subfolder/nested.txt",
+                contents: "nested"
+            )
+            #expect(FileManager.default.fileExists(atPath: folderURL.path()))
+
+            try await session.removeDirectory(
+                for: .rootContainer.child(name: path)
+            )
+
+            #expect(!FileManager.default.fileExists(atPath: folderURL.path()))
+        }
+
         @Test func removeMissingDirectoryThrowsNoSuchItem() async throws {
             let session = try await getSession()
 
