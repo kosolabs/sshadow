@@ -7,6 +7,7 @@ class Session {
     let config: ConnectionConfig
     let ssh: SSHClient
     let sftp: SFTPClient
+    let itemManager: ItemManager
 
     private let logger: Logger
 
@@ -14,18 +15,21 @@ class Session {
         name: String,
         config: ConnectionConfig,
         ssh: SSHClient,
-        sftp: SFTPClient
+        sftp: SFTPClient,
+        itemManager: ItemManager
     ) {
         self.name = name
         self.config = config
         self.ssh = ssh
         self.sftp = sftp
+        self.itemManager = itemManager
 
         self.logger = Logger(category: "\(name):Session")
     }
 
-    func path(for identifier: NSFileProviderItemIdentifier) -> String {
-        config.path(for: identifier)
+    func path(for identifier: NSFileProviderItemIdentifier) async -> String {
+        let relative = await itemManager.path(for: identifier)
+        return config.path(for: relative)
     }
 
     func item(
@@ -34,7 +38,8 @@ class Session {
         try await Item(
             domainName: name,
             itemIdentifier: identifier,
-            itemAttributes: attributes(for: identifier)
+            itemAttributes: attributes(for: identifier),
+            itemManager: itemManager
         )
     }
 
@@ -42,13 +47,13 @@ class Session {
         for identifier: NSFileProviderItemIdentifier
     ) async throws -> SFTPAttributes {
         try await mapError(with: identifier) {
-            try await sftp.attributes(atPath: path(for: identifier))
+            try await sftp.attributes(atPath: await path(for: identifier))
         }
     }
 
     func exists(for identifier: NSFileProviderItemIdentifier) async -> Bool {
         do {
-            _ = try await sftp.attributes(atPath: path(for: identifier))
+            _ = try await sftp.attributes(atPath: await path(for: identifier))
             return true
         } catch {
             return false
@@ -76,7 +81,7 @@ class Session {
         )
         try await mapError(with: identifier) {
             try await sftp.setAttributes(
-                atPath: path(for: identifier),
+                atPath: await path(for: identifier),
                 permissions: permissions,
                 accessTime: accessTime,
                 modifyTime: modifyTime
@@ -97,13 +102,13 @@ class Session {
         logger.info("Move \(old.desc) to \(new.desc)")
         try await mapError {
             do {
-                try await sftp.move(from: path(for: old), to: path(for: new))
+                try await sftp.move(from: await path(for: old), to: await path(for: new))
             } catch SSHError.sftpError(.noSuchFile, _)
                 where ifParentNotExists == .create
             {
                 logger.info("Parent of \(new.desc) doesn't exist")
-                try await createDirectory(for: new.parent, ifExists: .succeed)
-                try await sftp.move(from: path(for: old), to: path(for: new))
+                try await createDirectory(for: await itemManager.parent(for: new), ifExists: .succeed)
+                try await sftp.move(from: await path(for: old), to: await path(for: new))
             }
         }
     }
@@ -113,7 +118,7 @@ class Session {
     ) async throws {
         logger.info("Remove \(identifier.desc)")
         try await mapError(with: identifier) {
-            try await sftp.removeFile(atPath: path(for: identifier))
+            try await sftp.removeFile(atPath: await path(for: identifier))
         }
     }
 
@@ -133,7 +138,7 @@ class Session {
         try await mapError(with: identifier) {
             do {
                 try await sftp.createDirectory(
-                    atPath: path(for: identifier),
+                    atPath: await path(for: identifier),
                     mode: mode
                 )
             } catch SSHError.sftpError(.fileAlreadyExists, _)
@@ -150,7 +155,7 @@ class Session {
         logger.info("Remove directory \(identifier.desc)")
         try await mapError(with: identifier) {
             try await sftp.removeDirectoryRecursively(
-                atPath: path(for: identifier)
+                atPath: await path(for: identifier)
             )
         }
     }
@@ -163,7 +168,7 @@ class Session {
     ) async throws -> T {
         try await mapError(with: identifier) {
             try await sftp.withSftpFile(
-                atPath: path(for: identifier),
+                atPath: await path(for: identifier),
                 accessType: accessType,
                 mode: mode,
                 perform: perform
@@ -177,7 +182,7 @@ class Session {
     ) async throws -> T {
         try await mapError(with: identifier) {
             try await sftp.withDirectory(
-                atPath: path(for: identifier),
+                atPath: await path(for: identifier),
                 perform: perform
             )
         }

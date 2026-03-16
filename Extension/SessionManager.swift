@@ -7,11 +7,13 @@ private let logger = Logger(category: "SessionManager")
 actor SessionManager {
     let name: String
     let config: ConnectionConfig?
+    let itemManager: ItemManager
     private var session: Session? = nil
 
-    init(name: String, config: ConnectionConfig?) {
+    init(name: String, config: ConnectionConfig?, itemManager: ItemManager) {
         self.name = name
         self.config = config
+        self.itemManager = itemManager
     }
 
     func getSession() async throws -> Session {
@@ -37,7 +39,8 @@ actor SessionManager {
             name: name,
             config: config,
             ssh: ssh,
-            sftp: sftp
+            sftp: sftp,
+            itemManager: itemManager
         )
 
         self.session = session

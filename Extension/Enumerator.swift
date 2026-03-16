@@ -29,18 +29,6 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         for observer: NSFileProviderEnumerationObserver,
         startingAt page: NSFileProviderPage
     ) {
-        /* TODO:
-         - inspect the page to determine whether this is an initial or a follow-up request
-        
-         If this is an enumerator for a directory, the root container or all directories:
-         - perform a server request to fetch directory contents
-         If this is an enumerator for the active set:
-         - perform a server request to update your local database
-         - fetch the active set from your local database
-        
-         - inform the observer about the items returned by the server (possibly multiple times)
-         - inform the observer that you are finished with this page
-         */
         let trace = StackTrace.capture()
 
         Task {
@@ -63,7 +51,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
     private func enumerateItems(
         startingAt page: NSFileProviderPage,
         session: Session,
-        yield: @Sendable ([any NSFileProviderItemProtocol]) -> Void,
+        yield: @Sendable ([any NSFileProviderItemProtocol]) -> Void
     ) async throws -> NSFileProviderPage? {
         logger.info("Enumerating \(itemIdentifier.desc)")
 
@@ -80,10 +68,12 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         try await session.withDirectory(for: itemIdentifier) { dir in
             for try await attrs in dir {
                 if let name = attrs.name {
-                    let item = Item(
+                    let childId = await session.itemManager.id(for: itemIdentifier, name: name)
+                    let item = await Item(
                         domainName: session.name,
-                        itemIdentifier: itemIdentifier.child(name: name),
-                        itemAttributes: attrs
+                        itemIdentifier: childId,
+                        itemAttributes: attrs,
+                        itemManager: session.itemManager
                     )
                     yield([item])
                 }
@@ -97,15 +87,6 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         for observer: NSFileProviderChangeObserver,
         from anchor: NSFileProviderSyncAnchor
     ) {
-        /* TODO:
-         - query the server for updates since the passed-in sync anchor
-        
-         If this is an enumerator for the active set:
-         - note the changes in your local database
-        
-         - inform the observer about item deletions and updates (modifications + insertions)
-         - inform the observer when you have finished enumerating up to a subsequent sync anchor
-         */
         logger.debug("Enumerating changes for \(itemIdentifier.desc)")
         observer.finishEnumeratingChanges(upTo: anchor, moreComing: false)
     }

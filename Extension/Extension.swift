@@ -9,19 +9,32 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 {
     let logger: Logger
     let manager: SessionManager
+    let itemManager: ItemManager
 
     required public init(domain: NSFileProviderDomain) {
         logger = Logger(category: "\(domain.displayName):Extension")
 
+        let parsedConfig: ConnectionConfig?
         do {
             let userInfo = try UserInfo.fromDictionary(domain.userInfo)
-            let config = try ConnectionConfig(from: userInfo)
-            manager = SessionManager(name: domain.displayName, config: config)
-            logger.debug("Init \(config)")
+            parsedConfig = try ConnectionConfig(from: userInfo)
+            logger.debug("Init \(String(describing: parsedConfig))")
         } catch {
-            manager = SessionManager(name: domain.displayName, config: nil)
+            parsedConfig = nil
             logger.fault("Failed to retrieve connection config: \(error)")
         }
+
+        do {
+            itemManager = try ItemManager(domain: domain)
+        } catch {
+            fatalError("Failed to init ItemManager: \(error)")
+        }
+
+        manager = SessionManager(
+            name: domain.displayName,
+            config: parsedConfig,
+            itemManager: itemManager
+        )
 
         super.init()
     }
@@ -204,7 +217,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
         logger.debug("Create \(item.desc) for \(fields.desc)")
 
-        let itemIdentifier = item.expectedIdentifier
+        let itemIdentifier = await session.itemManager.id(for: item.parentId, name: item.filename)
         var remaining = fields.subtracting(.nameFields)
         let steps = progress.steps()
 
@@ -245,6 +258,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             steps.add {
                 try await self.setAttributes(
                     item,
+                    itemIdentifier: itemIdentifier,
                     fields: fields,
                     session: session
                 )
@@ -309,7 +323,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
         logger.debug("Modify \(item.desc) for \(changedFields.desc)")
 
-        let itemIdentifier = item.expectedIdentifier
+        let itemIdentifier = await session.itemManager.id(for: item.parentId, name: item.filename)
         var remaining = changedFields
         let steps = progress.steps()
 
@@ -350,6 +364,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     ifParentNotExists:
                         item.parentId == .trashContainer ? .create : .fail
                 )
+                await session.itemManager.update(
+                    id: item.itemIdentifier,
+                    newParentId: item.parentId,
+                    newName: item.filename
+                )
             }
         }
 
@@ -358,6 +377,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             steps.add {
                 try await self.setAttributes(
                     item,
+                    itemIdentifier: itemIdentifier,
                     fields: changedFields,
                     session: session
                 )
@@ -537,11 +557,12 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
     private func setAttributes(
         _ item: NSFileProviderItem,
+        itemIdentifier: NSFileProviderItemIdentifier,
         fields: NSFileProviderItemFields,
         session: Session
     ) async throws {
         try await session.setAttributes(
-            for: item.expectedId,
+            for: itemIdentifier,
             permissions: fields.contains(.fileSystemFlags)
                 ? item.fileSystemFlags?.permissions : nil,
             accessTime: fields.contains(.lastUsedDate)
