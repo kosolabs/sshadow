@@ -171,6 +171,7 @@
 		738D63A22F3FD1F100FED311 /* Extension.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Extension.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		738D63AC2F3FD1F100FED311 /* ExtensionTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ExtensionTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7393A9C02F3134FB00213730 /* Provider.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Provider.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		73B13EBC2F7DF9440047EBA7 /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -326,6 +327,7 @@
 				7322A9212F2857C700D8117D /* SSHadow.icon */,
 				738D63342F3FAFEA00FED311 /* UITests.xctestplan */,
 				7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */,
+				73B13EBC2F7DF9440047EBA7 /* CLAUDE.md */,
 			);
 			sourceTree = "<group>";
 		};
