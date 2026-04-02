@@ -5,7 +5,8 @@ import SwiftUI
 
 private let logger = Logger(category: "ConnectionProfile")
 
-@Model class ConnectionProfile: CustomStringConvertible {
+@Model
+class ConnectionProfile: CustomStringConvertible {
     enum ValidationError: Error {
         case passwordNil
         case privateKeyURLNil
