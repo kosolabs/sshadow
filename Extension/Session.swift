@@ -3,25 +3,32 @@ import FileProvider
 import SwiftLibSSH
 
 class Session {
-    let name: String
+    let domain: NSFileProviderDomain
     let config: ConnectionConfig
     let ssh: SSHClient
     let sftp: SFTPClient
-
+    let db: SSHadowDB
+    
+    var name: String {
+        domain.displayName
+    }
+    
     private let logger: Logger
 
     init(
-        name: String,
+        domain: NSFileProviderDomain,
         config: ConnectionConfig,
         ssh: SSHClient,
-        sftp: SFTPClient
+        sftp: SFTPClient,
+        db: SSHadowDB
     ) {
-        self.name = name
+        self.domain = domain
         self.config = config
         self.ssh = ssh
         self.sftp = sftp
+        self.db = db
 
-        self.logger = Logger(category: "\(name):Session")
+        self.logger = Logger(category: "\(domain.displayName):Session")
     }
 
     func path(for identifier: NSFileProviderItemIdentifier) -> String {
@@ -32,7 +39,7 @@ class Session {
         for identifier: NSFileProviderItemIdentifier,
     ) async throws -> Item {
         try await Item(
-            domainName: name,
+            domainName: domain.displayName,
             itemIdentifier: identifier,
             itemAttributes: attributes(for: identifier)
         )

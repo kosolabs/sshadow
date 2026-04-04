@@ -109,21 +109,17 @@ class ConnectionProfile: CustomStringConvertible {
         let userInfo = try await UserInfo(from: self)
         let domain = try getDomain(with: userInfo)
         try await NSFileProviderManager.add(domain)
+        try await SSHadowDB.create(domain: getDomain())
         self.enabled = true
         await logger.info("Enabled: \(self)")
     }
 
-    func disable() {
-        NSFileProviderManager.remove(getDomain()) { error in
-            if let error = error {
-                logger.error(
-                    "Failed to disable \(self): \(error)"
-                )
-            } else {
-                self.enabled = false
-                logger.info("Disabled: \(self)")
-            }
-        }
+    func disable() async throws {
+        let domain = getDomain()
+        try await NSFileProviderManager.remove(domain)
+        try await SSHadowDB.delete(domain: domain)
+        self.enabled = false
+        await logger.info("Disabled: \(self)")
     }
 
     // MARK: - Password Management
@@ -248,9 +244,9 @@ class ConnectionProfile: CustomStringConvertible {
 }
 
 extension ModelContext {
-    func delete(connectionConfig config: ConnectionProfile) {
+    func delete(connectionConfig config: ConnectionProfile) async throws {
         if config.enabled {
-            config.disable()
+            try await config.disable()
         }
         config.deletePassword()
         config.deletePrivateKeyPassphrase()

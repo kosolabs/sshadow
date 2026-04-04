@@ -6,14 +6,7 @@ private func defaultModelContainer(for domain: NSFileProviderDomain) throws
     -> ModelContainer
 {
     let schema = Schema([SSHItem.self])
-    guard
-        let groupURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier:
-                "group.com.kosolabs.SSHadow"
-        )
-    else {
-        throw CocoaError(.fileReadUnknown)
-    }
+    let groupURL = try SSHadow.groupURL()
 
     return try ModelContainer(
         for: schema,
@@ -27,7 +20,7 @@ private func defaultModelContainer(for domain: NSFileProviderDomain) throws
 }
 
 @ModelActor
-public actor SSHItemStore {
+public actor SSHadowDB {
     public init(
         domain: NSFileProviderDomain,
         modelContainer: ModelContainer? = nil
@@ -39,7 +32,26 @@ public actor SSHItemStore {
         )
     }
 
-    public func fetch(id: UUID) -> SSHItem? {
+    public static func create(domain: NSFileProviderDomain) async throws {
+        _ = try SSHadowDB(domain: domain)
+    }
+
+    public static func delete(domain: NSFileProviderDomain) async throws {
+        let groupURL = try SSHadow.groupURL()
+
+        let basePath = groupURL.appendingPathComponent(
+            "SSHadowDB-\(domain.identifier.rawValue).sqlite"
+        ).path
+
+        for suffix in ["", "-shm", "-wal"] {
+            let path = basePath + suffix
+            if FileManager.default.fileExists(atPath: path) {
+                try FileManager.default.removeItem(atPath: path)
+            }
+        }
+    }
+
+    public func fetch(id: String) -> SSHItem? {
         let descriptor = FetchDescriptor<SSHItem>(
             predicate: #Predicate { input in
                 input.id == id

@@ -76,7 +76,7 @@ struct ExtensionTests {
 
         let path = "extension-read-file/small-file.txt"
         let contents = "Hello, World!"
-        try TestData.createTestFile(path: path, contents: contents)
+        try TestData.createFile(path: path, contents: contents)
 
         // Fetch FPItemID(extension-read-file/small-file.txt)
         let readProgress = Progress()
@@ -101,7 +101,7 @@ struct ExtensionTests {
 
         let path = "extension-read-file/large-file.dat"
         let data = Data(count: 10_485_760)
-        try TestData.createTestFile(path: path, data: data)
+        try TestData.createFile(path: path, data: data)
 
         // Fetch FPItemID(extension-read-file/large-file.dat)
         let readProgress = Progress()
@@ -127,7 +127,7 @@ struct ExtensionTests {
         let data = (0..<256).reduce(into: Data()) { data, i in
             data.append(contentsOf: repeatElement(UInt8(i), count: 1024))
         }
-        try TestData.createTestFile(path: path, data: data)
+        try TestData.createFile(path: path, data: data)
 
         // Read FPItemID(extension-read-file/partial-file.dat) with range Optional({10240, 10240})
         let requestedRange = NSRange(location: 10 * 1024, length: 10 * 1024)
@@ -163,7 +163,7 @@ struct ExtensionTests {
 
         let path = "extension-read-file/cancellable-file.txt"
         let data = Data(count: 10_485_760)
-        try TestData.createTestFile(path: path, data: data)
+        try TestData.createFile(path: path, data: data)
 
         let progress = Progress()
         let fetchTask = Task {
@@ -188,15 +188,15 @@ struct ExtensionTests {
         let newDate = Date(timeIntervalSince1970: 1_760_000_000)
 
         let testPath = "extension-create-folder"
-        let testURL = try TestData.createTestFolder(
+        let testURL = try TestData.createFolder(
             path: testPath,
             modifyDate: oldDate
         )
         let testID = root.child(name: testPath)
 
         let folderPath = "\(testPath)/folder"
-        try TestData.removeTestItem(path: folderPath)
-        let folderURL = TestData.getTestURL(path: folderPath)
+        try TestData.removeItem(path: folderPath)
+        let folderURL = TestData.getURL(path: folderPath)
         let folderID = root.child(name: folderPath)
 
         let ext = try getExtension()
@@ -268,15 +268,15 @@ struct ExtensionTests {
         let newDate = Date(timeIntervalSince1970: 1_760_000_000)
 
         let testPath = "extension-create-file"
-        let testURL = try TestData.createTestFolder(
+        let testURL = try TestData.createFolder(
             path: testPath,
             modifyDate: oldDate
         )
         let testID = root.child(name: testPath)
 
         let filePath = "\(testPath)/file.txt"
-        try TestData.removeTestItem(path: filePath)
-        let fileURL = TestData.getTestURL(path: filePath)
+        try TestData.removeItem(path: filePath)
+        let fileURL = TestData.getURL(path: filePath)
         let fileID = root.child(name: filePath)
 
         let ext = try getExtension()
@@ -359,15 +359,15 @@ struct ExtensionTests {
         let newDate = Date(timeIntervalSince1970: 1_760_000_000)
 
         let testPath = "extension-create-large-file"
-        let testURL = try TestData.createTestFolder(
+        let testURL = try TestData.createFolder(
             path: testPath,
             modifyDate: oldDate
         )
         let testID = root.child(name: testPath)
 
         let filePath = "\(testPath)/file.txt"
-        try TestData.removeTestItem(path: filePath)
-        let fileURL = TestData.getTestURL(path: filePath)
+        try TestData.removeItem(path: filePath)
+        let fileURL = TestData.getURL(path: filePath)
         let fileID = root.child(name: filePath)
 
         let ext = try getExtension()
@@ -444,14 +444,14 @@ struct ExtensionTests {
         let newDate = Date(timeIntervalSince1970: 1_760_000_000)
 
         let folderPath = "extension-rename-file"
-        let folderURL = try TestData.createTestFolder(
+        let folderURL = try TestData.createFolder(
             path: folderPath,
             modifyDate: oldDate
         )
         let folderID = root.child(name: folderPath)
 
         let srcPath = "\(folderPath)/src.txt"
-        let srcURL = try TestData.createTestFile(
+        let srcURL = try TestData.createFile(
             path: srcPath,
             contents: "data",
             modifyDate: oldDate
@@ -459,7 +459,7 @@ struct ExtensionTests {
         let srcID = root.child(name: srcPath)
 
         let destPath = "\(folderPath)/dest.txt"
-        let destURL = try TestData.removeTestItem(path: destPath)
+        let destURL = try TestData.removeItem(path: destPath)
 
         let ext = try getExtension()
 
@@ -540,14 +540,14 @@ struct ExtensionTests {
         let newDate = Date(timeIntervalSince1970: 1_760_000_000)
 
         let srcFolderPath = "extension-move-file/src"
-        let srcFolderURL = try TestData.createTestFolder(
+        let srcFolderURL = try TestData.createFolder(
             path: srcFolderPath,
             modifyDate: oldDate
         )
         let srcFolderID = root.child(name: srcFolderPath)
 
         let srcPath = "\(srcFolderPath)/file.txt"
-        let srcURL = try TestData.createTestFile(
+        let srcURL = try TestData.createFile(
             path: srcPath,
             contents: "data",
             modifyDate: oldDate
@@ -555,14 +555,14 @@ struct ExtensionTests {
         let srcID = root.child(name: srcPath)
 
         let destFolderPath = "extension-move-file/dest"
-        let destFolderURL = try TestData.createTestFolder(
+        let destFolderURL = try TestData.createFolder(
             path: destFolderPath,
             modifyDate: oldDate
         )
         let destFolderID = root.child(name: destFolderPath)
 
         let destPath = "\(destFolderPath)/file.txt"
-        let destURL = TestData.getTestURL(path: destPath)
+        let destURL = TestData.getURL(path: destPath)
 
         let ext = try getExtension()
 
@@ -673,14 +673,14 @@ struct ExtensionTests {
     @Test func trashFileSucceeds() async throws {
         // mv extension-trash-file/file.txt .Trashes/file.txt
         let filePath = "extension-trash-file/file.txt"
-        let fileURL = try TestData.createTestFile(
+        let fileURL = try TestData.createFile(
             path: filePath,
             contents: "data"
         )
         let fileID = root.child(name: filePath)
 
-        try TestData.removeTestItem(path: ".Trashes")
-        let trashedURL = TestData.getTestURL(path: ".Trashes/file.txt")
+        try TestData.removeItem(path: ".Trashes")
+        let trashedURL = TestData.getURL(path: ".Trashes/file.txt")
 
         let ext = try getExtension()
 
@@ -719,7 +719,7 @@ struct ExtensionTests {
         let newDate = Date(timeIntervalSince1970: 1_760_000_000)
 
         let folderPath = "extension-edit-file"
-        try TestData.createTestFolder(
+        try TestData.createFolder(
             path: folderPath,
             modifyDate: oldDate
         )
@@ -727,7 +727,7 @@ struct ExtensionTests {
 
         let oldContent = "Hello, "
         let filePath = "\(folderPath)/file.txt"
-        let fileURL = try TestData.createTestFile(
+        let fileURL = try TestData.createFile(
             path: filePath,
             contents: oldContent,
             modifyDate: oldDate
@@ -810,7 +810,7 @@ struct ExtensionTests {
         let testPath = "extension-permissions"
 
         let filePath = "\(testPath)/file.txt"
-        let fileURL = try TestData.createTestFile(
+        let fileURL = try TestData.createFile(
             path: filePath,
             contents: "data",
             permissions: 0o000
@@ -850,7 +850,7 @@ struct ExtensionTests {
         let testPath = "extension-permissions"
 
         let folderPath = "\(testPath)/folder"
-        let folderURL = try TestData.createTestFolder(
+        let folderURL = try TestData.createFolder(
             path: folderPath,
             permissions: 0o000
         )
@@ -889,7 +889,7 @@ struct ExtensionTests {
         let testPath = "extension-delete-item"
 
         let folderPath = "\(testPath)/folder"
-        let folderURL = try TestData.createTestFolder(path: folderPath)
+        let folderURL = try TestData.createFolder(path: folderPath)
         let folderID = root.child(name: folderPath)
 
         let ext = try getExtension()
@@ -914,7 +914,7 @@ struct ExtensionTests {
 
         let filePath = "\(testPath)/file.txt"
         let contents = "Hello, World!"
-        let fileURL = try TestData.createTestFile(
+        let fileURL = try TestData.createFile(
             path: filePath,
             contents: contents
         )

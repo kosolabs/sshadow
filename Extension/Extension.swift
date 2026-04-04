@@ -16,10 +16,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         do {
             let userInfo = try UserInfo.fromDictionary(domain.userInfo)
             let config = try ConnectionConfig(from: userInfo)
-            manager = SessionManager(name: domain.displayName, config: config)
+            manager = SessionManager(domain: domain, config: config)
             logger.debug("Init \(config)")
         } catch {
-            manager = SessionManager(name: domain.displayName, config: nil)
+            manager = SessionManager(domain: domain, config: nil)
             logger.fault("Failed to retrieve connection config: \(error)")
         }
 
