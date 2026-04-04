@@ -1,4 +1,5 @@
 import Common
+import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -37,7 +38,16 @@ struct ConnectionProfileEditView: View {
                         self.testing = false
                     }
                 } else {
-                    config.disable()
+                    enableTask = Task {
+                        self.error = nil
+                        do {
+                            try await config.disable()
+                        } catch {
+                            if !Task.isCancelled {
+                                self.error = error
+                            }
+                        }
+                    }
                 }
             }
         )

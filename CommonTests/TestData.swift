@@ -1,9 +1,11 @@
 import Common
+import FileProvider
 import Foundation
+import SwiftData
 
 private let logger = Logger(category: "TestData")
 
-struct TestData {
+enum TestData {
     static let name = "test"
     static let host = "localhost"
     static let port: UInt16 = 2248
@@ -18,6 +20,10 @@ struct TestData {
         logger.info("Test server mount path: \(url.path())")
         return url
     }()
+    static let domain = NSFileProviderDomain(
+        identifier: NSFileProviderDomainIdentifier(name),
+        displayName: "Test"
+    )
 
     static func getConnectionConfig(
         id: UUID = UUID(),
@@ -77,13 +83,29 @@ struct TestData {
         return url
     }
 
-    static func getTestURL(path: String) -> URL {
+    static func getInMemoryContainer() throws -> ModelContainer {
+        let schema = Schema([SSHItem.self])
+        let config = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: true
+        )
+        return try ModelContainer(for: schema, configurations: config)
+    }
+
+    static func getSSHadowDB() throws -> SSHadowDB {
+        try SSHadowDB(
+            domain: TestData.domain,
+            modelContainer: getInMemoryContainer()
+        )
+    }
+
+    static func getURL(path: String) -> URL {
         mount.appending(path: path)
     }
 
     @discardableResult
-    static func removeTestItem(path: String) throws -> URL {
-        let url = getTestURL(path: path)
+    static func removeItem(path: String) throws -> URL {
+        let url = getURL(path: path)
         if FileManager.default.fileExists(atPath: url.path()) {
             try FileManager.default.removeItem(at: url)
         }
@@ -91,12 +113,12 @@ struct TestData {
     }
 
     @discardableResult
-    static func createTestFolder(
+    static func createFolder(
         path: String,
         permissions: mode_t? = nil,
         modifyDate: Date? = nil
     ) throws -> URL {
-        let folder = getTestURL(path: path)
+        let folder = getURL(path: path)
         try FileManager.default.createDirectory(
             at: folder,
             withIntermediateDirectories: true
@@ -123,7 +145,7 @@ struct TestData {
     }
 
     @discardableResult
-    static func createTestFile(
+    static func createFile(
         path: String,
         contents: String,
         permissions: mode_t? = nil,
@@ -139,7 +161,7 @@ struct TestData {
             )
         }
 
-        return try createTestFile(
+        return try createFile(
             path: path,
             data: data,
             permissions: permissions,
@@ -148,13 +170,13 @@ struct TestData {
     }
 
     @discardableResult
-    static func createTestFile(
+    static func createFile(
         path: String,
         data: Data,
         permissions: mode_t? = nil,
         modifyDate: Date? = nil
     ) throws -> URL {
-        let file = getTestURL(path: path)
+        let file = getURL(path: path)
         let folder = file.deletingLastPathComponent()
 
         try FileManager.default.createDirectory(

@@ -6,14 +6,8 @@ private typealias OSLogger = os.Logger
 public struct Logger: Sendable {
     private let logger: OSLogger
 
-    public init(
-        subsystem: String? = Bundle.main.bundleIdentifier,
-        category: String
-    ) {
-        self.logger = OSLogger(
-            subsystem: subsystem ?? "com.kosolabs.SSHadow",
-            category: category
-        )
+    public init(subsystem: String = SSHadow.bundleID, category: String) {
+        self.logger = OSLogger(subsystem: subsystem, category: category)
     }
 
     public func log(level: OSLogType = .default, _ message: String) {

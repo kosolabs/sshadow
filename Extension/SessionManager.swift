@@ -5,12 +5,16 @@ import SwiftLibSSH
 private let logger = Logger(category: "SessionManager")
 
 actor SessionManager {
-    let name: String
-    let config: ConnectionConfig?
+    nonisolated let domain: NSFileProviderDomain
+    nonisolated let config: ConnectionConfig?
     private var session: Session? = nil
-
-    init(name: String, config: ConnectionConfig?) {
-        self.name = name
+    
+    nonisolated var name: String {
+        domain.displayName
+    }
+    
+    init(domain: NSFileProviderDomain, config: ConnectionConfig?) {
+        self.domain = domain
         self.config = config
     }
 
@@ -22,11 +26,12 @@ actor SessionManager {
         guard let config = self.config else {
             throw NSFileProviderError(.notAuthenticated)
         }
-        let ssh: SSHClient
-        let sftp: SFTPClient
+        
+        let ssh: SSHClient, sftp: SFTPClient, db: SSHadowDB
         do {
             ssh = try await SSHClient.connect(config: config)
             sftp = try await ssh.sftp()
+            db = try SSHadowDB(domain: domain)
         } catch SSHError.authenticationFailed(_) {
             throw NSFileProviderError(.notAuthenticated)
         } catch SSHError.connectionFailed(_) {
@@ -34,10 +39,11 @@ actor SessionManager {
         }
 
         let session = Session(
-            name: name,
+            domain: domain,
             config: config,
             ssh: ssh,
-            sftp: sftp
+            sftp: sftp,
+            db: db
         )
 
         self.session = session

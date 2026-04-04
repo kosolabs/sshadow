@@ -7,10 +7,15 @@ import UniformTypeIdentifiers
 @testable import Extension
 
 private func getSession() async throws -> Session {
+    let domain = NSFileProviderDomain(
+        identifier: NSFileProviderDomainIdentifier("test"),
+        displayName: TestData.name
+    )
     let config = try TestData.getConnectionConfig()
     let ssh = try await SSHClient.connect(config: config)
     let sftp = try await ssh.sftp()
-    return Session(name: TestData.name, config: config, ssh: ssh, sftp: sftp)
+    let db = try TestData.getSSHadowDB()
+    return Session(domain: domain, config: config, ssh: ssh, sftp: sftp, db: db)
 }
 
 struct SessionTests {
@@ -19,7 +24,7 @@ struct SessionTests {
         let testFolderURL: URL
 
         init() throws {
-            testFolderURL = try TestData.createTestFolder(path: testFolderPath)
+            testFolderURL = try TestData.createFolder(path: testFolderPath)
         }
 
         @Test func itemForFileSucceeds() async throws {
@@ -27,7 +32,7 @@ struct SessionTests {
 
             let path = "\(testFolderPath)/file.txt"
             let contents = "Hello, World!"
-            try TestData.createTestFile(path: path, contents: contents)
+            try TestData.createFile(path: path, contents: contents)
 
             let item = try await session.item(
                 for: .rootContainer.child(name: path)
@@ -42,7 +47,7 @@ struct SessionTests {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/folder"
-            try TestData.createTestFolder(path: path)
+            try TestData.createFolder(path: path)
 
             let item = try await session.item(
                 for: .rootContainer.child(name: path)
@@ -81,7 +86,7 @@ struct SessionTests {
         let testFolderURL: URL
 
         init() throws {
-            testFolderURL = try TestData.createTestFolder(path: testFolderPath)
+            testFolderURL = try TestData.createFolder(path: testFolderPath)
         }
 
         @Test func attributesForFileSucceeds() async throws {
@@ -89,7 +94,7 @@ struct SessionTests {
 
             let path = "\(testFolderPath)/file.txt"
             let contents = "Hello, World!"
-            try TestData.createTestFile(path: path, contents: contents)
+            try TestData.createFile(path: path, contents: contents)
 
             let attrs = try await session.attributes(
                 for: .rootContainer.child(name: path)
@@ -103,7 +108,7 @@ struct SessionTests {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/folder"
-            try TestData.createTestFolder(path: path)
+            try TestData.createFolder(path: path)
 
             let attrs = try await session.attributes(
                 for: .rootContainer.child(name: path)
@@ -128,7 +133,7 @@ struct SessionTests {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/modify-time.txt"
-            try TestData.createTestFile(path: path, contents: "data")
+            try TestData.createFile(path: path, contents: "data")
 
             let newModifyTime = Date(timeIntervalSince1970: 1_000_000)
             try await session.setAttributes(
@@ -136,7 +141,7 @@ struct SessionTests {
                 modifyTime: newModifyTime
             )
 
-            let fileURL = TestData.getTestURL(path: path)
+            let fileURL = TestData.getURL(path: path)
             let fileAttrs = try FileManager.default.attributesOfItem(
                 atPath: fileURL.path()
             )
@@ -151,7 +156,7 @@ struct SessionTests {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/access-time.txt"
-            try TestData.createTestFile(path: path, contents: "data")
+            try TestData.createFile(path: path, contents: "data")
 
             let newAccessTime = Date(timeIntervalSince1970: 2_000_000)
             try await session.setAttributes(
@@ -159,7 +164,7 @@ struct SessionTests {
                 accessTime: newAccessTime
             )
 
-            let fileURL = TestData.getTestURL(path: path)
+            let fileURL = TestData.getURL(path: path)
             var st = stat()
             stat(fileURL.path(), &st)
             let actualAccessTime = Date(
@@ -190,15 +195,15 @@ struct SessionTests {
         let testFolderURL: URL
 
         init() throws {
-            testFolderURL = try TestData.createTestFolder(path: testFolderPath)
+            testFolderURL = try TestData.createFolder(path: testFolderPath)
         }
 
         @Test func createDirectorySucceeds() async throws {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/new-directory"
-            try TestData.removeTestItem(path: path)
-            let directoryURL = TestData.getTestURL(path: path)
+            try TestData.removeItem(path: path)
+            let directoryURL = TestData.getURL(path: path)
             #expect(
                 !FileManager.default.fileExists(atPath: directoryURL.path())
             )
@@ -216,8 +221,8 @@ struct SessionTests {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/existing-directory"
-            try TestData.createTestFolder(path: path)
-            let directoryURL = TestData.getTestURL(path: path)
+            try TestData.createFolder(path: path)
+            let directoryURL = TestData.getURL(path: path)
 
             try await session.createDirectory(
                 for: .rootContainer.child(name: path),
@@ -233,7 +238,7 @@ struct SessionTests {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/existing-directory"
-            try TestData.createTestFolder(path: path)
+            try TestData.createFolder(path: path)
 
             await #expect {
                 try await session.createDirectory(
@@ -253,17 +258,17 @@ struct SessionTests {
         let testFolderURL: URL
 
         init() throws {
-            testFolderURL = try TestData.createTestFolder(path: testFolderPath)
+            testFolderURL = try TestData.createFolder(path: testFolderPath)
         }
 
         @Test func moveFileSucceeds() async throws {
             let session = try await getSession()
 
             let sourcePath = "\(testFolderPath)/source.txt"
-            try TestData.createTestFile(path: sourcePath, contents: "data")
+            try TestData.createFile(path: sourcePath, contents: "data")
 
             let destinationPath = "\(testFolderPath)/destination.txt"
-            try TestData.removeTestItem(path: destinationPath)
+            try TestData.removeItem(path: destinationPath)
 
             try await session.move(
                 from: .rootContainer.child(name: sourcePath),
@@ -272,12 +277,12 @@ struct SessionTests {
 
             #expect(
                 FileManager.default.fileExists(
-                    atPath: TestData.getTestURL(path: destinationPath).path()
+                    atPath: TestData.getURL(path: destinationPath).path()
                 )
             )
             #expect(
                 !FileManager.default.fileExists(
-                    atPath: TestData.getTestURL(path: sourcePath).path()
+                    atPath: TestData.getURL(path: sourcePath).path()
                 )
             )
         }
@@ -301,11 +306,11 @@ struct SessionTests {
             let session = try await getSession()
 
             let sourcePath = "\(testFolderPath)/source-missing-parent-fail.txt"
-            try TestData.createTestFile(path: sourcePath, contents: "data")
+            try TestData.createFile(path: sourcePath, contents: "data")
 
             let destinationPath =
                 "\(testFolderPath)/missing-parent-fail/destination.txt"
-            try TestData.removeTestItem(
+            try TestData.removeItem(
                 path: "\(testFolderPath)/missing-parent-fail"
             )
 
@@ -322,11 +327,11 @@ struct SessionTests {
             let session = try await getSession()
 
             let sourcePath = "\(testFolderPath)/source-missing-parent.txt"
-            try TestData.createTestFile(path: sourcePath, contents: "data")
+            try TestData.createFile(path: sourcePath, contents: "data")
 
             let destinationPath =
                 "\(testFolderPath)/missing-parent/destination.txt"
-            try TestData.removeTestItem(
+            try TestData.removeItem(
                 path: "\(testFolderPath)/missing-parent"
             )
 
@@ -338,12 +343,12 @@ struct SessionTests {
 
             #expect(
                 FileManager.default.fileExists(
-                    atPath: TestData.getTestURL(path: destinationPath).path()
+                    atPath: TestData.getURL(path: destinationPath).path()
                 )
             )
             #expect(
                 !FileManager.default.fileExists(
-                    atPath: TestData.getTestURL(path: sourcePath).path()
+                    atPath: TestData.getURL(path: sourcePath).path()
                 )
             )
         }
@@ -355,14 +360,14 @@ struct SessionTests {
         let testFolderURL: URL
 
         init() throws {
-            testFolderURL = try TestData.createTestFolder(path: testFolderPath)
+            testFolderURL = try TestData.createFolder(path: testFolderPath)
         }
 
         @Test func removeFileSucceeds() async throws {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/file.txt"
-            let fileURL = try TestData.createTestFile(
+            let fileURL = try TestData.createFile(
                 path: path,
                 contents: "data"
             )
@@ -393,14 +398,14 @@ struct SessionTests {
         let testFolderURL: URL
 
         init() throws {
-            testFolderURL = try TestData.createTestFolder(path: testFolderPath)
+            testFolderURL = try TestData.createFolder(path: testFolderPath)
         }
 
         @Test func removeDirectorySucceeds() async throws {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/folder"
-            let folderURL = try TestData.createTestFolder(path: path)
+            let folderURL = try TestData.createFolder(path: path)
             #expect(FileManager.default.fileExists(atPath: folderURL.path()))
 
             try await session.removeDirectory(
@@ -414,13 +419,13 @@ struct SessionTests {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/non-empty-folder"
-            let folderURL = try TestData.createTestFolder(path: path)
-            try TestData.createTestFile(
+            let folderURL = try TestData.createFolder(path: path)
+            try TestData.createFile(
                 path: "\(path)/file.txt",
                 contents: "data"
             )
-            try TestData.createTestFolder(path: "\(path)/subfolder")
-            try TestData.createTestFile(
+            try TestData.createFolder(path: "\(path)/subfolder")
+            try TestData.createFile(
                 path: "\(path)/subfolder/nested.txt",
                 contents: "nested"
             )
@@ -451,7 +456,7 @@ struct SessionTests {
         let testFolderURL: URL
 
         init() throws {
-            testFolderURL = try TestData.createTestFolder(path: testFolderPath)
+            testFolderURL = try TestData.createFolder(path: testFolderPath)
         }
 
         @Test func withFileReadSucceeds() async throws {
@@ -459,7 +464,7 @@ struct SessionTests {
 
             let path = "\(testFolderPath)/read-file.txt"
             let contents = "Hello, World!"
-            try TestData.createTestFile(path: path, contents: contents)
+            try TestData.createFile(path: path, contents: contents)
 
             let data = try await session.withFile(
                 for: .rootContainer.child(name: path),
