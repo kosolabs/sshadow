@@ -53,8 +53,17 @@ public actor SSHadowDB {
 
     public func fetch(id: String) -> SSHItem? {
         let descriptor = FetchDescriptor<SSHItem>(
-            predicate: #Predicate { input in
-                input.id == id
+            predicate: #Predicate { row in
+                row.id == id
+            }
+        )
+        return try? modelContext.fetch(descriptor).first
+    }
+    
+    public func fetch(parentId: String, name: String) -> SSHItem? {
+        let descriptor = FetchDescriptor<SSHItem>(
+            predicate: #Predicate { row in
+                row.parentId == parentId && row.name == name
             }
         )
         return try? modelContext.fetch(descriptor).first
