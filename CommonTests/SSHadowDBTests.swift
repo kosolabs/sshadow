@@ -121,6 +121,51 @@ struct SSHadowDBTests {
         #expect(actual.name == "b.txt")
     }
 
+    @Test func seedInsertsRootContainer() async throws {
+        let db = try TestData.getSSHadowDB()
+        try await db.seed()
+
+        let rootId = NSFileProviderItemIdentifier.rootContainer.rawValue
+        let root = try #require(await db.fetch(id: rootId))
+
+        #expect(root.parentId == rootId)
+        #expect(root.name == "")
+    }
+
+    @Test func seedInsertsTrashContainer() async throws {
+        let db = try TestData.getSSHadowDB()
+        try await db.seed()
+
+        let rootId = NSFileProviderItemIdentifier.rootContainer.rawValue
+        let trashId = NSFileProviderItemIdentifier.trashContainer.rawValue
+        let trash = try #require(await db.fetch(id: trashId))
+
+        #expect(trash.parentId == rootId)
+        #expect(trash.name == ".Trashes")
+    }
+
+    @Test func seedInsertsWorkingSet() async throws {
+        let db = try TestData.getSSHadowDB()
+        try await db.seed()
+
+        let rootId = NSFileProviderItemIdentifier.rootContainer.rawValue
+        let workingSetId = NSFileProviderItemIdentifier.workingSet.rawValue
+        let workingSet = try #require(await db.fetch(id: workingSetId))
+
+        #expect(workingSet.parentId == rootId)
+        #expect(workingSet.name == "")
+    }
+
+    @Test func seedIsIdempotent() async throws {
+        let db = try TestData.getSSHadowDB()
+        try await db.seed()
+        try await db.seed()
+
+        let rootId = NSFileProviderItemIdentifier.rootContainer.rawValue
+        let root = try #require(await db.fetch(id: rootId))
+        #expect(root.parentId == rootId)
+    }
+
     @Test func upsertDuplicateIdUpdatesExistingItem() async throws {
         let db = try TestData.getSSHadowDB()
 

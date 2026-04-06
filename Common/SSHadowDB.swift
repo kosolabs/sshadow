@@ -2,38 +2,38 @@ import FileProvider
 import Foundation
 import SwiftData
 
-private func defaultModelContainer(for domain: NSFileProviderDomain) throws
-    -> ModelContainer
-{
-    let schema = Schema([SSHItem.self])
-    let groupURL = try SSHadow.groupURL()
-
-    return try ModelContainer(
-        for: schema,
-        configurations: ModelConfiguration(
-            schema: schema,
-            url: groupURL.appendingPathComponent(
-                "SSHadowDB-\(domain.identifier.rawValue).sqlite"
-            )
-        )
-    )
-}
-
 @ModelActor
 public actor SSHadowDB {
-    public init(
-        domain: NSFileProviderDomain,
-        modelContainer: ModelContainer? = nil
-    ) throws {
-        self.modelContainer =
-            try modelContainer ?? defaultModelContainer(for: domain)
-        self.modelExecutor = DefaultSerialModelExecutor(
-            modelContext: ModelContext(self.modelContainer)
+    public static func open(domain: NSFileProviderDomain) throws -> SSHadowDB {
+        let schema = Schema([SSHItem.self])
+        let groupURL = try SSHadow.groupURL()
+
+        let container = try ModelContainer(
+            for: schema,
+            configurations: ModelConfiguration(
+                schema: schema,
+                url: groupURL.appendingPathComponent(
+                    "SSHadowDB-\(domain.identifier.rawValue).sqlite"
+                )
+            )
         )
+
+        return SSHadowDB(modelContainer: container)
     }
 
     public static func create(domain: NSFileProviderDomain) async throws {
-        _ = try SSHadowDB(domain: domain)
+        let db = try SSHadowDB.open(domain: domain)
+        try await db.seed()
+    }
+
+    public func seed() throws {
+        let rootId = NSFileProviderItemIdentifier.rootContainer.rawValue
+        let trashId = NSFileProviderItemIdentifier.trashContainer.rawValue
+        let workingSetId = NSFileProviderItemIdentifier.workingSet.rawValue
+
+        try upsert(SSHItem(id: rootId, parentId: rootId, name: ""))
+        try upsert(SSHItem(id: trashId, parentId: rootId, name: ".Trashes"))
+        try upsert(SSHItem(id: workingSetId, parentId: rootId, name: ""))
     }
 
     public static func delete(domain: NSFileProviderDomain) async throws {
@@ -59,7 +59,7 @@ public actor SSHadowDB {
         )
         return try? modelContext.fetch(descriptor).first
     }
-    
+
     public func fetch(parentId: String, name: String) -> SSHItem? {
         let descriptor = FetchDescriptor<SSHItem>(
             predicate: #Predicate { row in

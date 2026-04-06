@@ -93,10 +93,7 @@ enum TestData {
     }
 
     static func getSSHadowDB() throws -> SSHadowDB {
-        try SSHadowDB(
-            domain: TestData.domain,
-            modelContainer: getInMemoryContainer()
-        )
+        try SSHadowDB(modelContainer: getInMemoryContainer())
     }
 
     static func getURL(path: String) -> URL {

@@ -31,7 +31,7 @@ actor SessionManager {
         do {
             ssh = try await SSHClient.connect(config: config)
             sftp = try await ssh.sftp()
-            db = try SSHadowDB(domain: domain)
+            db = try SSHadowDB.open(domain: domain)
         } catch SSHError.authenticationFailed(_) {
             throw NSFileProviderError(.notAuthenticated)
         } catch SSHError.connectionFailed(_) {
