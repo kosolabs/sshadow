@@ -9,8 +9,8 @@ struct SSHadowDBTests {
     @Test func upsertAndFetchById() async throws {
         let db = try TestData.getSSHadowDB()
 
-        let id = UUID().uuidString
-        let parentId = UUID().uuidString
+        let id = NSFileProviderItemIdentifier(UUID().uuidString)
+        let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
         let item = SSHItem(id: id, parentId: parentId, name: "hello.txt")
 
         try await db.upsert(item)
@@ -24,16 +24,18 @@ struct SSHadowDBTests {
     @Test func fetchReturnsNilForUnknownId() async throws {
         let db = try TestData.getSSHadowDB()
 
-        let result = await db.fetch(id: UUID().uuidString)
+        let result = await db.fetch(
+            id: NSFileProviderItemIdentifier(UUID().uuidString)
+        )
         #expect(result == nil)
     }
 
     @Test func upsertMultipleItems() async throws {
         let db = try TestData.getSSHadowDB()
 
-        let parentId = UUID().uuidString
-        let id1 = UUID().uuidString
-        let id2 = UUID().uuidString
+        let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
+        let id1 = NSFileProviderItemIdentifier(UUID().uuidString)
+        let id2 = NSFileProviderItemIdentifier(UUID().uuidString)
 
         try await db.upsert(
             SSHItem(id: id1, parentId: parentId, name: "a.txt")
@@ -52,8 +54,8 @@ struct SSHadowDBTests {
     @Test func fetchByParentIdAndName() async throws {
         let db = try TestData.getSSHadowDB()
 
-        let parentId = UUID().uuidString
-        let id = UUID().uuidString
+        let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
+        let id = NSFileProviderItemIdentifier(UUID().uuidString)
 
         try await db.upsert(
             SSHItem(id: id, parentId: parentId, name: "hello.txt")
@@ -71,14 +73,10 @@ struct SSHadowDBTests {
     @Test func fetchByParentIdAndNameReturnsNilWhenNotFound() async throws {
         let db = try TestData.getSSHadowDB()
 
-        let parentId = UUID().uuidString
+        let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
 
         try await db.upsert(
-            SSHItem(
-                id: UUID().uuidString,
-                parentId: parentId,
-                name: "exists.txt"
-            )
+            SSHItem(parentId: parentId, name: "exists.txt")
         )
 
         let wrongName = await db.fetch(
@@ -86,7 +84,7 @@ struct SSHadowDBTests {
             name: "missing.txt"
         )
         let wrongParent = await db.fetch(
-            parentId: UUID().uuidString,
+            parentId: NSFileProviderItemIdentifier(UUID().uuidString),
             name: "exists.txt"
         )
 
@@ -97,21 +95,13 @@ struct SSHadowDBTests {
     @Test func fetchByParentIdAndNameDistinguishesSiblings() async throws {
         let db = try TestData.getSSHadowDB()
 
-        let parentId = UUID().uuidString
+        let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
 
         try await db.upsert(
-            SSHItem(
-                id: UUID().uuidString,
-                parentId: parentId,
-                name: "a.txt"
-            )
+            SSHItem(parentId: parentId, name: "a.txt")
         )
         try await db.upsert(
-            SSHItem(
-                id: UUID().uuidString,
-                parentId: parentId,
-                name: "b.txt"
-            )
+            SSHItem(parentId: parentId, name: "b.txt")
         )
 
         let actual = try #require(
@@ -125,10 +115,9 @@ struct SSHadowDBTests {
         let db = try TestData.getSSHadowDB()
         try await db.seed()
 
-        let rootId = NSFileProviderItemIdentifier.rootContainer.rawValue
-        let root = try #require(await db.fetch(id: rootId))
+        let root = try #require(await db.fetch(id: .rootContainer))
 
-        #expect(root.parentId == rootId)
+        #expect(root.parentId == .rootContainer)
         #expect(root.name == "")
     }
 
@@ -136,11 +125,9 @@ struct SSHadowDBTests {
         let db = try TestData.getSSHadowDB()
         try await db.seed()
 
-        let rootId = NSFileProviderItemIdentifier.rootContainer.rawValue
-        let trashId = NSFileProviderItemIdentifier.trashContainer.rawValue
-        let trash = try #require(await db.fetch(id: trashId))
+        let trash = try #require(await db.fetch(id: .trashContainer))
 
-        #expect(trash.parentId == rootId)
+        #expect(trash.parentId == .rootContainer)
         #expect(trash.name == ".Trashes")
     }
 
@@ -148,11 +135,9 @@ struct SSHadowDBTests {
         let db = try TestData.getSSHadowDB()
         try await db.seed()
 
-        let rootId = NSFileProviderItemIdentifier.rootContainer.rawValue
-        let workingSetId = NSFileProviderItemIdentifier.workingSet.rawValue
-        let workingSet = try #require(await db.fetch(id: workingSetId))
+        let workingSet = try #require(await db.fetch(id: .workingSet))
 
-        #expect(workingSet.parentId == rootId)
+        #expect(workingSet.parentId == .rootContainer)
         #expect(workingSet.name == "")
     }
 
@@ -161,16 +146,44 @@ struct SSHadowDBTests {
         try await db.seed()
         try await db.seed()
 
-        let rootId = NSFileProviderItemIdentifier.rootContainer.rawValue
-        let root = try #require(await db.fetch(id: rootId))
-        #expect(root.parentId == rootId)
+        let root = try #require(await db.fetch(id: .rootContainer))
+        #expect(root.parentId == .rootContainer)
+    }
+
+    @Test func pathBuildsFromNestedItems() async throws {
+        let db = try TestData.getSSHadowDB()
+        try await db.seed()
+
+        let dirId = try await db.child(of: .rootContainer, name: "Documents")
+        let fileId = try await db.child(of: dirId, name: "notes.txt")
+
+        let path = try await db.path(for: fileId)
+        #expect(path == "Documents/notes.txt")
+    }
+
+    @Test func pathReturnsNameForDirectChildOfRoot() async throws {
+        let db = try TestData.getSSHadowDB()
+        try await db.seed()
+
+        let id = try await db.child(of: .rootContainer, name: "file.txt")
+
+        let path = try await db.path(for: id)
+        #expect(path == "file.txt")
+    }
+
+    @Test func pathReturnsEmptyForRootContainer() async throws {
+        let db = try TestData.getSSHadowDB()
+        try await db.seed()
+
+        let path = try await db.path(for: .rootContainer)
+        #expect(path == "")
     }
 
     @Test func upsertDuplicateIdUpdatesExistingItem() async throws {
         let db = try TestData.getSSHadowDB()
 
-        let id = UUID().uuidString
-        let parentId = UUID().uuidString
+        let id = NSFileProviderItemIdentifier(UUID().uuidString)
+        let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
 
         try await db.upsert(
             SSHItem(id: id, parentId: parentId, name: "first.txt")

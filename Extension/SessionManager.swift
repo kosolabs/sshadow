@@ -8,11 +8,11 @@ actor SessionManager {
     nonisolated let domain: NSFileProviderDomain
     nonisolated let config: ConnectionConfig?
     private var session: Session? = nil
-    
+
     nonisolated var name: String {
         domain.displayName
     }
-    
+
     init(domain: NSFileProviderDomain, config: ConnectionConfig?) {
         self.domain = domain
         self.config = config
@@ -26,12 +26,14 @@ actor SessionManager {
         guard let config = self.config else {
             throw NSFileProviderError(.notAuthenticated)
         }
-        
-        let ssh: SSHClient, sftp: SFTPClient, db: SSHadowDB
+
+        let ssh: SSHClient
+        let sftp: SFTPClient
+        let db: SSHadowDB
         do {
             ssh = try await SSHClient.connect(config: config)
             sftp = try await ssh.sftp()
-            db = try SSHadowDB.open(domain: domain)
+            db = try await SSHadowDB.open(domain: domain)
         } catch SSHError.authenticationFailed(_) {
             throw NSFileProviderError(.notAuthenticated)
         } catch SSHError.connectionFailed(_) {

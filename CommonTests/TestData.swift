@@ -83,17 +83,14 @@ enum TestData {
         return url
     }
 
-    static func getInMemoryContainer() throws -> ModelContainer {
+    static func getSSHadowDB() throws -> SSHadowDB {
         let schema = Schema([SSHItem.self])
         let config = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: true
         )
-        return try ModelContainer(for: schema, configurations: config)
-    }
-
-    static func getSSHadowDB() throws -> SSHadowDB {
-        try SSHadowDB(modelContainer: getInMemoryContainer())
+        let container = try ModelContainer(for: schema, configurations: config)
+        return SSHadowDB(modelContainer: container)
     }
 
     static func getURL(path: String) -> URL {
