@@ -31,13 +31,13 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
     ) {
         /* TODO:
          - inspect the page to determine whether this is an initial or a follow-up request
-        
+
          If this is an enumerator for a directory, the root container or all directories:
          - perform a server request to fetch directory contents
          If this is an enumerator for the active set:
          - perform a server request to update your local database
          - fetch the active set from your local database
-        
+
          - inform the observer about the items returned by the server (possibly multiple times)
          - inform the observer that you are finished with this page
          */
@@ -77,18 +77,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
             }
         }
 
-        try await session.withDirectory(for: itemIdentifier) { dir in
-            for try await attrs in dir {
-                if let name = attrs.name {
-                    let item = Item(
-                        domainName: session.name,
-                        itemIdentifier: itemIdentifier.child(name: name),
-                        itemAttributes: attrs
-                    )
-                    yield([item])
-                }
-            }
-        }
+        try await session.enumerateItems(for: itemIdentifier, yield: yield)
 
         return nil
     }
@@ -99,10 +88,10 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
     ) {
         /* TODO:
          - query the server for updates since the passed-in sync anchor
-        
+
          If this is an enumerator for the active set:
          - note the changes in your local database
-        
+
          - inform the observer about item deletions and updates (modifications + insertions)
          - inform the observer when you have finished enumerating up to a subsequent sync anchor
          */

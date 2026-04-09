@@ -33,6 +33,7 @@ public struct UserInfo: Codable, CustomStringConvertible, Sendable {
     public let user: String
     public let path: String
     public let authMethod: AuthMethod
+    public let testing: Bool
 
     public init(
         id: UUID,
@@ -42,6 +43,7 @@ public struct UserInfo: Codable, CustomStringConvertible, Sendable {
         user: String,
         path: String,
         authMethod: AuthMethod,
+        testing: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -50,6 +52,7 @@ public struct UserInfo: Codable, CustomStringConvertible, Sendable {
         self.user = user
         self.path = path
         self.authMethod = authMethod
+        self.testing = testing
     }
 
     public var url: String {

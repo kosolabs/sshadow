@@ -9,14 +9,6 @@ extension NSFileProviderItem {
         parentItemIdentifier
     }
 
-    var expectedId: NSFileProviderItemIdentifier {
-        expectedIdentifier
-    }
-
-    var expectedIdentifier: NSFileProviderItemIdentifier {
-        parentItemIdentifier.child(name: filename)
-    }
-
     var desc: String {
         var components: [String] = []
         components.append("id: \(id.desc)")
@@ -98,17 +90,6 @@ extension NSFileProviderItem {
 }
 
 extension NSFileProviderItemIdentifier {
-    init(path: String) {
-        switch path {
-        case "":
-            self = .rootContainer
-        case ".Trashes":
-            self = .trashContainer
-        default:
-            self = NSFileProviderItemIdentifier(path)
-        }
-    }
-
     var desc: String {
         switch self {
         case .rootContainer:
@@ -120,32 +101,6 @@ extension NSFileProviderItemIdentifier {
         default:
             return "FPItemID(\(rawValue))"
         }
-    }
-
-    var name: String {
-        rawValue.split(separator: "/").last.map(String.init) ?? ""
-    }
-
-    var path: String {
-        switch self {
-        case .rootContainer:
-            return ""
-        case .trashContainer:
-            return ".Trashes"
-        default:
-            return rawValue
-        }
-    }
-
-    var parent: NSFileProviderItemIdentifier {
-        let parts = rawValue.split(separator: "/").dropLast()
-        let parentPath = parts.joined(separator: "/")
-        return NSFileProviderItemIdentifier(path: parentPath)
-    }
-
-    func child(name: String) -> NSFileProviderItemIdentifier {
-        let path = [path, name].filter { !$0.isEmpty }.joined(separator: "/")
-        return NSFileProviderItemIdentifier(path: path)
     }
 }
 

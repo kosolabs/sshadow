@@ -20,27 +20,18 @@ enum TestData {
         logger.info("Test server mount path: \(url.path())")
         return url
     }()
-    static let domain = NSFileProviderDomain(
-        identifier: NSFileProviderDomainIdentifier(name),
-        displayName: "Test"
-    )
+    static let domain = getDomain()
 
-    static func getConnectionConfig(
-        id: UUID = UUID(),
-        url: URL = mount
-    ) throws -> ConnectionConfig {
-        try ConnectionConfig(
-            id: id,
-            name: name,
-            host: host,
-            port: port,
-            user: user,
-            path: url.path(),
-            authMethod: .privateKey(
-                base64PrivateKey: getBase64PrivateKey(),
-                passphrase: nil
+    static func getDomain(id: UUID = UUID()) -> NSFileProviderDomain {
+        let domain = NSFileProviderDomain(
+            identifier: NSFileProviderDomainIdentifier(
+                rawValue: id.uuidString
             ),
+            displayName: "Test"
         )
+        let userInfo = try! getUserInfo(id: id)
+        domain.userInfo = try! userInfo.toDictionary()
+        return domain
     }
 
     static func getUserInfo(
@@ -56,7 +47,26 @@ enum TestData {
             path: url.path(),
             authMethod: .privateKey(
                 bookmark: getPrivateKeyURL().bookmarkData()
-            )
+            ),
+            testing: true
+        )
+    }
+    
+    static func getConnectionConfig(
+        id: UUID = UUID(),
+        url: URL = mount
+    ) throws -> ConnectionConfig {
+        try ConnectionConfig(
+            id: id,
+            name: name,
+            host: host,
+            port: port,
+            user: user,
+            path: url.path(),
+            authMethod: .privateKey(
+                base64PrivateKey: getBase64PrivateKey(),
+                passphrase: nil
+            ),
         )
     }
 
@@ -83,14 +93,8 @@ enum TestData {
         return url
     }
 
-    static func getSSHadowDB() throws -> SSHadowDB {
-        let schema = Schema([SSHItem.self])
-        let config = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: true
-        )
-        let container = try ModelContainer(for: schema, configurations: config)
-        return SSHadowDB(modelContainer: container)
+    static func getSSHadowDB() async throws -> SSHadowDB {
+        return try await SSHadowDB.open(domain: domain)
     }
 
     static func getURL(path: String) -> URL {

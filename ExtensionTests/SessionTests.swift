@@ -1,6 +1,7 @@
 import Common
 import FileProvider
 import SwiftLibSSH
+import Synchronization
 import Testing
 import UniformTypeIdentifiers
 
@@ -14,11 +15,99 @@ private func getSession() async throws -> Session {
     let config = try TestData.getConnectionConfig()
     let ssh = try await SSHClient.connect(config: config)
     let sftp = try await ssh.sftp()
-    let db = try TestData.getSSHadowDB()
+    let db = try await TestData.getSSHadowDB()
     return Session(domain: domain, config: config, ssh: ssh, sftp: sftp, db: db)
 }
 
 struct SessionTests {
+    struct NameTests {
+        @Test func filePropertyReturnsFilenameForSimpleItem() async throws {
+            let session = try await getSession()
+            let simpleFile = try await session.child(path: "file.txt")
+            let name = try await session.name(of: simpleFile)
+            #expect(name == "file.txt")
+        }
+
+        @Test func filePropertyReturnsFilenameForNestedItem() async throws {
+            let session = try await getSession()
+            let nestedFile = try await session.child(path: "folder/file.txt")
+            let name = try await session.name(of: nestedFile)
+            #expect(name == "file.txt")
+        }
+    }
+    
+    struct ParentTests {
+        @Test func parentOfRootContainerIsRootContainer() async throws {
+            let session = try await getSession()
+            let parent = try await session.parent(of: .rootContainer)
+            #expect(parent == .rootContainer)
+        }
+
+        @Test func parentOfTopLevelItemIsRootContainer() async throws {
+            let session = try await getSession()
+            let topLevel = try await session.child(path: "folder")
+            let parent = try await session.parent(of: topLevel)
+            #expect(parent == .rootContainer)
+        }
+
+        @Test func parentOfTrashContainerIsRootContainer() async throws {
+            let session = try await getSession()
+            let parent = try await session.parent(of: .trashContainer)
+            #expect(parent == .rootContainer)
+        }
+
+        @Test func parentOfItemInTrashIsTrashContainer() async throws {
+            let session = try await getSession()
+            let itemInTrashes = try await session.child(path: ".Trashes/file")
+            let parent = try await session.parent(of: itemInTrashes)
+            #expect(parent == .trashContainer)
+        }
+
+        @Test func parentOfNestedItemIsParentFolder() async throws {
+            let session = try await getSession()
+            let nested = try await session.child(path: "folder/file")
+            let actual = try await session.parent(of: nested)
+            let expected = try await session.child(path: "folder")
+            #expect(actual == expected)
+        }
+
+        @Test func parentOfDeeplyNestedItemIsImmediateParent() async throws {
+            let session = try await getSession()
+            let deeplyNested = try await session.child(path: "a/b/c")
+            let actual = try await session.parent(of: deeplyNested)
+            let expected = try await session.child(path: "a/b")
+            #expect(actual == expected)
+        }
+    }
+    
+    struct ChildTests {
+        @Test func childOfRootContainerWithNameTrashesIsTrashContainer()
+            async throws
+        {
+            let session = try await getSession()
+            let childOfRoot = try await session.child(path: ".Trashes")
+            #expect(childOfRoot == .trashContainer)
+        }
+
+        @Test func childOfTrashContainerReturnsItemInTrashes() async throws {
+            let session = try await getSession()
+            let actual = try await session.child(
+                of: .trashContainer,
+                path: "file"
+            )
+            let expected = try await session.child(path: ".Trashes/file")
+            #expect(actual == expected)
+        }
+
+        @Test func childOfItemReturnsNestedItem() async throws {
+            let session = try await getSession()
+            let parent = try await session.child(path: "folder")
+            let actual = try await session.child(of: parent, path: "file")
+            let expected = try await session.child(path: "folder/file")
+            #expect(actual == expected)
+        }
+    }
+    
     struct ItemTests {
         let testFolderPath = "session-item"
         let testFolderURL: URL
@@ -35,7 +124,7 @@ struct SessionTests {
             try TestData.createFile(path: path, contents: contents)
 
             let item = try await session.item(
-                for: .rootContainer.child(name: path)
+                for: session.child(path: path)
             )
 
             #expect(item.filename == "file.txt")
@@ -50,7 +139,7 @@ struct SessionTests {
             try TestData.createFolder(path: path)
 
             let item = try await session.item(
-                for: .rootContainer.child(name: path)
+                for: session.child(path: path)
             )
 
             #expect(item.filename == "folder")
@@ -63,7 +152,7 @@ struct SessionTests {
             let item = try await session.item(for: .rootContainer)
 
             #expect(
-                item.filename == "NSFileProviderRootContainerItemIdentifier"
+                item.filename == ""
             )
             #expect(item.contentType == .folder)
         }
@@ -73,8 +162,8 @@ struct SessionTests {
 
             await #expect {
                 try await session.item(
-                    for: .rootContainer.child(
-                        name: "\(testFolderPath)/missing.txt"
+                    for: session.child(
+                        path: "\(testFolderPath)/missing.txt"
                     )
                 )
             } throws: { error in isNoSuchItemError(error) }
@@ -97,7 +186,7 @@ struct SessionTests {
             try TestData.createFile(path: path, contents: contents)
 
             let attrs = try await session.attributes(
-                for: .rootContainer.child(name: path)
+                for: session.child(path: path)
             )
 
             #expect(attrs.type == .regular)
@@ -111,7 +200,7 @@ struct SessionTests {
             try TestData.createFolder(path: path)
 
             let attrs = try await session.attributes(
-                for: .rootContainer.child(name: path)
+                for: session.child(path: path)
             )
 
             #expect(attrs.type == .directory)
@@ -122,8 +211,9 @@ struct SessionTests {
 
             await #expect {
                 try await session.attributes(
-                    for: .rootContainer.child(
-                        name: "\(testFolderPath)/missing.txt"
+                    for: session.child(
+                        path: "\(testFolderPath)/missing.txt",
+                        ifNotExists: .fail
                     )
                 )
             } throws: { error in isNoSuchItemError(error) }
@@ -137,7 +227,7 @@ struct SessionTests {
 
             let newModifyTime = Date(timeIntervalSince1970: 1_000_000)
             try await session.setAttributes(
-                for: .rootContainer.child(name: path),
+                for: session.child(path: path),
                 modifyTime: newModifyTime
             )
 
@@ -160,7 +250,7 @@ struct SessionTests {
 
             let newAccessTime = Date(timeIntervalSince1970: 2_000_000)
             try await session.setAttributes(
-                for: .rootContainer.child(name: path),
+                for: session.child(path: path),
                 accessTime: newAccessTime
             )
 
@@ -181,8 +271,9 @@ struct SessionTests {
 
             await #expect {
                 try await session.setAttributes(
-                    for: .rootContainer.child(
-                        name: "\(testFolderPath)/missing.txt"
+                    for: session.child(
+                        path: "\(testFolderPath)/missing.txt",
+                        ifNotExists: .fail
                     ),
                     modifyTime: Date()
                 )
@@ -209,7 +300,7 @@ struct SessionTests {
             )
 
             try await session.createDirectory(
-                for: .rootContainer.child(name: path)
+                for: session.child(path: path)
             )
 
             #expect(
@@ -225,7 +316,7 @@ struct SessionTests {
             let directoryURL = TestData.getURL(path: path)
 
             try await session.createDirectory(
-                for: .rootContainer.child(name: path),
+                for: session.child(path: path),
                 ifExists: .succeed
             )
 
@@ -242,7 +333,7 @@ struct SessionTests {
 
             await #expect {
                 try await session.createDirectory(
-                    for: .rootContainer.child(name: path),
+                    for: session.child(path: path),
                     ifExists: .fail
                 )
             } throws: { error in
@@ -271,8 +362,8 @@ struct SessionTests {
             try TestData.removeItem(path: destinationPath)
 
             try await session.move(
-                from: .rootContainer.child(name: sourcePath),
-                to: .rootContainer.child(name: destinationPath)
+                from: session.child(path: sourcePath),
+                to: session.child(path: destinationPath)
             )
 
             #expect(
@@ -292,11 +383,11 @@ struct SessionTests {
 
             await #expect {
                 try await session.move(
-                    from: .rootContainer.child(
-                        name: "\(testFolderPath)/missing.txt"
+                    from: session.child(
+                        path: "\(testFolderPath)/missing.txt"
                     ),
-                    to: .rootContainer.child(
-                        name: "\(testFolderPath)/destination.txt"
+                    to: session.child(
+                        path: "\(testFolderPath)/destination.txt"
                     )
                 )
             } throws: { error in isNoSuchItemError(error) }
@@ -316,8 +407,8 @@ struct SessionTests {
 
             await #expect {
                 try await session.move(
-                    from: .rootContainer.child(name: sourcePath),
-                    to: .rootContainer.child(name: destinationPath),
+                    from: session.child(path: sourcePath),
+                    to: session.child(path: destinationPath),
                     ifParentNotExists: .fail
                 )
             } throws: { error in isNoSuchItemError(error) }
@@ -336,8 +427,8 @@ struct SessionTests {
             )
 
             try await session.move(
-                from: .rootContainer.child(name: sourcePath),
-                to: .rootContainer.child(name: destinationPath),
+                from: session.child(path: sourcePath),
+                to: session.child(path: destinationPath),
                 ifParentNotExists: .create
             )
 
@@ -367,14 +458,11 @@ struct SessionTests {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/file.txt"
-            let fileURL = try TestData.createFile(
-                path: path,
-                contents: "data"
-            )
+            let fileURL = try TestData.createFile(path: path, contents: "data")
             #expect(FileManager.default.fileExists(atPath: fileURL.path()))
 
             try await session.removeFile(
-                for: .rootContainer.child(name: path)
+                for: session.child(path: path)
             )
 
             #expect(!FileManager.default.fileExists(atPath: fileURL.path()))
@@ -385,8 +473,8 @@ struct SessionTests {
 
             await #expect {
                 try await session.removeFile(
-                    for: .rootContainer.child(
-                        name: "\(testFolderPath)/missing.txt"
+                    for: session.child(
+                        path: "\(testFolderPath)/missing.txt"
                     )
                 )
             } throws: { error in isNoSuchItemError(error) }
@@ -409,7 +497,7 @@ struct SessionTests {
             #expect(FileManager.default.fileExists(atPath: folderURL.path()))
 
             try await session.removeDirectory(
-                for: .rootContainer.child(name: path)
+                for: session.child(path: path)
             )
 
             #expect(!FileManager.default.fileExists(atPath: folderURL.path()))
@@ -432,7 +520,7 @@ struct SessionTests {
             #expect(FileManager.default.fileExists(atPath: folderURL.path()))
 
             try await session.removeDirectory(
-                for: .rootContainer.child(name: path)
+                for: session.child(path: path)
             )
 
             #expect(!FileManager.default.fileExists(atPath: folderURL.path()))
@@ -443,11 +531,100 @@ struct SessionTests {
 
             await #expect {
                 try await session.removeDirectory(
-                    for: .rootContainer.child(
-                        name: "\(testFolderPath)/missing"
+                    for: session.child(
+                        path: "\(testFolderPath)/missing"
                     )
                 )
             } throws: { error in isNoSuchItemError(error) }
+        }
+    }
+
+    struct EnumerateItemsTests {
+        let testFolderPath = "session-enumerate"
+        let testFolderURL: URL
+
+        init() throws {
+            testFolderURL = try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func enumeratesFilesAndFolders() async throws {
+            let session = try await getSession()
+
+            try TestData.createFile(
+                path: "\(testFolderPath)/file.txt",
+                contents: "hello"
+            )
+            try TestData.createFolder(path: "\(testFolderPath)/subfolder")
+
+            let items = Mutex<[any NSFileProviderItemProtocol]>([])
+            try await session.enumerateItems(
+                for: session.child(path: testFolderPath)
+            ) { batch in
+                items.withLock { $0.append(contentsOf: batch) }
+            }
+
+            let names = Set(items.withLock { $0 }.map(\.filename))
+            #expect(names.contains("file.txt"))
+            #expect(names.contains("subfolder"))
+        }
+
+        @Test func yieldedItemsHaveCorrectParent() async throws {
+            let session = try await getSession()
+
+            try TestData.createFile(
+                path: "\(testFolderPath)/child.txt",
+                contents: "data"
+            )
+
+            let parentId = try await session.child(path: testFolderPath)
+            let items = Mutex<[any NSFileProviderItemProtocol]>([])
+            try await session.enumerateItems(for: parentId) { batch in
+                items.withLock { $0.append(contentsOf: batch) }
+            }
+
+            let child = try #require(
+                items.withLock { $0 }.first { $0.filename == "child.txt" }
+            )
+            #expect(child.parentItemIdentifier == parentId)
+        }
+
+        @Test func yieldedItemsHaveCorrectContentType() async throws {
+            let session = try await getSession()
+
+            try TestData.createFile(
+                path: "\(testFolderPath)/a.txt",
+                contents: "text"
+            )
+            try TestData.createFolder(path: "\(testFolderPath)/dir")
+
+            let items = Mutex<[any NSFileProviderItemProtocol]>([])
+            try await session.enumerateItems(
+                for: session.child(path: testFolderPath)
+            ) { batch in
+                items.withLock { $0.append(contentsOf: batch) }
+            }
+
+            let snapshot = items.withLock { $0 }
+            let file = try #require(snapshot.first { $0.filename == "a.txt" })
+            let folder = try #require(snapshot.first { $0.filename == "dir" })
+            #expect(file.contentType == .text)
+            #expect(folder.contentType == .folder)
+        }
+
+        @Test func emptyDirectoryYieldsNoItems() async throws {
+            let session = try await getSession()
+
+            let emptyPath = "\(testFolderPath)/empty"
+            try TestData.createFolder(path: emptyPath)
+
+            let items = Mutex<[any NSFileProviderItemProtocol]>([])
+            try await session.enumerateItems(
+                for: session.child(path: emptyPath)
+            ) { batch in
+                items.withLock { $0.append(contentsOf: batch) }
+            }
+
+            #expect(items.withLock { $0 }.isEmpty)
         }
     }
 
@@ -467,7 +644,7 @@ struct SessionTests {
             try TestData.createFile(path: path, contents: contents)
 
             let data = try await session.withFile(
-                for: .rootContainer.child(name: path),
+                for: session.child(path: path),
                 accessType: .readOnly
             ) { file in
                 try await file.read()
@@ -481,8 +658,8 @@ struct SessionTests {
 
             await #expect {
                 try await session.withFile(
-                    for: .rootContainer.child(
-                        name: "\(testFolderPath)/missing.txt"
+                    for: session.child(
+                        path: "\(testFolderPath)/missing.txt"
                     ),
                     accessType: .readOnly
                 ) { _ in }

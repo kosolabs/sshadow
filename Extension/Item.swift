@@ -7,21 +7,23 @@ public class Item: NSObject, NSFileProviderItem {
     private let logger: Logger
 
     public let itemIdentifier: NSFileProviderItemIdentifier
+    public let parentItemIdentifier: NSFileProviderItemIdentifier
+    public let filename: String
     private let itemAttributes: SFTPAttributes
 
     init(
         domainName: String,
         itemIdentifier: NSFileProviderItemIdentifier,
+        parentItemIdentifier: NSFileProviderItemIdentifier,
+        filename: String,
         itemAttributes: SFTPAttributes,
     ) {
         logger = Logger(category: "\(domainName):Item")
-        logger.debug("Init \(itemIdentifier.desc)")
+        logger.debug("Init \(itemIdentifier.desc), \(filename)")
         self.itemIdentifier = itemIdentifier
+        self.parentItemIdentifier = parentItemIdentifier
+        self.filename = filename
         self.itemAttributes = itemAttributes
-    }
-
-    public var parentItemIdentifier: NSFileProviderItemIdentifier {
-        return itemIdentifier.parent
     }
 
     public var capabilities: NSFileProviderItemCapabilities {
@@ -38,10 +40,6 @@ public class Item: NSObject, NSFileProviderItem {
         )
     }
 
-    public var filename: String {
-        itemIdentifier.name
-    }
-    
     public var size: UInt64 {
         itemAttributes.size
     }
