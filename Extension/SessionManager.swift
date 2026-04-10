@@ -4,10 +4,33 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "SessionManager")
 
+private func connect(
+    domain: NSFileProviderDomain,
+    config: ConnectionConfig
+) async throws -> Session {
+    do {
+        let ssh = try await SSHClient.connect(config: config)
+        let sftp = try await ssh.sftp()
+        let db = try await SSHadowDB.open(domain: domain)
+        return Session(
+            domain: domain,
+            config: config,
+            ssh: ssh,
+            sftp: sftp,
+            db: db
+        )
+    } catch SSHError.authenticationFailed(_) {
+        throw NSFileProviderError(.notAuthenticated)
+    } catch SSHError.connectionFailed(_) {
+        throw NSFileProviderError(.serverUnreachable)
+    }
+}
+
 actor SessionManager {
     nonisolated let domain: NSFileProviderDomain
     nonisolated let config: ConnectionConfig?
     private var session: Session? = nil
+    private var connectTask: Task<Session, any Error>? = nil
 
     nonisolated var name: String {
         domain.displayName
@@ -22,35 +45,30 @@ actor SessionManager {
         if let session = self.session {
             return session
         }
+        
+        if let task = connectTask {
+            return try await task.value
+        }
 
         guard let config = self.config else {
             throw NSFileProviderError(.notAuthenticated)
         }
-
-        let ssh: SSHClient
-        let sftp: SFTPClient
-        let db: SSHadowDB
-        do {
-            ssh = try await SSHClient.connect(config: config)
-            sftp = try await ssh.sftp()
-            db = try await SSHadowDB.open(domain: domain)
-        } catch SSHError.authenticationFailed(_) {
-            throw NSFileProviderError(.notAuthenticated)
-        } catch SSHError.connectionFailed(_) {
-            throw NSFileProviderError(.serverUnreachable)
+        
+        let task = Task {
+            try await connect(domain: domain, config: config)
         }
-
-        let session = Session(
-            domain: domain,
-            config: config,
-            ssh: ssh,
-            sftp: sftp,
-            db: db
-        )
-
-        self.session = session
-        logger.info("Connected: \(session.config.url)")
-        return session
+        connectTask = task
+        
+        do {
+            let session = try await task.value
+            self.session = session
+            logger.info("Connected: \(session.config.url)")
+            connectTask = nil
+            return session
+        } catch {
+            connectTask = nil
+            throw error
+        }
     }
 
     func close() async {

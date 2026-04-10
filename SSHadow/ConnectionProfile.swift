@@ -109,7 +109,7 @@ class ConnectionProfile: CustomStringConvertible {
         let userInfo = try await UserInfo(from: self)
         let domain = try getDomain(with: userInfo)
         try await NSFileProviderManager.add(domain)
-        try await SSHadowDB.create(domain: getDomain())
+        try await SSHadowDB.open(domain: domain)
         self.enabled = true
         await logger.info("Enabled: \(self)")
     }

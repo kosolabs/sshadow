@@ -204,7 +204,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
         logger.debug("Create \(item.desc) for \(fields.desc)")
 
-        let itemIdentifier = item.expectedIdentifier
+        let itemIdentifier = try await session.child(
+            of: item.parentItemIdentifier,
+            path: item.filename
+        )
         var remaining = fields.subtracting(.nameFields)
         let steps = progress.steps()
 
@@ -309,7 +312,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
         logger.debug("Modify \(item.desc) for \(changedFields.desc)")
 
-        let itemIdentifier = item.expectedIdentifier
+        let itemIdentifier = try await session.child(
+            of: item.parentId,
+            path: item.filename
+        )
         var remaining = changedFields
         let steps = progress.steps()
 
@@ -541,7 +547,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         session: Session
     ) async throws {
         try await session.setAttributes(
-            for: item.expectedId,
+            for: session.child(of: item.parentId, path: item.filename),
             permissions: fields.contains(.fileSystemFlags)
                 ? item.fileSystemFlags?.permissions : nil,
             accessTime: fields.contains(.lastUsedDate)

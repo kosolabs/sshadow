@@ -6,37 +6,42 @@ import SwiftData
 public actor SSHadowDB {
     private var logger = Logger(category: "SSHadowDB")
 
+    @discardableResult
     public static func open(
         domain: NSFileProviderDomain
     ) async throws -> SSHadowDB {
+        let userInfo = try UserInfo.fromDictionary(domain.userInfo)
+
         let schema = Schema([SSHItem.self])
         let groupURL = try SSHadow.groupURL()
-
-        let container = try ModelContainer(
-            for: schema,
-            configurations: ModelConfiguration(
-                schema: schema,
-                url: groupURL.appendingPathComponent(
-                    "SSHadowDB-\(domain.identifier.rawValue).sqlite"
+        
+        let container = if userInfo.testing {
+            try ModelContainer(
+                for: schema,
+                configurations: ModelConfiguration(
+                    schema: schema,
+                    isStoredInMemoryOnly: true
                 )
             )
-        )
+        } else {
+            try ModelContainer(
+                for: schema,
+                configurations: ModelConfiguration(
+                    schema: schema,
+                    url: groupURL.appendingPathComponent(
+                        "SSHadowDB-\(domain.identifier.rawValue).sqlite"
+                    )
+                )
+            )
+        }
 
         let db = SSHadowDB(modelContainer: container)
-        await db.configure(domain: domain)
+        try await db.configure(domain: domain)
         return db
     }
 
-    private func configure(domain: NSFileProviderDomain) {
+    private func configure(domain: NSFileProviderDomain) throws {
         logger = Logger(category: "\(domain.displayName):SSHadowDB")
-    }
-
-    public static func create(domain: NSFileProviderDomain) async throws {
-        let db = try await SSHadowDB.open(domain: domain)
-        try await db.seed()
-    }
-
-    public func seed() throws {
         try upsert(
             SSHItem(
                 id: .rootContainer,
@@ -98,17 +103,50 @@ public actor SSHadowDB {
         return try? modelContext.fetch(descriptor).first
     }
 
-    public func child(
+    public func name(of id: NSFileProviderItemIdentifier) throws -> String {
+        guard let item = fetch(id: id) else {
+            throw NSFileProviderError(.noSuchItem)
+        }
+        return item.name
+    }
+
+    public enum OnNotExists {
+        case fail
+        case create
+    }
+
+    private func child(
         of parent: NSFileProviderItemIdentifier,
-        name: String
+        name: String,
+        ifNotExists: OnNotExists,
     ) throws -> NSFileProviderItemIdentifier {
         if let item = fetch(parentId: parent, name: name) {
             return item.id
         }
 
+        if ifNotExists == .fail {
+            throw NSFileProviderError(.noSuchItem)
+        }
+
         let item = SSHItem(parentId: parent, name: name)
         try upsert(item)
         return item.id
+    }
+
+    public func child(
+        of parent: NSFileProviderItemIdentifier = .rootContainer,
+        path: String,
+        ifNotExists: OnNotExists = .create,
+    ) throws -> NSFileProviderItemIdentifier {
+        var current = parent
+        for segment in path.split(separator: "/").map(String.init) {
+            current = try child(
+                of: current,
+                name: segment,
+                ifNotExists: ifNotExists
+            )
+        }
+        return current
     }
 
     public func parent(
@@ -121,15 +159,12 @@ public actor SSHadowDB {
         return item.parentId
     }
 
-    public func path(
-        for id: NSFileProviderItemIdentifier
-    ) throws -> String {
+    public func path(for id: NSFileProviderItemIdentifier) -> String {
         var current = id
         var segments: [String] = []
 
         while let item = fetch(id: current),
             current != .rootContainer,
-            current != .trashContainer,
             current != .workingSet
         {
             segments.append(item.name)
