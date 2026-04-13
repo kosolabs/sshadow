@@ -173,6 +173,27 @@ public actor SSHadowDB {
 
         return segments.reversed().joined(separator: "/")
     }
+    
+    public func path(
+        for name: String,
+        in parentId: NSFileProviderItemIdentifier
+    ) -> String {
+        let parentPath = path(for: parentId)
+        return parentPath.isEmpty ? name : parentPath + "/" + name
+    }
+
+    public func move(
+        _ id: NSFileProviderItemIdentifier,
+        toParent newParentId: NSFileProviderItemIdentifier,
+        name newName: String
+    ) throws {
+        guard let item = fetch(id: id) else {
+            throw NSFileProviderError(.noSuchItem)
+        }
+        item.parentId = newParentId
+        item.name = newName
+        try modelContext.save()
+    }
 
     public func upsert(_ item: SSHItem) throws {
         modelContext.insert(item)

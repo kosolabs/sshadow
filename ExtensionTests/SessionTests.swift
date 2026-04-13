@@ -358,17 +358,22 @@ struct SessionTests {
             let sourcePath = "\(testFolderPath)/source.txt"
             try TestData.createFile(path: sourcePath, contents: "data")
 
-            let destinationPath = "\(testFolderPath)/destination.txt"
-            try TestData.removeItem(path: destinationPath)
+            try TestData.removeItem(path: "\(testFolderPath)/destination.txt")
+
+            let sourceId = try await session.child(path: sourcePath)
+            let parentId = try await session.child(path: testFolderPath)
 
             try await session.move(
-                from: session.child(path: sourcePath),
-                to: session.child(path: destinationPath)
+                sourceId,
+                toParent: parentId,
+                name: "destination.txt"
             )
 
             #expect(
                 FileManager.default.fileExists(
-                    atPath: TestData.getURL(path: destinationPath).path()
+                    atPath: TestData.getURL(
+                        path: "\(testFolderPath)/destination.txt"
+                    ).path()
                 )
             )
             #expect(
@@ -376,19 +381,25 @@ struct SessionTests {
                     atPath: TestData.getURL(path: sourcePath).path()
                 )
             )
+            let name = try await session.name(of: sourceId)
+            let parent = try await session.parent(of: sourceId)
+            #expect(name == "destination.txt")
+            #expect(parent == parentId)
         }
 
         @Test func moveMissingFileThrowsNoSuchItem() async throws {
             let session = try await getSession()
 
+            let sourceId = try await session.child(
+                path: "\(testFolderPath)/missing.txt"
+            )
+            let parentId = try await session.child(path: testFolderPath)
+
             await #expect {
                 try await session.move(
-                    from: session.child(
-                        path: "\(testFolderPath)/missing.txt"
-                    ),
-                    to: session.child(
-                        path: "\(testFolderPath)/destination.txt"
-                    )
+                    sourceId,
+                    toParent: parentId,
+                    name: "destination.txt"
                 )
             } throws: { error in isNoSuchItemError(error) }
         }
@@ -399,16 +410,20 @@ struct SessionTests {
             let sourcePath = "\(testFolderPath)/source-missing-parent-fail.txt"
             try TestData.createFile(path: sourcePath, contents: "data")
 
-            let destinationPath =
-                "\(testFolderPath)/missing-parent-fail/destination.txt"
             try TestData.removeItem(
+                path: "\(testFolderPath)/missing-parent-fail"
+            )
+
+            let sourceId = try await session.child(path: sourcePath)
+            let parentId = try await session.child(
                 path: "\(testFolderPath)/missing-parent-fail"
             )
 
             await #expect {
                 try await session.move(
-                    from: session.child(path: sourcePath),
-                    to: session.child(path: destinationPath),
+                    sourceId,
+                    toParent: parentId,
+                    name: "destination.txt",
                     ifParentNotExists: .fail
                 )
             } throws: { error in isNoSuchItemError(error) }
@@ -420,18 +435,24 @@ struct SessionTests {
             let sourcePath = "\(testFolderPath)/source-missing-parent.txt"
             try TestData.createFile(path: sourcePath, contents: "data")
 
-            let destinationPath =
-                "\(testFolderPath)/missing-parent/destination.txt"
             try TestData.removeItem(
                 path: "\(testFolderPath)/missing-parent"
             )
 
+            let sourceId = try await session.child(path: sourcePath)
+            let parentId = try await session.child(
+                path: "\(testFolderPath)/missing-parent"
+            )
+
             try await session.move(
-                from: session.child(path: sourcePath),
-                to: session.child(path: destinationPath),
+                sourceId,
+                toParent: parentId,
+                name: "destination.txt",
                 ifParentNotExists: .create
             )
 
+            let destinationPath =
+                "\(testFolderPath)/missing-parent/destination.txt"
             #expect(
                 FileManager.default.fileExists(
                     atPath: TestData.getURL(path: destinationPath).path()
@@ -444,6 +465,37 @@ struct SessionTests {
             )
         }
 
+    }
+
+    struct ExistsTests {
+        let testFolderPath = "session-exists"
+        let testFolderURL: URL
+
+        init() throws {
+            testFolderURL = try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func existsReturnsTrueForExistingFile() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/file.txt"
+            try TestData.createFile(path: path, contents: "data")
+
+            let result = await session.exists(
+                for: try session.child(path: path)
+            )
+            #expect(result == true)
+        }
+
+        @Test func existsReturnsFalseForMissingFile() async throws {
+            let session = try await getSession()
+
+            let id = try await session.child(
+                path: "\(testFolderPath)/missing.txt"
+            )
+            let result = await session.exists(for: id)
+            #expect(result == false)
+        }
     }
 
     struct RemoveFileTests {

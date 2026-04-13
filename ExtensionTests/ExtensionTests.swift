@@ -71,7 +71,7 @@ struct ExtensionTests {
         let contents = "Hello, World!"
         try TestData.createFile(path: path, contents: contents)
 
-        // Fetch FPItemID(extension-read-file/small-file.txt)
+        // Fetch FPItemID(<id>)
         let readProgress = Progress()
         let (url, item) = try await ext.fetchContents(
             for: session.child(path: path),
@@ -97,7 +97,7 @@ struct ExtensionTests {
         let data = Data(count: 10_485_760)
         try TestData.createFile(path: path, data: data)
 
-        // Fetch FPItemID(extension-read-file/large-file.dat)
+        // Fetch FPItemID(<id>)
         let readProgress = Progress()
         let (url, item) = try await ext.fetchContents(
             for: session.child(path: path),
@@ -124,7 +124,7 @@ struct ExtensionTests {
         }
         try TestData.createFile(path: path, data: data)
 
-        // Read FPItemID(extension-read-file/partial-file.dat) with range Optional({10240, 10240})
+        // Read FPItemID(<id>) with range Optional({10240, 10240})
         let requestedRange = NSRange(location: 10 * 1024, length: 10 * 1024)
         let readProgress = Progress()
         let (url, item, returnedRange) = try await ext.fetchPartialContents(
@@ -198,7 +198,7 @@ struct ExtensionTests {
         let folderURL = TestData.getURL(path: folderPath)
         let folderID = try await session.child(path: folderPath)
 
-        // Create FPItem(id: FPItemID(__fp/fs/fileID(17967944)), parentId: FPItemID(extension-create-folder), filename: folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), createTime: 2026-03-04 07:05:26 +0000, modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1478, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        // Create FPItem(id: FPItemID(__fp/fs/fileID(17967944)), parentId: FPItemID(<pid>), filename: folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), createTime: 2026-03-04 07:05:26 +0000, modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1478, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let createFolderProgress = Progress()
         _ = try await ext.createItem(
             basedOn: ItemTemplate(
@@ -229,7 +229,7 @@ struct ExtensionTests {
         #expect(try FileManager.default.modifyDate(of: folderURL) == newDate)
         #expect(try FileManager.default.permissions(of: folderURL) == 0o700)
 
-        // Modify FPItem(id: FPItemID(extension-create-folder), parentId: FPItemID.rootContainer, filename: extension-create-folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID.rootContainer, filename: extension-create-folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -279,7 +279,7 @@ struct ExtensionTests {
         let fileURL = TestData.getURL(path: filePath)
         let fileID = try await session.child(path: filePath)
 
-        // Create FPItem(id: FPItemID(__fp/fs/docID(10961)), parentId: FPItemID(extension-create-file), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 14, createTime: 2026-03-04 21:51:16 +0000, modifyTime: 2026-03-04 21:51:16 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        // Create FPItem(id: FPItemID(__fp/fs/docID(10961)), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 14, createTime: 2026-03-04 21:51:16 +0000, modifyTime: 2026-03-04 21:51:16 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let fileToUploadURL = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString)
         let content = "Hello, World!\n"
@@ -321,7 +321,7 @@ struct ExtensionTests {
         #expect(uploadProgress.isFinished)
         #expect(try FileManager.default.permissions(of: fileURL) == 0o600)
 
-        // Modify FPItem(id: FPItemID(extension-create-file), parentId: FPItemID.rootContainer, filename: extension-create-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 21:51:16 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID.rootContainer, filename: extension-create-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 21:51:16 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -371,7 +371,7 @@ struct ExtensionTests {
         let fileURL = TestData.getURL(path: filePath)
         let fileID = try await session.child(path: filePath)
 
-        // Create FPItem(id: FPItemID(__fp/fs/docID(10965)), parentId: FPItemID(extension-create-large-file), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 10485760, createTime: 2026-03-04 22:15:29 +0000, modifyTime: 2026-03-04 22:15:29 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        // Create FPItem(id: FPItemID(__fp/fs/docID(10965)), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 10485760, createTime: 2026-03-04 22:15:29 +0000, modifyTime: 2026-03-04 22:15:29 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let fileToUploadURL = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString)
         let content = Data(count: 10_485_760)
@@ -407,7 +407,7 @@ struct ExtensionTests {
         #expect(uploadProgress.isFinished)
         #expect(try FileManager.default.permissions(of: fileURL) == 0o600)
 
-        // Modify FPItem(id: FPItemID(extension-create-large-file), parentId: FPItemID.rootContainer, filename: extension-create-large-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 22:15:29 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID.rootContainer, filename: extension-create-large-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 22:15:29 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -463,7 +463,7 @@ struct ExtensionTests {
         let destPath = "\(folderPath)/dest.txt"
         let destURL = try TestData.removeItem(path: destPath)
 
-        // Modify FPItem(id: FPItemID(extension-rename-file/src.txt), parentId: FPItemID(extension-rename-file), filename: dest.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 2, filename)
+        // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID(<pid>), filename: dest.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 2, filename)
         let renameProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -491,7 +491,7 @@ struct ExtensionTests {
         #expect(!FileManager.default.fileExists(at: srcURL))
         #expect(renameProgress.isFinished)
 
-        // Modify FPItem(id: FPItemID(extension-rename-file), parentId: FPItemID.rootContainer, filename: extension-rename-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-03 20:18:28 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID.rootContainer, filename: extension-rename-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-03 20:18:28 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -519,19 +519,6 @@ struct ExtensionTests {
         let actualModifyDate = try FileManager.default.modifyDate(of: folderURL)
         #expect(actualModifyDate == newDate)
         #expect(updateFolderProgress.isFinished)
-
-        // Item FPItemID(extension-rename-file/src.txt)
-        let getOriginalItemProgress = Progress()
-        await #expect {
-            try await ext.item(
-                for: srcID,
-                request: NSFileProviderRequest(),
-                progress: getOriginalItemProgress,
-                session: try await ext.manager.getSession()
-            )
-        } throws: { error in isNoSuchItemError(error) }
-
-        #expect(getOriginalItemProgress.isFinished)
     }
 
     @Test func moveFileSucceeds() async throws {
@@ -567,7 +554,7 @@ struct ExtensionTests {
         let destPath = "\(destFolderPath)/file.txt"
         let destURL = TestData.getURL(path: destPath)
 
-        // Modify FPItem(id: FPItemID(extension-move-file/src/file.txt), parentId: FPItemID(extension-move-file/dest), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 4, parentItemIdentifier)
+        // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID(<npid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 4, parentItemIdentifier)
         let moveProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -595,7 +582,7 @@ struct ExtensionTests {
         #expect(!FileManager.default.fileExists(at: srcURL))
         #expect(moveProgress.isFinished)
 
-        // Modify FPItem(id: FPItemID(extension-move-file/dest), parentId: FPItemID(extension-move-file), filename: dest, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-03 21:30:15 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<npid>), parentId: FPItemID(<ppid>), filename: dest, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-03 21:30:15 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateDestFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -626,7 +613,7 @@ struct ExtensionTests {
         #expect(actualDestModifyDate == newDate)
         #expect(updateDestFolderProgress.isFinished)
 
-        // Modify FPItem(id: FPItemID(extension-move-file/src), parentId: FPItemID(extension-move-file), filename: src, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-03 21:30:15 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<opid>), parentId: FPItemID(<ppid>), filename: src, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-03 21:30:15 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateSrcFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -656,19 +643,105 @@ struct ExtensionTests {
         )
         #expect(actualSrcModifyDate == newDate)
         #expect(updateSrcFolderProgress.isFinished)
+    }
 
-        // Item FPItemID(extension-move-file/src/file.txt)
-        let getOriginalItemProgress = Progress()
-        await #expect {
-            try await ext.item(
-                for: srcID,
-                request: NSFileProviderRequest(),
-                progress: getOriginalItemProgress,
-                session: try await ext.manager.getSession()
+    @Test func moveAndRenameFileSucceeds() async throws {
+        let ext = try getExtension()
+        let session = try await ext.manager.getSession()
+
+        // mv extension-move-rename/src/old.txt extension-move-rename/dest/new.txt
+        let srcFolderPath = "extension-move-rename/src"
+        try TestData.createFolder(path: srcFolderPath)
+
+        let srcPath = "\(srcFolderPath)/old.txt"
+        try TestData.createFile(path: srcPath, contents: "data")
+        let srcID = try await session.child(path: srcPath)
+
+        let destFolderPath = "extension-move-rename/dest"
+        try TestData.createFolder(path: destFolderPath)
+        let destFolderID = try await session.child(path: destFolderPath)
+
+        let destURL = TestData.getURL(path: "\(destFolderPath)/new.txt")
+        try TestData.removeItem(path: "\(destFolderPath)/new.txt")
+
+        let progress = Progress()
+        _ = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: srcID,
+                parentItemIdentifier: destFolderID,
+                filename: "new.txt",
+                contentType: .text,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [
+                    .userReadable, .userWritable, .pathExtensionHidden,
+                ],
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.filename, .parentItemIdentifier],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: progress,
+            session: session,
+        )
+
+        #expect(FileManager.default.fileExists(at: destURL))
+        #expect(
+            !FileManager.default.fileExists(
+                at: TestData.getURL(path: srcPath)
             )
-        } throws: { error in isNoSuchItemError(error) }
+        )
+        #expect(progress.isFinished)
+    }
 
-        #expect(getOriginalItemProgress.isFinished)
+    @Test func moveFilePreservesIdentifier() async throws {
+        let ext = try getExtension()
+        let session = try await ext.manager.getSession()
+
+        // mv extension-move-preserve-id/file.txt extension-move-preserve-id/dest/
+        let srcPath = "extension-move-preserve-id/file.txt"
+        try TestData.createFile(path: srcPath, contents: "data")
+        let srcID = try await session.child(path: srcPath)
+
+        let destFolderPath = "extension-move-preserve-id/dest"
+        try TestData.createFolder(path: destFolderPath)
+        let destFolderID = try await session.child(path: destFolderPath)
+
+        try TestData.removeItem(path: "\(destFolderPath)/file.txt")
+
+        _ = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: srcID,
+                parentItemIdentifier: destFolderID,
+                filename: "file.txt",
+                contentType: .text,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [
+                    .userReadable, .userWritable, .pathExtensionHidden,
+                ],
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.parentItemIdentifier],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: Progress(),
+            session: session,
+        )
+
+        // Original ID should still resolve to the moved file
+        let item = try await ext.item(
+            for: srcID,
+            request: NSFileProviderRequest(),
+            progress: Progress(),
+            session: try await ext.manager.getSession()
+        )
+        #expect(item.filename == "file.txt")
+        #expect(item.parentItemIdentifier == destFolderID)
     }
 
     @Test func trashFileSucceeds() async throws {
@@ -686,7 +759,7 @@ struct ExtensionTests {
         try TestData.removeItem(path: ".Trashes")
         let trashedURL = TestData.getURL(path: ".Trashes/file.txt")
 
-        // Modify FPItem(id: FPItemID(extension-trash-file/file.txt), parentId: FPItemID.trashContainer, filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 4, parentItemIdentifier)
+        // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID.trashContainer, filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 4, parentItemIdentifier)
         let trashProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -739,7 +812,7 @@ struct ExtensionTests {
         )
         let fileID = try await session.child(path: filePath)
 
-        // Fetch FPItemID(extension-edit-file/file.txt)
+        // Fetch FPItemID(<id>)
         let fetchOldProgress = Progress()
         let (oldURL, oldItem) = try await ext.fetchContents(
             for: fileID,
@@ -754,7 +827,7 @@ struct ExtensionTests {
         #expect(try String(contentsOf: oldURL, encoding: .utf8) == oldContent)
         #expect(fetchOldProgress.isFinished)
 
-        // Modify FPItem(id: FPItemID(extension-edit-file/file.txt), parentId: FPItemID(extension-edit-file), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), size: 14, modifyTime: 2026-03-03 22:20:44 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 129, contents, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), size: 14, modifyTime: 2026-03-03 22:20:44 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 129, contents, contentModificationDate)
         let newContent = "Hello, World!\n"
         let newContentURL = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString)
@@ -792,7 +865,7 @@ struct ExtensionTests {
         #expect(try String(contentsOf: fileURL, encoding: .utf8) == newContent)
         #expect(modifyProgress.isFinished)
 
-        // Fetch FPItemID(extension-edit-file/file.txt)
+        // Fetch FPItemID(<id>)
         let fetchNewProgress = Progress()
         let (newURL, newItem) = try await ext.fetchContents(
             for: fileID,
@@ -823,7 +896,7 @@ struct ExtensionTests {
         )
         let fileID = try await session.child(path: filePath)
 
-        // Modify FPItem(id: FPItemID(extension-permissions/file.txt), parentId: FPItemID(extension-permissions), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 256, fileSystemFlags)
+        // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 256, fileSystemFlags)
         let modifyProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -863,7 +936,7 @@ struct ExtensionTests {
         )
         let folderID = try await session.child(path: folderPath)
 
-        // Modify FPItem(id: FPItemID(extension-permissions/folder), parentId: FPItemID(extension-permissions), filename: folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 256, fileSystemFlags)
+        // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID(<pid>), filename: folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 256, fileSystemFlags)
         let modifyProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -900,7 +973,7 @@ struct ExtensionTests {
         let folderURL = try TestData.createFolder(path: folderPath)
         let folderID = try await session.child(path: folderPath)
 
-        // Delete FPItemID(extension-delete-item/folder)
+        // Delete FPItemID(<id>)
         let progress = Progress()
         try await ext.deleteItem(
             identifier: folderID,
@@ -929,7 +1002,7 @@ struct ExtensionTests {
         )
         let fileID = try await session.child(path: filePath)
 
-        // Delete FPItemID(extension-delete-item/file.txt)
+        // Delete FPItemID(<id>)
         let progress = Progress()
         try await ext.deleteItem(
             identifier: fileID,
