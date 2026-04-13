@@ -57,7 +57,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         progress: Progress,
         session: Session,
     ) async throws -> NSFileProviderItem {
-        logger.debug("Item \(itemIdentifier.desc)")
+        let itemRef = await session.id(of: itemIdentifier)
+        logger.debug("Item \(itemRef)")
 
         return try await progress.withChild {
             if itemIdentifier == .rootContainer || itemIdentifier == .workingSet
@@ -149,14 +150,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         progress: Progress,
         session: Session,
     ) async throws -> (URL, NSFileProviderItem, NSRange) {
-        logger.debug(
-            """
-            Fetch partial contents of \(itemIdentifier.desc) \
-            with range(\(range.location), \(range.length)) \
-            aligned to \(alignment)
-            """
-        )
-
         return try await read(
             itemIdentifier,
             range: range.aligned(to: alignment),
@@ -414,7 +407,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         progress: Progress,
         session: Session,
     ) async throws {
-        logger.debug("Delete \(identifier.desc)")
+        let itemRef = await session.id(of: identifier)
+        logger.debug("Delete \(itemRef)")
 
         return try await progress.withChild {
             let attrs = try await session.attributes(for: identifier)
@@ -443,8 +437,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         progress: Progress,
         session: Session
     ) async throws -> (URL, NSFileProviderItem, NSRange) {
+        let itemRef = await session.id(of: itemIdentifier)
         let url = FileManager.default.temporaryDirectory
-            .appending(path: UUID().uuidString)
+            .appending(path: itemIdentifier.rawValue)
         guard FileManager.default.createFile(atPath: url.path(), contents: nil)
         else {
             throw NSFileProviderError(.insufficientQuota)
@@ -456,7 +451,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         let range = range.clamped(to: Int(item.size))
         logger.info(
             """
-            Download \(itemIdentifier.desc) \
+            Download \(itemRef) \
             with range(\(range.location), \(range.length)) \
             into \(url.path())
             """
@@ -481,16 +476,12 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 }
                 try handle.write(contentsOf: data)
                 if let progress = speedometer.update(delta: data.count) {
-                    logger.debug(
-                        "Downloading \(itemIdentifier.desc): \(progress)"
-                    )
+                    logger.debug("Downloading \(itemRef): \(progress)")
                 }
             }
         }
 
-        logger.info(
-            "Downloaded \(itemIdentifier.desc): \(speedometer.finalize())"
-        )
+        logger.info("Downloaded \(itemRef): \(speedometer.finalize())")
         return (url, item, range)
     }
 
@@ -502,10 +493,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         progress: Progress,
         session: Session,
     ) async throws {
+        let itemRef = await session.id(of: itemIdentifier)
         let fp = try FileHandle(forReadingFrom: url)
         defer { try? fp.close() }
 
-        logger.info("Upload \(itemIdentifier.desc) from \(url.path())")
+        logger.info("Upload \(itemRef) from \(url.path())")
         let size = try FileManager.default.size(of: url)
 
         progress.kind = .file
@@ -525,17 +517,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     }
                     try await writer.write(data: data)
                     if let progress = speedometer.update(delta: data.count) {
-                        logger.debug(
-                            "Uploading \(itemIdentifier.desc): \(progress)"
-                        )
+                        logger.debug("Uploading \(itemRef): \(progress)")
                     }
                 }
             }
         }
 
-        logger.info(
-            "Uploaded \(itemIdentifier.desc): \(speedometer.finalize())"
-        )
+        logger.info("Uploaded \(itemRef): \(speedometer.finalize())")
     }
 
     private func setAttributes(

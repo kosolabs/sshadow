@@ -93,13 +93,13 @@ extension NSFileProviderItemIdentifier {
     var desc: String {
         switch self {
         case .rootContainer:
-            return "FPItemID.rootContainer"
+            return ".rootContainer"
         case .workingSet:
-            return "FPItemID.workingSet"
+            return ".workingSet"
         case .trashContainer:
-            return "FPItemID.trashContainer"
+            return ".trashContainer"
         default:
-            return "FPItemID(\(rawValue))"
+            return rawValue
         }
     }
 }

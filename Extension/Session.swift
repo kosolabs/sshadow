@@ -32,7 +32,7 @@ class Session {
     }
 
     func id(of identifier: NSFileProviderItemIdentifier) async -> String {
-        await "FPItemID(\(identifier.rawValue), \(db.path(for: identifier)))"
+        await "FPItemID(\(identifier.desc), \(db.path(for: identifier)))"
     }
 
     func name(

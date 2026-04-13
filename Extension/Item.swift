@@ -19,7 +19,7 @@ public class Item: NSObject, NSFileProviderItem {
         itemAttributes: SFTPAttributes,
     ) {
         logger = Logger(category: "\(domainName):Item")
-        logger.debug("Init \(itemIdentifier.desc), \(filename)")
+        logger.debug("Init FPItemID(\(itemIdentifier.desc), \(filename))")
         self.itemIdentifier = itemIdentifier
         self.parentItemIdentifier = parentItemIdentifier
         self.filename = filename
