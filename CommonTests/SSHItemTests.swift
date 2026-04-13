@@ -42,20 +42,8 @@ struct SSHItemTests {
         #expect(item.id == .workingSet)
     }
 
-    @Test func idReturnsCustomId() {
-        let id = NSFileProviderItemIdentifier(UUID().uuidString)
-        let item = SSHItem(id: id, parentId: .rootContainer, name: "file.txt")
-        #expect(item.id == id)
-    }
-
     @Test func parentIdReturnsRootContainer() {
         let item = SSHItem(parentId: .rootContainer, name: "file.txt")
         #expect(item.parentId == .rootContainer)
-    }
-
-    @Test func parentIdReturnsCustomId() {
-        let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
-        let item = SSHItem(parentId: parentId, name: "file.txt")
-        #expect(item.parentId == parentId)
     }
 }

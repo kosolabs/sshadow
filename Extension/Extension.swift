@@ -312,10 +312,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
         logger.debug("Modify \(item.desc) for \(changedFields.desc)")
 
-        let itemIdentifier = try await session.child(
-            of: item.parentId,
-            path: item.filename
-        )
         var remaining = changedFields
         let steps = progress.steps()
 
@@ -337,7 +333,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
             steps.add(weight: fileTransferUnits) { subprogress in
                 try await self.write(
-                    itemIdentifier,
+                    item.itemIdentifier,
                     contents: newContents,
                     fileSystemFlags: fileSystemFlags,
                     bufferSize: bufferSize,
@@ -351,8 +347,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             remaining.subtract(.nameFields)
             steps.add {
                 try await session.move(
-                    from: item.itemIdentifier,
-                    to: itemIdentifier,
+                    item.itemIdentifier,
+                    toParent: item.parentId,
+                    name: item.filename,
                     ifParentNotExists:
                         item.parentId == .trashContainer ? .create : .fail
                 )
@@ -376,7 +373,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
         var modifiedItem: NSFileProviderItem?
         steps.add {
-            modifiedItem = try await session.item(for: itemIdentifier)
+            modifiedItem = try await session.item(for: item.itemIdentifier)
         }
 
         try await steps.execute()

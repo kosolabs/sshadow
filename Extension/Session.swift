@@ -57,8 +57,15 @@ class Session {
 
     func path(
         for identifier: NSFileProviderItemIdentifier
-    ) async throws -> String {
+    ) async -> String {
         await config.path(for: db.path(for: identifier))
+    }
+    
+    func path(
+        for name: String,
+        parentId: NSFileProviderItemIdentifier
+    ) async -> String {
+        await config.path(for: db.path(for: name, in: parentId))
     }
 
     func item(
@@ -125,25 +132,31 @@ class Session {
     }
 
     func move(
-        from old: NSFileProviderItemIdentifier,
-        to new: NSFileProviderItemIdentifier,
+        _ id: NSFileProviderItemIdentifier,
+        toParent newParentId: NSFileProviderItemIdentifier,
+        name newName: String,
         ifParentNotExists: OnParentNotExists = .fail
     ) async throws {
-        await logger.info("Move \(id(of: old)) to \(id(of: new))")
+        let oldPath = await path(for: id)
+        let newPath = await path(for: newName, parentId: newParentId)
+
+        await logger.info("Move \(self.id(of: id)) to \(newPath)")
         try await mapError {
             do {
-                try await sftp.move(from: path(for: old), to: path(for: new))
+                try await sftp.move(from: oldPath, to: newPath)
             } catch SSHError.sftpError(.noSuchFile, _)
                 where ifParentNotExists == .create
             {
-                await logger.info("Parent of \(id(of: new)) doesn't exist")
-                try await createDirectory(
-                    for: parent(of: new),
-                    ifExists: .succeed
+                logger.info("Parent doesn't exist, creating")
+                try await sftp.createDirectory(
+                    atPath: await path(for: newParentId),
+                    mode: 0o700
                 )
-                try await sftp.move(from: path(for: old), to: path(for: new))
+                try await sftp.move(from: oldPath, to: newPath)
             }
         }
+
+        try await db.move(id, toParent: newParentId, name: newName)
     }
 
     func removeFile(
