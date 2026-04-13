@@ -65,7 +65,8 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         session: Session,
         yield: @Sendable ([any NSFileProviderItemProtocol]) -> Void,
     ) async throws -> NSFileProviderPage? {
-        logger.info("Enumerating \(itemIdentifier.desc)")
+        let itemRef = await session.id(of: itemIdentifier)
+        logger.info("Enumerating \(itemRef)")
 
         if itemIdentifier == .workingSet {
             return nil
