@@ -150,12 +150,98 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         progress: Progress,
         session: Session,
     ) async throws -> (URL, NSFileProviderItem, NSRange) {
-        return try await read(
-            itemIdentifier,
-            range: range.aligned(to: alignment),
-            progress: progress,
-            session: session
+        let chunkSize = SSHadowDB.chunkSize
+        let item = try await session.item(for: itemIdentifier)
+        let fileSize = Int(item.size)
+
+        // Align requested range to chunk boundaries
+        let alignedRange = range.aligned(to: alignment)
+        let startChunk = alignedRange.location / chunkSize
+        let endChunk = (alignedRange.upperBound + chunkSize - 1) / chunkSize
+        let chunkRange = startChunk..<endChunk
+
+        // Find which chunks we already have
+        let cached = await session.db.cachedChunks(
+            for: itemIdentifier,
+            in: chunkRange
         )
+        let missing = chunkRange.filter { !cached.contains($0) }
+
+        let cacheURL = session.cacheFileURL(for: itemIdentifier)
+        let itemRef = await session.id(of: itemIdentifier)
+
+        // Create cache file if it doesn't exist
+        if !FileManager.default.fileExists(atPath: cacheURL.path()) {
+            FileManager.default.createFile(
+                atPath: cacheURL.path(), contents: nil
+            )
+        }
+
+        // Download missing chunks
+        if !missing.isEmpty {
+            logger.info(
+                "Fetching chunks \(missing) of \(itemRef) (cached: \(cached.sorted()))"
+            )
+
+            let handle = try FileHandle(forWritingTo: cacheURL)
+            defer { try? handle.close() }
+
+            progress.kind = .file
+            progress.fileOperationKind = .downloading
+            let totalBytes = missing.count * chunkSize
+            progress.totalUnitCount = Int64(totalBytes)
+            let speedometer = Speedometer(progress: progress)
+
+            for chunkIndex in missing {
+                let offset = UInt64(chunkIndex * chunkSize)
+                let length = min(chunkSize, fileSize - chunkIndex * chunkSize)
+                guard length > 0 else { continue }
+
+                try handle.seek(toOffset: offset)
+                try await session.withFile(
+                    for: itemIdentifier,
+                    accessType: .readOnly
+                ) { file in
+                    for try await data in file.stream(
+                        offset: offset,
+                        length: UInt64(length)
+                    ) {
+                        if progress.isCancelled {
+                            throw CocoaError(.userCancelled)
+                        }
+                        try handle.write(contentsOf: data)
+                        if let progress = speedometer.update(
+                            delta: data.count)
+                        {
+                            logger.debug(
+                                "Downloading \(itemRef): \(progress)"
+                            )
+                        }
+                    }
+                }
+            }
+
+            try await session.db.recordChunks(
+                for: itemIdentifier,
+                indices: missing
+            )
+            logger.info(
+                "Downloaded chunks \(missing) of \(itemRef): \(speedometer.finalize())"
+            )
+        } else {
+            logger.info(
+                "All chunks cached for \(itemRef) range \(alignedRange)"
+            )
+        }
+
+        // Return the chunk-aligned range we have available
+        let returnStart = startChunk * chunkSize
+        let returnEnd = min(endChunk * chunkSize, fileSize)
+        let returnRange = NSRange(
+            location: returnStart, length: returnEnd - returnStart
+        )
+
+        return (cacheURL, item, returnRange)
     }
 
     public func createItem(

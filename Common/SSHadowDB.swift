@@ -12,7 +12,7 @@ public actor SSHadowDB {
     ) async throws -> SSHadowDB {
         let userInfo = try UserInfo.fromDictionary(domain.userInfo)
 
-        let schema = Schema([SSHItem.self])
+        let schema = Schema([SSHItem.self, SSHChunk.self])
         let groupURL = try SSHadow.groupURL()
         
         let container = if userInfo.testing {
@@ -197,6 +197,57 @@ public actor SSHadowDB {
 
     public func upsert(_ item: SSHItem) throws {
         modelContext.insert(item)
+        try modelContext.save()
+    }
+
+    // MARK: - Chunk Cache
+
+    public static let chunkSize = 256 * 1024  // 256 KB
+
+    public func cachedChunks(
+        for itemId: NSFileProviderItemIdentifier,
+        in range: Range<Int>
+    ) -> Set<Int> {
+        let rawItemId = itemId.rawValue
+        let startIndex = range.lowerBound
+        let endIndex = range.upperBound
+        let descriptor = FetchDescriptor<SSHChunk>(
+            predicate: #Predicate { chunk in
+                chunk.rawItemId == rawItemId
+                    && chunk.index >= startIndex
+                    && chunk.index < endIndex
+            }
+        )
+        guard let chunks = try? modelContext.fetch(descriptor) else {
+            return []
+        }
+        return Set(chunks.map(\.index))
+    }
+
+    public func recordChunks(
+        for itemId: NSFileProviderItemIdentifier,
+        indices: some Sequence<Int>
+    ) throws {
+        let existing = cachedChunks(
+            for: itemId,
+            in: (indices.min() ?? 0)..<((indices.max() ?? 0) + 1)
+        )
+        for index in indices where !existing.contains(index) {
+            modelContext.insert(SSHChunk(itemId: itemId, index: index))
+        }
+        try modelContext.save()
+    }
+
+    public func deleteChunks(
+        for itemId: NSFileProviderItemIdentifier
+    ) throws {
+        let rawItemId = itemId.rawValue
+        try modelContext.delete(
+            model: SSHChunk.self,
+            where: #Predicate { chunk in
+                chunk.rawItemId == rawItemId
+            }
+        )
         try modelContext.save()
     }
 }

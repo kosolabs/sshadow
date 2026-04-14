@@ -68,6 +68,13 @@ class Session {
         await config.path(for: db.path(for: name, in: parentId))
     }
 
+    func cacheFileURL(
+        for identifier: NSFileProviderItemIdentifier
+    ) -> URL {
+        FileManager.default.temporaryDirectory
+            .appending(path: "chunks-\(identifier.rawValue)")
+    }
+
     func item(
         for identifier: NSFileProviderItemIdentifier,
     ) async throws -> Item {
