@@ -376,43 +376,31 @@ struct SSHadowDBTests {
     }
     
     struct ChunkTests {
-        @Test func cachedChunksReturnsEmptyForNewItem() async throws {
+        @Test func isChunkCachedReturnsFalseForNewItem() async throws {
             let db = try await TestData.getSSHadowDB()
             let itemId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-            let cached = await db.cachedChunks(for: itemId, in: 0..<10)
-            #expect(cached.isEmpty)
+            #expect(await !db.isChunkCached(for: itemId, index: 0))
         }
 
-        @Test func recordAndQueryChunks() async throws {
+        @Test func recordAndQueryChunk() async throws {
             let db = try await TestData.getSSHadowDB()
             let itemId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-            try await db.recordChunks(for: itemId, indices: [0, 2, 5])
+            try await db.recordChunk(for: itemId, index: 3)
 
-            let cached = await db.cachedChunks(for: itemId, in: 0..<10)
-            #expect(cached == [0, 2, 5])
+            #expect(await db.isChunkCached(for: itemId, index: 3))
+            #expect(await !db.isChunkCached(for: itemId, index: 0))
         }
 
-        @Test func cachedChunksFiltersToRange() async throws {
+        @Test func recordChunkIsIdempotent() async throws {
             let db = try await TestData.getSSHadowDB()
             let itemId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-            try await db.recordChunks(for: itemId, indices: [0, 1, 2, 5, 8])
+            try await db.recordChunk(for: itemId, index: 0)
+            try await db.recordChunk(for: itemId, index: 0)
 
-            let cached = await db.cachedChunks(for: itemId, in: 2..<6)
-            #expect(cached == [2, 5])
-        }
-
-        @Test func recordChunksIsIdempotent() async throws {
-            let db = try await TestData.getSSHadowDB()
-            let itemId = NSFileProviderItemIdentifier(UUID().uuidString)
-
-            try await db.recordChunks(for: itemId, indices: [0, 1])
-            try await db.recordChunks(for: itemId, indices: [0, 1, 2])
-
-            let cached = await db.cachedChunks(for: itemId, in: 0..<10)
-            #expect(cached == [0, 1, 2])
+            #expect(await db.isChunkCached(for: itemId, index: 0))
         }
 
         @Test func chunksAreIsolatedPerItem() async throws {
@@ -420,13 +408,13 @@ struct SSHadowDBTests {
             let item1 = NSFileProviderItemIdentifier(UUID().uuidString)
             let item2 = NSFileProviderItemIdentifier(UUID().uuidString)
 
-            try await db.recordChunks(for: item1, indices: [0, 1])
-            try await db.recordChunks(for: item2, indices: [2, 3])
+            try await db.recordChunk(for: item1, index: 0)
+            try await db.recordChunk(for: item2, index: 1)
 
-            let cached1 = await db.cachedChunks(for: item1, in: 0..<10)
-            let cached2 = await db.cachedChunks(for: item2, in: 0..<10)
-            #expect(cached1 == [0, 1])
-            #expect(cached2 == [2, 3])
+            #expect(await db.isChunkCached(for: item1, index: 0))
+            #expect(await !db.isChunkCached(for: item1, index: 1))
+            #expect(await !db.isChunkCached(for: item2, index: 0))
+            #expect(await db.isChunkCached(for: item2, index: 1))
         }
 
         @Test func deleteChunksRemovesAllForItem() async throws {
@@ -434,14 +422,14 @@ struct SSHadowDBTests {
             let item1 = NSFileProviderItemIdentifier(UUID().uuidString)
             let item2 = NSFileProviderItemIdentifier(UUID().uuidString)
 
-            try await db.recordChunks(for: item1, indices: [0, 1, 2])
-            try await db.recordChunks(for: item2, indices: [0, 1])
+            try await db.recordChunk(for: item1, index: 0)
+            try await db.recordChunk(for: item1, index: 1)
+            try await db.recordChunk(for: item2, index: 0)
             try await db.deleteChunks(for: item1)
 
-            let cached1 = await db.cachedChunks(for: item1, in: 0..<10)
-            let cached2 = await db.cachedChunks(for: item2, in: 0..<10)
-            #expect(cached1.isEmpty)
-            #expect(cached2 == [0, 1])
+            #expect(await !db.isChunkCached(for: item1, index: 0))
+            #expect(await !db.isChunkCached(for: item1, index: 1))
+            #expect(await db.isChunkCached(for: item2, index: 0))
         }
     }
 }

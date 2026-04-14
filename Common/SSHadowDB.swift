@@ -204,38 +204,26 @@ public actor SSHadowDB {
     // MARK: - Chunk Cache
 
     public static let chunkSize = 64 * 1024
-
-    public func cachedChunks(
+    
+    public func isChunkCached(
         for itemId: NSFileProviderItemIdentifier,
-        in range: Range<Int>
-    ) -> Set<Int> {
+        index: Int
+    ) -> Bool {
         let rawItemId = itemId.rawValue
-        let startIndex = range.lowerBound
-        let endIndex = range.upperBound
         let descriptor = FetchDescriptor<SSHChunk>(
             predicate: #Predicate { chunk in
-                chunk.rawItemId == rawItemId
-                    && chunk.index >= startIndex
-                    && chunk.index < endIndex
+                chunk.rawItemId == rawItemId && chunk.index == index
             }
         )
-        guard let chunks = try? modelContext.fetch(descriptor) else {
-            return []
-        }
-        return Set(chunks.map(\.index))
+        return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
     }
 
-    public func recordChunks(
+    public func recordChunk(
         for itemId: NSFileProviderItemIdentifier,
-        indices: some Sequence<Int>
+        index: Int
     ) throws {
-        let existing = cachedChunks(
-            for: itemId,
-            in: (indices.min() ?? 0)..<((indices.max() ?? 0) + 1)
-        )
-        for index in indices where !existing.contains(index) {
-            modelContext.insert(SSHChunk(itemId: itemId, index: index))
-        }
+        guard !isChunkCached(for: itemId, index: index) else { return }
+        modelContext.insert(SSHChunk(itemId: itemId, index: index))
         try modelContext.save()
     }
 
