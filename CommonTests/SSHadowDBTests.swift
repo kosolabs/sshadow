@@ -374,4 +374,74 @@ struct SSHadowDBTests {
             #expect(second.name == "b.txt")
         }
     }
+    
+    struct ChunkTests {
+        @Test func cachedChunksReturnsEmptyForNewItem() async throws {
+            let db = try await TestData.getSSHadowDB()
+            let itemId = NSFileProviderItemIdentifier(UUID().uuidString)
+
+            let cached = await db.cachedChunks(for: itemId, in: 0..<10)
+            #expect(cached.isEmpty)
+        }
+
+        @Test func recordAndQueryChunks() async throws {
+            let db = try await TestData.getSSHadowDB()
+            let itemId = NSFileProviderItemIdentifier(UUID().uuidString)
+
+            try await db.recordChunks(for: itemId, indices: [0, 2, 5])
+
+            let cached = await db.cachedChunks(for: itemId, in: 0..<10)
+            #expect(cached == [0, 2, 5])
+        }
+
+        @Test func cachedChunksFiltersToRange() async throws {
+            let db = try await TestData.getSSHadowDB()
+            let itemId = NSFileProviderItemIdentifier(UUID().uuidString)
+
+            try await db.recordChunks(for: itemId, indices: [0, 1, 2, 5, 8])
+
+            let cached = await db.cachedChunks(for: itemId, in: 2..<6)
+            #expect(cached == [2, 5])
+        }
+
+        @Test func recordChunksIsIdempotent() async throws {
+            let db = try await TestData.getSSHadowDB()
+            let itemId = NSFileProviderItemIdentifier(UUID().uuidString)
+
+            try await db.recordChunks(for: itemId, indices: [0, 1])
+            try await db.recordChunks(for: itemId, indices: [0, 1, 2])
+
+            let cached = await db.cachedChunks(for: itemId, in: 0..<10)
+            #expect(cached == [0, 1, 2])
+        }
+
+        @Test func chunksAreIsolatedPerItem() async throws {
+            let db = try await TestData.getSSHadowDB()
+            let item1 = NSFileProviderItemIdentifier(UUID().uuidString)
+            let item2 = NSFileProviderItemIdentifier(UUID().uuidString)
+
+            try await db.recordChunks(for: item1, indices: [0, 1])
+            try await db.recordChunks(for: item2, indices: [2, 3])
+
+            let cached1 = await db.cachedChunks(for: item1, in: 0..<10)
+            let cached2 = await db.cachedChunks(for: item2, in: 0..<10)
+            #expect(cached1 == [0, 1])
+            #expect(cached2 == [2, 3])
+        }
+
+        @Test func deleteChunksRemovesAllForItem() async throws {
+            let db = try await TestData.getSSHadowDB()
+            let item1 = NSFileProviderItemIdentifier(UUID().uuidString)
+            let item2 = NSFileProviderItemIdentifier(UUID().uuidString)
+
+            try await db.recordChunks(for: item1, indices: [0, 1, 2])
+            try await db.recordChunks(for: item2, indices: [0, 1])
+            try await db.deleteChunks(for: item1)
+
+            let cached1 = await db.cachedChunks(for: item1, in: 0..<10)
+            let cached2 = await db.cachedChunks(for: item2, in: 0..<10)
+            #expect(cached1.isEmpty)
+            #expect(cached2 == [0, 1])
+        }
+    }
 }
