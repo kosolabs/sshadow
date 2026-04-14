@@ -236,15 +236,53 @@ class Session {
         }
     }
 
-    func cacheFile(for identifier: NSFileProviderItemIdentifier) -> URL {
-        let cacheURL = FileManager.default.temporaryDirectory
+    func cacheFileURL(
+        for identifier: NSFileProviderItemIdentifier
+    ) -> URL {
+        FileManager.default.temporaryDirectory
             .appending(path: "chunks-\(identifier.rawValue)")
+    }
+
+    func readChunk(
+        for identifier: NSFileProviderItemIdentifier,
+        index: Int,
+        fileSize: Int,
+        onData: (Data) throws -> Void
+    ) async throws {
+        let chunkSize = SSHadowDB.chunkSize
+
+        // Already cached
+        if await db.isChunkCached(for: identifier, index: index) { return }
+
+        let offset = UInt64(index * chunkSize)
+        let length = min(chunkSize, fileSize - index * chunkSize)
+        guard length > 0 else { return }
+
+        let cacheURL = cacheFileURL(for: identifier)
         if !FileManager.default.fileExists(atPath: cacheURL.path()) {
             FileManager.default.createFile(
                 atPath: cacheURL.path(), contents: nil
             )
         }
-        return cacheURL
+
+        let handle = try FileHandle(forWritingTo: cacheURL)
+        defer { try? handle.close() }
+        try handle.seek(toOffset: offset)
+
+        try await withFile(
+            for: identifier,
+            accessType: .readOnly
+        ) { file in
+            for try await data in file.stream(
+                offset: offset,
+                length: UInt64(length)
+            ) {
+                try handle.write(contentsOf: data)
+                try onData(data)
+            }
+        }
+
+        try await db.recordChunk(for: identifier, index: index)
     }
 
     func enumerateItems(
