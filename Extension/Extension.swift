@@ -101,11 +101,40 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         progress: Progress,
         session: Session,
     ) async throws -> (URL, NSFileProviderItem) {
-        let (url, item, _) = try await read(
-            itemIdentifier,
-            progress: progress,
-            session: session
-        )
+        let itemRef = await session.id(of: itemIdentifier)
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: itemIdentifier.rawValue)
+        guard FileManager.default.createFile(atPath: url.path(), contents: nil)
+        else {
+            throw NSFileProviderError(.insufficientQuota)
+        }
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+
+        let item = try await session.item(for: itemIdentifier)
+        logger.info("Download \(itemRef) into \(url.path())")
+
+        progress.kind = .file
+        progress.fileOperationKind = .downloading
+        progress.totalUnitCount = Int64(item.size)
+        let speedometer = Speedometer(progress: progress)
+
+        try await session.withFile(
+            for: itemIdentifier,
+            accessType: .readOnly
+        ) { file in
+            for try await data in file.stream() {
+                if progress.isCancelled {
+                    throw CocoaError(.userCancelled)
+                }
+                try handle.write(contentsOf: data)
+                if let progress = speedometer.update(delta: data.count) {
+                    logger.debug("Downloading \(itemRef): \(progress)")
+                }
+            }
+        }
+
+        logger.info("Downloaded \(itemRef): \(speedometer.finalize())")
         return (url, item)
     }
 
@@ -150,12 +179,91 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         progress: Progress,
         session: Session,
     ) async throws -> (URL, NSFileProviderItem, NSRange) {
-        return try await read(
-            itemIdentifier,
-            range: range.aligned(to: alignment),
-            progress: progress,
-            session: session
+        let chunkSize = SSHadowDB.chunkSize
+        let item = try await session.item(for: itemIdentifier)
+        let fileSize = Int(item.size)
+
+        // Align requested range to chunk boundaries
+        let alignedRange = range.aligned(to: alignment)
+        let startChunk = alignedRange.location / chunkSize
+        let endChunk = (alignedRange.upperBound + chunkSize - 1) / chunkSize
+        let chunkRange = startChunk..<endChunk
+
+        // Find which chunks we already have
+        let cached = await session.db.cachedChunks(
+            for: itemIdentifier,
+            in: chunkRange
         )
+        let missing = chunkRange.filter { !cached.contains($0) }
+
+        let cacheURL = session.cacheFile(for: itemIdentifier)
+        let itemRef = await session.id(of: itemIdentifier)
+
+        // Download missing chunks
+        if !missing.isEmpty {
+            logger.info(
+                "Fetching chunks \(missing) of \(itemRef) (cached: \(cached.sorted()))"
+            )
+
+            let handle = try FileHandle(forWritingTo: cacheURL)
+            defer { try? handle.close() }
+
+            progress.kind = .file
+            progress.fileOperationKind = .downloading
+            let totalBytes = missing.count * chunkSize
+            progress.totalUnitCount = Int64(totalBytes)
+            let speedometer = Speedometer(progress: progress)
+
+            for chunkIndex in missing {
+                let offset = UInt64(chunkIndex * chunkSize)
+                let length = min(chunkSize, fileSize - chunkIndex * chunkSize)
+                guard length > 0 else { continue }
+
+                try handle.seek(toOffset: offset)
+                try await session.withFile(
+                    for: itemIdentifier,
+                    accessType: .readOnly
+                ) { file in
+                    for try await data in file.stream(
+                        offset: offset,
+                        length: UInt64(length)
+                    ) {
+                        if progress.isCancelled {
+                            throw CocoaError(.userCancelled)
+                        }
+                        try handle.write(contentsOf: data)
+                        if let progress = speedometer.update(
+                            delta: data.count)
+                        {
+                            logger.debug(
+                                "Downloading \(itemRef): \(progress)"
+                            )
+                        }
+                    }
+                }
+            }
+
+            try await session.db.recordChunks(
+                for: itemIdentifier,
+                indices: missing
+            )
+            logger.info(
+                "Downloaded chunks \(missing) of \(itemRef): \(speedometer.finalize())"
+            )
+        } else {
+            logger.info(
+                "All chunks cached for \(itemRef) range \(alignedRange)"
+            )
+        }
+
+        // Return the chunk-aligned range we have available
+        let returnStart = startChunk * chunkSize
+        let returnEnd = min(endChunk * chunkSize, fileSize)
+        let returnRange = NSRange(
+            location: returnStart, length: returnEnd - returnStart
+        )
+
+        return (cacheURL, item, returnRange)
     }
 
     public func createItem(
@@ -429,60 +537,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             manager: manager,
             itemIdentifier: containerItemIdentifier
         )
-    }
-
-    private func read(
-        _ itemIdentifier: NSFileProviderItemIdentifier,
-        range: NSRange? = nil,
-        progress: Progress,
-        session: Session
-    ) async throws -> (URL, NSFileProviderItem, NSRange) {
-        let itemRef = await session.id(of: itemIdentifier)
-        let url = FileManager.default.temporaryDirectory
-            .appending(path: itemIdentifier.rawValue)
-        guard FileManager.default.createFile(atPath: url.path(), contents: nil)
-        else {
-            throw NSFileProviderError(.insufficientQuota)
-        }
-        let handle = try FileHandle(forWritingTo: url)
-        defer { try? handle.close() }
-
-        let item = try await session.item(for: itemIdentifier)
-        let range = range.clamped(to: Int(item.size))
-        logger.info(
-            """
-            Download \(itemRef) \
-            with range(\(range.location), \(range.length)) \
-            into \(url.path())
-            """
-        )
-
-        progress.kind = .file
-        progress.fileOperationKind = .downloading
-        progress.totalUnitCount = Int64(range.length)
-        let speedometer = Speedometer(progress: progress)
-
-        try handle.seek(toOffset: UInt64(range.location))
-        try await session.withFile(
-            for: itemIdentifier,
-            accessType: .readOnly
-        ) { file in
-            for try await data in file.stream(
-                offset: UInt64(range.location),
-                length: UInt64(range.length)
-            ) {
-                if progress.isCancelled {
-                    throw CocoaError(.userCancelled)
-                }
-                try handle.write(contentsOf: data)
-                if let progress = speedometer.update(delta: data.count) {
-                    logger.debug("Downloading \(itemRef): \(progress)")
-                }
-            }
-        }
-
-        logger.info("Downloaded \(itemRef): \(speedometer.finalize())")
-        return (url, item, range)
     }
 
     private func write(

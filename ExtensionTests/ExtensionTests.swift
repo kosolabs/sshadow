@@ -119,8 +119,8 @@ struct ExtensionTests {
         let session = try await ext.manager.getSession()
 
         let path = "extension-read-file/partial-file.dat"
-        let data = (0..<256).reduce(into: Data()) { data, i in
-            data.append(contentsOf: repeatElement(UInt8(i), count: 1024))
+        let data = (0..<1024).reduce(into: Data()) { data, i in
+            data.append(contentsOf: repeatElement(UInt8(i % 256), count: 1024))
         }
         try TestData.createFile(path: path, data: data)
 
@@ -137,16 +137,17 @@ struct ExtensionTests {
             session: session,
         )
 
+        let chunkSize = SSHadowDB.chunkSize
         #expect(item.filename == "partial-file.dat")
         #expect(item.documentSize??.intValue == data.count)
-        #expect(returnedRange == NSRange(0..<32768))
+        #expect(returnedRange == NSRange(0..<chunkSize))
 
         let handle = try FileHandle(forReadingFrom: url)
         try handle.seek(toOffset: UInt64(requestedRange.location))
         let actual = try handle.read(upToCount: requestedRange.length)
 
         let expected = (10..<20).reduce(into: Data()) { data, i in
-            data.append(contentsOf: repeatElement(UInt8(i), count: 1024))
+            data.append(contentsOf: repeatElement(UInt8(i % 256), count: 1024))
         }
 
         #expect(actual == expected)
