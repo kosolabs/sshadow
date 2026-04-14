@@ -60,7 +60,7 @@ class Session {
     ) async -> String {
         await config.path(for: db.path(for: identifier))
     }
-    
+
     func path(
         for name: String,
         parentId: NSFileProviderItemIdentifier
@@ -234,6 +234,17 @@ class Session {
                 perform: perform
             )
         }
+    }
+
+    func cacheFile(for identifier: NSFileProviderItemIdentifier) -> URL {
+        let cacheURL = FileManager.default.temporaryDirectory
+            .appending(path: "chunks-\(identifier.rawValue)")
+        if !FileManager.default.fileExists(atPath: cacheURL.path()) {
+            FileManager.default.createFile(
+                atPath: cacheURL.path(), contents: nil
+            )
+        }
+        return cacheURL
     }
 
     func enumerateItems(
