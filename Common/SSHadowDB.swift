@@ -203,11 +203,9 @@ public actor SSHadowDB {
 
     // MARK: - Chunk Cache
 
-    public static let chunkSize = 64 * 1024
-    
     public func isChunkCached(
         for itemId: NSFileProviderItemIdentifier,
-        index: Int
+        index: UInt64
     ) -> Bool {
         let rawItemId = itemId.rawValue
         let descriptor = FetchDescriptor<SSHChunk>(
@@ -220,7 +218,7 @@ public actor SSHadowDB {
 
     public func recordChunk(
         for itemId: NSFileProviderItemIdentifier,
-        index: Int
+        index: UInt64
     ) throws {
         guard !isChunkCached(for: itemId, index: index) else { return }
         modelContext.insert(SSHChunk(itemId: itemId, index: index))

@@ -236,60 +236,68 @@ class Session {
         }
     }
 
-    func cacheFileURL(
-        for identifier: NSFileProviderItemIdentifier
-    ) -> URL {
-        FileManager.default.temporaryDirectory
-            .appending(path: "chunks-\(identifier.rawValue)")
-    }
-
-    func readChunk(
+    func stream(
         for identifier: NSFileProviderItemIdentifier,
-        index: Int,
-        fileSize: Int,
+        range: NSRange,
+        alignment: Int,
+        fileSize: UInt64,
         onData: (Data) throws -> Void
-    ) async throws {
-        let chunkSize = SSHadowDB.chunkSize
+    ) async throws -> (URL, NSRange) {
         let itemRef = await id(of: identifier)
-        
-        logger.debug("Caching \(itemRef)[\(index)]")
 
-        // Already cached
-        if await db.isChunkCached(for: identifier, index: index) {
-            logger.debug("Cache hit \(itemRef)[\(index)]")
-            return
-        }
-
-        let offset = UInt64(index * chunkSize)
-        let length = min(chunkSize, fileSize - index * chunkSize)
-        guard length > 0 else { return }
-
-        let cacheURL = cacheFileURL(for: identifier)
-        if !FileManager.default.fileExists(atPath: cacheURL.path()) {
-            FileManager.default.createFile(
-                atPath: cacheURL.path(), contents: nil
+        guard SSHChunk.size % UInt64(alignment) == 0 else {
+            throw NSFileProviderError(
+                .cannotSynchronize,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Alignment \(alignment) is not a divisor of chunk size \(SSHChunk.size)"
+                ]
             )
         }
 
-        let handle = try FileHandle(forWritingTo: cacheURL)
-        defer { try? handle.close() }
-        try handle.seek(toOffset: offset)
+        let chunkRange = SSHChunk.chunkRange(for: range.asRange())
 
-        try await withFile(
-            for: identifier,
-            accessType: .readOnly
-        ) { file in
-            for try await data in file.stream(
-                offset: offset,
-                length: UInt64(length)
-            ) {
-                try handle.write(contentsOf: data)
-                try onData(data)
+        logger.info("Stream \(itemRef)[\(chunkRange)](\(range))")
+
+        let cacheURL = FileManager.default.temporaryDirectory
+            .appending(path: "chunks-\(identifier.rawValue)")
+
+        for chunkIndex in chunkRange {
+            if await db.isChunkCached(for: identifier, index: chunkIndex) {
+                logger.debug("Cache hit \(itemRef)[\(chunkIndex)]")
+                continue
             }
+
+            let bytes = SSHChunk.byteRange(for: chunkIndex, fileSize: fileSize)
+            guard !bytes.isEmpty else { continue }
+
+            if !FileManager.default.fileExists(atPath: cacheURL.path()) {
+                FileManager.default.createFile(
+                    atPath: cacheURL.path(),
+                    contents: nil
+                )
+            }
+
+            let handle = try FileHandle(forWritingTo: cacheURL)
+            defer { try? handle.close() }
+
+            try await withFile(for: identifier, accessType: .readOnly) { file in
+                for try await data in file.stream(
+                    offset: bytes.offset,
+                    length: bytes.length
+                ) {
+                    try handle.write(contentsOf: data)
+                    try onData(data)
+                }
+            }
+
+            try await db.recordChunk(for: identifier, index: chunkIndex)
+            logger.debug("Cached \(itemRef)[\(chunkIndex)]")
         }
 
-        try await db.recordChunk(for: identifier, index: index)
-        logger.debug("Cached \(itemRef)[\(index)]")
+        let byteRange = SSHChunk.byteRange(for: chunkRange, fileSize: fileSize)
+        logger.info("Streamed \(itemRef)[\(chunkRange)](\(byteRange))")
+        return (cacheURL, byteRange.asNSRange())
     }
 
     func enumerateItems(
