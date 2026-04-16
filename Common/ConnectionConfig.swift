@@ -5,12 +5,8 @@ import SwiftUI
 
 private let logger = Logger(category: "ConnectionConfig")
 
-public struct ConnectionConfig:
-    Codable, CustomStringConvertible, Equatable, Sendable
-{
-    public enum AuthMethod:
-        Codable, CustomStringConvertible, Equatable, Sendable
-    {
+public struct ConnectionConfig: Message, CustomStringConvertible {
+    public enum AuthMethod: Message, CustomStringConvertible {
         case none
         case password(String)
         case privateKey(base64PrivateKey: String, passphrase: String?)
@@ -56,7 +52,7 @@ public struct ConnectionConfig:
         self.path = path.hasSuffix("/") ? String(path.dropLast()) : path
         self.authMethod = authMethod
     }
-    
+
     public var socket: String {
         var result = "\(host)"
         if port != 22 {
