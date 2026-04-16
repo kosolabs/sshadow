@@ -1,6 +1,5 @@
 import Common
 import FileProvider
-import SwiftData
 import SwiftLibSSH
 import UniformTypeIdentifiers
 
@@ -179,45 +178,30 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         progress: Progress,
         session: Session,
     ) async throws -> (URL, NSFileProviderItem, NSRange) {
-        let chunkSize = SSHadowDB.chunkSize
         let item = try await session.item(for: itemIdentifier)
-        let fileSize = Int(item.size)
-        let itemRef = await session.id(of: itemIdentifier)
-
-        // Align requested range to chunk boundaries, clamped to file size
-        let chunkRange = range.aligned(to: alignment)
-            .aligned(to: chunkSize)
-            .clamped(to: fileSize)
-        let startChunk = chunkRange.location / chunkSize
-        let endChunk = (chunkRange.upperBound + chunkSize - 1) / chunkSize
-
-        logger.info(
-            "Stream \(itemRef)[\(startChunk..<endChunk)](\(range)"
-        )
 
         progress.kind = .file
         progress.fileOperationKind = .downloading
-        progress.totalUnitCount = Int64(chunkRange.length)
         let speedometer = Speedometer(progress: progress)
 
-        for chunkIndex in startChunk..<endChunk {
-            try await session.readChunk(
-                for: itemIdentifier,
-                index: chunkIndex,
-                fileSize: fileSize
-            ) { data in
-                if progress.isCancelled {
-                    throw CocoaError(.userCancelled)
-                }
-                if let update = speedometer.update(delta: data.count) {
-                    logger.debug("Streaming \(itemRef)[\(chunkIndex)]: \(update)")
-                }
+        let (url, fetchedRange) = try await session.stream(
+            for: itemIdentifier,
+            range: range,
+            alignment: alignment,
+            fileSize: item.size
+        ) { data in
+            if progress.isCancelled {
+                throw CocoaError(.userCancelled)
+            }
+            if let update = speedometer.update(delta: data.count) {
+                logger.debug("Streaming: \(update)")
             }
         }
 
-        logger.info("Streamed \(itemRef)[\(startChunk..<endChunk)](\(range)): \(speedometer.finalize())")
+        progress.totalUnitCount = Int64(fetchedRange.length)
+        logger.info("Streamed: \(speedometer.finalize())")
 
-        return (session.cacheFileURL(for: itemIdentifier), item, chunkRange)
+        return (url, item, fetchedRange)
     }
 
     public func createItem(

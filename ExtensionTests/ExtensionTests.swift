@@ -137,7 +137,7 @@ struct ExtensionTests {
             session: session,
         )
 
-        let chunkSize = SSHadowDB.chunkSize
+        let chunkSize = SSHChunk.size
         #expect(item.filename == "partial-file.dat")
         #expect(item.documentSize??.intValue == data.count)
         #expect(returnedRange == NSRange(0..<chunkSize))
