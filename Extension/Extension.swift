@@ -192,7 +192,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         let endChunk = (chunkRange.upperBound + chunkSize - 1) / chunkSize
 
         logger.info(
-            "Partial read \(itemRef) range \(range) -> chunks \(startChunk)..<\(endChunk)"
+            "Stream \(itemRef)[\(startChunk..<endChunk)](\(range)"
         )
 
         progress.kind = .file
@@ -210,12 +210,12 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     throw CocoaError(.userCancelled)
                 }
                 if let update = speedometer.update(delta: data.count) {
-                    logger.debug("Downloading \(itemRef): \(update)")
+                    logger.debug("Streaming \(itemRef)[\(chunkIndex)]: \(update)")
                 }
             }
         }
 
-        logger.info("Partial read \(itemRef): \(speedometer.finalize())")
+        logger.info("Streamed \(itemRef)[\(startChunk..<endChunk)](\(range)): \(speedometer.finalize())")
 
         return (session.cacheFileURL(for: itemIdentifier), item, chunkRange)
     }

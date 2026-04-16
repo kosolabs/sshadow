@@ -250,9 +250,15 @@ class Session {
         onData: (Data) throws -> Void
     ) async throws {
         let chunkSize = SSHadowDB.chunkSize
+        let itemRef = await id(of: identifier)
+        
+        logger.debug("Caching \(itemRef)[\(index)]")
 
         // Already cached
-        if await db.isChunkCached(for: identifier, index: index) { return }
+        if await db.isChunkCached(for: identifier, index: index) {
+            logger.debug("Cache hit \(itemRef)[\(index)]")
+            return
+        }
 
         let offset = UInt64(index * chunkSize)
         let length = min(chunkSize, fileSize - index * chunkSize)
@@ -283,6 +289,7 @@ class Session {
         }
 
         try await db.recordChunk(for: identifier, index: index)
+        logger.debug("Cached \(itemRef)[\(index)]")
     }
 
     func enumerateItems(
