@@ -8,6 +8,7 @@ class Session {
     let ssh: SSHClient
     let sftp: SFTPClient
     let db: SSHadowDB
+    let agent: AgentClient
 
     var name: String {
         domain.displayName
@@ -20,13 +21,15 @@ class Session {
         config: ConnectionConfig,
         ssh: SSHClient,
         sftp: SFTPClient,
-        db: SSHadowDB
+        db: SSHadowDB,
+        agent: AgentClient
     ) {
         self.domain = domain
         self.config = config
         self.ssh = ssh
         self.sftp = sftp
         self.db = db
+        self.agent = agent
 
         self.logger = Logger(category: "\(domain.displayName):Session")
     }

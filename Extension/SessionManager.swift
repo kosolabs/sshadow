@@ -17,7 +17,8 @@ private func connect(
             config: config,
             ssh: ssh,
             sftp: sftp,
-            db: db
+            db: db,
+            agent: AgentClient()
         )
     } catch SSHError.authenticationFailed(_) {
         throw NSFileProviderError(.notAuthenticated)

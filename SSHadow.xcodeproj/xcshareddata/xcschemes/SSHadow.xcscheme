@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "2630"
+   LastUpgradeVersion = "2640"
    version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
@@ -68,6 +68,17 @@
                BlueprintIdentifier = "738D63AB2F3FD1F100FED311"
                BuildableName = "ExtensionTests.xctest"
                BlueprintName = "ExtensionTests"
+               ReferencedContainer = "container:SSHadow.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "73799A472F9811DD00A15109"
+               BuildableName = "AgentKitTests.xctest"
+               BlueprintName = "AgentKitTests"
                ReferencedContainer = "container:SSHadow.xcodeproj">
             </BuildableReference>
          </TestableReference>

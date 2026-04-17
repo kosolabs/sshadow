@@ -1,3 +1,4 @@
+import AgentKit
 import Common
 import FileProvider
 import Foundation
@@ -51,7 +52,7 @@ enum TestData {
             testing: true
         )
     }
-    
+
     static func getConnectionConfig(
         id: UUID = UUID(),
         url: URL = mount
@@ -95,6 +96,22 @@ enum TestData {
 
     static func getSSHadowDB() async throws -> SSHadowDB {
         return try await SSHadowDB.open(domain: domain)
+    }
+
+    static func getAgentClient() -> AgentClient {
+        let delegate = AgentListenerDelegate()
+        let listener = NSXPCListener.anonymous()
+        listener.delegate = delegate
+        objc_setAssociatedObject(
+            listener,
+            "delegate",
+            delegate,
+            .OBJC_ASSOCIATION_RETAIN
+        )
+        listener.resume()
+
+        let connection = NSXPCConnection(listenerEndpoint: listener.endpoint)
+        return AgentClient(connection: connection)
     }
 
     static func getURL(path: String) -> URL {
