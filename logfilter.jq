@@ -45,7 +45,14 @@ try (
   (gray + .timestamp[11:26] + reset) as $time |
   ($lvl_color + .messageType + reset) as $level |
   (.threadID as $tid | (thread_colors | .[$tid % length]) + ($tid | tostring) + reset) as $threadID |
-  (.subsystem | split(".") | .[-1]) as $subsystem |
+  
+  # Map subsystem to clearer names
+  (.subsystem | split(".") | .[-1] |
+    if . == "SSHadow" then "AppUI"
+    elif . == "Provider" then "FPExt"
+    else . end
+  ) as $subsystem |
+  
   (bold + .category + reset) as $category |
   ($lvl_color + .eventMessage + reset) as $message |
   

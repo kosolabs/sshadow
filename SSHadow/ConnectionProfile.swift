@@ -112,6 +112,10 @@ class ConnectionProfile: CustomStringConvertible {
         try await SSHadowDB.open(domain: domain)
         self.enabled = true
         await logger.info("Enabled: \(self)")
+        
+        let agent = AgentClient()
+        let response = try await agent.sayHello(to: "AppUI")
+        await logger.info("Agent response: \(response)")
     }
 
     func disable() async throws {
