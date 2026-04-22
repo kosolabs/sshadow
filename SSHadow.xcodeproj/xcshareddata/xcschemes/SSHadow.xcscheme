@@ -66,8 +66,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "738D63AB2F3FD1F100FED311"
-               BuildableName = "ExtensionTests.xctest"
-               BlueprintName = "ExtensionTests"
+               BuildableName = "ExtensionKitTests.xctest"
+               BlueprintName = "ExtensionKitTests"
                ReferencedContainer = "container:SSHadow.xcodeproj">
             </BuildableReference>
          </TestableReference>

@@ -3,7 +3,7 @@ import FileProvider
 import Testing
 import UniformTypeIdentifiers
 
-@testable import Extension
+@testable import ExtensionKit
 
 private let root = NSFileProviderItemIdentifier.rootContainer
 
