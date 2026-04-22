@@ -5,7 +5,7 @@ import Synchronization
 import Testing
 import UniformTypeIdentifiers
 
-@testable import Extension
+@testable import ExtensionKit
 
 private func getSession() async throws -> Session {
     let domain = NSFileProviderDomain(

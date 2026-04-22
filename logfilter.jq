@@ -49,7 +49,7 @@ try (
   # Map subsystem to clearer names
   (.subsystem | split(".") | .[-1] |
     if . == "SSHadow" then "AppUI"
-    elif . == "Provider" then "FPExt"
+    elif . == "Extension" then "FPExt"
     else . end
   ) as $subsystem |
   
