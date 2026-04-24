@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 private func getSession() async throws -> Session {
     Session.agentClientFactory = TestData.getAgentClient
     SSHadowDB.modelConfigurationFactory = { domain in
-        ModelConfiguration(url: TestData.sshadowDBStorePath)
+        ModelConfiguration(url: TestData.sshadowDbStorePath)
     }
     try await TestData.initAppDB()
 
@@ -22,7 +22,7 @@ private func getSession() async throws -> Session {
     let config = try TestData.getConnectionConfig()
     let ssh = try await SSHClient.connect(config: config)
     let sftp = try await ssh.sftp()
-    let db = try await TestData.getSSHadowDB()
+    let db = try await TestData.getSSHadowDb()
 
     return Session(
         domain: domain,
@@ -245,7 +245,7 @@ struct SessionTests {
                 modifyTime: newModifyTime
             )
 
-            let fileURL = TestData.getURL(path: path)
+            let fileURL = TestData.getUrl(path: path)
             let fileAttrs = try FileManager.default.attributesOfItem(
                 atPath: fileURL.path()
             )
@@ -268,7 +268,7 @@ struct SessionTests {
                 accessTime: newAccessTime
             )
 
-            let fileURL = TestData.getURL(path: path)
+            let fileURL = TestData.getUrl(path: path)
             var st = stat()
             stat(fileURL.path(), &st)
             let actualAccessTime = Date(
@@ -308,7 +308,7 @@ struct SessionTests {
 
             let path = "\(testFolderPath)/new-directory"
             try TestData.removeItem(path: path)
-            let directoryURL = TestData.getURL(path: path)
+            let directoryURL = TestData.getUrl(path: path)
             #expect(
                 !FileManager.default.fileExists(atPath: directoryURL.path())
             )
@@ -327,7 +327,7 @@ struct SessionTests {
 
             let path = "\(testFolderPath)/existing-directory"
             try TestData.createFolder(path: path)
-            let directoryURL = TestData.getURL(path: path)
+            let directoryURL = TestData.getUrl(path: path)
 
             try await session.createDirectory(
                 for: session.child(path: path),
@@ -385,14 +385,14 @@ struct SessionTests {
 
             #expect(
                 FileManager.default.fileExists(
-                    atPath: TestData.getURL(
+                    atPath: TestData.getUrl(
                         path: "\(testFolderPath)/destination.txt"
                     ).path()
                 )
             )
             #expect(
                 !FileManager.default.fileExists(
-                    atPath: TestData.getURL(path: sourcePath).path()
+                    atPath: TestData.getUrl(path: sourcePath).path()
                 )
             )
             let name = try await session.name(of: sourceId)
@@ -469,12 +469,12 @@ struct SessionTests {
                 "\(testFolderPath)/missing-parent/destination.txt"
             #expect(
                 FileManager.default.fileExists(
-                    atPath: TestData.getURL(path: destinationPath).path()
+                    atPath: TestData.getUrl(path: destinationPath).path()
                 )
             )
             #expect(
                 !FileManager.default.fileExists(
-                    atPath: TestData.getURL(path: sourcePath).path()
+                    atPath: TestData.getUrl(path: sourcePath).path()
                 )
             )
         }

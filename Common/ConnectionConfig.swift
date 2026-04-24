@@ -73,7 +73,7 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
         [path, subpath].filter { !$0.isEmpty }.joined(separator: "/")
     }
 
-    public func absoluteURL(for path: String) -> String {
+    public func absoluteUrl(for path: String) -> String {
         self.path.isEmpty ? "\(url):\(path)" : "\(url)/\(path)"
     }
 }

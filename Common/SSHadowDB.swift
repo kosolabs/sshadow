@@ -7,7 +7,7 @@ public actor SSHadowDB {
     public static var modelConfigurationFactory:
         (NSFileProviderDomain) -> ModelConfiguration = { domain in
             ModelConfiguration(
-                url: SSHadow.groupURL.appendingPathComponent(
+                url: SSHadow.groupUrl.appendingPathComponent(
                     "SSHadowDB-\(domain.identifier.rawValue).store"
                 )
             )
@@ -20,7 +20,6 @@ public actor SSHadowDB {
         domain: NSFileProviderDomain
     ) async throws -> SSHadowDB {
         let schema = Schema([SSHItem.self, SSHChunk.self])
-        let userInfo = try UserInfo.fromDictionary(domain.userInfo)
 
         let config = Self.modelConfigurationFactory(domain)
 
@@ -60,7 +59,7 @@ public actor SSHadowDB {
     }
 
     public static func delete(domain: NSFileProviderDomain) async throws {
-        let basePath = SSHadow.groupURL.appendingPathComponent(
+        let basePath = SSHadow.groupUrl.appendingPathComponent(
             "SSHadowDB-\(domain.identifier.rawValue).sqlite"
         ).path
 

@@ -7,8 +7,8 @@ import SwiftLibSSH
 
 public enum AgentRequest: Codable {
     case sayHello(name: String)
-    case loadConfig(domainID: UUID)
-    case attributes(domainID: UUID, itemID: String)
+    case loadConfig(domainId: UUID)
+    case attributes(domainId: UUID, itemId: String)
 }
 
 public enum AgentResponse: Codable {

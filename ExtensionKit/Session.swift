@@ -91,7 +91,7 @@ class Session {
         for identifier: NSFileProviderItemIdentifier
     ) async throws -> SFTPAttributes {
         try await mapError(with: identifier) {
-            try await agent.attributes(domainID: config.id, itemID: identifier)
+            try await agent.attributes(domainId: config.id, itemId: identifier)
         }
     }
 

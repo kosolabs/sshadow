@@ -66,18 +66,18 @@ public class AgentClient {
     }
 
     public func loadConfig(id: UUID) async throws {
-        let response = try await perform(.loadConfig(domainID: id))
+        let response = try await perform(.loadConfig(domainId: id))
         guard case .loadConfig = response else {
             throw CocoaError(.coderInvalidValue)
         }
     }
 
     public func attributes(
-        domainID: UUID,
-        itemID: NSFileProviderItemIdentifier
+        domainId: UUID,
+        itemId: NSFileProviderItemIdentifier
     ) async throws -> SFTPAttributes {
         let response = try await perform(
-            .attributes(domainID: domainID, itemID: itemID.rawValue)
+            .attributes(domainId: domainId, itemId: itemId.rawValue)
         )
         guard case .attributes(let attributes) = response else {
             throw CocoaError(.coderInvalidValue)

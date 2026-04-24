@@ -22,7 +22,7 @@ struct ConnectionTestStatusView: View {
                     systemImage: "lock.circle"
                 )
                 .foregroundStyle(.red)
-            case .privateKeyURLNil:
+            case .privateKeyUrlNil:
                 Label(
                     "Private key is required",
                     systemImage: "lock.circle"

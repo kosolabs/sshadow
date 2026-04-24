@@ -6,7 +6,7 @@ private typealias OSLogger = os.Logger
 public struct Logger: Sendable {
     private let logger: OSLogger
 
-    public init(subsystem: String = SSHadow.bundleID, category: String) {
+    public init(subsystem: String = SSHadow.bundleId, category: String) {
         self.logger = OSLogger(subsystem: subsystem, category: category)
     }
 

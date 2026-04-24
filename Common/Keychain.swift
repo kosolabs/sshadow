@@ -10,7 +10,7 @@ public struct Keychain: Sendable {
     private let accessGroup: String
 
     public init(
-        service: String = SSHadow.bundleID,
+        service: String = SSHadow.bundleId,
         accessGroup: String = SSHadow.appGroup
     ) {
         self.service = service

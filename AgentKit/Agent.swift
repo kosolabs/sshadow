@@ -27,10 +27,10 @@ public class Agent: NSObject, AgentProtocol {
                     switch request {
                     case .sayHello(let name):
                         sayHello(to: name)
-                    case .loadConfig(let domainID):
-                        try await loadConfig(id: domainID)
-                    case .attributes(let domainID, let itemID):
-                        try await attributes(domainID: domainID, itemID: itemID)
+                    case .loadConfig(let domainId):
+                        try await loadConfig(id: domainId)
+                    case .attributes(let domainId, let itemId):
+                        try await attributes(domainId: domainId, itemId: itemId)
                     }
                 reply(try AgentCoding.encode(AgentResult.success(response)))
             } catch {
@@ -55,12 +55,12 @@ public class Agent: NSObject, AgentProtocol {
     }
 
     func attributes(
-        domainID: UUID,
-        itemID: String
+        domainId: UUID,
+        itemId: String
     ) async throws -> AgentResponse {
-        let session = try await sessions.connect(id: domainID)
+        let session = try await sessions.connect(id: domainId)
         let attributes = try await session.attributes(
-            for: NSFileProviderItemIdentifier(itemID)
+            for: NSFileProviderItemIdentifier(itemId)
         )
         return .attributes(attributes)
     }

@@ -84,7 +84,7 @@ struct ConnectionConfigTests {
             path: "",
             authMethod: .none
         )
-        #expect(config.absoluteURL(for: "file.txt") == "user@host:file.txt")
+        #expect(config.absoluteUrl(for: "file.txt") == "user@host:file.txt")
     }
 
     @Test func testAbsoluteURLWithNonEmptyConfigPath() {
@@ -98,7 +98,7 @@ struct ConnectionConfigTests {
             authMethod: .none
         )
         #expect(
-            config.absoluteURL(for: "file.txt") == "user@host:base/file.txt"
+            config.absoluteUrl(for: "file.txt") == "user@host:base/file.txt"
         )
     }
 
@@ -113,7 +113,7 @@ struct ConnectionConfigTests {
             authMethod: .none
         )
         #expect(
-            config.absoluteURL(for: "file.txt") == "user@host:base/file.txt"
+            config.absoluteUrl(for: "file.txt") == "user@host:base/file.txt"
         )
     }
 
@@ -128,7 +128,7 @@ struct ConnectionConfigTests {
             authMethod: .none
         )
         #expect(
-            config.absoluteURL(for: "file.txt") == "user@host:/base/file.txt"
+            config.absoluteUrl(for: "file.txt") == "user@host:/base/file.txt"
         )
     }
 
@@ -143,7 +143,7 @@ struct ConnectionConfigTests {
             authMethod: .none
         )
         #expect(
-            config.absoluteURL(for: "file.txt") == "user@host:2222:file.txt"
+            config.absoluteUrl(for: "file.txt") == "user@host:2222:file.txt"
         )
     }
 }
