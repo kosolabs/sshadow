@@ -11,12 +11,12 @@ struct SSHadowApp: App {
             ConnectionProfileListView()
         }
         .modelContainer(
-            for: ConnectionProfile.self,
-            inMemory: isUITesting
+            try! AppDB.getModelContainer(
+                config: ModelConfiguration(
+                    isStoredInMemoryOnly: ProcessInfo.processInfo.arguments
+                        .contains("-uiTesting")
+                )
+            )
         )
-    }
-
-    private var isUITesting: Bool {
-        ProcessInfo.processInfo.arguments.contains("-uiTesting")
     }
 }

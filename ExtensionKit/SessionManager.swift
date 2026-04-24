@@ -17,8 +17,7 @@ private func connect(
             config: config,
             ssh: ssh,
             sftp: sftp,
-            db: db,
-            agent: AgentClient()
+            db: db
         )
     } catch SSHError.authenticationFailed(_) {
         throw NSFileProviderError(.notAuthenticated)
@@ -46,7 +45,7 @@ actor SessionManager {
         if let session = self.session {
             return session
         }
-        
+
         if let task = connectTask {
             return try await task.value
         }
@@ -54,12 +53,12 @@ actor SessionManager {
         guard let config = self.config else {
             throw NSFileProviderError(.notAuthenticated)
         }
-        
+
         let task = Task {
             try await connect(domain: domain, config: config)
         }
         connectTask = task
-        
+
         do {
             let session = try await task.value
             self.session = session

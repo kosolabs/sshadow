@@ -1,4 +1,6 @@
+import FileProvider
 import Foundation
+import SwiftLibSSH
 
 private let logger = Logger(category: "AgentClient")
 private let serviceName = "com.kosolabs.SSHadow.Agent"
@@ -26,23 +28,60 @@ public class AgentClient {
         connection.invalidate()
     }
 
-    private func proxy(
-        errorHandler: @escaping (Error) -> Void
-    ) -> AgentProtocol {
-        connection.remoteObjectProxyWithErrorHandler(errorHandler)
-            as! AgentProtocol
-    }
-
-    public func sayHello(to: String) async throws -> String {
+    private func perform(
+        _ request: AgentRequest
+    ) async throws -> AgentResponse {
         try await withCheckedThrowingContinuation { continuation in
-            let service = proxy { error in
+            let proxy =
+                connection.remoteObjectProxyWithErrorHandler { error in
+                    continuation.resume(throwing: error)
+                } as! AgentProtocol
+
+            do {
+                logger.debug("Perform: \(request)")
+                let requestData = try AgentCoding.encode(request)
+                proxy.perform(requestData) { responseData in
+                    do {
+                        let result = try AgentCoding.decode(
+                            AgentResult.self,
+                            from: responseData
+                        )
+                        continuation.resume(returning: try result.get())
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
+                }
+            } catch {
                 continuation.resume(throwing: error)
             }
-            logger.info("sayHello(to: \(to))")
-            service.sayHello(to: to) { response in
-                logger.info("Agent response: \(response)")
-                continuation.resume(returning: response)
-            }
         }
+    }
+
+    public func sayHello(to name: String) async throws -> String {
+        let response = try await perform(.sayHello(name: name))
+        guard case .sayHello(let greeting) = response else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        return greeting
+    }
+
+    public func loadConfig(id: UUID) async throws {
+        let response = try await perform(.loadConfig(domainID: id))
+        guard case .loadConfig = response else {
+            throw CocoaError(.coderInvalidValue)
+        }
+    }
+
+    public func attributes(
+        domainID: UUID,
+        itemID: NSFileProviderItemIdentifier
+    ) async throws -> SFTPAttributes {
+        let response = try await perform(
+            .attributes(domainID: domainID, itemID: itemID.rawValue)
+        )
+        guard case .attributes(let attributes) = response else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        return attributes
     }
 }

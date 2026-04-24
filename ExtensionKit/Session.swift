@@ -3,6 +3,10 @@ import FileProvider
 import SwiftLibSSH
 
 class Session {
+    static var agentClientFactory: () -> AgentClient = {
+        AgentClient()
+    }
+
     let domain: NSFileProviderDomain
     let config: ConnectionConfig
     let ssh: SSHClient
@@ -22,14 +26,14 @@ class Session {
         ssh: SSHClient,
         sftp: SFTPClient,
         db: SSHadowDB,
-        agent: AgentClient
+        agent: AgentClient? = nil
     ) {
         self.domain = domain
         self.config = config
         self.ssh = ssh
         self.sftp = sftp
         self.db = db
-        self.agent = agent
+        self.agent = agent ?? Self.agentClientFactory()
 
         self.logger = Logger(category: "\(domain.displayName):Session")
     }
@@ -87,7 +91,7 @@ class Session {
         for identifier: NSFileProviderItemIdentifier
     ) async throws -> SFTPAttributes {
         try await mapError(with: identifier) {
-            try await sftp.attributes(atPath: path(for: identifier))
+            try await agent.attributes(domainID: config.id, itemID: identifier)
         }
     }
 

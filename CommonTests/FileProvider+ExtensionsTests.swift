@@ -1,7 +1,7 @@
 import FileProvider
 import Testing
 
-@testable import ExtensionKit
+@testable import Common
 
 struct ItemFieldsExtensionsTests {
     @Test func descIncludesAllFields() {
@@ -52,7 +52,7 @@ struct FileSystemFlagsExtensionsTests {
         let permissions = flags.permissions
         #expect(permissions == 0o200)
     }
-    
+
     @Test func executePermissionsIs100() {
         let flags = NSFileProviderFileSystemFlags([
             .userExecutable

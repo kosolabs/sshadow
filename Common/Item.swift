@@ -1,4 +1,3 @@
-import Common
 import FileProvider
 import SwiftLibSSH
 import UniformTypeIdentifiers
@@ -11,7 +10,7 @@ public class Item: NSObject, NSFileProviderItem {
     public let filename: String
     private let itemAttributes: SFTPAttributes
 
-    init(
+    public init(
         domainName: String,
         itemIdentifier: NSFileProviderItemIdentifier,
         parentItemIdentifier: NSFileProviderItemIdentifier,

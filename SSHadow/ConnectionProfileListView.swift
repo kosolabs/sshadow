@@ -58,7 +58,9 @@ struct ConnectionProfileListView: View {
                     Button(role: .destructive) {
                         if let selection {
                             Task {
-                                try? await modelContext.delete(connectionConfig: selection)
+                                try? await modelContext.delete(
+                                    connectionConfig: selection
+                                )
                             }
                             self.selection = nil
                         }

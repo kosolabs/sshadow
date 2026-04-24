@@ -23,10 +23,6 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
         }
     }
 
-    public enum ConnectionConfigError: Error {
-        case passwordNil
-    }
-
     public let id: UUID
     public let name: String
     public let host: String
