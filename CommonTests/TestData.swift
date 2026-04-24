@@ -23,10 +23,10 @@ enum TestData {
         return url
     }()
     static let domain = getDomain()
-    static let sshadowDBStorePath = FileManager.default.temporaryDirectory
+    static let sshadowDbStorePath = FileManager.default.temporaryDirectory
         .appendingPathComponent("SSHadowDB-\(id.uuidString).store")
 
-    static let appDBStorePath = FileManager.default.temporaryDirectory
+    static let appDbStorePath = FileManager.default.temporaryDirectory
         .appendingPathComponent("AppDB-test.store")
 
     static func getDomain() -> NSFileProviderDomain {
@@ -43,7 +43,7 @@ enum TestData {
 
     static func initAppDB() async throws {
         let appDB = try AppDB.open(
-            config: ModelConfiguration(url: appDBStorePath)
+            config: ModelConfiguration(url: appDbStorePath)
         )
 
         let profile = try ConnectionProfile(
@@ -55,7 +55,7 @@ enum TestData {
             user: user,
             path: mount.path(),
             authMethod: .privateKey,
-            bookmark: getPrivateKeyURL().bookmarkData()
+            bookmark: getPrivateKeyUrl().bookmarkData()
         )
 
         try await appDB.upsert(profile: profile)
@@ -73,7 +73,7 @@ enum TestData {
             user: user,
             path: url.path(),
             authMethod: .privateKey(
-                bookmark: getPrivateKeyURL().bookmarkData()
+                bookmark: getPrivateKeyUrl().bookmarkData()
             ),
             testing: true
         )
@@ -98,10 +98,10 @@ enum TestData {
     }
 
     static func getBase64PrivateKey() throws -> String {
-        return try String(contentsOf: getPrivateKeyURL(), encoding: .utf8)
+        return try String(contentsOf: getPrivateKeyUrl(), encoding: .utf8)
     }
 
-    static func getPrivateKeyURL() throws -> URL {
+    static func getPrivateKeyUrl() throws -> URL {
         let bundle = Bundle(for: BundleMarker.self)
 
         guard
@@ -120,12 +120,12 @@ enum TestData {
         return url
     }
 
-    static func getSSHadowDB() async throws -> SSHadowDB {
+    static func getSSHadowDb() async throws -> SSHadowDB {
         return try await SSHadowDB.open(domain: domain)
     }
 
     static func getAgentClient() -> AgentClient {
-        let delegate = AgentListenerDelegate(appDbStorePath: appDBStorePath)
+        let delegate = AgentListenerDelegate(appDbStorePath: appDbStorePath)
         let listener = NSXPCListener.anonymous()
         listener.delegate = delegate
         objc_setAssociatedObject(
@@ -140,13 +140,13 @@ enum TestData {
         return AgentClient(connection: connection)
     }
 
-    static func getURL(path: String) -> URL {
+    static func getUrl(path: String) -> URL {
         mount.appending(path: path)
     }
 
     @discardableResult
     static func removeItem(path: String) throws -> URL {
-        let url = getURL(path: path)
+        let url = getUrl(path: path)
         if FileManager.default.fileExists(atPath: url.path()) {
             try FileManager.default.removeItem(at: url)
         }
@@ -159,7 +159,7 @@ enum TestData {
         permissions: mode_t? = nil,
         modifyDate: Date? = nil
     ) throws -> URL {
-        let folder = getURL(path: path)
+        let folder = getUrl(path: path)
         try FileManager.default.createDirectory(
             at: folder,
             withIntermediateDirectories: true
@@ -217,7 +217,7 @@ enum TestData {
         permissions: mode_t? = nil,
         modifyDate: Date? = nil
     ) throws -> URL {
-        let file = getURL(path: path)
+        let file = getUrl(path: path)
         let folder = file.deletingLastPathComponent()
 
         try FileManager.default.createDirectory(

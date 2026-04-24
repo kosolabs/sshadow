@@ -12,7 +12,7 @@ private func getExtension(id: UUID = UUID()) async throws -> Extension {
     Extension.agentClientFactory = TestData.getAgentClient
     Session.agentClientFactory = TestData.getAgentClient
     SSHadowDB.modelConfigurationFactory = { domain in
-        ModelConfiguration(url: TestData.sshadowDBStorePath)
+        ModelConfiguration(url: TestData.sshadowDbStorePath)
     }
     try await TestData.initAppDB()
     return Extension(domain: TestData.domain)
@@ -65,7 +65,7 @@ struct ExtensionTests {
             user: NSUserName(),
             path: "",
             authMethod: .privateKey(
-                bookmark: TestData.getPrivateKeyURL().bookmarkData()
+                bookmark: TestData.getPrivateKeyUrl().bookmarkData()
             )
         )
         domain.userInfo = try userInfo.toDictionary()
@@ -210,7 +210,7 @@ struct ExtensionTests {
 
         let folderPath = "\(testPath)/folder"
         try TestData.removeItem(path: folderPath)
-        let folderURL = TestData.getURL(path: folderPath)
+        let folderURL = TestData.getUrl(path: folderPath)
         let folderID = try await session.child(path: folderPath)
 
         // Create FPItem(id: FPItemID(__fp/fs/fileID(17967944)), parentId: FPItemID(<pid>), filename: folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), createTime: 2026-03-04 07:05:26 +0000, modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1478, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
@@ -291,7 +291,7 @@ struct ExtensionTests {
 
         let filePath = "\(testPath)/file.txt"
         try TestData.removeItem(path: filePath)
-        let fileURL = TestData.getURL(path: filePath)
+        let fileURL = TestData.getUrl(path: filePath)
         let fileID = try await session.child(path: filePath)
 
         // Create FPItem(id: FPItemID(__fp/fs/docID(10961)), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 14, createTime: 2026-03-04 21:51:16 +0000, modifyTime: 2026-03-04 21:51:16 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
@@ -383,7 +383,7 @@ struct ExtensionTests {
 
         let filePath = "\(testPath)/file.txt"
         try TestData.removeItem(path: filePath)
-        let fileURL = TestData.getURL(path: filePath)
+        let fileURL = TestData.getUrl(path: filePath)
         let fileID = try await session.child(path: filePath)
 
         // Create FPItem(id: FPItemID(__fp/fs/docID(10965)), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 10485760, createTime: 2026-03-04 22:15:29 +0000, modifyTime: 2026-03-04 22:15:29 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
@@ -567,7 +567,7 @@ struct ExtensionTests {
         let destFolderID = try await session.child(path: destFolderPath)
 
         let destPath = "\(destFolderPath)/file.txt"
-        let destURL = TestData.getURL(path: destPath)
+        let destURL = TestData.getUrl(path: destPath)
 
         // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID(<npid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 4, parentItemIdentifier)
         let moveProgress = Progress()
@@ -676,7 +676,7 @@ struct ExtensionTests {
         try TestData.createFolder(path: destFolderPath)
         let destFolderID = try await session.child(path: destFolderPath)
 
-        let destURL = TestData.getURL(path: "\(destFolderPath)/new.txt")
+        let destURL = TestData.getUrl(path: "\(destFolderPath)/new.txt")
         try TestData.removeItem(path: "\(destFolderPath)/new.txt")
 
         let progress = Progress()
@@ -705,7 +705,7 @@ struct ExtensionTests {
         #expect(FileManager.default.fileExists(at: destURL))
         #expect(
             !FileManager.default.fileExists(
-                at: TestData.getURL(path: srcPath)
+                at: TestData.getUrl(path: srcPath)
             )
         )
         #expect(progress.isFinished)
@@ -772,7 +772,7 @@ struct ExtensionTests {
         let fileID = try await session.child(path: filePath)
 
         try TestData.removeItem(path: ".Trashes")
-        let trashedURL = TestData.getURL(path: ".Trashes/file.txt")
+        let trashedURL = TestData.getUrl(path: ".Trashes/file.txt")
 
         // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID.trashContainer, filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 4, parentItemIdentifier)
         let trashProgress = Progress()

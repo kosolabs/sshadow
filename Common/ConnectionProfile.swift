@@ -8,9 +8,9 @@ private let logger = Logger(category: "ConnectionProfile")
 public class ConnectionProfile: CustomStringConvertible {
     public enum ValidationError: Error {
         case passwordNil
-        case privateKeyURLNil
+        case privateKeyUrlNil
         case privateKeyReadFailed
-        case encodeToJSONFailed
+        case encodeToJsonFailed
     }
 
     public enum AuthMethod: Codable, CustomStringConvertible, Sendable {
@@ -145,7 +145,7 @@ public class ConnectionProfile: CustomStringConvertible {
         Keychain.shared.delete(passwordKey)
     }
 
-    public func privateKeyURL() -> URL? {
+    public func privateKeyUrl() -> URL? {
         guard let bookmark = bookmark else {
             return nil
         }
@@ -207,7 +207,7 @@ public class ConnectionProfile: CustomStringConvertible {
             return .password(password)
         case .privateKey:
             guard let bookmark = bookmark else {
-                throw ValidationError.privateKeyURLNil
+                throw ValidationError.privateKeyUrlNil
             }
             var isStale = false
             let url = try URL(
@@ -243,7 +243,7 @@ public class ConnectionProfile: CustomStringConvertible {
             return .password
         case .privateKey:
             guard let bookmark = bookmark else {
-                throw ValidationError.privateKeyURLNil
+                throw ValidationError.privateKeyUrlNil
             }
             return .privateKey(bookmark: bookmark)
         }
