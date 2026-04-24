@@ -2,7 +2,11 @@ import Common
 import Foundation
 
 public class AgentListenerDelegate: NSObject, NSXPCListenerDelegate {
-    public override init() {}
+    private let appDbStorePath: URL?
+
+    public init(appDbStorePath: URL? = nil) {
+        self.appDbStorePath = appDbStorePath
+    }
 
     public func listener(
         _ listener: NSXPCListener,
@@ -11,7 +15,7 @@ public class AgentListenerDelegate: NSObject, NSXPCListenerDelegate {
         connection.exportedInterface = NSXPCInterface(
             with: (any AgentProtocol).self
         )
-        connection.exportedObject = Agent()
+        connection.exportedObject = Agent(appDbStorePath: appDbStorePath)
         connection.resume()
         return true
     }

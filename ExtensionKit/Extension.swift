@@ -6,11 +6,17 @@ import UniformTypeIdentifiers
 public class Extension: NSObject, NSFileProviderReplicatedExtension,
     NSFileProviderPartialContentFetching
 {
+    static var agentClientFactory: () -> AgentClient = {
+        AgentClient()
+    }
+
     let logger: Logger
     let manager: SessionManager
+    let agent: AgentClient
 
     required public init(domain: NSFileProviderDomain) {
         logger = Logger(category: "\(domain.displayName):Extension")
+        agent = Self.agentClientFactory()
 
         do {
             let userInfo = try UserInfo.fromDictionary(domain.userInfo)

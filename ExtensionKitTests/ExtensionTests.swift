@@ -1,5 +1,6 @@
 import Common
 import FileProvider
+import SwiftData
 import Testing
 import UniformTypeIdentifiers
 
@@ -7,13 +8,26 @@ import UniformTypeIdentifiers
 
 private let root = NSFileProviderItemIdentifier.rootContainer
 
-private func getExtension(id: UUID = UUID()) throws -> Extension {
+private func getExtension(id: UUID = UUID()) async throws -> Extension {
+    Extension.agentClientFactory = TestData.getAgentClient
+    Session.agentClientFactory = TestData.getAgentClient
+    SSHadowDB.modelConfigurationFactory = { domain in
+        ModelConfiguration(url: TestData.sshadowDBStorePath)
+    }
+    try await TestData.initAppDB()
     return Extension(domain: TestData.domain)
 }
 
 struct ExtensionTests {
+    @Test func agentSayHelloSucceeds() async throws {
+        let ext = try await getExtension()
+        let session = try await ext.manager.getSession()
+        let result = try await session.agent.sayHello(to: "Unit Tests")
+        #expect(result == "Hello, Unit Tests!")
+    }
+
     @Test func initializeValidConfigSucceeds() async throws {
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
         let actualConfig = session.config
 
@@ -64,7 +78,7 @@ struct ExtensionTests {
 
     @Test func readSmallFileSucceeds() async throws {
         // cat extension-read-file/small-file.txt
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         let path = "extension-read-file/small-file.txt"
@@ -90,7 +104,7 @@ struct ExtensionTests {
 
     @Test func readLargeFileSucceeds() async throws {
         // cat extension-read-file/large-file.dat
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         let path = "extension-read-file/large-file.dat"
@@ -115,7 +129,7 @@ struct ExtensionTests {
 
     @Test func readPartialFileSucceeds() async throws {
         // dd if=extension-read-file/partial-file.dat bs=1m skip=5 count=1
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         let path = "extension-read-file/partial-file.dat"
@@ -155,7 +169,7 @@ struct ExtensionTests {
     }
 
     @Test func readFileWithCancellation() async throws {
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         let path = "extension-read-file/cancellable-file.txt"
@@ -180,7 +194,7 @@ struct ExtensionTests {
     }
 
     @Test func createFolderSucceeds() async throws {
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         // mkdir extension-create-folder/folder
@@ -261,7 +275,7 @@ struct ExtensionTests {
     }
 
     @Test func createFileSucceeds() async throws {
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         // echo "Hello, World!" > extension-create-file/file.txt
@@ -353,7 +367,7 @@ struct ExtensionTests {
     }
 
     @Test func createLargeFileSucceeds() async throws {
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         // dd if=/dev/zero of=extension-create-large-file/file.txt bs=1m count=10
@@ -439,7 +453,7 @@ struct ExtensionTests {
     }
 
     @Test func renameFileSucceeds() async throws {
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         // mv extension-rename-file/src.txt extension-rename-file/dest.txt
@@ -523,7 +537,7 @@ struct ExtensionTests {
     }
 
     @Test func moveFileSucceeds() async throws {
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         // mv extension-move-file/src/file.txt extension-move-file/dest/
@@ -647,7 +661,7 @@ struct ExtensionTests {
     }
 
     @Test func moveAndRenameFileSucceeds() async throws {
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         // mv extension-move-rename/src/old.txt extension-move-rename/dest/new.txt
@@ -698,7 +712,7 @@ struct ExtensionTests {
     }
 
     @Test func moveFilePreservesIdentifier() async throws {
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         // mv extension-move-preserve-id/file.txt extension-move-preserve-id/dest/
@@ -746,7 +760,7 @@ struct ExtensionTests {
     }
 
     @Test func trashFileSucceeds() async throws {
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         // mv extension-trash-file/file.txt .Trashes/file.txt
@@ -790,7 +804,7 @@ struct ExtensionTests {
     }
 
     @Test func editFileSucceeds() async throws {
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         // echo "World!" >> extension-edit-file/file.txt
@@ -883,7 +897,7 @@ struct ExtensionTests {
     }
 
     @Test func setFileReadWriteSucceeds() async throws {
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         // chmod 600 extension-permissions/file.txt
@@ -924,7 +938,7 @@ struct ExtensionTests {
     }
 
     @Test func setFolderReadWriteExecuteSucceeds() async throws {
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         // chmod 700 extension-permissions/folder
@@ -964,7 +978,7 @@ struct ExtensionTests {
     }
 
     @Test func deleteFolderSucceeds() async throws {
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         // rmdir extension-delete-item/folder
@@ -989,7 +1003,7 @@ struct ExtensionTests {
     }
 
     @Test func deleteFileSucceeds() async throws {
-        let ext = try getExtension()
+        let ext = try await getExtension()
         let session = try await ext.manager.getSession()
 
         // rm extension-delete-item/file.txt

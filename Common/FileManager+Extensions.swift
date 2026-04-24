@@ -1,23 +1,23 @@
 import Foundation
 
 extension FileManager {
-    func fileExists(at url: URL) -> Bool {
+    public func fileExists(at url: URL) -> Bool {
         fileExists(atPath: url.path)
     }
-    
-    func attributes(of url: URL) throws -> NSDictionary {
+
+    public func attributes(of url: URL) throws -> NSDictionary {
         try self.attributesOfItem(atPath: url.path) as NSDictionary
     }
 
-    func size(of url: URL) throws -> UInt64 {
+    public func size(of url: URL) throws -> UInt64 {
         try attributes(of: url).fileSize()
     }
-    
-    func permissions(of url: URL) throws -> mode_t {
+
+    public func permissions(of url: URL) throws -> mode_t {
         UInt16(try attributes(of: url).filePosixPermissions())
     }
 
-    func modifyDate(of url: URL) throws -> Date {
+    public func modifyDate(of url: URL) throws -> Date {
         guard let date = try attributes(of: url).fileModificationDate() else {
             throw NSError(
                 domain: "FileManagerExtensions",

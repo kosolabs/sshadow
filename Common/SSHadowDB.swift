@@ -4,39 +4,32 @@ import SwiftData
 
 @ModelActor
 public actor SSHadowDB {
+    public static var modelConfigurationFactory:
+        (NSFileProviderDomain) -> ModelConfiguration = { domain in
+            ModelConfiguration(
+                url: SSHadow.groupURL.appendingPathComponent(
+                    "SSHadowDB-\(domain.identifier.rawValue).store"
+                )
+            )
+        }
+
     private var logger = Logger(category: "SSHadowDB")
 
     @discardableResult
     public static func open(
         domain: NSFileProviderDomain
     ) async throws -> SSHadowDB {
+        let schema = Schema([SSHItem.self, SSHChunk.self])
         let userInfo = try UserInfo.fromDictionary(domain.userInfo)
 
-        let schema = Schema([SSHItem.self, SSHChunk.self])
-        let groupURL = try SSHadow.groupURL()
+        let config = Self.modelConfigurationFactory(domain)
 
-        let container =
-            if userInfo.testing {
-                try ModelContainer(
-                    for: schema,
-                    configurations: ModelConfiguration(
-                        schema: schema,
-                        isStoredInMemoryOnly: true
-                    )
-                )
-            } else {
-                try ModelContainer(
-                    for: schema,
-                    configurations: ModelConfiguration(
-                        schema: schema,
-                        url: groupURL.appendingPathComponent(
-                            "SSHadowDB-\(domain.identifier.rawValue).sqlite"
-                        )
-                    )
-                )
-            }
-
-        let db = SSHadowDB(modelContainer: container)
+        let db = try SSHadowDB(
+            modelContainer: ModelContainer(
+                for: schema,
+                configurations: config
+            )
+        )
         try await db.configure(domain: domain)
         return db
     }
@@ -67,9 +60,7 @@ public actor SSHadowDB {
     }
 
     public static func delete(domain: NSFileProviderDomain) async throws {
-        let groupURL = try SSHadow.groupURL()
-
-        let basePath = groupURL.appendingPathComponent(
+        let basePath = SSHadow.groupURL.appendingPathComponent(
             "SSHadowDB-\(domain.identifier.rawValue).sqlite"
         ).path
 

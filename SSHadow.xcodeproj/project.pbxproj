@@ -346,6 +346,13 @@
 			);
 			target = 738D63AB2F3FD1F100FED311 /* ExtensionKitTests */;
 		};
+		73EC8FBD2F996C53008A08C9 /* Exceptions for "CommonTests" folder in "AgentKitTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				TestData.swift,
+			);
+			target = 73799A472F9811DD00A15109 /* AgentKitTests */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -362,6 +369,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				73D94BC82F41216200CF7891 /* Exceptions for "CommonTests" folder in "ExtensionKitTests" target */,
+				73EC8FBD2F996C53008A08C9 /* Exceptions for "CommonTests" folder in "AgentKitTests" target */,
 			);
 			path = CommonTests;
 			sourceTree = "<group>";
@@ -2074,7 +2082,7 @@
 			repositoryURL = "https://github.com/kosolabs/swift-lib-ssh.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.13.0;
+				minimumVersion = 1.15.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

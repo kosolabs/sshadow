@@ -1,15 +1,15 @@
 import FileProvider
 
 extension NSFileProviderItem {
-    var id: NSFileProviderItemIdentifier {
+    public var id: NSFileProviderItemIdentifier {
         itemIdentifier
     }
 
-    var parentId: NSFileProviderItemIdentifier {
+    public var parentId: NSFileProviderItemIdentifier {
         parentItemIdentifier
     }
 
-    var desc: String {
+    public var desc: String {
         var components: [String] = []
         components.append("id: \(id.desc)")
         components.append("parentId: \(parentId.desc)")
@@ -90,7 +90,7 @@ extension NSFileProviderItem {
 }
 
 extension NSFileProviderItemIdentifier {
-    var desc: String {
+    public var desc: String {
         switch self {
         case .rootContainer:
             return ".rootContainer"
@@ -104,7 +104,7 @@ extension NSFileProviderItemIdentifier {
     }
 }
 
-let allItemFields: [(NSFileProviderItemFields, String)] = [
+public let allItemFields: [(NSFileProviderItemFields, String)] = [
     (.contents, "contents"),
     (.filename, "filename"),
     (.parentItemIdentifier, "parentItemIdentifier"),
@@ -119,20 +119,20 @@ let allItemFields: [(NSFileProviderItemFields, String)] = [
 ]
 
 extension NSFileProviderItemFields {
-    static let nameFields: NSFileProviderItemFields = [
+    public static let nameFields: NSFileProviderItemFields = [
         .parentItemIdentifier, .filename,
     ]
 
-    static let attrFields: NSFileProviderItemFields = [
+    public static let attrFields: NSFileProviderItemFields = [
         .creationDate, .contentModificationDate, .lastUsedDate,
         .fileSystemFlags, .typeAndCreator,
     ]
 
-    static let writeFields: NSFileProviderItemFields = [
+    public static let writeFields: NSFileProviderItemFields = [
         .contents
     ]
 
-    var desc: String {
+    public var desc: String {
         var result: [String] = []
         result.append("rawValue: \(rawValue)")
         for (field, name) in allItemFields where self.contains(field) {
@@ -141,13 +141,13 @@ extension NSFileProviderItemFields {
         return "FPItemFields(\(result.joined(separator: ", ")))"
     }
 
-    func intersects(with members: NSFileProviderItemFields) -> Bool {
+    public func intersects(with members: NSFileProviderItemFields) -> Bool {
         return !intersection(members).isEmpty
     }
 }
 
 extension NSFileProviderItemCapabilities {
-    var desc: String {
+    public var desc: String {
         var result = [String]()
         result.append("rawValue: \(rawValue)")
         if contains(.allowsReading) {
@@ -176,7 +176,7 @@ extension NSFileProviderItemCapabilities {
 }
 
 extension NSFileProviderFileSystemFlags {
-    var permissions: mode_t {
+    public var permissions: mode_t {
         var mode: mode_t = 0
         if contains(.userExecutable) {
             mode |= S_IXUSR
@@ -190,7 +190,7 @@ extension NSFileProviderFileSystemFlags {
         return mode
     }
 
-    var desc: String {
+    public var desc: String {
         var flags = [String]()
         flags.append("rawValue: \(rawValue)")
         if contains(.userExecutable) {

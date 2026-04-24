@@ -7,6 +7,7 @@ import SwiftData
 private let logger = Logger(category: "TestData")
 
 enum TestData {
+    static let id = UUID()
     static let name = "test"
     static let host = "localhost"
     static let port: UInt16 = 2248
@@ -22,8 +23,13 @@ enum TestData {
         return url
     }()
     static let domain = getDomain()
+    static let sshadowDBStorePath = FileManager.default.temporaryDirectory
+        .appendingPathComponent("SSHadowDB-\(id.uuidString).store")
 
-    static func getDomain(id: UUID = UUID()) -> NSFileProviderDomain {
+    static let appDBStorePath = FileManager.default.temporaryDirectory
+        .appendingPathComponent("AppDB-test.store")
+
+    static func getDomain() -> NSFileProviderDomain {
         let domain = NSFileProviderDomain(
             identifier: NSFileProviderDomainIdentifier(
                 rawValue: id.uuidString
@@ -35,8 +41,28 @@ enum TestData {
         return domain
     }
 
+    static func initAppDB() async throws {
+        let appDB = try AppDB.open(
+            config: ModelConfiguration(url: appDBStorePath)
+        )
+
+        let profile = try ConnectionProfile(
+            id: id,
+            name: name,
+            enabled: true,
+            host: host,
+            port: port,
+            user: user,
+            path: mount.path(),
+            authMethod: .privateKey,
+            bookmark: getPrivateKeyURL().bookmarkData()
+        )
+
+        try await appDB.upsert(profile: profile)
+    }
+
     static func getUserInfo(
-        id: UUID = UUID(),
+        id: UUID = id,
         url: URL = mount,
     ) throws -> UserInfo {
         try UserInfo(
@@ -54,7 +80,7 @@ enum TestData {
     }
 
     static func getConnectionConfig(
-        id: UUID = UUID(),
+        id: UUID = id,
         url: URL = mount
     ) throws -> ConnectionConfig {
         try ConnectionConfig(
@@ -99,7 +125,7 @@ enum TestData {
     }
 
     static func getAgentClient() -> AgentClient {
-        let delegate = AgentListenerDelegate()
+        let delegate = AgentListenerDelegate(appDbStorePath: appDBStorePath)
         let listener = NSXPCListener.anonymous()
         listener.delegate = delegate
         objc_setAssociatedObject(

@@ -1,4 +1,3 @@
-import Common
 import FileProvider
 import SwiftData
 import SwiftUI
@@ -6,15 +5,15 @@ import SwiftUI
 private let logger = Logger(category: "ConnectionProfile")
 
 @Model
-class ConnectionProfile: CustomStringConvertible {
-    enum ValidationError: Error {
+public class ConnectionProfile: CustomStringConvertible {
+    public enum ValidationError: Error {
         case passwordNil
         case privateKeyURLNil
         case privateKeyReadFailed
         case encodeToJSONFailed
     }
 
-    enum AuthMethod: Codable, CustomStringConvertible, Sendable {
+    public enum AuthMethod: Codable, CustomStringConvertible, Sendable {
         case password
         case privateKey
 
@@ -28,19 +27,19 @@ class ConnectionProfile: CustomStringConvertible {
         }
     }
 
-    @Attribute(.unique) var id: UUID
-    var name: String?
-    var enabled: Bool
-    var host: String
-    var port: UInt16?
-    var user: String?
-    var path: String?
-    var authMethod: AuthMethod
-    var bookmark: Data?
+    @Attribute(.unique) public var id: UUID
+    public var name: String?
+    public var enabled: Bool
+    public var host: String
+    public var port: UInt16?
+    public var user: String?
+    public var path: String?
+    public var authMethod: AuthMethod
+    public var bookmark: Data?
 
     @Transient private var tester: ConnectionTester = DefaultConnectionTester()
 
-    init(
+    public init(
         id: UUID = UUID(),
         name: String? = nil,
         enabled: Bool = false,
@@ -49,6 +48,7 @@ class ConnectionProfile: CustomStringConvertible {
         user: String? = nil,
         path: String? = nil,
         authMethod: AuthMethod = .password,
+        bookmark: Data? = nil,
         tester: ConnectionTester = DefaultConnectionTester()
     ) {
         self.id = id
@@ -59,13 +59,14 @@ class ConnectionProfile: CustomStringConvertible {
         self.user = user
         self.path = path
         self.authMethod = authMethod
+        self.bookmark = bookmark
 
         self.tester = tester
     }
 
     // MARK: - Effective Values
 
-    var url: String? {
+    public var url: String? {
         if host == "" { return nil }
         var result = "\(effectiveUser)@\(host)"
         if let port = port {
@@ -77,53 +78,53 @@ class ConnectionProfile: CustomStringConvertible {
         return result
     }
 
-    var effectiveName: String {
+    public var effectiveName: String {
         name ?? url ?? "New Connection"
     }
 
-    var effectivePort: UInt16 {
+    public var effectivePort: UInt16 {
         port ?? 22
     }
 
-    var effectiveUser: String {
+    public var effectiveUser: String {
         user ?? NSUserName()
     }
 
-    var effectivePath: String {
+    public var effectivePath: String {
         path ?? "~"
     }
 
-    var description: String {
+    public var description: String {
         "ConnectionProfile(id: \(id), name: \(name ?? "-"), enabled: \(enabled), url: \(url ?? "-"), authMethod: \(authMethod))"
     }
 
     // MARK: - Enable / Disable
 
-    func isEnabled() -> Bool {
+    public func isEnabled() -> Bool {
         return enabled
     }
 
-    func enable() async throws {
-        let config = try await ConnectionConfig(from: self)
+    public func enable() async throws {
+        try await NSFileProviderManager.removeAllDomains()
+        let config = try ConnectionConfig(from: self)
         try await tester.test(config: config)
-        let userInfo = try await UserInfo(from: self)
+        let userInfo = try UserInfo(from: self)
         let domain = try getDomain(with: userInfo)
         try await NSFileProviderManager.add(domain)
         try await SSHadowDB.open(domain: domain)
         self.enabled = true
-        await logger.info("Enabled: \(self)")
-        
+        logger.info("Enabled: \(self)")
+
         let agent = AgentClient()
-        let response = try await agent.sayHello(to: "AppUI")
-        await logger.info("Agent response: \(response)")
+        try await agent.loadConfig(id: id)
     }
 
-    func disable() async throws {
+    public func disable() async throws {
         let domain = getDomain()
         try await NSFileProviderManager.remove(domain)
         try await SSHadowDB.delete(domain: domain)
         self.enabled = false
-        await logger.info("Disabled: \(self)")
+        logger.info("Disabled: \(self)")
     }
 
     // MARK: - Password Management
@@ -132,19 +133,19 @@ class ConnectionProfile: CustomStringConvertible {
         Keychain.shared.getPasswordKey(id: id)
     }
 
-    func getPassword() -> String? {
+    public func getPassword() -> String? {
         Keychain.shared.get(passwordKey)
     }
 
-    func setPassword(_ password: String) {
+    public func setPassword(_ password: String) {
         Keychain.shared.set(passwordKey, to: password)
     }
 
-    func deletePassword() {
+    public func deletePassword() {
         Keychain.shared.delete(passwordKey)
     }
 
-    func privateKeyURL() -> URL? {
+    public func privateKeyURL() -> URL? {
         guard let bookmark = bookmark else {
             return nil
         }
@@ -168,26 +169,28 @@ class ConnectionProfile: CustomStringConvertible {
         Keychain.shared.getPrivateKeyPassphraseKey(id: id)
     }
 
-    func getPrivateKeyPassphrase() -> String? {
+    public func getPrivateKeyPassphrase() -> String? {
         Keychain.shared.get(privateKeyPassphraseKey)
     }
 
-    func setPrivateKeyPassphrase(_ passphrase: String) {
+    public func setPrivateKeyPassphrase(_ passphrase: String) {
         Keychain.shared.set(privateKeyPassphraseKey, to: passphrase)
     }
 
-    func deletePrivateKeyPassphrase() {
+    public func deletePrivateKeyPassphrase() {
         Keychain.shared.delete(privateKeyPassphraseKey)
     }
 
-    func getDomain() -> NSFileProviderDomain {
+    public func getDomain() -> NSFileProviderDomain {
         NSFileProviderDomain(
             identifier: NSFileProviderDomainIdentifier(id.uuidString),
             displayName: effectiveName,
         )
     }
 
-    func getDomain(with userInfo: UserInfo) throws -> NSFileProviderDomain {
+    public func getDomain(with userInfo: UserInfo) throws
+        -> NSFileProviderDomain
+    {
         let domain = getDomain()
         domain.userInfo = try userInfo.toDictionary()
         return domain
@@ -248,7 +251,9 @@ class ConnectionProfile: CustomStringConvertible {
 }
 
 extension ModelContext {
-    func delete(connectionConfig config: ConnectionProfile) async throws {
+    public func delete(
+        connectionConfig config: ConnectionProfile
+    ) async throws {
         if config.enabled {
             try await config.disable()
         }
@@ -259,7 +264,7 @@ extension ModelContext {
 }
 
 extension ConnectionConfig {
-    init(from profile: ConnectionProfile) throws {
+    public init(from profile: ConnectionProfile) throws {
         try self.init(
             id: profile.id,
             name: profile.effectiveName,
@@ -273,7 +278,7 @@ extension ConnectionConfig {
 }
 
 extension UserInfo {
-    init(from profile: ConnectionProfile) throws {
+    public init(from profile: ConnectionProfile) throws {
         try self.init(
             id: profile.id,
             name: profile.effectiveName,
