@@ -134,6 +134,24 @@ public class AgentClient {
         return path
     }
 
+    public func createDirectory(
+        for itemId: NSFileProviderItemIdentifier,
+        mode: mode_t = 0o700,
+        ifExists: OnExists = .fail
+    ) async throws {
+        let response = try await perform(
+            .createDirectory(
+                domainId: domainId,
+                itemId: itemId.rawValue,
+                mode: mode,
+                ifExists: ifExists
+            )
+        )
+        guard case .createDirectory = response else {
+            throw CocoaError(.coderInvalidValue)
+        }
+    }
+
     public func setAttributes(
         for itemId: NSFileProviderItemIdentifier,
         permissions: mode_t? = nil,

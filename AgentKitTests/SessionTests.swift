@@ -264,6 +264,54 @@ struct SessionTests {
             } throws: { error in isNoSuchItemError(error) }
         }
     }
+
+    struct CreateDirectoryTests {
+        let testFolderPath = "session-create-directory"
+
+        init() throws {
+            try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func createDirectorySucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/new-dir"
+            let itemId = try await session.child(path: path)
+
+            try await session.createDirectory(for: itemId, mode: 0o755)
+
+            let attrs = try await session.attributes(for: itemId)
+            #expect(attrs.type == .directory)
+            #expect(attrs.permissions & 0o777 == 0o755)
+        }
+
+        @Test func createDirectoryWithIfExistsSucceedDoesNotThrow() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/existing-dir"
+            try TestData.createFolder(path: path)
+            let itemId = try await session.child(path: path)
+
+            try await session.createDirectory(
+                for: itemId,
+                ifExists: .succeed
+            )
+        }
+
+        @Test func createDirectoryWhenExistsThrowsByDefault() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/already-exists"
+            try TestData.createFolder(path: path)
+            let itemId = try await session.child(path: path)
+
+            await #expect {
+                try await session.createDirectory(for: itemId)
+            } throws: { error in
+                (error as NSError).domain == NSFileProviderErrorDomain
+            }
+        }
+    }
 }
 
 func isNoSuchItemError(_ error: any Error) -> Bool {

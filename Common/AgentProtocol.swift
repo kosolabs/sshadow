@@ -1,6 +1,11 @@
 import Foundation
 import SwiftLibSSH
 
+public enum OnExists: Codable {
+    case fail
+    case succeed
+}
+
 @objc public protocol AgentProtocol {
     func perform(_ request: Data, reply: @escaping (Data) -> Void)
 }
@@ -24,6 +29,12 @@ public enum AgentRequest: Codable {
         accessTime: Date?,
         modifyTime: Date?
     )
+    case createDirectory(
+        domainId: UUID,
+        itemId: String,
+        mode: mode_t,
+        ifExists: OnExists
+    )
 }
 
 public enum AgentResponse: Codable {
@@ -33,6 +44,7 @@ public enum AgentResponse: Codable {
     case path(path: String)
     case attributes(SFTPAttributes)
     case setAttributes
+    case createDirectory
 }
 
 public enum AgentError: Codable, Error {
