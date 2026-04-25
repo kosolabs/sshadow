@@ -148,6 +148,26 @@ class Session {
 
         try await db.move(itemId, toParent: newParentId, name: newName)
     }
+    
+    func removeFile(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws {
+        await logger.info("Remove \(id(of: itemId))")
+        try await mapError(with: itemId) {
+            try await sftp.removeFile(atPath: path(for: itemId))
+        }
+    }
+
+    func removeDirectory(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws {
+        await logger.info("Remove directory \(id(of: itemId))")
+        try await mapError(with: itemId) {
+            try await sftp.removeDirectoryRecursively(
+                atPath: path(for: itemId)
+            )
+        }
+    }
 
     func mapError<T>(
         with itemId: NSFileProviderItemIdentifier,

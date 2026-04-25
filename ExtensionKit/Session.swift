@@ -131,10 +131,7 @@ class Session {
     func removeFile(
         for identifier: NSFileProviderItemIdentifier
     ) async throws {
-        await logger.info("Remove \(id(of: identifier))")
-        try await mapError(with: identifier) {
-            try await sftp.removeFile(atPath: path(for: identifier))
-        }
+        try await agent.removeFile(for: identifier)
     }
 
     func createDirectory(
@@ -152,12 +149,7 @@ class Session {
     func removeDirectory(
         for identifier: NSFileProviderItemIdentifier
     ) async throws {
-        await logger.info("Remove directory \(id(of: identifier))")
-        try await mapError(with: identifier) {
-            try await sftp.removeDirectoryRecursively(
-                atPath: path(for: identifier)
-            )
-        }
+        try await agent.removeDirectory(for: identifier)
     }
 
     func withFile<T: Sendable>(

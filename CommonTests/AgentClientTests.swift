@@ -85,6 +85,18 @@ struct AgentClientTests {
         #expect(attrs.permissions & 0o777 == 0o644)
     }
     
+    @Test func createDirectorySucceeds() async throws {
+        let agent = try await getAgentClient()
+
+        let path = "\(testFolderPath)/new-dir"
+        let itemId = try await agent.child(path: path)
+
+        try await agent.createDirectory(for: itemId, mode: 0o755)
+
+        let attrs = try await agent.attributes(for: itemId)
+        #expect(attrs.type == .directory)
+    }
+    
     @Test func moveSucceeds() async throws {
         let agent = try await getAgentClient()
 
@@ -103,16 +115,32 @@ struct AgentClientTests {
         #expect(name == "moved.txt")
     }
 
-    @Test func createDirectorySucceeds() async throws {
+    @Test func removeFileSucceeds() async throws {
         let agent = try await getAgentClient()
 
-        let path = "\(testFolderPath)/new-dir"
+        let path = "\(testFolderPath)/rm-file.txt"
+        try TestData.createFile(path: path, contents: "bye")
         let itemId = try await agent.child(path: path)
 
-        try await agent.createDirectory(for: itemId, mode: 0o755)
+        try await agent.removeFile(for: itemId)
 
-        let attrs = try await agent.attributes(for: itemId)
-        #expect(attrs.type == .directory)
+        await #expect {
+            try await agent.attributes(for: itemId)
+        } throws: { error in isNoSuchItemError(error) }
+    }
+
+    @Test func removeDirectorySucceeds() async throws {
+        let agent = try await getAgentClient()
+
+        let path = "\(testFolderPath)/rm-dir"
+        try TestData.createFolder(path: path)
+        let itemId = try await agent.child(path: path)
+
+        try await agent.removeDirectory(for: itemId)
+
+        await #expect {
+            try await agent.attributes(for: itemId)
+        } throws: { error in isNoSuchItemError(error) }
     }
 }
 
