@@ -417,6 +417,79 @@ struct SessionTests {
             #expect(name == "new-name.txt")
         }
     }
+
+    struct RemoveFileTests {
+        let testFolderPath = "session-remove-file"
+
+        init() throws {
+            try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func removeFileSucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/to-delete.txt"
+            try TestData.createFile(path: path, contents: "bye")
+            let itemId = try await session.child(path: path)
+
+            try await session.removeFile(for: itemId)
+
+            await #expect {
+                try await session.attributes(for: itemId)
+            } throws: { error in isNoSuchItemError(error) }
+        }
+
+        @Test func removeFileMissingThrows() async throws {
+            let session = try await getSession()
+
+            let itemId = try await session.child(
+                path: "\(testFolderPath)/nonexistent.txt"
+            )
+
+            await #expect {
+                try await session.removeFile(for: itemId)
+            } throws: { error in isNoSuchItemError(error) }
+        }
+    }
+
+    struct RemoveDirectoryTests {
+        let testFolderPath = "session-remove-dir"
+
+        init() throws {
+            try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func removeDirectorySucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/to-delete"
+            try TestData.createFolder(path: path)
+            let itemId = try await session.child(path: path)
+
+            try await session.removeDirectory(for: itemId)
+
+            await #expect {
+                try await session.attributes(for: itemId)
+            } throws: { error in isNoSuchItemError(error) }
+        }
+
+        @Test func removeDirectoryWithContentsSucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/non-empty"
+            try TestData.createFile(
+                path: "\(path)/child.txt",
+                contents: "nested"
+            )
+            let itemId = try await session.child(path: path)
+
+            try await session.removeDirectory(for: itemId)
+
+            await #expect {
+                try await session.attributes(for: itemId)
+            } throws: { error in isNoSuchItemError(error) }
+        }
+    }
 }
 
 func isNoSuchItemError(_ error: any Error) -> Bool {

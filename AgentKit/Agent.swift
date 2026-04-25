@@ -85,7 +85,7 @@ public class Agent: NSObject, AgentProtocol {
                             domainId: domainId,
                             itemId: itemId
                         )
-                    
+
                     case .setAttributes(
                         let domainId,
                         let itemId,
@@ -100,7 +100,7 @@ public class Agent: NSObject, AgentProtocol {
                             accessTime: accessTime,
                             modifyTime: modifyTime
                         )
-                    
+
                     case .createDirectory(
                         let domainId,
                         let itemId,
@@ -127,6 +127,24 @@ public class Agent: NSObject, AgentProtocol {
                             newParentId: newParentId,
                             newName: newName,
                             ifParentNotExists: ifParentNotExists
+                        )
+
+                    case .removeFile(
+                        let domainId,
+                        let itemId
+                    ):
+                        try await removeFile(
+                            domainId: domainId,
+                            itemId: itemId
+                        )
+
+                    case .removeDirectory(
+                        let domainId,
+                        let itemId
+                    ):
+                        try await removeDirectory(
+                            domainId: domainId,
+                            itemId: itemId
                         )
                     }
                 reply(try AgentCoding.encode(AgentResult.success(response)))
@@ -256,5 +274,27 @@ public class Agent: NSObject, AgentProtocol {
             ifParentNotExists: ifParentNotExists
         )
         return .move
+    }
+    
+    func removeFile(
+        domainId: UUID,
+        itemId: String
+    ) async throws -> AgentResponse {
+        let session = try await sessions.connect(id: domainId)
+        try await session.removeFile(
+            for: NSFileProviderItemIdentifier(itemId)
+        )
+        return .removeFile
+    }
+
+    func removeDirectory(
+        domainId: UUID,
+        itemId: String
+    ) async throws -> AgentResponse {
+        let session = try await sessions.connect(id: domainId)
+        try await session.removeDirectory(
+            for: NSFileProviderItemIdentifier(itemId)
+        )
+        return .removeDirectory
     }
 }

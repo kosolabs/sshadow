@@ -63,6 +63,14 @@ public enum AgentRequest: Codable {
         newName: String,
         ifParentNotExists: OnParentNotExists
     )
+    case removeFile(
+        domainId: UUID,
+        itemId: String
+    )
+    case removeDirectory(
+        domainId: UUID,
+        itemId: String
+    )
 }
 
 public enum AgentResponse: Codable {
@@ -74,6 +82,8 @@ public enum AgentResponse: Codable {
     case setAttributes
     case createDirectory
     case move
+    case removeFile
+    case removeDirectory
 }
 
 public enum AgentError: Codable, Error {

@@ -183,7 +183,7 @@ public class AgentClient {
             throw CocoaError(.coderInvalidValue)
         }
     }
-    
+
     public func move(
         _ itemId: NSFileProviderItemIdentifier,
         toParent newParentId: NSFileProviderItemIdentifier,
@@ -200,6 +200,28 @@ public class AgentClient {
             )
         )
         guard case .move = response else {
+            throw CocoaError(.coderInvalidValue)
+        }
+    }
+    
+    public func removeFile(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws {
+        let response = try await perform(
+            .removeFile(domainId: domainId, itemId: itemId.rawValue)
+        )
+        guard case .removeFile = response else {
+            throw CocoaError(.coderInvalidValue)
+        }
+    }
+
+    public func removeDirectory(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws {
+        let response = try await perform(
+            .removeDirectory(domainId: domainId, itemId: itemId.rawValue)
+        )
+        guard case .removeDirectory = response else {
             throw CocoaError(.coderInvalidValue)
         }
     }
