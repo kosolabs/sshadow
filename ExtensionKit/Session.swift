@@ -88,9 +88,7 @@ class Session {
     func attributes(
         for identifier: NSFileProviderItemIdentifier
     ) async throws -> SFTPAttributes {
-        try await mapError(with: identifier) {
-            try await agent.attributes(for: identifier)
-        }
+        try await agent.attributes(for: identifier)
     }
 
     func exists(for identifier: NSFileProviderItemIdentifier) async -> Bool {
@@ -108,19 +106,12 @@ class Session {
         accessTime: Date? = nil,
         modifyTime: Date? = nil
     ) async throws {
-        try await mapError(with: identifier) {
-            try await agent.setAttributes(
-                for: identifier,
-                permissions: permissions,
-                accessTime: accessTime,
-                modifyTime: modifyTime
-            )
-        }
-    }
-
-    enum OnParentNotExists {
-        case fail
-        case create
+        try await agent.setAttributes(
+            for: identifier,
+            permissions: permissions,
+            accessTime: accessTime,
+            modifyTime: modifyTime
+        )
     }
 
     func move(
@@ -129,26 +120,12 @@ class Session {
         name newName: String,
         ifParentNotExists: OnParentNotExists = .fail
     ) async throws {
-        let oldPath = try await path(for: id)
-        let newPath = try await path(for: newName, parentId: newParentId)
-
-        await logger.info("Move \(self.id(of: id)) to \(newPath)")
-        try await mapError {
-            do {
-                try await sftp.move(from: oldPath, to: newPath)
-            } catch SSHError.sftpError(.noSuchFile, _)
-                where ifParentNotExists == .create
-            {
-                logger.info("Parent doesn't exist, creating")
-                try await sftp.createDirectory(
-                    atPath: await path(for: newParentId),
-                    mode: 0o700
-                )
-                try await sftp.move(from: oldPath, to: newPath)
-            }
-        }
-
-        try await db.move(id, toParent: newParentId, name: newName)
+        try await agent.move(
+            id,
+            toParent: newParentId,
+            name: newName,
+            ifParentNotExists: ifParentNotExists
+        )
     }
 
     func removeFile(
@@ -165,13 +142,11 @@ class Session {
         mode: mode_t = 0o700,
         ifExists: OnExists = .fail
     ) async throws {
-        try await mapError(with: identifier) {
-            try await agent.createDirectory(
-                for: identifier,
-                mode: mode,
-                ifExists: ifExists
-            )
-        }
+        try await agent.createDirectory(
+            for: identifier,
+            mode: mode,
+            ifExists: ifExists
+        )
     }
 
     func removeDirectory(

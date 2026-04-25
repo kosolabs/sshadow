@@ -113,6 +113,21 @@ public class Agent: NSObject, AgentProtocol {
                             mode: mode,
                             ifExists: ifExists
                         )
+
+                    case .move(
+                        let domainId,
+                        let itemId,
+                        let newParentId,
+                        let newName,
+                        let ifParentNotExists
+                    ):
+                        try await move(
+                            domainId: domainId,
+                            itemId: itemId,
+                            newParentId: newParentId,
+                            newName: newName,
+                            ifParentNotExists: ifParentNotExists
+                        )
                     }
                 reply(try AgentCoding.encode(AgentResult.success(response)))
             } catch {
@@ -224,5 +239,22 @@ public class Agent: NSObject, AgentProtocol {
             ifExists: ifExists
         )
         return .createDirectory
+    }
+
+    func move(
+        domainId: UUID,
+        itemId: String,
+        newParentId: String,
+        newName: String,
+        ifParentNotExists: OnParentNotExists
+    ) async throws -> AgentResponse {
+        let session = try await sessions.connect(id: domainId)
+        try await session.move(
+            NSFileProviderItemIdentifier(itemId),
+            toParent: NSFileProviderItemIdentifier(newParentId),
+            name: newName,
+            ifParentNotExists: ifParentNotExists
+        )
+        return .move
     }
 }

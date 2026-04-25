@@ -133,23 +133,17 @@ public class AgentClient {
         }
         return path
     }
-
-    public func createDirectory(
-        for itemId: NSFileProviderItemIdentifier,
-        mode: mode_t = 0o700,
-        ifExists: OnExists = .fail
-    ) async throws {
+    
+    public func attributes(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> SFTPAttributes {
         let response = try await perform(
-            .createDirectory(
-                domainId: domainId,
-                itemId: itemId.rawValue,
-                mode: mode,
-                ifExists: ifExists
-            )
+            .attributes(domainId: domainId, itemId: itemId.rawValue)
         )
-        guard case .createDirectory = response else {
+        guard case .attributes(let attributes) = response else {
             throw CocoaError(.coderInvalidValue)
         }
+        return attributes
     }
 
     public func setAttributes(
@@ -172,15 +166,41 @@ public class AgentClient {
         }
     }
 
-    public func attributes(
-        for itemId: NSFileProviderItemIdentifier
-    ) async throws -> SFTPAttributes {
+    public func createDirectory(
+        for itemId: NSFileProviderItemIdentifier,
+        mode: mode_t = 0o700,
+        ifExists: OnExists = .fail
+    ) async throws {
         let response = try await perform(
-            .attributes(domainId: domainId, itemId: itemId.rawValue)
+            .createDirectory(
+                domainId: domainId,
+                itemId: itemId.rawValue,
+                mode: mode,
+                ifExists: ifExists
+            )
         )
-        guard case .attributes(let attributes) = response else {
+        guard case .createDirectory = response else {
             throw CocoaError(.coderInvalidValue)
         }
-        return attributes
+    }
+    
+    public func move(
+        _ itemId: NSFileProviderItemIdentifier,
+        toParent newParentId: NSFileProviderItemIdentifier,
+        name newName: String,
+        ifParentNotExists: OnParentNotExists = .fail
+    ) async throws {
+        let response = try await perform(
+            .move(
+                domainId: domainId,
+                itemId: itemId.rawValue,
+                newParentId: newParentId.rawValue,
+                newName: newName,
+                ifParentNotExists: ifParentNotExists
+            )
+        )
+        guard case .move = response else {
+            throw CocoaError(.coderInvalidValue)
+        }
     }
 }
