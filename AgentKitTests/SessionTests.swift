@@ -312,6 +312,111 @@ struct SessionTests {
             }
         }
     }
+
+    struct MoveTests {
+        let testFolderPath = "session-move"
+
+        init() throws {
+            try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func moveRenamesFile() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/original.txt"
+            try TestData.createFile(path: path, contents: "hello")
+            let itemId = try await session.child(path: path)
+            let parentId = try await session.child(path: testFolderPath)
+
+            try await session.move(
+                itemId,
+                toParent: parentId,
+                name: "renamed.txt"
+            )
+
+            let newId = try await session.child(
+                path: "\(testFolderPath)/renamed.txt",
+                ifNotExists: .fail
+            )
+            let attrs = try await session.attributes(for: newId)
+            #expect(attrs.type == .regular)
+        }
+
+        @Test func moveToNewParent() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/to-move.txt"
+            try TestData.createFile(path: path, contents: "hello")
+            let itemId = try await session.child(path: path)
+
+            let destPath = "\(testFolderPath)/dest"
+            try TestData.createFolder(path: destPath)
+            let destId = try await session.child(path: destPath)
+
+            try await session.move(
+                itemId,
+                toParent: destId,
+                name: "to-move.txt"
+            )
+
+            let movedId = try await session.child(
+                path: "\(testFolderPath)/dest/to-move.txt",
+                ifNotExists: .fail
+            )
+            let attrs = try await session.attributes(for: movedId)
+            #expect(attrs.type == .regular)
+        }
+
+        @Test func moveCreatesParentWhenRequested() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/create-parent.txt"
+            try TestData.createFile(path: path, contents: "hello")
+            let itemId = try await session.child(path: path)
+
+            let newParentId = try await session.child(
+                path: "\(testFolderPath)/new-parent"
+            )
+
+            try await session.move(
+                itemId,
+                toParent: newParentId,
+                name: "create-parent.txt",
+                ifParentNotExists: .create
+            )
+
+            let movedId = try await session.child(
+                path: "\(testFolderPath)/new-parent/create-parent.txt",
+                ifNotExists: .fail
+            )
+            let attrs = try await session.attributes(for: movedId)
+            #expect(attrs.type == .regular)
+        }
+
+        @Test func moveUpdatesDbParentAndName() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/db-check.txt"
+            try TestData.createFile(path: path, contents: "hello")
+            let itemId = try await session.child(path: path)
+
+            let destPath = "\(testFolderPath)/db-dest"
+            try TestData.createFolder(path: destPath)
+            let destId = try await session.child(path: destPath)
+
+            try await session.move(
+                itemId,
+                toParent: destId,
+                name: "new-name.txt"
+            )
+
+            let parent = try await session.parent(of: itemId)
+            #expect(parent == destId)
+
+            let name = try await session.name(of: itemId)
+            #expect(name == "new-name.txt")
+        }
+    }
 }
 
 func isNoSuchItemError(_ error: any Error) -> Bool {

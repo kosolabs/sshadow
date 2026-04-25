@@ -85,6 +85,24 @@ struct AgentClientTests {
         #expect(attrs.permissions & 0o777 == 0o644)
     }
     
+    @Test func moveSucceeds() async throws {
+        let agent = try await getAgentClient()
+
+        let path = "\(testFolderPath)/move-me.txt"
+        try TestData.createFile(path: path, contents: "hello")
+        let itemId = try await agent.child(path: path)
+        let parentId = try await agent.child(path: testFolderPath)
+
+        try await agent.move(
+            itemId,
+            toParent: parentId,
+            name: "moved.txt"
+        )
+
+        let name = try await agent.name(of: itemId)
+        #expect(name == "moved.txt")
+    }
+
     @Test func createDirectorySucceeds() async throws {
         let agent = try await getAgentClient()
 

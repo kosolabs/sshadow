@@ -6,22 +6,43 @@ public enum OnExists: Codable {
     case succeed
 }
 
+public enum OnParentNotExists: Codable {
+    case fail
+    case create
+}
+
 @objc public protocol AgentProtocol {
     func perform(_ request: Data, reply: @escaping (Data) -> Void)
 }
 
 public enum AgentRequest: Codable {
-    case name(domainId: UUID, itemId: String)
+    case name(
+        domainId: UUID,
+        itemId: String
+    )
     case child(
         domainId: UUID,
         parentId: String,
         path: String,
         ifNotExists: DomainDB.OnNotExists
     )
-    case parent(domainId: UUID, itemId: String)
-    case pathForItem(domainId: UUID, itemId: String)
-    case pathForChild(domainId: UUID, name: String, parentId: String)
-    case attributes(domainId: UUID, itemId: String)
+    case parent(
+        domainId: UUID,
+        itemId: String
+    )
+    case pathForItem(
+        domainId: UUID,
+        itemId: String
+    )
+    case pathForChild(
+        domainId: UUID,
+        name: String,
+        parentId: String
+    )
+    case attributes(
+        domainId: UUID,
+        itemId: String
+    )
     case setAttributes(
         domainId: UUID,
         itemId: String,
@@ -35,6 +56,13 @@ public enum AgentRequest: Codable {
         mode: mode_t,
         ifExists: OnExists
     )
+    case move(
+        domainId: UUID,
+        itemId: String,
+        newParentId: String,
+        newName: String,
+        ifParentNotExists: OnParentNotExists
+    )
 }
 
 public enum AgentResponse: Codable {
@@ -45,6 +73,7 @@ public enum AgentResponse: Codable {
     case attributes(SFTPAttributes)
     case setAttributes
     case createDirectory
+    case move
 }
 
 public enum AgentError: Codable, Error {

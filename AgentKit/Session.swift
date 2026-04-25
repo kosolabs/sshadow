@@ -121,6 +121,34 @@ class Session {
         }
     }
 
+    func move(
+        _ itemId: NSFileProviderItemIdentifier,
+        toParent newParentId: NSFileProviderItemIdentifier,
+        name newName: String,
+        ifParentNotExists: OnParentNotExists = .fail
+    ) async throws {
+        let oldPath = await path(for: itemId)
+        let newPath = await path(for: newName, parentId: newParentId)
+
+        await logger.info("Move \(id(of: itemId)) to \(newPath)")
+        try await mapError(with: itemId) {
+            do {
+                try await sftp.move(from: oldPath, to: newPath)
+            } catch SSHError.sftpError(.noSuchFile, _)
+                where ifParentNotExists == .create
+            {
+                logger.info("Parent doesn't exist, creating")
+                try await sftp.createDirectory(
+                    atPath: await path(for: newParentId),
+                    mode: 0o700
+                )
+                try await sftp.move(from: oldPath, to: newPath)
+            }
+        }
+
+        try await db.move(itemId, toParent: newParentId, name: newName)
+    }
+
     func mapError<T>(
         with itemId: NSFileProviderItemIdentifier,
         _ operation: () async throws -> T
