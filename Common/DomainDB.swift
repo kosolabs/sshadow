@@ -91,7 +91,7 @@ public actor DomainDB {
         return item.name
     }
 
-    public enum OnNotExists {
+    public enum OnNotExists: Codable {
         case fail
         case create
     }

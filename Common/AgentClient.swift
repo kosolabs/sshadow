@@ -6,17 +6,16 @@ private let logger = Logger(category: "AgentClient")
 private let serviceName = "com.kosolabs.SSHadow.Agent"
 
 public class AgentClient {
+    private let domainId: UUID
     private let connection: NSXPCConnection
 
-    public init() {
-        connection = NSXPCConnection(serviceName: serviceName)
-        connection.remoteObjectInterface = NSXPCInterface(
-            with: AgentProtocol.self
-        )
-        connection.resume()
+    public convenience init(domainId: UUID) {
+        let connection = NSXPCConnection(serviceName: serviceName)
+        self.init(domainId: domainId, connection: connection)
     }
 
-    public init(connection: NSXPCConnection) {
+    public init(domainId: UUID, connection: NSXPCConnection) {
+        self.domainId = domainId
         connection.remoteObjectInterface = NSXPCInterface(
             with: AgentProtocol.self
         )
@@ -57,24 +56,86 @@ public class AgentClient {
         }
     }
 
-    public func sayHello(to name: String) async throws -> String {
-        let response = try await perform(.sayHello(name: name))
-        guard case .sayHello(let greeting) = response else {
+    public func name(
+        of itemId: NSFileProviderItemIdentifier
+    ) async throws -> String {
+        let response = try await perform(
+            .name(domainId: domainId, itemId: itemId.rawValue)
+        )
+        guard case .name(let name) = response else {
             throw CocoaError(.coderInvalidValue)
         }
-        return greeting
+        return name
     }
 
-    public func loadConfig(id: UUID) async throws {
-        let response = try await perform(.loadConfig(domainId: id))
-        guard case .loadConfig = response else {
+    public func child(
+        of parentId: NSFileProviderItemIdentifier = .rootContainer,
+        path: String,
+        ifNotExists: DomainDB.OnNotExists = .create
+    ) async throws -> NSFileProviderItemIdentifier {
+        let response = try await perform(
+            .child(
+                domainId: domainId,
+                parentId: parentId.rawValue,
+                path: path,
+                ifNotExists: ifNotExists
+            )
+        )
+        guard case .child(let itemId) = response else {
             throw CocoaError(.coderInvalidValue)
         }
+        return NSFileProviderItemIdentifier(itemId)
+    }
+
+    public func parent(
+        of itemId: NSFileProviderItemIdentifier
+    ) async throws -> NSFileProviderItemIdentifier {
+        let response = try await perform(
+            .parent(
+                domainId: domainId,
+                itemId: itemId.rawValue
+            )
+        )
+        guard case .parent(let parentId) = response else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        return NSFileProviderItemIdentifier(parentId)
+    }
+
+    public func path(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> String {
+        let response = try await perform(
+            .pathForItem(
+                domainId: domainId,
+                itemId: itemId.rawValue
+            )
+        )
+        guard case .path(let path) = response else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        return path
+    }
+
+    public func path(
+        for name: String,
+        parentId: NSFileProviderItemIdentifier
+    ) async throws -> String {
+        let response = try await perform(
+            .pathForChild(
+                domainId: domainId,
+                name: name,
+                parentId: parentId.rawValue
+            )
+        )
+        guard case .path(let path) = response else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        return path
     }
 
     public func attributes(
-        domainId: UUID,
-        itemId: NSFileProviderItemIdentifier
+        for itemId: NSFileProviderItemIdentifier
     ) async throws -> SFTPAttributes {
         let response = try await perform(
             .attributes(domainId: domainId, itemId: itemId.rawValue)

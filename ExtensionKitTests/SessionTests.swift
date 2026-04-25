@@ -761,14 +761,6 @@ struct SessionTests {
             }
         }
     }
-
-    struct AgentTests {
-        @Test func agentSayHelloSucceeds() async throws {
-            let session = try await getSession()
-            let result = try await session.agent.sayHello(to: "Unit Tests")
-            #expect(result == "Hello, Unit Tests!")
-        }
-    }
 }
 
 func isNoSuchItemError(_ error: any Error) -> Bool {

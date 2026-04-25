@@ -17,13 +17,6 @@ private func getExtension(id: UUID = UUID()) async throws -> Extension {
 }
 
 struct ExtensionTests {
-    @Test func agentSayHelloSucceeds() async throws {
-        let ext = try await getExtension()
-        let session = try await ext.manager.getSession()
-        let result = try await session.agent.sayHello(to: "Unit Tests")
-        #expect(result == "Hello, Unit Tests!")
-    }
-
     @Test func initializeValidConfigSucceeds() async throws {
         let ext = try await getExtension()
         let session = try await ext.manager.getSession()

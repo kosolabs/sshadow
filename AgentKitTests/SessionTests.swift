@@ -1,0 +1,200 @@
+import Common
+import FileProvider
+import Foundation
+import SwiftLibSSH
+import Testing
+
+@testable import AgentKit
+
+private func getSession() async throws -> Session {
+    DomainDB.urlFactory = { _ in TestData.domainDbStorePath }
+    try await TestData.initAppDB()
+
+    let config = try TestData.getConnectionConfig()
+    let ssh = try await SSHClient.connect(config: config)
+    let sftp = try await ssh.sftp()
+    let db = try await TestData.getDomainDb()
+
+    return Session(
+        config: config,
+        ssh: ssh,
+        sftp: sftp,
+        db: db,
+    )
+}
+
+struct SessionTests {
+    struct NameTests {
+        @Test func filePropertyReturnsFilenameForSimpleItem() async throws {
+            let session = try await getSession()
+            let simpleFile = try await session.child(path: "file.txt")
+            let name = try await session.name(of: simpleFile)
+            #expect(name == "file.txt")
+        }
+
+        @Test func filePropertyReturnsFilenameForNestedItem() async throws {
+            let session = try await getSession()
+            let nestedFile = try await session.child(path: "folder/file.txt")
+            let name = try await session.name(of: nestedFile)
+            #expect(name == "file.txt")
+        }
+    }
+
+    struct ParentTests {
+        @Test func parentOfRootContainerIsRootContainer() async throws {
+            let session = try await getSession()
+            let parent = try await session.parent(of: .rootContainer)
+            #expect(parent == .rootContainer)
+        }
+
+        @Test func parentOfTopLevelItemIsRootContainer() async throws {
+            let session = try await getSession()
+            let topLevel = try await session.child(path: "folder")
+            let parent = try await session.parent(of: topLevel)
+            #expect(parent == .rootContainer)
+        }
+
+        @Test func parentOfTrashContainerIsRootContainer() async throws {
+            let session = try await getSession()
+            let parent = try await session.parent(of: .trashContainer)
+            #expect(parent == .rootContainer)
+        }
+
+        @Test func parentOfItemInTrashIsTrashContainer() async throws {
+            let session = try await getSession()
+            let itemInTrashes = try await session.child(path: ".Trashes/file")
+            let parent = try await session.parent(of: itemInTrashes)
+            #expect(parent == .trashContainer)
+        }
+
+        @Test func parentOfNestedItemIsParentFolder() async throws {
+            let session = try await getSession()
+            let nested = try await session.child(path: "folder/file")
+            let actual = try await session.parent(of: nested)
+            let expected = try await session.child(path: "folder")
+            #expect(actual == expected)
+        }
+
+        @Test func parentOfDeeplyNestedItemIsImmediateParent() async throws {
+            let session = try await getSession()
+            let deeplyNested = try await session.child(path: "a/b/c")
+            let actual = try await session.parent(of: deeplyNested)
+            let expected = try await session.child(path: "a/b")
+            #expect(actual == expected)
+        }
+    }
+
+    struct ChildTests {
+        @Test func childOfRootContainerWithNameTrashesIsTrashContainer()
+            async throws
+        {
+            let session = try await getSession()
+            let childOfRoot = try await session.child(path: ".Trashes")
+            #expect(childOfRoot == .trashContainer)
+        }
+
+        @Test func childOfTrashContainerReturnsItemInTrashes() async throws {
+            let session = try await getSession()
+            let actual = try await session.child(
+                of: .trashContainer,
+                path: "file"
+            )
+            let expected = try await session.child(path: ".Trashes/file")
+            #expect(actual == expected)
+        }
+
+        @Test func childOfItemReturnsNestedItem() async throws {
+            let session = try await getSession()
+            let parent = try await session.child(path: "folder")
+            let actual = try await session.child(of: parent, path: "file")
+            let expected = try await session.child(path: "folder/file")
+            #expect(actual == expected)
+        }
+    }
+
+    struct PathTests {
+        @Test func pathForRootContainerReturnsConfigPath() async throws {
+            let session = try await getSession()
+            let path = await session.path(for: .rootContainer)
+            #expect(path == TestData.mount.path())
+        }
+
+        @Test func pathForItemReturnsCombinedPath() async throws {
+            let session = try await getSession()
+            let itemId = try await session.child(path: "folder/file.txt")
+            let path = await session.path(for: itemId)
+            #expect(path == "\(TestData.mount.path())/folder/file.txt")
+        }
+
+        @Test func pathForNameInParentReturnsCombinedPath() async throws {
+            let session = try await getSession()
+            let parentId = try await session.child(path: "folder")
+            let path = await session.path(for: "file.txt", parentId: parentId)
+            #expect(path == "\(TestData.mount.path())/folder/file.txt")
+        }
+
+        @Test func pathForNameInRootReturnsCombinedPath() async throws {
+            let session = try await getSession()
+            let path = await session.path(
+                for: "file.txt",
+                parentId: .rootContainer
+            )
+            #expect(path == "\(TestData.mount.path())/file.txt")
+        }
+    }
+
+    struct AttributesTests {
+        let testFolderPath = "session-attributes"
+        let testFolderURL: URL
+
+        init() throws {
+            testFolderURL = try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func attributesForFileSucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/file.txt"
+            let contents = "Hello, World!"
+            try TestData.createFile(path: path, contents: contents)
+
+            let attrs = try await session.attributes(
+                for: session.child(path: path)
+            )
+
+            #expect(attrs.type == .regular)
+            #expect(attrs.size == UInt64(contents.utf8.count))
+        }
+
+        @Test func attributesForFolderSucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/folder"
+            try TestData.createFolder(path: path)
+
+            let attrs = try await session.attributes(
+                for: session.child(path: path)
+            )
+
+            #expect(attrs.type == .directory)
+        }
+
+        @Test func attributesForMissingFileThrowsNoSuchItem() async throws {
+            let session = try await getSession()
+
+            await #expect {
+                try await session.attributes(
+                    for: session.child(
+                        path: "\(testFolderPath)/missing.txt",
+                        ifNotExists: .fail
+                    )
+                )
+            } throws: { error in isNoSuchItemError(error) }
+        }
+    }
+}
+
+func isNoSuchItemError(_ error: any Error) -> Bool {
+    (error as NSError).code == NSFileProviderError.noSuchItem.rawValue
+        && (error as NSError).domain == NSFileProviderErrorDomain
+}

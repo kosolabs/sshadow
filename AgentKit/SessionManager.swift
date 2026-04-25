@@ -35,10 +35,11 @@ actor SessionManager {
         }
 
         let task = Task {
+            let config = try ConnectionConfig(from: profile)
             let ssh = try await SSHClient.connect(profile: profile)
             let sftp = try await ssh.sftp()
             let db = try await DomainDB.open(id: id)
-            return Session(profile: profile, ssh: ssh, sftp: sftp, db: db)
+            return Session(config: config, ssh: ssh, sftp: sftp, db: db)
         }
         connectTasks[id] = task
 
