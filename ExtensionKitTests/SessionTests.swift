@@ -10,9 +10,7 @@ import UniformTypeIdentifiers
 
 private func getSession() async throws -> Session {
     Session.agentClientFactory = TestData.getAgentClient
-    SSHadowDB.modelConfigurationFactory = { domain in
-        ModelConfiguration(url: TestData.sshadowDbStorePath)
-    }
+    DomainDB.urlFactory = { _ in TestData.domainDbStorePath }
     try await TestData.initAppDB()
 
     let domain = NSFileProviderDomain(
@@ -22,7 +20,7 @@ private func getSession() async throws -> Session {
     let config = try TestData.getConnectionConfig()
     let ssh = try await SSHClient.connect(config: config)
     let sftp = try await ssh.sftp()
-    let db = try await TestData.getSSHadowDb()
+    let db = try await TestData.getDomainDb()
 
     return Session(
         domain: domain,

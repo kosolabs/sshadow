@@ -3,25 +3,24 @@ import FileProvider
 import Foundation
 import SwiftLibSSH
 
+private let logger = Logger(category: "Session")
+
 class Session {
-    let config: ConnectionConfig
+    let profile: ConnectionProfile
     let ssh: SSHClient
     let sftp: SFTPClient
-    let db: SSHadowDB
-
-    private let logger: Logger
+    let db: DomainDB
 
     init(
-        config: ConnectionConfig,
+        profile: ConnectionProfile,
         ssh: SSHClient,
         sftp: SFTPClient,
-        db: SSHadowDB
+        db: DomainDB
     ) {
-        self.config = config
+        self.profile = profile
         self.ssh = ssh
         self.sftp = sftp
         self.db = db
-        self.logger = Logger(category: "\(config.name):Session")
     }
 
     func id(of identifier: NSFileProviderItemIdentifier) async -> String {
@@ -31,11 +30,11 @@ class Session {
     func close() async {
         await sftp.close()
         await ssh.close()
-        logger.info("Closed: \(config.url)")
+        logger.info("Closed: \(profile.url)")
     }
 
     func path(for id: NSFileProviderItemIdentifier) async -> String {
-        await config.path(for: db.path(for: id))
+        await profile.path(for: db.path(for: id))
     }
 
     func attributes(

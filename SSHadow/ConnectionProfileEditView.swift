@@ -128,7 +128,7 @@ struct ConnectionProfileEditView: View {
                     TextField(
                         "Display Name",
                         text: name,
-                        prompt: Text(config.effectiveName)
+                        prompt: Text(config.displayName)
                     )
                     .accessibilityIdentifier("nameField")
                     HStack {
@@ -156,13 +156,13 @@ struct ConnectionProfileEditView: View {
                     TextField(
                         "Port",
                         text: port,
-                        prompt: Text("\(config.effectivePort) (default)")
+                        prompt: Text("22 (default)")
                     )
                     .accessibilityIdentifier("portField")
                     TextField(
                         "Remote Path",
                         text: path,
-                        prompt: Text(config.effectivePath)
+                        prompt: Text("~")
                     )
                     .accessibilityIdentifier("pathField")
                 }
@@ -170,7 +170,7 @@ struct ConnectionProfileEditView: View {
                     TextField(
                         "Username",
                         text: user,
-                        prompt: Text(config.effectiveUser)
+                        prompt: Text(NSUserName())
                     )
                     .accessibilityIdentifier("userField")
                     Toggle("Use Private Key", isOn: usePrivateKey)

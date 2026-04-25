@@ -27,16 +27,15 @@ struct ConnectionProfileListView: View {
                             VStack(alignment: .leading) {
                                 if let name = config.name {
                                     Text(name)
-                                    Text(config.url ?? "New Connection")
-                                        .font(.caption)
+                                    Text(config.displayUrl).font(.caption)
                                 } else {
-                                    Text(config.url ?? "New Connection")
+                                    Text(config.displayUrl)
                                 }
                             }
                         }
                     }
                     .accessibilityIdentifier(
-                        "connectionLink_\(config.url ?? config.id.uuidString)"
+                        "connectionLink_\(config.url)"
                     )
                 }
             }

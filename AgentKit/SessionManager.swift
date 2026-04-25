@@ -26,34 +26,30 @@ actor SessionManager {
             throw AgentError.profileNotFound(id)
         }
 
-        let config = try ConnectionConfig(from: profile)
-
-        if let session = sessions[config.id] {
+        if let session = sessions[id] {
             return session
         }
 
-        if let task = connectTasks[config.id] {
+        if let task = connectTasks[id] {
             return try await task.value
         }
 
         let task = Task {
-            let ssh = try await SSHClient.connect(config: config)
+            let ssh = try await SSHClient.connect(profile: profile)
             let sftp = try await ssh.sftp()
-            let userInfo = try UserInfo(from: profile)
-            let domain = try profile.getDomain(with: userInfo)
-            let db = try await SSHadowDB.open(domain: domain)
-            return Session(config: config, ssh: ssh, sftp: sftp, db: db)
+            let db = try await DomainDB.open(id: id)
+            return Session(profile: profile, ssh: ssh, sftp: sftp, db: db)
         }
-        connectTasks[config.id] = task
+        connectTasks[id] = task
 
         do {
             let session = try await task.value
-            sessions[config.id] = session
-            connectTasks[config.id] = nil
-            logger.info("Connected: \(config.url)")
+            sessions[id] = session
+            connectTasks[id] = nil
+            logger.info("Connected: \(profile.url)")
             return session
         } catch {
-            connectTasks[config.id] = nil
+            connectTasks[id] = nil
             throw error
         }
     }
