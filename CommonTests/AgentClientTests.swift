@@ -71,6 +71,19 @@ struct AgentClientTests {
             )
         } throws: { error in isNoSuchItemError(error) }
     }
+    
+    @Test func setAttributesSucceeds() async throws {
+        let agent = try await getAgentClient()
+
+        let path = "\(testFolderPath)/set-attrs.txt"
+        try TestData.createFile(path: path, contents: "test")
+        let itemId = try await agent.child(path: path)
+
+        try await agent.setAttributes(for: itemId, permissions: 0o644)
+
+        let attrs = try await agent.attributes(for: itemId)
+        #expect(attrs.permissions & 0o777 == 0o644)
+    }
 }
 
 func isNoSuchItemError(_ error: any Error) -> Bool {

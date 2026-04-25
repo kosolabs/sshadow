@@ -134,6 +134,26 @@ public class AgentClient {
         return path
     }
 
+    public func setAttributes(
+        for itemId: NSFileProviderItemIdentifier,
+        permissions: mode_t? = nil,
+        accessTime: Date? = nil,
+        modifyTime: Date? = nil
+    ) async throws {
+        let response = try await perform(
+            .setAttributes(
+                domainId: domainId,
+                itemId: itemId.rawValue,
+                permissions: permissions,
+                accessTime: accessTime,
+                modifyTime: modifyTime
+            )
+        )
+        guard case .setAttributes = response else {
+            throw CocoaError(.coderInvalidValue)
+        }
+    }
+
     public func attributes(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> SFTPAttributes {

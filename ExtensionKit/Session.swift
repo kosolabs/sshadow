@@ -95,7 +95,7 @@ class Session {
 
     func exists(for identifier: NSFileProviderItemIdentifier) async -> Bool {
         do {
-            _ = try await sftp.attributes(atPath: path(for: identifier))
+            _ = try await agent.attributes(for: identifier)
             return true
         } catch {
             return false
@@ -106,24 +106,11 @@ class Session {
         for identifier: NSFileProviderItemIdentifier,
         permissions: mode_t? = nil,
         accessTime: Date? = nil,
-        modifyTime: Date? = nil,
+        modifyTime: Date? = nil
     ) async throws {
-        var changes: [String] = []
-        if let accessTime = accessTime {
-            changes.append("accessTime: \(accessTime)")
-        }
-        if let modifyTime = modifyTime {
-            changes.append("modifyTime: \(modifyTime)")
-        }
-        if let permissions = permissions {
-            changes.append("permissions: \(String(permissions, radix: 8))")
-        }
-        await logger.info(
-            "Set attributes of \(id(of: identifier)): \(changes.joined(separator: ", "))"
-        )
         try await mapError(with: identifier) {
-            try await sftp.setAttributes(
-                atPath: path(for: identifier),
+            try await agent.setAttributes(
+                for: identifier,
                 permissions: permissions,
                 accessTime: accessTime,
                 modifyTime: modifyTime

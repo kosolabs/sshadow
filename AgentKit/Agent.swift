@@ -51,6 +51,20 @@ public class Agent: NSObject, AgentProtocol {
                         )
                     case .attributes(let domainId, let itemId):
                         try await attributes(domainId: domainId, itemId: itemId)
+                    case .setAttributes(
+                        let domainId,
+                        let itemId,
+                        let permissions,
+                        let accessTime,
+                        let modifyTime
+                    ):
+                        try await setAttributes(
+                            domainId: domainId,
+                            itemId: itemId,
+                            permissions: permissions,
+                            accessTime: accessTime,
+                            modifyTime: modifyTime
+                        )
                     }
                 reply(try AgentCoding.encode(AgentResult.success(response)))
             } catch {
@@ -130,5 +144,22 @@ public class Agent: NSObject, AgentProtocol {
             for: NSFileProviderItemIdentifier(itemId)
         )
         return .attributes(attributes)
+    }
+
+    func setAttributes(
+        domainId: UUID,
+        itemId: String,
+        permissions: mode_t?,
+        accessTime: Date?,
+        modifyTime: Date?
+    ) async throws -> AgentResponse {
+        let session = try await sessions.connect(id: domainId)
+        try await session.setAttributes(
+            for: NSFileProviderItemIdentifier(itemId),
+            permissions: permissions,
+            accessTime: accessTime,
+            modifyTime: modifyTime
+        )
+        return .setAttributes
     }
 }
