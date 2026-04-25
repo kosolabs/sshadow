@@ -17,6 +17,13 @@ public enum AgentRequest: Codable {
     case pathForItem(domainId: UUID, itemId: String)
     case pathForChild(domainId: UUID, name: String, parentId: String)
     case attributes(domainId: UUID, itemId: String)
+    case setAttributes(
+        domainId: UUID,
+        itemId: String,
+        permissions: mode_t?,
+        accessTime: Date?,
+        modifyTime: Date?
+    )
 }
 
 public enum AgentResponse: Codable {
@@ -25,6 +32,7 @@ public enum AgentResponse: Codable {
     case parent(itemId: String)
     case path(path: String)
     case attributes(SFTPAttributes)
+    case setAttributes
 }
 
 public enum AgentError: Codable, Error {

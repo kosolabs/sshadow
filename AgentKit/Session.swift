@@ -74,6 +74,31 @@ class Session {
         }
     }
 
+    func setAttributes(
+        for itemId: NSFileProviderItemIdentifier,
+        permissions: mode_t? = nil,
+        accessTime: Date? = nil,
+        modifyTime: Date? = nil
+    ) async throws {
+        var changes: [String] = []
+        if let accessTime { changes.append("accessTime: \(accessTime)") }
+        if let modifyTime { changes.append("modifyTime: \(modifyTime)") }
+        if let permissions {
+            changes.append("permissions: \(String(permissions, radix: 8))")
+        }
+        await logger.info(
+            "Set attributes of \(id(of: itemId)): \(changes.joined(separator: ", "))"
+        )
+        try await mapError(with: itemId) {
+            try await sftp.setAttributes(
+                atPath: path(for: itemId),
+                permissions: permissions,
+                accessTime: accessTime,
+                modifyTime: modifyTime
+            )
+        }
+    }
+
     func mapError<T>(
         with itemId: NSFileProviderItemIdentifier,
         _ operation: () async throws -> T

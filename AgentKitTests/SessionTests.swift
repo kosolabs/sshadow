@@ -192,6 +192,78 @@ struct SessionTests {
             } throws: { error in isNoSuchItemError(error) }
         }
     }
+
+    struct SetAttributesTests {
+        let testFolderPath = "session-set-attributes"
+
+        init() throws {
+            try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func setPermissionsSucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/perms.txt"
+            try TestData.createFile(path: path, contents: "test")
+            let itemId = try await session.child(path: path)
+
+            try await session.setAttributes(
+                for: itemId,
+                permissions: 0o644
+            )
+
+            let attrs = try await session.attributes(for: itemId)
+            #expect(attrs.permissions & 0o777 == 0o644)
+        }
+
+        @Test func setModifyTimeSucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/modify-time.txt"
+            try TestData.createFile(path: path, contents: "test")
+            let itemId = try await session.child(path: path)
+
+            let date = Date(timeIntervalSince1970: 1_000_000)
+            try await session.setAttributes(
+                for: itemId,
+                modifyTime: date
+            )
+
+            let attrs = try await session.attributes(for: itemId)
+            #expect(attrs.modifyTime == date)
+        }
+        
+        @Test func setAccessTimeSucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/access-time.txt"
+            try TestData.createFile(path: path, contents: "test")
+            let itemId = try await session.child(path: path)
+
+            let date = Date(timeIntervalSince1970: 2_000_000)
+            try await session.setAttributes(
+                for: itemId,
+                accessTime: date
+            )
+
+            let attrs = try await session.attributes(for: itemId)
+            #expect(attrs.accessTime == date)
+        }
+
+        @Test func setAttributesForMissingFileThrows() async throws {
+            let session = try await getSession()
+
+            await #expect {
+                try await session.setAttributes(
+                    for: session.child(
+                        path: "\(testFolderPath)/missing.txt",
+                        ifNotExists: .fail
+                    ),
+                    permissions: 0o644
+                )
+            } throws: { error in isNoSuchItemError(error) }
+        }
+    }
 }
 
 func isNoSuchItemError(_ error: any Error) -> Bool {
