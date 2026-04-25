@@ -1,5 +1,6 @@
 import FileProvider
 import SwiftData
+import SwiftLibSSH
 import SwiftUI
 
 private let logger = Logger(category: "ConnectionProfile")
@@ -66,20 +67,28 @@ public class ConnectionProfile: CustomStringConvertible {
 
     // MARK: - Effective Values
 
-    public var url: String? {
-        if host == "" { return nil }
-        var result = "\(effectiveUser)@\(host)"
-        if let port = port {
+    public var socket: String {
+        var result = "\(host)"
+        if let port = port, port != 22 {
             result += ":\(port)"
-        }
-        if let path = path {
-            result += ":\(path)"
         }
         return result
     }
 
-    public var effectiveName: String {
-        name ?? url ?? "New Connection"
+    public var url: String {
+        var result = "\(effectiveUser)@\(socket)"
+        if !effectivePath.isEmpty {
+            result += ":\(effectivePath)"
+        }
+        return result
+    }
+
+    public var displayName: String {
+        host.isEmpty ? "New Connection" : name ?? url
+    }
+
+    public var displayUrl: String {
+        host.isEmpty ? "New Connection" : url
     }
 
     public var effectivePort: UInt16 {
@@ -91,11 +100,25 @@ public class ConnectionProfile: CustomStringConvertible {
     }
 
     public var effectivePath: String {
-        path ?? "~"
+        let p = path ?? ""
+        return p.count > 1 && p.hasSuffix("/") ? String(p.dropLast()) : p
+    }
+
+    public func path(for subpath: String) -> String {
+        if effectivePath == "/" {
+            return "/\(subpath)"
+        }
+        return [effectivePath, subpath].filter { !$0.isEmpty }.joined(
+            separator: "/"
+        )
+    }
+
+    public func absoluteUrl(for path: String) -> String {
+        effectivePath.isEmpty ? "\(url):\(path)" : "\(url)/\(path)"
     }
 
     public var description: String {
-        "ConnectionProfile(id: \(id), name: \(name ?? "-"), enabled: \(enabled), url: \(url ?? "-"), authMethod: \(authMethod))"
+        "ConnectionProfile(id: \(id), name: \(name ?? "-"), enabled: \(enabled), url: \(url), authMethod: \(authMethod))"
     }
 
     // MARK: - Enable / Disable
@@ -105,13 +128,12 @@ public class ConnectionProfile: CustomStringConvertible {
     }
 
     public func enable() async throws {
-        try await NSFileProviderManager.removeAllDomains()
         let config = try ConnectionConfig(from: self)
         try await tester.test(config: config)
         let userInfo = try UserInfo(from: self)
         let domain = try getDomain(with: userInfo)
         try await NSFileProviderManager.add(domain)
-        try await SSHadowDB.open(domain: domain)
+        try await DomainDB.open(id: id)
         self.enabled = true
         logger.info("Enabled: \(self)")
 
@@ -122,7 +144,7 @@ public class ConnectionProfile: CustomStringConvertible {
     public func disable() async throws {
         let domain = getDomain()
         try await NSFileProviderManager.remove(domain)
-        try await SSHadowDB.delete(domain: domain)
+        try await DomainDB.delete(id: id)
         self.enabled = false
         logger.info("Disabled: \(self)")
     }
@@ -162,6 +184,30 @@ public class ConnectionProfile: CustomStringConvertible {
             return nil
         }
     }
+    
+    public func getBase64PrivateKey() throws -> String {
+            guard let bookmark = bookmark else {
+                throw ValidationError.privateKeyUrlNil
+            }
+            var isStale = false
+            let url = try URL(
+                resolvingBookmarkData: bookmark,
+                bookmarkDataIsStale: &isStale
+            )
+            guard url.startAccessingSecurityScopedResource() else {
+                throw ValidationError.privateKeyReadFailed
+            }
+            defer { url.stopAccessingSecurityScopedResource() }
+            guard
+                let base64PrivateKey = try? String(
+                    data: Data(contentsOf: url),
+                    encoding: .utf8
+                )
+            else {
+                throw ValidationError.privateKeyReadFailed
+            }
+            return base64PrivateKey
+    }
 
     // MARK: - Private Key Passphrase Management
 
@@ -184,7 +230,7 @@ public class ConnectionProfile: CustomStringConvertible {
     public func getDomain() -> NSFileProviderDomain {
         NSFileProviderDomain(
             identifier: NSFileProviderDomainIdentifier(id.uuidString),
-            displayName: effectiveName,
+            displayName: displayName,
         )
     }
 
@@ -267,7 +313,7 @@ extension ConnectionConfig {
     public init(from profile: ConnectionProfile) throws {
         try self.init(
             id: profile.id,
-            name: profile.effectiveName,
+            name: profile.displayName,
             host: profile.host,
             port: profile.effectivePort,
             user: profile.effectiveUser,
@@ -281,12 +327,59 @@ extension UserInfo {
     public init(from profile: ConnectionProfile) throws {
         try self.init(
             id: profile.id,
-            name: profile.effectiveName,
+            name: profile.displayName,
             host: profile.host,
             port: profile.effectivePort,
             user: profile.effectiveUser,
             path: profile.effectivePath,
             authMethod: profile.resolveUserInfoAuthMethod()
         )
+    }
+}
+
+extension SSHClient {
+    public static func connect(
+        profile: ConnectionProfile
+    ) async throws -> SSHClient {
+        switch profile.authMethod {
+        case .password:
+            guard let password = profile.getPassword() else {
+                throw ConnectionProfile.ValidationError.passwordNil
+            }
+            return try await SSHClient.connect(
+                host: profile.host,
+                port: profile.effectivePort,
+                user: profile.effectiveUser,
+                password: password,
+            )
+        case .privateKey:
+            let base64PrivateKey = try profile.getBase64PrivateKey()
+            let passphrase = profile.getPrivateKeyPassphrase()
+            return try await SSHClient.connect(
+                host: profile.host,
+                port: profile.effectivePort,
+                user: profile.effectiveUser,
+                base64PrivateKey: base64PrivateKey,
+                passphrase: passphrase,
+            )
+        }
+    }
+
+    @discardableResult
+    public static func withSession<T: Sendable>(
+        profile: ConnectionProfile,
+        perform: @Sendable (SSHClient, SFTPClient) async throws -> T
+    ) async throws -> T {
+        let sshClient = try await connect(profile: profile)
+        do {
+            let result = try await sshClient.withSftp { sftpClient in
+                try await perform(sshClient, sftpClient)
+            }
+            await sshClient.close()
+            return result
+        } catch {
+            await sshClient.close()
+            throw error
+        }
     }
 }

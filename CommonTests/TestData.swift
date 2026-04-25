@@ -23,8 +23,8 @@ enum TestData {
         return url
     }()
     static let domain = getDomain()
-    static let sshadowDbStorePath = FileManager.default.temporaryDirectory
-        .appendingPathComponent("SSHadowDB-\(id.uuidString).store")
+    static let domainDbStorePath = FileManager.default.temporaryDirectory
+        .appendingPathComponent("DomainDB-\(id.uuidString).store")
 
     static let appDbStorePath = FileManager.default.temporaryDirectory
         .appendingPathComponent("AppDB-test.store")
@@ -120,8 +120,8 @@ enum TestData {
         return url
     }
 
-    static func getSSHadowDb() async throws -> SSHadowDB {
-        return try await SSHadowDB.open(domain: domain)
+    static func getDomainDb() async throws -> DomainDB {
+        return try await DomainDB.open(id: id)
     }
 
     static func getAgentClient() -> AgentClient {

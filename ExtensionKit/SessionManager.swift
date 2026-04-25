@@ -11,7 +11,7 @@ private func connect(
     do {
         let ssh = try await SSHClient.connect(config: config)
         let sftp = try await ssh.sftp()
-        let db = try await SSHadowDB.open(domain: domain)
+        let db = try await DomainDB.open(id: config.id)
         return Session(
             domain: domain,
             config: config,

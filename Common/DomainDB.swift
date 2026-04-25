@@ -2,39 +2,31 @@ import FileProvider
 import Foundation
 import SwiftData
 
-@ModelActor
-public actor SSHadowDB {
-    public static var modelConfigurationFactory:
-        (NSFileProviderDomain) -> ModelConfiguration = { domain in
-            ModelConfiguration(
-                url: SSHadow.groupUrl.appendingPathComponent(
-                    "SSHadowDB-\(domain.identifier.rawValue).store"
-                )
-            )
-        }
+private let logger = Logger(category: "DomainDB")
 
-    private var logger = Logger(category: "SSHadowDB")
+@ModelActor
+public actor DomainDB {
+    public static var urlFactory: (UUID) -> URL = { id in
+        SSHadow.groupUrl.appendingPathComponent(
+            "DomainDB-\(id.uuidString).store"
+        )
+    }
 
     @discardableResult
-    public static func open(
-        domain: NSFileProviderDomain
-    ) async throws -> SSHadowDB {
+    public static func open(id: UUID) async throws -> DomainDB {
         let schema = Schema([SSHItem.self, SSHChunk.self])
 
-        let config = Self.modelConfigurationFactory(domain)
-
-        let db = try SSHadowDB(
+        let db = try DomainDB(
             modelContainer: ModelContainer(
                 for: schema,
-                configurations: config
+                configurations: ModelConfiguration(url: urlFactory(id))
             )
         )
-        try await db.configure(domain: domain)
+        try await db.configure()
         return db
     }
 
-    private func configure(domain: NSFileProviderDomain) throws {
-        logger = Logger(category: "\(domain.displayName):SSHadowDB")
+    private func configure() throws {
         try upsert(
             SSHItem(
                 id: .rootContainer,
@@ -58,10 +50,8 @@ public actor SSHadowDB {
         )
     }
 
-    public static func delete(domain: NSFileProviderDomain) async throws {
-        let basePath = SSHadow.groupUrl.appendingPathComponent(
-            "SSHadowDB-\(domain.identifier.rawValue).sqlite"
-        ).path
+    public static func delete(id: UUID) async throws {
+        let basePath = urlFactory(id).path
 
         for suffix in ["", "-shm", "-wal"] {
             let path = basePath + suffix

@@ -11,9 +11,7 @@ private let root = NSFileProviderItemIdentifier.rootContainer
 private func getExtension(id: UUID = UUID()) async throws -> Extension {
     Extension.agentClientFactory = TestData.getAgentClient
     Session.agentClientFactory = TestData.getAgentClient
-    SSHadowDB.modelConfigurationFactory = { domain in
-        ModelConfiguration(url: TestData.sshadowDbStorePath)
-    }
+    DomainDB.urlFactory = { _ in TestData.domainDbStorePath }
     try await TestData.initAppDB()
     return Extension(domain: TestData.domain)
 }

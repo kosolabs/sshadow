@@ -11,7 +11,7 @@ class Session {
     let config: ConnectionConfig
     let ssh: SSHClient
     let sftp: SFTPClient
-    let db: SSHadowDB
+    let db: DomainDB
     let agent: AgentClient
 
     var name: String {
@@ -25,7 +25,7 @@ class Session {
         config: ConnectionConfig,
         ssh: SSHClient,
         sftp: SFTPClient,
-        db: SSHadowDB,
+        db: DomainDB,
         agent: AgentClient? = nil
     ) {
         self.domain = domain
@@ -51,7 +51,7 @@ class Session {
     func child(
         of parent: NSFileProviderItemIdentifier = .rootContainer,
         path: String,
-        ifNotExists: SSHadowDB.OnNotExists = .create
+        ifNotExists: DomainDB.OnNotExists = .create
     ) async throws -> NSFileProviderItemIdentifier {
         try await db.child(of: parent, path: path, ifNotExists: ifNotExists)
     }
