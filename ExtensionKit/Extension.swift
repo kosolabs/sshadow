@@ -3,6 +3,8 @@ import FileProvider
 import SwiftLibSSH
 import UniformTypeIdentifiers
 
+private let logger = Logger(category: "Extension")
+
 public class Extension: NSObject, NSFileProviderReplicatedExtension,
     NSFileProviderPartialContentFetching
 {
@@ -10,12 +12,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         AgentClient()
     }
 
-    let logger: Logger
     let manager: SessionManager
     let agent: AgentClient
 
     required public init(domain: NSFileProviderDomain) {
-        logger = Logger(category: "\(domain.displayName):Extension")
         agent = Self.agentClientFactory()
 
         do {
@@ -338,9 +338,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         } onSuccess: { item, fields, shouldFetchContent in
             completionHandler(item, fields, shouldFetchContent, nil)
         } onError: { error in
-            self.logger.fault(
-                "Failed to modify item \(item.itemIdentifier)"
-            )
+            logger.fault("Failed to modify item \(item.itemIdentifier)")
             completionHandler(nil, [], false, error)
         }
     }
@@ -444,9 +442,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         } onSuccess: {
             completionHandler(nil)
         } onError: { error in
-            self.logger.fault(
-                "Failed to delete item \(identifier)"
-            )
+            logger.fault("Failed to delete item \(identifier)")
             completionHandler(error)
         }
     }

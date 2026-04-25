@@ -2,6 +2,8 @@ import Common
 import FileProvider
 import SwiftLibSSH
 
+private let logger = Logger(category: "Session")
+
 class Session {
     static var agentClientFactory: () -> AgentClient = {
         AgentClient()
@@ -18,8 +20,6 @@ class Session {
         domain.displayName
     }
 
-    private let logger: Logger
-
     init(
         domain: NSFileProviderDomain,
         config: ConnectionConfig,
@@ -34,8 +34,6 @@ class Session {
         self.sftp = sftp
         self.db = db
         self.agent = agent ?? Self.agentClientFactory()
-
-        self.logger = Logger(category: "\(domain.displayName):Session")
     }
 
     func id(of identifier: NSFileProviderItemIdentifier) async -> String {
