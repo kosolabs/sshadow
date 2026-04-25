@@ -124,7 +124,7 @@ enum TestData {
         return try await DomainDB.open(id: id)
     }
 
-    static func getAgentClient() -> AgentClient {
+    static func getAgentClient(id: UUID = id) -> AgentClient {
         let delegate = AgentListenerDelegate(appDbStorePath: appDbStorePath)
         let listener = NSXPCListener.anonymous()
         listener.delegate = delegate
@@ -137,7 +137,7 @@ enum TestData {
         listener.resume()
 
         let connection = NSXPCConnection(listenerEndpoint: listener.endpoint)
-        return AgentClient(connection: connection)
+        return AgentClient(domainId: id, connection: connection)
     }
 
     static func getUrl(path: String) -> URL {

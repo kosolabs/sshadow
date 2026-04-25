@@ -6,15 +6,25 @@ import SwiftLibSSH
 }
 
 public enum AgentRequest: Codable {
-    case sayHello(name: String)
-    case loadConfig(domainId: UUID)
+    case name(domainId: UUID, itemId: String)
+    case child(
+        domainId: UUID,
+        parentId: String,
+        path: String,
+        ifNotExists: DomainDB.OnNotExists
+    )
+    case parent(domainId: UUID, itemId: String)
+    case pathForItem(domainId: UUID, itemId: String)
+    case pathForChild(domainId: UUID, name: String, parentId: String)
     case attributes(domainId: UUID, itemId: String)
 }
 
 public enum AgentResponse: Codable {
-    case sayHello(greeting: String)
+    case name(name: String)
+    case child(itemId: String)
+    case parent(itemId: String)
+    case path(path: String)
     case attributes(SFTPAttributes)
-    case loadConfig
 }
 
 public enum AgentError: Codable, Error {

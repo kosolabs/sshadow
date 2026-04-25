@@ -5,8 +5,8 @@ import SwiftLibSSH
 private let logger = Logger(category: "Session")
 
 class Session {
-    static var agentClientFactory: () -> AgentClient = {
-        AgentClient()
+    static var agentClientFactory: (UUID) -> AgentClient = { domainId in
+        AgentClient(domainId: domainId)
     }
 
     let domain: NSFileProviderDomain
@@ -33,7 +33,7 @@ class Session {
         self.ssh = ssh
         self.sftp = sftp
         self.db = db
-        self.agent = agent ?? Self.agentClientFactory()
+        self.agent = agent ?? Self.agentClientFactory(config.id)
     }
 
     func id(of identifier: NSFileProviderItemIdentifier) async -> String {
@@ -43,7 +43,7 @@ class Session {
     func name(
         of identifier: NSFileProviderItemIdentifier
     ) async throws -> String {
-        try await db.name(of: identifier)
+        try await agent.name(of: identifier)
     }
 
     func child(
@@ -51,26 +51,26 @@ class Session {
         path: String,
         ifNotExists: DomainDB.OnNotExists = .create
     ) async throws -> NSFileProviderItemIdentifier {
-        try await db.child(of: parent, path: path, ifNotExists: ifNotExists)
+        try await agent.child(of: parent, path: path, ifNotExists: ifNotExists)
     }
 
     func parent(
         of identifier: NSFileProviderItemIdentifier
     ) async throws -> NSFileProviderItemIdentifier {
-        try await db.parent(of: identifier)
+        try await agent.parent(of: identifier)
     }
 
     func path(
         for identifier: NSFileProviderItemIdentifier
-    ) async -> String {
-        await config.path(for: db.path(for: identifier))
+    ) async throws -> String {
+        try await agent.path(for: identifier)
     }
 
     func path(
         for name: String,
         parentId: NSFileProviderItemIdentifier
-    ) async -> String {
-        await config.path(for: db.path(for: name, in: parentId))
+    ) async throws -> String {
+        try await agent.path(for: name, parentId: parentId)
     }
 
     func item(
@@ -89,7 +89,7 @@ class Session {
         for identifier: NSFileProviderItemIdentifier
     ) async throws -> SFTPAttributes {
         try await mapError(with: identifier) {
-            try await agent.attributes(domainId: config.id, itemId: identifier)
+            try await agent.attributes(for: identifier)
         }
     }
 
@@ -142,8 +142,8 @@ class Session {
         name newName: String,
         ifParentNotExists: OnParentNotExists = .fail
     ) async throws {
-        let oldPath = await path(for: id)
-        let newPath = await path(for: newName, parentId: newParentId)
+        let oldPath = try await path(for: id)
+        let newPath = try await path(for: newName, parentId: newParentId)
 
         await logger.info("Move \(self.id(of: id)) to \(newPath)")
         try await mapError {

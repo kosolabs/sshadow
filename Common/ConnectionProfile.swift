@@ -133,17 +133,16 @@ public class ConnectionProfile: CustomStringConvertible {
         let userInfo = try UserInfo(from: self)
         let domain = try getDomain(with: userInfo)
         try await NSFileProviderManager.add(domain)
+        // TODO: Initialize the DB in the Agent
         try await DomainDB.open(id: id)
         self.enabled = true
         logger.info("Enabled: \(self)")
-
-        let agent = AgentClient()
-        try await agent.loadConfig(id: id)
     }
 
     public func disable() async throws {
         let domain = getDomain()
         try await NSFileProviderManager.remove(domain)
+        // TODO: Deinit the DB in the Agent
         try await DomainDB.delete(id: id)
         self.enabled = false
         logger.info("Disabled: \(self)")

@@ -8,23 +8,25 @@ private let logger = Logger(category: "Extension")
 public class Extension: NSObject, NSFileProviderReplicatedExtension,
     NSFileProviderPartialContentFetching
 {
-    static var agentClientFactory: () -> AgentClient = {
-        AgentClient()
+    static var agentClientFactory: (UUID) -> AgentClient = {
+        domainId in
+        AgentClient(domainId: domainId)
     }
 
     let manager: SessionManager
     let agent: AgentClient
 
     required public init(domain: NSFileProviderDomain) {
-        agent = Self.agentClientFactory()
 
         do {
             let userInfo = try UserInfo.fromDictionary(domain.userInfo)
             let config = try ConnectionConfig(from: userInfo)
             manager = SessionManager(domain: domain, config: config)
+            agent = Self.agentClientFactory(config.id)
             logger.debug("Init \(config)")
         } catch {
             manager = SessionManager(domain: domain, config: nil)
+            agent = Self.agentClientFactory(UUID())
             logger.fault("Failed to retrieve connection config: \(error)")
         }
 

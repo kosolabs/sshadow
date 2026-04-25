@@ -25,10 +25,30 @@ public class Agent: NSObject, AgentProtocol {
                 logger.debug("Perform: \(request)")
                 let response: AgentResponse =
                     switch request {
-                    case .sayHello(let name):
-                        sayHello(to: name)
-                    case .loadConfig(let domainId):
-                        try await loadConfig(id: domainId)
+                    case .name(let domainId, let itemId):
+                        try await name(domainId: domainId, itemId: itemId)
+                    case .child(
+                        let domainId,
+                        let parentId,
+                        let path,
+                        let ifNotExists
+                    ):
+                        try await child(
+                            domainId: domainId,
+                            parentId: parentId,
+                            path: path,
+                            ifNotExists: ifNotExists
+                        )
+                    case .parent(let domainId, let itemId):
+                        try await parent(domainId: domainId, itemId: itemId)
+                    case .pathForItem(let domainId, let itemId):
+                        try await pathForItem(domainId: domainId, itemId: itemId)
+                    case .pathForChild(let domainId, let name, let parentId):
+                        try await pathForChild(
+                            domainId: domainId,
+                            name: name,
+                            parentId: parentId
+                        )
                     case .attributes(let domainId, let itemId):
                         try await attributes(domainId: domainId, itemId: itemId)
                     }
@@ -40,18 +60,65 @@ public class Agent: NSObject, AgentProtocol {
         }
     }
 
-    func sayHello(to name: String) -> AgentResponse {
-        .sayHello(greeting: "Hello, \(name)!")
+    func name(
+        domainId: UUID,
+        itemId: String
+    ) async throws -> AgentResponse {
+        let session = try await sessions.connect(id: domainId)
+        let name = try await session.name(
+            of: NSFileProviderItemIdentifier(itemId)
+        )
+        return .name(name: name)
     }
 
-    func loadConfig(id: UUID) async throws -> AgentResponse {
-        let appDB = try AppDB.open()
-        guard let profile = await appDB.fetch(id: id) else {
-            logger.error("Profile not found for \(id)")
-            throw AgentError.profileNotFound(id)
-        }
-        logger.info("\(profile)")
-        return .loadConfig
+    func child(
+        domainId: UUID,
+        parentId: String,
+        path: String,
+        ifNotExists: DomainDB.OnNotExists
+    ) async throws -> AgentResponse {
+        let session = try await sessions.connect(id: domainId)
+        let childId = try await session.child(
+            of: NSFileProviderItemIdentifier(parentId),
+            path: path,
+            ifNotExists: ifNotExists
+        )
+        return .child(itemId: childId.rawValue)
+    }
+
+    func parent(
+        domainId: UUID,
+        itemId: String
+    ) async throws -> AgentResponse {
+        let session = try await sessions.connect(id: domainId)
+        let parentId = try await session.parent(
+            of: NSFileProviderItemIdentifier(itemId)
+        )
+        return .parent(itemId: parentId.rawValue)
+    }
+
+    func pathForItem(
+        domainId: UUID,
+        itemId: String
+    ) async throws -> AgentResponse {
+        let session = try await sessions.connect(id: domainId)
+        let path = await session.path(
+            for: NSFileProviderItemIdentifier(itemId)
+        )
+        return .path(path: path)
+    }
+
+    func pathForChild(
+        domainId: UUID,
+        name: String,
+        parentId: String
+    ) async throws -> AgentResponse {
+        let session = try await sessions.connect(id: domainId)
+        let path = await session.path(
+            for: name,
+            parentId: NSFileProviderItemIdentifier(parentId)
+        )
+        return .path(path: path)
     }
 
     func attributes(

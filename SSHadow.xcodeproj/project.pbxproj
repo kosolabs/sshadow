@@ -349,6 +349,7 @@
 		73EC8FBD2F996C53008A08C9 /* Exceptions for "CommonTests" folder in "AgentKitTests" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				id_ed25519,
 				TestData.swift,
 			);
 			target = 73799A472F9811DD00A15109 /* AgentKitTests */;
