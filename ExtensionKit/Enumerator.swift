@@ -2,8 +2,9 @@ import Common
 import FileProvider
 import SwiftLibSSH
 
+private let logger = Logger(category: "Enumerator")
+
 public class Enumerator: NSObject, NSFileProviderEnumerator {
-    private let logger: Logger
     private let manager: SessionManager
     private let itemIdentifier: NSFileProviderItemIdentifier
     private let anchor = NSFileProviderSyncAnchor(
@@ -14,7 +15,6 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         manager: SessionManager,
         itemIdentifier: NSFileProviderItemIdentifier
     ) {
-        logger = Logger(category: "\(manager.name):Enumerator")
         logger.debug("Init \(itemIdentifier.desc)")
         self.manager = manager
         self.itemIdentifier = itemIdentifier

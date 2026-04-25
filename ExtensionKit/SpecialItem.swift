@@ -3,15 +3,15 @@ import FileProvider
 import SwiftLibSSH
 import UniformTypeIdentifiers
 
+private let logger = Logger(category: "Item")
+
 public class SpecialItem: NSObject, NSFileProviderItem {
-    private let logger: Logger
     public let itemIdentifier: NSFileProviderItemIdentifier
 
     init(
         domainName: String,
         itemIdentifier: NSFileProviderItemIdentifier,
     ) {
-        logger = Logger(category: "\(domainName):Item")
         logger.debug("Init \(itemIdentifier.desc)")
         self.itemIdentifier = itemIdentifier
     }

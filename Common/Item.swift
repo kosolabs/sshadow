@@ -2,9 +2,9 @@ import FileProvider
 import SwiftLibSSH
 import UniformTypeIdentifiers
 
-public class Item: NSObject, NSFileProviderItem {
-    private let logger: Logger
+private let logger = Logger(category: "Item")
 
+public class Item: NSObject, NSFileProviderItem {
     public let itemIdentifier: NSFileProviderItemIdentifier
     public let parentItemIdentifier: NSFileProviderItemIdentifier
     public let filename: String
@@ -17,7 +17,6 @@ public class Item: NSObject, NSFileProviderItem {
         filename: String,
         itemAttributes: SFTPAttributes,
     ) {
-        logger = Logger(category: "\(domainName):Item")
         logger.debug("Init FPItemID(\(itemIdentifier.desc), \(filename))")
         self.itemIdentifier = itemIdentifier
         self.parentItemIdentifier = parentItemIdentifier
