@@ -25,8 +25,16 @@ public class Agent: NSObject, AgentProtocol {
                 logger.debug("Perform: \(request)")
                 let response: AgentResponse =
                     switch request {
-                    case .name(let domainId, let itemId):
-                        try await name(domainId: domainId, itemId: itemId)
+
+                    case .name(
+                        let domainId,
+                        let itemId
+                    ):
+                        try await name(
+                            domainId: domainId,
+                            itemId: itemId
+                        )
+
                     case .child(
                         let domainId,
                         let parentId,
@@ -39,18 +47,45 @@ public class Agent: NSObject, AgentProtocol {
                             path: path,
                             ifNotExists: ifNotExists
                         )
-                    case .parent(let domainId, let itemId):
-                        try await parent(domainId: domainId, itemId: itemId)
-                    case .pathForItem(let domainId, let itemId):
-                        try await pathForItem(domainId: domainId, itemId: itemId)
-                    case .pathForChild(let domainId, let name, let parentId):
+
+                    case .parent(
+                        let domainId,
+                        let itemId
+                    ):
+                        try await parent(
+                            domainId: domainId,
+                            itemId: itemId
+                        )
+
+                    case .pathForItem(
+                        let domainId,
+                        let itemId
+                    ):
+                        try await pathForItem(
+                            domainId: domainId,
+                            itemId: itemId
+                        )
+
+                    case .pathForChild(
+                        let domainId,
+                        let name,
+                        let parentId
+                    ):
                         try await pathForChild(
                             domainId: domainId,
                             name: name,
                             parentId: parentId
                         )
-                    case .attributes(let domainId, let itemId):
-                        try await attributes(domainId: domainId, itemId: itemId)
+
+                    case .attributes(
+                        let domainId,
+                        let itemId
+                    ):
+                        try await attributes(
+                            domainId: domainId,
+                            itemId: itemId
+                        )
+                    
                     case .setAttributes(
                         let domainId,
                         let itemId,
@@ -64,6 +99,19 @@ public class Agent: NSObject, AgentProtocol {
                             permissions: permissions,
                             accessTime: accessTime,
                             modifyTime: modifyTime
+                        )
+                    
+                    case .createDirectory(
+                        let domainId,
+                        let itemId,
+                        let mode,
+                        let ifExists
+                    ):
+                        try await createDirectory(
+                            domainId: domainId,
+                            itemId: itemId,
+                            mode: mode,
+                            ifExists: ifExists
                         )
                     }
                 reply(try AgentCoding.encode(AgentResult.success(response)))
@@ -161,5 +209,20 @@ public class Agent: NSObject, AgentProtocol {
             modifyTime: modifyTime
         )
         return .setAttributes
+    }
+
+    func createDirectory(
+        domainId: UUID,
+        itemId: String,
+        mode: mode_t,
+        ifExists: OnExists
+    ) async throws -> AgentResponse {
+        let session = try await sessions.connect(id: domainId)
+        try await session.createDirectory(
+            for: NSFileProviderItemIdentifier(itemId),
+            mode: mode,
+            ifExists: ifExists
+        )
+        return .createDirectory
     }
 }

@@ -71,7 +71,7 @@ struct AgentClientTests {
             )
         } throws: { error in isNoSuchItemError(error) }
     }
-    
+
     @Test func setAttributesSucceeds() async throws {
         let agent = try await getAgentClient()
 
@@ -83,6 +83,18 @@ struct AgentClientTests {
 
         let attrs = try await agent.attributes(for: itemId)
         #expect(attrs.permissions & 0o777 == 0o644)
+    }
+    
+    @Test func createDirectorySucceeds() async throws {
+        let agent = try await getAgentClient()
+
+        let path = "\(testFolderPath)/new-dir"
+        let itemId = try await agent.child(path: path)
+
+        try await agent.createDirectory(for: itemId, mode: 0o755)
+
+        let attrs = try await agent.attributes(for: itemId)
+        #expect(attrs.type == .directory)
     }
 }
 

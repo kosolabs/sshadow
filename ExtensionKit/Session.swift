@@ -160,30 +160,17 @@ class Session {
         }
     }
 
-    enum OnExists {
-        case fail
-        case succeed
-    }
-
     func createDirectory(
         for identifier: NSFileProviderItemIdentifier,
         mode: mode_t = 0o700,
         ifExists: OnExists = .fail
     ) async throws {
-        await logger.info(
-            "Create directory \(id(of: identifier)) with permissions \(String(mode, radix: 8))"
-        )
         try await mapError(with: identifier) {
-            do {
-                try await sftp.createDirectory(
-                    atPath: path(for: identifier),
-                    mode: mode
-                )
-            } catch SSHError.sftpError(.fileAlreadyExists, _)
-                where ifExists == .succeed
-            {
-                logger.info("Directory already exists for \(identifier.desc)")
-            }
+            try await agent.createDirectory(
+                for: identifier,
+                mode: mode,
+                ifExists: ifExists
+            )
         }
     }
 
