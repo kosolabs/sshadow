@@ -22,7 +22,7 @@ public class Agent: NSObject, AgentProtocol {
                     AgentRequest.self,
                     from: requestData
                 )
-                logger.debug("Perform: \(request)")
+                logger.debug("Request: \(request)")
                 let response: AgentResponse =
                     switch request {
 
@@ -147,6 +147,7 @@ public class Agent: NSObject, AgentProtocol {
                             itemId: itemId
                         )
                     }
+                logger.debug("Response: \(response)")
                 reply(try AgentCoding.encode(AgentResult.success(response)))
             } catch {
                 let result = AgentResult.failure(AgentResultError(from: error))

@@ -20,6 +20,7 @@ public class AgentClient {
             with: AgentProtocol.self
         )
         connection.resume()
+        logger.info("Connecting to: \(connection)")
         self.connection = connection
     }
 
@@ -37,7 +38,7 @@ public class AgentClient {
                 } as! AgentProtocol
 
             do {
-                logger.debug("Perform: \(request)")
+                logger.debug("Request: \(request)")
                 let requestData = try AgentCoding.encode(request)
                 proxy.perform(requestData) { responseData in
                     do {
@@ -46,7 +47,9 @@ public class AgentClient {
                             from: responseData
                         )
                         continuation.resume(returning: try result.get())
+                        logger.debug("Result: \(request)")
                     } catch {
+                        logger.debug("Error: \(error)")
                         continuation.resume(throwing: error)
                     }
                 }

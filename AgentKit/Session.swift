@@ -148,7 +148,7 @@ class Session {
 
         try await db.move(itemId, toParent: newParentId, name: newName)
     }
-    
+
     func removeFile(
         for itemId: NSFileProviderItemIdentifier
     ) async throws {
@@ -165,6 +165,71 @@ class Session {
         try await mapError(with: itemId) {
             try await sftp.removeDirectoryRecursively(
                 atPath: path(for: itemId)
+            )
+        }
+    }
+
+    func download(
+        itemId: NSFileProviderItemIdentifier,
+        progress: Progress,
+    ) async throws -> (URL, SFTPAttributes) {
+        let itemRef = await id(of: itemId)
+        let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
+        guard FileManager.default.createFile(atPath: url.path(), contents: nil)
+        else { throw NSFileProviderError(.insufficientQuota) }
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+
+        let attributes = try await attributes(for: itemId)
+        logger.info("Download \(itemRef) into \(url.path())")
+
+        progress.kind = .file
+        progress.fileOperationKind = .downloading
+        progress.totalUnitCount = Int64(attributes.size)
+        let speedometer = Speedometer(progress: progress)
+
+        try await withFile(for: itemId, accessType: .readOnly) { file in
+            for try await data in file.stream() {
+                if progress.isCancelled {
+                    throw CocoaError(.userCancelled)
+                }
+                try handle.write(contentsOf: data)
+                if let progress = speedometer.update(delta: data.count) {
+                    logger.debug("Downloading \(itemRef): \(progress)")
+                }
+            }
+        }
+        
+        logger.info("Downloaded \(itemRef): \(speedometer.finalize())")
+        return (url, attributes)
+    }
+
+    func withFile<T: Sendable>(
+        for itemId: NSFileProviderItemIdentifier,
+        accessType: AccessType,
+        mode: mode_t = 0o600,
+        perform: @Sendable (SFTPFile) async throws -> T
+    ) async throws -> T {
+        await logger.info("With \(accessType) file \(id(of: itemId))")
+        return try await mapError(with: itemId) {
+            try await sftp.withSftpFile(
+                atPath: path(for: itemId),
+                accessType: accessType,
+                mode: mode,
+                perform: perform
+            )
+        }
+    }
+
+    func withDirectory<T: Sendable>(
+        for itemId: NSFileProviderItemIdentifier,
+        perform: @Sendable (SFTPDirectory) async throws -> T
+    ) async throws -> T {
+        await logger.info("With directory \(id(of: itemId))")
+        return try await mapError(with: itemId) {
+            try await sftp.withDirectory(
+                atPath: path(for: itemId),
+                perform: perform
             )
         }
     }
