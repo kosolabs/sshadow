@@ -270,18 +270,6 @@ class Session {
         }
     }
 
-    func mapError<T>(_ operation: () async throws -> T) async throws -> T {
-        do {
-            return try await operation()
-        } catch SSHError.sftpError(.noSuchFile, _) {
-            logger.fault("No such file")
-            throw NSFileProviderError(.noSuchItem)
-        } catch SSHError.sftpError(.fileAlreadyExists, _) {
-            logger.fault("File already exists")
-            throw NSFileProviderError(.filenameCollision)
-        }
-    }
-
     func mapError<T>(
         with identifier: NSFileProviderItemIdentifier,
         _ operation: () async throws -> T
