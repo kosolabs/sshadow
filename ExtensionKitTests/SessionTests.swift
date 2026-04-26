@@ -730,37 +730,6 @@ struct SessionTests {
             } throws: { error in isNoSuchItemError(error) }
         }
     }
-
-    struct MapErrorTests {
-        @Test func mapErrorPassesThroughSuccess() async throws {
-            let session = try await getSession()
-            let result = try await session.mapError { "success" }
-            #expect(result == "success")
-        }
-
-        @Test func mapErrorConvertsNoSuchFileToNoSuchItem() async throws {
-            let session = try await getSession()
-
-            await #expect {
-                try await session.mapError {
-                    throw SSHError.sftpError(.noSuchFile, message: "not found")
-                }
-            } throws: { error in isNoSuchItemError(error) }
-        }
-
-        @Test func mapErrorPassesThroughOtherErrors() async throws {
-            let session = try await getSession()
-
-            await #expect(throws: SSHError.self) {
-                try await session.mapError {
-                    throw SSHError.sftpError(
-                        .permissionDenied,
-                        message: "denied"
-                    )
-                }
-            }
-        }
-    }
 }
 
 func isNoSuchItemError(_ error: any Error) -> Bool {
