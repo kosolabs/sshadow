@@ -128,6 +128,10 @@ public class ConnectionProfile: CustomStringConvertible {
     }
 
     public func enable() async throws {
+        let agent = AgentClient(domainId: id)
+        let name = try await agent.name(of: .rootContainer)
+        logger.info("Name of \(NSFileProviderItemIdentifier.rootContainer): \(name)")
+
         let config = try ConnectionConfig(from: self)
         try await tester.test(config: config)
         let userInfo = try UserInfo(from: self)
@@ -135,7 +139,9 @@ public class ConnectionProfile: CustomStringConvertible {
         try await NSFileProviderManager.add(domain)
         // TODO: Initialize the DB in the Agent
         try await DomainDB.open(id: id)
+
         self.enabled = true
+        
         logger.info("Enabled: \(self)")
     }
 

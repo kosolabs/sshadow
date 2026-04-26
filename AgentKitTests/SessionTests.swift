@@ -490,6 +490,45 @@ struct SessionTests {
             } throws: { error in isNoSuchItemError(error) }
         }
     }
+    
+    struct WithFileTests {
+        let testFolderPath = "session-with-file"
+        let testFolderURL: URL
+
+        init() throws {
+            testFolderURL = try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func withFileReadSucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/read-file.txt"
+            let contents = "Hello, World!"
+            try TestData.createFile(path: path, contents: contents)
+
+            let data = try await session.withFile(
+                for: session.child(path: path),
+                accessType: .readOnly
+            ) { file in
+                try await file.read()
+            }
+
+            #expect(String(data: data, encoding: .utf8) == contents)
+        }
+
+        @Test func withFileMissingFileThrowsNoSuchItem() async throws {
+            let session = try await getSession()
+
+            await #expect {
+                try await session.withFile(
+                    for: session.child(
+                        path: "\(testFolderPath)/missing.txt"
+                    ),
+                    accessType: .readOnly
+                ) { _ in }
+            } throws: { error in isNoSuchItemError(error) }
+        }
+    }
 }
 
 func isNoSuchItemError(_ error: any Error) -> Bool {
