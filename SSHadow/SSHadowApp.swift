@@ -1,22 +1,28 @@
+import AgentKit
 import Common
-import ServiceManagement
 import SwiftData
 import SwiftUI
 
 private let logger = Logger(category: "SSHadowApp")
 
+private class AppXPCService {
+    static let shared = AppXPCService()
+
+    private let delegate = AgentListenerDelegate()
+    private let listener: NSXPCListener
+
+    private init() {
+        listener = NSXPCListener(machServiceName: SSHadow.appServiceName)
+        listener.delegate = delegate
+        listener.resume()
+        logger.info("App XPC: listening on \(SSHadow.appServiceName)")
+    }
+}
+
 @main
 struct SSHadowApp: App {
     init() {
-        let agent = SMAppService.agent(
-            plistName: "\(SSHadow.agentServiceName).plist"
-        )
-        try? agent.unregister()
-        do {
-            try agent.register()
-        } catch {
-            logger.error("Failed to register agent: \(error)")
-        }
+        _ = AppXPCService.shared
     }
 
     var body: some Scene {
