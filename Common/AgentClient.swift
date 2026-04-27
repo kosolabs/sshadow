@@ -10,7 +10,7 @@ public class AgentClient {
 
     public convenience init(domainId: UUID) {
         let connection = NSXPCConnection(
-            machServiceName: SSHadow.agentServiceName
+            machServiceName: SSHadow.appServiceName
         )
         self.init(domainId: domainId, connection: connection)
     }
