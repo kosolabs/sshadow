@@ -215,6 +215,15 @@
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		730EFC192F9EF27A00250E7A /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Library/LaunchAgents;
+			dstSubfolderSpec = 1;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		7322A9402F2957AF00D8117D /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -303,6 +312,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		730EFC182F9EF21F00250E7A /* Exceptions for "Agent" folder in "SSHadow" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				group.com.kosolabs.SSHadow.Agent.plist,
+			);
+			target = 733470882F22037100B8181D /* SSHadow */;
+		};
 		7332E7CD2F91689000C8A14C /* Exceptions for "Common" folder in "Common" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -320,6 +336,7 @@
 		7332E8EC2F92C30D00C8A14C /* Exceptions for "Agent" folder in "Agent" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				group.com.kosolabs.SSHadow.Agent.plist,
 				Info.plist,
 			);
 			target = 7332E8DB2F92C30D00C8A14C /* Agent */;
@@ -356,6 +373,16 @@
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		730EFC202F9EF47300250E7A /* Exceptions for "Agent" folder in "Copy Files" phase from "SSHadow" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 730EFC192F9EF27A00250E7A /* CopyFiles */;
+			membershipExceptions = (
+				group.com.kosolabs.SSHadow.Agent.plist,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		730981002F318825009F7AA2 /* Common */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
@@ -383,6 +410,8 @@
 		7332E8DD2F92C30D00C8A14C /* Agent */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				730EFC182F9EF21F00250E7A /* Exceptions for "Agent" folder in "SSHadow" target */,
+				730EFC202F9EF47300250E7A /* Exceptions for "Agent" folder in "Copy Files" phase from "SSHadow" target */,
 				7332E8EC2F92C30D00C8A14C /* Exceptions for "Agent" folder in "Agent" target */,
 			);
 			path = Agent;
@@ -707,6 +736,7 @@
 				7322A9402F2957AF00D8117D /* Embed Foundation Extensions */,
 				730981192F318825009F7AA2 /* Embed Frameworks */,
 				7332E8E82F92C30D00C8A14C /* Embed XPC Services */,
+				730EFC192F9EF27A00250E7A /* CopyFiles */,
 			);
 			buildRules = (
 			);
