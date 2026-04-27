@@ -3,14 +3,15 @@ import Foundation
 import SwiftLibSSH
 
 private let logger = Logger(category: "AgentClient")
-private let serviceName = "com.kosolabs.SSHadow.Agent"
 
 public class AgentClient {
     private let domainId: UUID
     private let connection: NSXPCConnection
 
     public convenience init(domainId: UUID) {
-        let connection = NSXPCConnection(serviceName: serviceName)
+        let connection = NSXPCConnection(
+            machServiceName: SSHadow.agentServiceName
+        )
         self.init(domainId: domainId, connection: connection)
     }
 
@@ -138,7 +139,7 @@ public class AgentClient {
         }
         return path
     }
-    
+
     public func attributes(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> SFTPAttributes {
@@ -208,7 +209,7 @@ public class AgentClient {
             throw CocoaError(.coderInvalidValue)
         }
     }
-    
+
     public func removeFile(
         for itemId: NSFileProviderItemIdentifier
     ) async throws {
