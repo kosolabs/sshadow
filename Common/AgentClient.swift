@@ -34,6 +34,7 @@ public class AgentClient {
         try await withCheckedThrowingContinuation { continuation in
             let proxy =
                 connection.remoteObjectProxyWithErrorHandler { error in
+                    logger.error("Failed to create proxy: \(error)")
                     continuation.resume(throwing: error)
                 } as! AgentProtocol
 
@@ -54,6 +55,7 @@ public class AgentClient {
                     }
                 }
             } catch {
+                logger.error("Failed to call proxy: \(error)")
                 continuation.resume(throwing: error)
             }
         }
