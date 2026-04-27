@@ -14,19 +14,13 @@
 		730981152F318825009F7AA2 /* Common.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		7309811F2F3188DA009F7AA2 /* Common.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; };
 		730981202F3188DA009F7AA2 /* Common.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		7311916F2F92CB9B00AE3267 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 7311916E2F92CB9B00AE3267 /* SwiftLibSSH */; };
 		7322A9222F2857C700D8117D /* SSHadow.icon in Resources */ = {isa = PBXBuildFile; fileRef = 7322A9212F2857C700D8117D /* SSHadow.icon */; };
 		7322A9282F294D5400D8117D /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 7322A9272F294D5400D8117D /* SwiftLibSSH */; };
-		7332E8E72F92C30D00C8A14C /* Agent.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = 7332E8DC2F92C30D00C8A14C /* Agent.xpc */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		7332E8EF2F92C3B600C8A14C /* Common.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; };
-		7332E8F02F92C3B600C8A14C /* Common.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		7369DF3F2F45513300F709F8 /* UnitTests.xctestplan in Resources */ = {isa = PBXBuildFile; fileRef = 7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */; };
 		736F08DA2F3D7B7C009669F4 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 736F08D92F3D7B7C009669F4 /* SwiftLibSSH */; };
 		73799A492F9811DD00A15109 /* AgentKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* AgentKit.framework */; };
 		73799A532F9811DD00A15109 /* AgentKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* AgentKit.framework */; };
 		73799A542F9811DD00A15109 /* AgentKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* AgentKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		73799A5B2F98120D00A15109 /* AgentKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* AgentKit.framework */; };
-		73799A5C2F98120D00A15109 /* AgentKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* AgentKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		73799A5F2F98122A00A15109 /* AgentKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* AgentKit.framework */; };
 		73799A642F98129E00A15109 /* Common.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; };
 		73799A652F98129E00A15109 /* Common.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -82,20 +76,6 @@
 			remoteGlobalIDString = 733470882F22037100B8181D;
 			remoteInfo = SSHadow;
 		};
-		7332E8E52F92C30D00C8A14C /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 733470812F22037100B8181D /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 7332E8DB2F92C30D00C8A14C;
-			remoteInfo = Agent;
-		};
-		7332E8F12F92C3B600C8A14C /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 733470812F22037100B8181D /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 730980FE2F318825009F7AA2;
-			remoteInfo = Common;
-		};
 		73799A4A2F9811DD00A15109 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 733470812F22037100B8181D /* Project object */;
@@ -111,13 +91,6 @@
 			remoteInfo = SSHadow;
 		};
 		73799A512F9811DD00A15109 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 733470812F22037100B8181D /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 73799A3D2F9811DD00A15109;
-			remoteInfo = AgentKit;
-		};
-		73799A5D2F98120D00A15109 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 733470812F22037100B8181D /* Project object */;
 			proxyType = 1;
@@ -241,21 +214,8 @@
 			dstPath = "$(CONTENTS_FOLDER_PATH)/XPCServices";
 			dstSubfolderSpec = 16;
 			files = (
-				7332E8E72F92C30D00C8A14C /* Agent.xpc in Embed XPC Services */,
 			);
 			name = "Embed XPC Services";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		7332E8F32F92C3B600C8A14C /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-				7332E8F02F92C3B600C8A14C /* Common.framework in Embed Frameworks */,
-				73799A5C2F98120D00A15109 /* AgentKit.framework in Embed Frameworks */,
-			);
-			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		73799A682F98129E00A15109 /* Embed Frameworks */ = {
@@ -299,7 +259,6 @@
 		7322A9112F28212400D8117D /* UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7322A9212F2857C700D8117D /* SSHadow.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = SSHadow.icon; sourceTree = "<group>"; };
 		7322A92E2F2957AF00D8117D /* UniformTypeIdentifiers.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UniformTypeIdentifiers.framework; path = System/Library/Frameworks/UniformTypeIdentifiers.framework; sourceTree = SDKROOT; };
-		7332E8DC2F92C30D00C8A14C /* Agent.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = Agent.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
 		733470892F22037100B8181D /* SSHadow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SSHadow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = UnitTests.xctestplan; sourceTree = "<group>"; };
 		73799A3E2F9811DD00A15109 /* AgentKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AgentKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -312,13 +271,6 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		730EFC182F9EF21F00250E7A /* Exceptions for "Agent" folder in "SSHadow" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				group.com.kosolabs.SSHadow.Agent.plist,
-			);
-			target = 733470882F22037100B8181D /* SSHadow */;
-		};
 		7332E7CD2F91689000C8A14C /* Exceptions for "Common" folder in "Common" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -332,14 +284,6 @@
 				"Alignment+ExtensionsTests.swift",
 			);
 			target = 730981082F318825009F7AA2 /* CommonTests */;
-		};
-		7332E8EC2F92C30D00C8A14C /* Exceptions for "Agent" folder in "Agent" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				group.com.kosolabs.SSHadow.Agent.plist,
-				Info.plist,
-			);
-			target = 7332E8DB2F92C30D00C8A14C /* Agent */;
 		};
 		7393A9D12F3134FB00213730 /* Exceptions for "Extension" folder in "Extension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -373,16 +317,6 @@
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
-/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		730EFC202F9EF47300250E7A /* Exceptions for "Agent" folder in "Copy Files" phase from "SSHadow" target */ = {
-			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
-			buildPhase = 730EFC192F9EF27A00250E7A /* CopyFiles */;
-			membershipExceptions = (
-				group.com.kosolabs.SSHadow.Agent.plist,
-			);
-		};
-/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		730981002F318825009F7AA2 /* Common */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
@@ -405,16 +339,6 @@
 		7322A9122F28212400D8117D /* UITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = UITests;
-			sourceTree = "<group>";
-		};
-		7332E8DD2F92C30D00C8A14C /* Agent */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				730EFC182F9EF21F00250E7A /* Exceptions for "Agent" folder in "SSHadow" target */,
-				730EFC202F9EF47300250E7A /* Exceptions for "Agent" folder in "Copy Files" phase from "SSHadow" target */,
-				7332E8EC2F92C30D00C8A14C /* Exceptions for "Agent" folder in "Agent" target */,
-			);
-			path = Agent;
 			sourceTree = "<group>";
 		};
 		7334708B2F22037100B8181D /* SSHadow */ = {
@@ -478,16 +402,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		7332E8D92F92C30D00C8A14C /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				7332E8EF2F92C3B600C8A14C /* Common.framework in Frameworks */,
-				7311916F2F92CB9B00AE3267 /* SwiftLibSSH in Frameworks */,
-				73799A5B2F98120D00A15109 /* AgentKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -559,7 +473,6 @@
 				7322A9122F28212400D8117D /* UITests */,
 				730981002F318825009F7AA2 /* Common */,
 				7309810F2F318825009F7AA2 /* CommonTests */,
-				7332E8DD2F92C30D00C8A14C /* Agent */,
 				73799A3F2F9811DD00A15109 /* AgentKit */,
 				73799A4E2F9811DD00A15109 /* AgentKitTests */,
 				7393A9C22F3134FB00213730 /* Extension */,
@@ -584,7 +497,6 @@
 				730981092F318825009F7AA2 /* CommonTests.xctest */,
 				738D63A22F3FD1F100FED311 /* ExtensionKit.framework */,
 				738D63AC2F3FD1F100FED311 /* ExtensionKitTests.xctest */,
-				7332E8DC2F92C30D00C8A14C /* Agent.xpc */,
 				73799A3E2F9811DD00A15109 /* AgentKit.framework */,
 				73799A482F9811DD00A15109 /* AgentKitTests.xctest */,
 			);
@@ -700,32 +612,6 @@
 			productReference = 7322A9112F28212400D8117D /* UITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
-		7332E8DB2F92C30D00C8A14C /* Agent */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 7332E8EB2F92C30D00C8A14C /* Build configuration list for PBXNativeTarget "Agent" */;
-			buildPhases = (
-				7332E8D82F92C30D00C8A14C /* Sources */,
-				7332E8D92F92C30D00C8A14C /* Frameworks */,
-				7332E8DA2F92C30D00C8A14C /* Resources */,
-				7332E8F32F92C3B600C8A14C /* Embed Frameworks */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				7332E8F22F92C3B600C8A14C /* PBXTargetDependency */,
-				73799A5E2F98120D00A15109 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				7332E8DD2F92C30D00C8A14C /* Agent */,
-			);
-			name = Agent;
-			packageProductDependencies = (
-				7311916E2F92CB9B00AE3267 /* SwiftLibSSH */,
-			);
-			productName = Agent;
-			productReference = 7332E8DC2F92C30D00C8A14C /* Agent.xpc */;
-			productType = "com.apple.product-type.xpc-service";
-		};
 		733470882F22037100B8181D /* SSHadow */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 733470942F22037100B8181D /* Build configuration list for PBXNativeTarget "SSHadow" */;
@@ -744,7 +630,6 @@
 				7393A9CC2F3134FB00213730 /* PBXTargetDependency */,
 				730981132F318825009F7AA2 /* PBXTargetDependency */,
 				738D63B62F3FD1F100FED311 /* PBXTargetDependency */,
-				7332E8E62F92C30D00C8A14C /* PBXTargetDependency */,
 				73799A522F9811DD00A15109 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
@@ -907,9 +792,6 @@
 						CreatedOnToolsVersion = 26.2;
 						TestTargetID = 733470882F22037100B8181D;
 					};
-					7332E8DB2F92C30D00C8A14C = {
-						CreatedOnToolsVersion = 26.4;
-					};
 					733470882F22037100B8181D = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -954,7 +836,6 @@
 				7393A9BF2F3134FB00213730 /* Extension */,
 				738D63A12F3FD1F100FED311 /* ExtensionKit */,
 				738D63AB2F3FD1F100FED311 /* ExtensionKitTests */,
-				7332E8DB2F92C30D00C8A14C /* Agent */,
 				73799A3D2F9811DD00A15109 /* AgentKit */,
 				73799A472F9811DD00A15109 /* AgentKitTests */,
 			);
@@ -977,13 +858,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		7322A90F2F28212400D8117D /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		7332E8DA2F92C30D00C8A14C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -1052,13 +926,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		7322A90D2F28212400D8117D /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		7332E8D82F92C30D00C8A14C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -1135,16 +1002,6 @@
 			target = 733470882F22037100B8181D /* SSHadow */;
 			targetProxy = 7322A9172F28212400D8117D /* PBXContainerItemProxy */;
 		};
-		7332E8E62F92C30D00C8A14C /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 7332E8DB2F92C30D00C8A14C /* Agent */;
-			targetProxy = 7332E8E52F92C30D00C8A14C /* PBXContainerItemProxy */;
-		};
-		7332E8F22F92C3B600C8A14C /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 730980FE2F318825009F7AA2 /* Common */;
-			targetProxy = 7332E8F12F92C3B600C8A14C /* PBXContainerItemProxy */;
-		};
 		73799A4B2F9811DD00A15109 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 73799A3D2F9811DD00A15109 /* AgentKit */;
@@ -1159,11 +1016,6 @@
 			isa = PBXTargetDependency;
 			target = 73799A3D2F9811DD00A15109 /* AgentKit */;
 			targetProxy = 73799A512F9811DD00A15109 /* PBXContainerItemProxy */;
-		};
-		73799A5E2F98120D00A15109 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 73799A3D2F9811DD00A15109 /* AgentKit */;
-			targetProxy = 73799A5D2F98120D00A15109 /* PBXContainerItemProxy */;
 		};
 		73799A622F98122A00A15109 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1362,92 +1214,6 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				TEST_TARGET_NAME = SSHadow;
-			};
-			name = Release;
-		};
-		7332E8E92F92C30D00C8A14C /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Agent/Agent.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
-				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
-				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
-				ENABLE_RESOURCE_ACCESS_USB = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Agent/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Agent;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@executable_path/../../../../Frameworks",
-					"@loader_path/../../../../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.3;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.kosolabs.SSHadow.Agent;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		7332E8EA2F92C30D00C8A14C /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Agent/Agent.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
-				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
-				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
-				ENABLE_RESOURCE_ACCESS_USB = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Agent/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Agent;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@executable_path/../../../../Frameworks",
-					"@loader_path/../../../../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.3;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.kosolabs.SSHadow.Agent;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
@@ -2033,15 +1799,6 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		7332E8EB2F92C30D00C8A14C /* Build configuration list for PBXNativeTarget "Agent" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				7332E8E92F92C30D00C8A14C /* Debug */,
-				7332E8EA2F92C30D00C8A14C /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		733470842F22037100B8181D /* Build configuration list for PBXProject "SSHadow" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -2125,11 +1882,6 @@
 			productName = SwiftLibSSH;
 		};
 		73011DE72F32A9F300443E45 /* SwiftLibSSH */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
-			productName = SwiftLibSSH;
-		};
-		7311916E2F92CB9B00AE3267 /* SwiftLibSSH */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
 			productName = SwiftLibSSH;
