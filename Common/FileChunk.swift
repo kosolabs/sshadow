@@ -3,7 +3,7 @@ import Foundation
 import SwiftData
 
 @Model
-public class SSHChunk {
+public class FileChunk {
     public static let size: UInt64 = 64 * 1024
 
     var rawItemId: String

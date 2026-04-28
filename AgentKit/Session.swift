@@ -30,7 +30,7 @@ class Session {
     }
 
     func id(of itemId: NSFileProviderItemIdentifier) async -> String {
-        await "FPItemID(\(itemId.desc), \(db.path(for: itemId)))"
+        await "FPItemID(\(itemId.rawValue), \(db.path(for: itemId)))"
     }
 
     func name(
@@ -71,6 +71,64 @@ class Session {
     ) async throws -> SFTPAttributes {
         try await mapError(with: itemId) {
             try await sftp.attributes(atPath: path(for: itemId))
+        }
+    }
+
+    func info(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> FileInfo {
+        let parentId = try await parent(of: itemId)
+        let name = try await name(of: itemId)
+        let attrs = try await attributes(for: itemId)
+        return FileInfo(
+            id: itemId.rawValue,
+            parentId: parentId.rawValue,
+            name: name,
+            isDirectory: attrs.type == .directory,
+            size: attrs.size,
+            permissions: attrs.permissions,
+            accessTime: attrs.accessTime,
+            modifyTime: attrs.modifyTime,
+            createTime: attrs.createTime
+        )
+    }
+
+    func list(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> [FileInfo] {
+        try await withDirectory(for: itemId) { dir in
+            var entries: [FileInfo] = []
+            for try await attrs in dir {
+                if let name = attrs.name {
+                    let childId = try await self.child(
+                        of: itemId,
+                        path: name
+                    )
+                    entries.append(FileInfo(
+                        id: childId.rawValue,
+                        parentId: itemId.rawValue,
+                        name: name,
+                        isDirectory: attrs.type == .directory,
+                        size: attrs.size,
+                        permissions: attrs.permissions,
+                        accessTime: attrs.accessTime,
+                        modifyTime: attrs.modifyTime,
+                        createTime: attrs.createTime
+                    ))
+                }
+            }
+            return entries
+        }
+    }
+
+    func exists(
+        for itemId: NSFileProviderItemIdentifier
+    ) async -> Bool {
+        do {
+            _ = try await attributes(for: itemId)
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -116,7 +174,7 @@ class Session {
             } catch SSHError.sftpError(.fileAlreadyExists, _)
                 where ifExists == .succeed
             {
-                logger.info("Directory already exists for \(itemId.desc)")
+                logger.info("Directory already exists for \(itemId.rawValue)")
             }
         }
     }

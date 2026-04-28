@@ -461,8 +461,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         logger.debug("Delete \(itemRef)")
 
         return try await progress.withChild {
-            let attrs = try await session.attributes(for: identifier)
-            if case .directory = attrs.type {
+            let item = try await session.item(for: identifier)
+            if item.isDirectory {
                 try await session.removeDirectory(for: identifier)
             } else {
                 try await session.removeFile(for: identifier)

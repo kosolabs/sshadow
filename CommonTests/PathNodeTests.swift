@@ -4,11 +4,11 @@ import Testing
 
 @testable import Common
 
-struct SSHItemTests {
+struct PathNodeTests {
     @Test func initSetsProperties() {
         let id = NSFileProviderItemIdentifier(UUID().uuidString)
         let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
-        let item = SSHItem(id: id, parentId: parentId, name: "file.txt")
+        let item = PathNode(id: id, parentId: parentId, name: "file.txt")
 
         #expect(item.id == id)
         #expect(item.parentId == parentId)
@@ -16,7 +16,7 @@ struct SSHItemTests {
     }
 
     @Test func idReturnsRootContainer() {
-        let item = SSHItem(
+        let item = PathNode(
             id: .rootContainer,
             parentId: .rootContainer,
             name: ""
@@ -25,7 +25,7 @@ struct SSHItemTests {
     }
 
     @Test func idReturnsTrashContainer() {
-        let item = SSHItem(
+        let item = PathNode(
             id: .trashContainer,
             parentId: .rootContainer,
             name: ".Trashes"
@@ -34,7 +34,7 @@ struct SSHItemTests {
     }
 
     @Test func idReturnsWorkingSet() {
-        let item = SSHItem(
+        let item = PathNode(
             id: .workingSet,
             parentId: .rootContainer,
             name: ""
@@ -43,7 +43,7 @@ struct SSHItemTests {
     }
 
     @Test func parentIdReturnsRootContainer() {
-        let item = SSHItem(parentId: .rootContainer, name: "file.txt")
+        let item = PathNode(parentId: .rootContainer, name: "file.txt")
         #expect(item.parentId == .rootContainer)
     }
 }

@@ -77,15 +77,6 @@ public class Agent: NSObject, AgentProtocol {
                             parentId: parentId
                         )
 
-                    case .attributes(
-                        let domainId,
-                        let itemId
-                    ):
-                        try await attributes(
-                            domainId: domainId,
-                            itemId: itemId
-                        )
-
                     case .setAttributes(
                         let domainId,
                         let itemId,
@@ -146,10 +137,38 @@ public class Agent: NSObject, AgentProtocol {
                             domainId: domainId,
                             itemId: itemId
                         )
+
+                    case .list(
+                        let domainId,
+                        let itemId
+                    ):
+                        try await list(
+                            domainId: domainId,
+                            itemId: itemId
+                        )
+
+                    case .info(
+                        let domainId,
+                        let itemId
+                    ):
+                        try await info(
+                            domainId: domainId,
+                            itemId: itemId
+                        )
+
+                    case .exists(
+                        let domainId,
+                        let itemId
+                    ):
+                        try await exists(
+                            domainId: domainId,
+                            itemId: itemId
+                        )
                     }
                 logger.debug("Response: \(response)")
                 reply(try AgentCoding.encode(AgentResult.success(response)))
             } catch {
+                logger.error("Failed to handle request: \(error)")
                 let result = AgentResult.failure(AgentResultError(from: error))
                 reply(try AgentCoding.encode(result))
             }
@@ -216,16 +235,38 @@ public class Agent: NSObject, AgentProtocol {
         )
         return .path(path: path)
     }
-
-    func attributes(
+    
+    func info(
         domainId: UUID,
         itemId: String
     ) async throws -> AgentResponse {
         let session = try await sessions.connect(id: domainId)
-        let attributes = try await session.attributes(
+        let info = try await session.info(
             for: NSFileProviderItemIdentifier(itemId)
         )
-        return .attributes(attributes)
+        return .info(info)
+    }
+
+    func list(
+        domainId: UUID,
+        itemId: String
+    ) async throws -> AgentResponse {
+        let session = try await sessions.connect(id: domainId)
+        let entries = try await session.list(
+            for: NSFileProviderItemIdentifier(itemId)
+        )
+        return .list(entries)
+    }
+
+    func exists(
+        domainId: UUID,
+        itemId: String
+    ) async throws -> AgentResponse {
+        let session = try await sessions.connect(id: domainId)
+        let exists = await session.exists(
+            for: NSFileProviderItemIdentifier(itemId)
+        )
+        return .exists(exists)
     }
 
     func setAttributes(
