@@ -235,7 +235,7 @@ public class Agent: NSObject, AgentProtocol {
         )
         return .path(path: path)
     }
-    
+
     func info(
         domainId: UUID,
         itemId: String
@@ -317,7 +317,7 @@ public class Agent: NSObject, AgentProtocol {
         )
         return .move
     }
-    
+
     func removeFile(
         domainId: UUID,
         itemId: String

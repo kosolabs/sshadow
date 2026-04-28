@@ -17,6 +17,7 @@ public actor AppDB {
             configurations: config
         )
     }
+
     public static func open(
         config: ModelConfiguration = ModelConfiguration(
             groupContainer: .identifier(SSHadow.appGroup)
