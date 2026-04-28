@@ -188,15 +188,6 @@
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		730EFC192F9EF27A00250E7A /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = Contents/Library/LaunchAgents;
-			dstSubfolderSpec = 1;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		7322A9402F2957AF00D8117D /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -622,7 +613,6 @@
 				7322A9402F2957AF00D8117D /* Embed Foundation Extensions */,
 				730981192F318825009F7AA2 /* Embed Frameworks */,
 				7332E8E82F92C30D00C8A14C /* Embed XPC Services */,
-				730EFC192F9EF27A00250E7A /* CopyFiles */,
 			);
 			buildRules = (
 			);
