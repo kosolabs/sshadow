@@ -190,47 +190,6 @@ struct SessionTests {
             testFolderURL = try TestData.createFolder(path: testFolderPath)
         }
 
-        @Test func attributesForFileSucceeds() async throws {
-            let session = try await getSession()
-
-            let path = "\(testFolderPath)/file.txt"
-            let contents = "Hello, World!"
-            try TestData.createFile(path: path, contents: contents)
-
-            let attrs = try await session.attributes(
-                for: session.child(path: path)
-            )
-
-            #expect(attrs.type == .regular)
-            #expect(attrs.size == UInt64(contents.utf8.count))
-        }
-
-        @Test func attributesForFolderSucceeds() async throws {
-            let session = try await getSession()
-
-            let path = "\(testFolderPath)/folder"
-            try TestData.createFolder(path: path)
-
-            let attrs = try await session.attributes(
-                for: session.child(path: path)
-            )
-
-            #expect(attrs.type == .directory)
-        }
-
-        @Test func attributesForMissingFileThrowsNoSuchItem() async throws {
-            let session = try await getSession()
-
-            await #expect {
-                try await session.attributes(
-                    for: session.child(
-                        path: "\(testFolderPath)/missing.txt",
-                        ifNotExists: .fail
-                    )
-                )
-            } throws: { error in isNoSuchItemError(error) }
-        }
-
         @Test func setModifyTimeSucceeds() async throws {
             let session = try await getSession()
 

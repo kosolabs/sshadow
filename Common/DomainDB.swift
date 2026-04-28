@@ -14,7 +14,7 @@ public actor DomainDB {
 
     @discardableResult
     public static func open(id: UUID) async throws -> DomainDB {
-        let schema = Schema([SSHItem.self, SSHChunk.self])
+        let schema = Schema([PathNode.self, FileChunk.self])
 
         let db = try DomainDB(
             modelContainer: ModelContainer(
@@ -28,21 +28,21 @@ public actor DomainDB {
 
     private func configure() throws {
         try upsert(
-            SSHItem(
+            PathNode(
                 id: .rootContainer,
                 parentId: .rootContainer,
                 name: ""
             )
         )
         try upsert(
-            SSHItem(
+            PathNode(
                 id: .trashContainer,
                 parentId: .rootContainer,
                 name: ".Trashes"
             )
         )
         try upsert(
-            SSHItem(
+            PathNode(
                 id: .workingSet,
                 parentId: .rootContainer,
                 name: ""
@@ -61,9 +61,9 @@ public actor DomainDB {
         }
     }
 
-    public func fetch(id: NSFileProviderItemIdentifier) -> SSHItem? {
+    public func fetch(id: NSFileProviderItemIdentifier) -> PathNode? {
         let rawId = id.rawValue
-        let descriptor = FetchDescriptor<SSHItem>(
+        let descriptor = FetchDescriptor<PathNode>(
             predicate: #Predicate { row in
                 row.rawId == rawId
             }
@@ -74,9 +74,9 @@ public actor DomainDB {
     public func fetch(
         parentId: NSFileProviderItemIdentifier,
         name: String
-    ) -> SSHItem? {
+    ) -> PathNode? {
         let rawParentId = parentId.rawValue
-        let descriptor = FetchDescriptor<SSHItem>(
+        let descriptor = FetchDescriptor<PathNode>(
             predicate: #Predicate { row in
                 row.rawParentId == rawParentId && row.name == name
             }
@@ -109,7 +109,7 @@ public actor DomainDB {
             throw NSFileProviderError(.noSuchItem)
         }
 
-        let item = SSHItem(parentId: parent, name: name)
+        let item = PathNode(parentId: parent, name: name)
         try upsert(item)
         return item.id
     }
@@ -176,7 +176,7 @@ public actor DomainDB {
         try modelContext.save()
     }
 
-    public func upsert(_ item: SSHItem) throws {
+    public func upsert(_ item: PathNode) throws {
         modelContext.insert(item)
         try modelContext.save()
     }
@@ -188,7 +188,7 @@ public actor DomainDB {
         index: UInt64
     ) -> Bool {
         let rawItemId = itemId.rawValue
-        let descriptor = FetchDescriptor<SSHChunk>(
+        let descriptor = FetchDescriptor<FileChunk>(
             predicate: #Predicate { chunk in
                 chunk.rawItemId == rawItemId && chunk.index == index
             }
@@ -201,7 +201,7 @@ public actor DomainDB {
         index: UInt64
     ) throws {
         guard !isChunkCached(for: itemId, index: index) else { return }
-        modelContext.insert(SSHChunk(itemId: itemId, index: index))
+        modelContext.insert(FileChunk(itemId: itemId, index: index))
         try modelContext.save()
     }
 
@@ -210,7 +210,7 @@ public actor DomainDB {
     ) throws {
         let rawItemId = itemId.rawValue
         try modelContext.delete(
-            model: SSHChunk.self,
+            model: FileChunk.self,
             where: #Predicate { chunk in
                 chunk.rawItemId == rawItemId
             }

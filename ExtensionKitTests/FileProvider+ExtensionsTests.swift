@@ -1,7 +1,7 @@
 import FileProvider
 import Testing
 
-@testable import Common
+@testable import ExtensionKit
 
 struct ItemFieldsExtensionsTests {
     @Test func descIncludesAllFields() {

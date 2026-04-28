@@ -139,17 +139,29 @@ public class AgentClient {
         }
         return path
     }
-
-    public func attributes(
+    
+    public func info(
         for itemId: NSFileProviderItemIdentifier
-    ) async throws -> SFTPAttributes {
+    ) async throws -> FileInfo {
         let response = try await perform(
-            .attributes(domainId: domainId, itemId: itemId.rawValue)
+            .info(domainId: domainId, itemId: itemId.rawValue)
         )
-        guard case .attributes(let attributes) = response else {
+        guard case .info(let info) = response else {
             throw CocoaError(.coderInvalidValue)
         }
-        return attributes
+        return info
+    }
+    
+    public func list(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> [FileInfo] {
+        let response = try await perform(
+            .list(domainId: domainId, itemId: itemId.rawValue)
+        )
+        guard case .list(let entries) = response else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        return entries
     }
 
     public func setAttributes(
@@ -230,5 +242,17 @@ public class AgentClient {
         guard case .removeDirectory = response else {
             throw CocoaError(.coderInvalidValue)
         }
+    }
+
+    public func exists(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> Bool {
+        let response = try await perform(
+            .exists(domainId: domainId, itemId: itemId.rawValue)
+        )
+        guard case .exists(let exists) = response else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        return exists
     }
 }

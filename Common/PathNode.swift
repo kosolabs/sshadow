@@ -3,7 +3,7 @@ import Foundation
 import SwiftData
 
 @Model
-public class SSHItem {
+public class PathNode {
     @Attribute(.unique) var rawId: String
     var rawParentId: String
     public var name: String

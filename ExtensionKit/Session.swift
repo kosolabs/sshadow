@@ -76,28 +76,11 @@ class Session {
     func item(
         for identifier: NSFileProviderItemIdentifier,
     ) async throws -> Item {
-        try await Item(
-            domainName: domain.displayName,
-            itemIdentifier: identifier,
-            parentItemIdentifier: parent(of: identifier),
-            filename: name(of: identifier),
-            itemAttributes: attributes(for: identifier)
-        )
-    }
-
-    func attributes(
-        for identifier: NSFileProviderItemIdentifier
-    ) async throws -> SFTPAttributes {
-        try await agent.attributes(for: identifier)
+        Item(info: try await agent.info(for: identifier))
     }
 
     func exists(for identifier: NSFileProviderItemIdentifier) async -> Bool {
-        do {
-            _ = try await agent.attributes(for: identifier)
-            return true
-        } catch {
-            return false
-        }
+        (try? await agent.exists(for: identifier)) ?? false
     }
 
     func setAttributes(
@@ -169,19 +152,6 @@ class Session {
         }
     }
 
-    func withDirectory<T: Sendable>(
-        for identifier: NSFileProviderItemIdentifier,
-        perform: @Sendable (SFTPDirectory) async throws -> T
-    ) async throws -> T {
-        await logger.info("With directory \(id(of: identifier))")
-        return try await mapError(with: identifier) {
-            try await sftp.withDirectory(
-                atPath: path(for: identifier),
-                perform: perform
-            )
-        }
-    }
-
     func stream(
         for identifier: NSFileProviderItemIdentifier,
         range: NSRange,
@@ -191,17 +161,17 @@ class Session {
     ) async throws -> (URL, NSRange) {
         let itemRef = await id(of: identifier)
 
-        guard SSHChunk.size % UInt64(alignment) == 0 else {
+        guard FileChunk.size % UInt64(alignment) == 0 else {
             throw NSFileProviderError(
                 .cannotSynchronize,
                 userInfo: [
                     NSLocalizedDescriptionKey:
-                        "Alignment \(alignment) is not a divisor of chunk size \(SSHChunk.size)"
+                        "Alignment \(alignment) is not a divisor of chunk size \(FileChunk.size)"
                 ]
             )
         }
 
-        let chunkRange = SSHChunk.chunkRange(for: range.asRange())
+        let chunkRange = FileChunk.chunkRange(for: range.asRange())
 
         logger.info("Stream \(itemRef)[\(chunkRange)](\(range))")
 
@@ -214,7 +184,7 @@ class Session {
                 continue
             }
 
-            let bytes = SSHChunk.byteRange(for: chunkIndex, fileSize: fileSize)
+            let bytes = FileChunk.byteRange(for: chunkIndex, fileSize: fileSize)
             guard !bytes.isEmpty else { continue }
 
             if !FileManager.default.fileExists(atPath: cacheURL.path()) {
@@ -241,7 +211,7 @@ class Session {
             logger.debug("Cached \(itemRef)[\(chunkIndex)]")
         }
 
-        let byteRange = SSHChunk.byteRange(for: chunkRange, fileSize: fileSize)
+        let byteRange = FileChunk.byteRange(for: chunkRange, fileSize: fileSize)
         logger.info("Streamed \(itemRef)[\(chunkRange)](\(byteRange))")
         return (cacheURL, byteRange.asNSRange())
     }
@@ -250,23 +220,9 @@ class Session {
         for identifier: NSFileProviderItemIdentifier,
         yield: @Sendable ([any NSFileProviderItemProtocol]) -> Void
     ) async throws {
-        try await withDirectory(for: identifier) { dir in
-            for try await attrs in dir {
-                if let name = attrs.name {
-                    let childId = try await child(
-                        of: identifier,
-                        path: name
-                    )
-                    let item = Item(
-                        domainName: self.name,
-                        itemIdentifier: childId,
-                        parentItemIdentifier: identifier,
-                        filename: name,
-                        itemAttributes: attrs
-                    )
-                    yield([item])
-                }
-            }
+        let entries = try await agent.list(for: identifier)
+        for entry in entries {
+            yield([Item(info: entry)])
         }
     }
 

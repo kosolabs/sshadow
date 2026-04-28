@@ -43,33 +43,71 @@ struct AgentClientTests {
         let path = try await agent.path(for: "file.txt", parentId: parentId)
         #expect(path.hasSuffix("/folder/file.txt"))
     }
-
-    @Test func attributesSucceeds() async throws {
+    
+    @Test func infoForFileSucceeds() async throws {
         let agent = try await getAgentClient()
 
-        let path = "\(testFolderPath)/file.txt"
+        let path = "\(testFolderPath)/info-file.txt"
         let contents = "Hello, World!"
         try TestData.createFile(path: path, contents: contents)
 
-        let attrs = try await agent.attributes(
-            for: agent.child(path: path)
-        )
+        let itemId = try await agent.child(path: path)
+        let info = try await agent.info(for: itemId)
 
-        #expect(attrs.type == .regular)
-        #expect(attrs.size == UInt64(contents.utf8.count))
+        #expect(info.name == "info-file.txt")
+        #expect(!info.isDirectory)
+        #expect(info.size == UInt64(contents.utf8.count))
     }
 
-    @Test func attributesThrowsExpectedError() async throws {
+    @Test func infoForDirectorySucceeds() async throws {
         let agent = try await getAgentClient()
 
-        await #expect {
-            try await agent.attributes(
-                for: agent.child(
-                    path: "\(testFolderPath)/missing.txt",
-                    ifNotExists: .fail
-                )
-            )
-        } throws: { error in isNoSuchItemError(error) }
+        let path = "\(testFolderPath)/info-dir"
+        try TestData.createFolder(path: path)
+
+        let itemId = try await agent.child(path: path)
+        let info = try await agent.info(for: itemId)
+
+        #expect(info.name == "info-dir")
+        #expect(info.isDirectory)
+    }
+    
+    @Test func listSucceeds() async throws {
+        let agent = try await getAgentClient()
+
+        let dirPath = "\(testFolderPath)/enum-dir"
+        try TestData.createFile(
+            path: "\(dirPath)/file.txt",
+            contents: "hello"
+        )
+        try TestData.createFolder(path: "\(dirPath)/subfolder")
+
+        let dirId = try await agent.child(path: dirPath)
+        let entries = try await agent.list(for: dirId)
+
+        let names = Set(entries.map(\.name))
+        #expect(names.contains("file.txt"))
+        #expect(names.contains("subfolder"))
+
+        let fileEntry = try #require(entries.first { $0.name == "file.txt" })
+        #expect(!fileEntry.isDirectory)
+
+        let folderEntry = try #require(
+            entries.first { $0.name == "subfolder" }
+        )
+        #expect(folderEntry.isDirectory)
+    }
+
+    @Test func listEmptyDirectorySucceeds() async throws {
+        let agent = try await getAgentClient()
+
+        let dirPath = "\(testFolderPath)/empty-dir"
+        try TestData.createFolder(path: dirPath)
+
+        let dirId = try await agent.child(path: dirPath)
+        let entries = try await agent.list(for: dirId)
+
+        #expect(entries.isEmpty)
     }
 
     @Test func setAttributesSucceeds() async throws {
@@ -80,9 +118,9 @@ struct AgentClientTests {
         let itemId = try await agent.child(path: path)
 
         try await agent.setAttributes(for: itemId, permissions: 0o644)
+        let info = try await agent.info(for: itemId)
 
-        let attrs = try await agent.attributes(for: itemId)
-        #expect(attrs.permissions & 0o777 == 0o644)
+        #expect(info.permissions & 0o777 == 0o644)
     }
     
     @Test func createDirectorySucceeds() async throws {
@@ -92,9 +130,9 @@ struct AgentClientTests {
         let itemId = try await agent.child(path: path)
 
         try await agent.createDirectory(for: itemId, mode: 0o755)
+        let info = try await agent.info(for: itemId)
 
-        let attrs = try await agent.attributes(for: itemId)
-        #expect(attrs.type == .directory)
+        #expect(info.isDirectory)
     }
     
     @Test func moveSucceeds() async throws {
@@ -123,10 +161,9 @@ struct AgentClientTests {
         let itemId = try await agent.child(path: path)
 
         try await agent.removeFile(for: itemId)
-
-        await #expect {
-            try await agent.attributes(for: itemId)
-        } throws: { error in isNoSuchItemError(error) }
+        let exists = try await agent.exists(for: itemId)
+        
+        #expect(exists == false)
     }
 
     @Test func removeDirectorySucceeds() async throws {
@@ -137,10 +174,9 @@ struct AgentClientTests {
         let itemId = try await agent.child(path: path)
 
         try await agent.removeDirectory(for: itemId)
-
-        await #expect {
-            try await agent.attributes(for: itemId)
-        } throws: { error in isNoSuchItemError(error) }
+        let exists = try await agent.exists(for: itemId)
+        
+        #expect(exists == false)
     }
 }
 

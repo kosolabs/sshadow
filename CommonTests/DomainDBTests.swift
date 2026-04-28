@@ -23,7 +23,7 @@ struct DomainDBTests {
             let id = NSFileProviderItemIdentifier(UUID().uuidString)
             
             try await db.upsert(
-                SSHItem(id: id, parentId: parentId, name: "hello.txt")
+                PathNode(id: id, parentId: parentId, name: "hello.txt")
             )
             
             let actual = try #require(
@@ -41,7 +41,7 @@ struct DomainDBTests {
             let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
             
             try await db.upsert(
-                SSHItem(parentId: parentId, name: "exists.txt")
+                PathNode(parentId: parentId, name: "exists.txt")
             )
             
             let wrongName = await db.fetch(
@@ -63,10 +63,10 @@ struct DomainDBTests {
             let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
             
             try await db.upsert(
-                SSHItem(parentId: parentId, name: "a.txt")
+                PathNode(parentId: parentId, name: "a.txt")
             )
             try await db.upsert(
-                SSHItem(parentId: parentId, name: "b.txt")
+                PathNode(parentId: parentId, name: "b.txt")
             )
             
             let actual = try #require(
@@ -112,7 +112,7 @@ struct DomainDBTests {
             
             let id = NSFileProviderItemIdentifier(UUID().uuidString)
             try await db.upsert(
-                SSHItem(id: id, parentId: .rootContainer, name: "file.txt")
+                PathNode(id: id, parentId: .rootContainer, name: "file.txt")
             )
             
             let name = try await db.name(of: id)
@@ -137,7 +137,7 @@ struct DomainDBTests {
             let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
             let id = NSFileProviderItemIdentifier(UUID().uuidString)
             try await db.upsert(
-                SSHItem(id: id, parentId: parentId, name: "file.txt")
+                PathNode(id: id, parentId: parentId, name: "file.txt")
             )
             
             let actual = try await db.parent(of: id)
@@ -285,7 +285,7 @@ struct DomainDBTests {
             let id = NSFileProviderItemIdentifier(UUID().uuidString)
             
             try await db.upsert(
-                SSHItem(id: id, parentId: oldParent, name: "old.txt")
+                PathNode(id: id, parentId: oldParent, name: "old.txt")
             )
             try await db.move(id, toParent: newParent, name: "new.txt")
             
@@ -326,7 +326,7 @@ struct DomainDBTests {
 
             let id = NSFileProviderItemIdentifier(UUID().uuidString)
             let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
-            let item = SSHItem(id: id, parentId: parentId, name: "hello.txt")
+            let item = PathNode(id: id, parentId: parentId, name: "hello.txt")
 
             try await db.upsert(item)
             let actual = try #require(await db.fetch(id: id))
@@ -343,10 +343,10 @@ struct DomainDBTests {
             let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
             
             try await db.upsert(
-                SSHItem(id: id, parentId: parentId, name: "first.txt")
+                PathNode(id: id, parentId: parentId, name: "first.txt")
             )
             try await db.upsert(
-                SSHItem(id: id, parentId: parentId, name: "second.txt")
+                PathNode(id: id, parentId: parentId, name: "second.txt")
             )
             
             let actual = try #require(await db.fetch(id: id))
@@ -361,10 +361,10 @@ struct DomainDBTests {
             let id2 = NSFileProviderItemIdentifier(UUID().uuidString)
 
             try await db.upsert(
-                SSHItem(id: id1, parentId: parentId, name: "a.txt")
+                PathNode(id: id1, parentId: parentId, name: "a.txt")
             )
             try await db.upsert(
-                SSHItem(id: id2, parentId: parentId, name: "b.txt")
+                PathNode(id: id2, parentId: parentId, name: "b.txt")
             )
 
             let first = try #require(await db.fetch(id: id1))

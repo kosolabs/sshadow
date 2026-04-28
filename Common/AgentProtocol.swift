@@ -39,7 +39,15 @@ public enum AgentRequest: Codable {
         name: String,
         parentId: String
     )
-    case attributes(
+    case info(
+        domainId: UUID,
+        itemId: String
+    )
+    case list(
+        domainId: UUID,
+        itemId: String
+    )
+    case exists(
         domainId: UUID,
         itemId: String
     )
@@ -78,12 +86,14 @@ public enum AgentResponse: Codable {
     case child(itemId: String)
     case parent(itemId: String)
     case path(path: String)
-    case attributes(SFTPAttributes)
+    case info(FileInfo)
+    case list([FileInfo])
     case setAttributes
     case createDirectory
     case move
     case removeFile
     case removeDirectory
+    case exists(Bool)
 }
 
 public enum AgentError: Codable, Error {
