@@ -139,7 +139,7 @@ public class AgentClient {
         }
         return path
     }
-    
+
     public func info(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> FileInfo {
@@ -151,7 +151,7 @@ public class AgentClient {
         }
         return info
     }
-    
+
     public func list(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> [FileInfo] {

@@ -142,6 +142,149 @@ struct SessionTests {
             #expect(path == "\(TestData.mount.path())/file.txt")
         }
     }
+    
+    struct InfoTests {
+        let testFolderPath = "session-info"
+
+        init() throws {
+            try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func infoForFileSucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/file.txt"
+            let contents = "Hello, World!"
+            try TestData.createFile(path: path, contents: contents)
+
+            let itemId = try await session.child(path: path)
+            let info = try await session.info(for: itemId)
+
+            #expect(info.name == "file.txt")
+            #expect(!info.isDirectory)
+            #expect(info.size == UInt64(contents.utf8.count))
+            #expect(info.id == itemId.rawValue)
+        }
+
+        @Test func infoForDirectorySucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/folder"
+            try TestData.createFolder(path: path)
+
+            let itemId = try await session.child(path: path)
+            let info = try await session.info(for: itemId)
+
+            #expect(info.name == "folder")
+            #expect(info.isDirectory)
+        }
+
+        @Test func infoHasCorrectParent() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/nested/file.txt"
+            try TestData.createFile(path: path, contents: "data")
+
+            let itemId = try await session.child(path: path)
+            let parentId = try await session.child(path: "\(testFolderPath)/nested")
+            let info = try await session.info(for: itemId)
+
+            #expect(info.parentId == parentId.rawValue)
+        }
+    }
+
+    struct ListTests {
+        let testFolderPath = "session-list"
+
+        init() throws {
+            try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func listReturnsFilesAndFolders() async throws {
+            let session = try await getSession()
+
+            try TestData.createFile(
+                path: "\(testFolderPath)/file.txt",
+                contents: "hello"
+            )
+            try TestData.createFolder(path: "\(testFolderPath)/subfolder")
+
+            let itemId = try await session.child(path: testFolderPath)
+            let entries = try await session.list(for: itemId)
+
+            let names = Set(entries.map(\.name))
+            #expect(names.contains("file.txt"))
+            #expect(names.contains("subfolder"))
+
+            let fileEntry = try #require(
+                entries.first { $0.name == "file.txt" }
+            )
+            #expect(!fileEntry.isDirectory)
+
+            let folderEntry = try #require(
+                entries.first { $0.name == "subfolder" }
+            )
+            #expect(folderEntry.isDirectory)
+        }
+
+        @Test func listEmptyDirectoryReturnsEmpty() async throws {
+            let session = try await getSession()
+
+            let emptyPath = "\(testFolderPath)/empty"
+            try TestData.createFolder(path: emptyPath)
+
+            let itemId = try await session.child(path: emptyPath)
+            let entries = try await session.list(for: itemId)
+
+            #expect(entries.isEmpty)
+        }
+
+        @Test func listEntriesHaveCorrectParent() async throws {
+            let session = try await getSession()
+
+            try TestData.createFile(
+                path: "\(testFolderPath)/child.txt",
+                contents: "data"
+            )
+
+            let parentId = try await session.child(path: testFolderPath)
+            let entries = try await session.list(for: parentId)
+
+            let child = try #require(
+                entries.first { $0.name == "child.txt" }
+            )
+            #expect(child.parentId == parentId.rawValue)
+        }
+    }
+
+    struct ExistsTests {
+        let testFolderPath = "session-exists"
+
+        init() throws {
+            try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func existsReturnsTrueForExistingFile() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/file.txt"
+            try TestData.createFile(path: path, contents: "data")
+
+            let itemId = try await session.child(path: path)
+            let result = await session.exists(for: itemId)
+            #expect(result == true)
+        }
+
+        @Test func existsReturnsFalseForMissingFile() async throws {
+            let session = try await getSession()
+
+            let itemId = try await session.child(
+                path: "\(testFolderPath)/missing.txt"
+            )
+            let result = await session.exists(for: itemId)
+            #expect(result == false)
+        }
+    }
 
     struct AttributesTests {
         let testFolderPath = "session-attributes"
@@ -489,149 +632,6 @@ struct SessionTests {
             await #expect {
                 try await session.attributes(for: itemId)
             } throws: { error in isNoSuchItemError(error) }
-        }
-    }
-
-    struct InfoTests {
-        let testFolderPath = "session-info"
-
-        init() throws {
-            try TestData.createFolder(path: testFolderPath)
-        }
-
-        @Test func infoForFileSucceeds() async throws {
-            let session = try await getSession()
-
-            let path = "\(testFolderPath)/file.txt"
-            let contents = "Hello, World!"
-            try TestData.createFile(path: path, contents: contents)
-
-            let itemId = try await session.child(path: path)
-            let info = try await session.info(for: itemId)
-
-            #expect(info.name == "file.txt")
-            #expect(!info.isDirectory)
-            #expect(info.size == UInt64(contents.utf8.count))
-            #expect(info.id == itemId.rawValue)
-        }
-
-        @Test func infoForDirectorySucceeds() async throws {
-            let session = try await getSession()
-
-            let path = "\(testFolderPath)/folder"
-            try TestData.createFolder(path: path)
-
-            let itemId = try await session.child(path: path)
-            let info = try await session.info(for: itemId)
-
-            #expect(info.name == "folder")
-            #expect(info.isDirectory)
-        }
-
-        @Test func infoHasCorrectParent() async throws {
-            let session = try await getSession()
-
-            let path = "\(testFolderPath)/nested/file.txt"
-            try TestData.createFile(path: path, contents: "data")
-
-            let itemId = try await session.child(path: path)
-            let parentId = try await session.child(path: "\(testFolderPath)/nested")
-            let info = try await session.info(for: itemId)
-
-            #expect(info.parentId == parentId.rawValue)
-        }
-    }
-
-    struct ListTests {
-        let testFolderPath = "session-list"
-
-        init() throws {
-            try TestData.createFolder(path: testFolderPath)
-        }
-
-        @Test func listReturnsFilesAndFolders() async throws {
-            let session = try await getSession()
-
-            try TestData.createFile(
-                path: "\(testFolderPath)/file.txt",
-                contents: "hello"
-            )
-            try TestData.createFolder(path: "\(testFolderPath)/subfolder")
-
-            let itemId = try await session.child(path: testFolderPath)
-            let entries = try await session.list(for: itemId)
-
-            let names = Set(entries.map(\.name))
-            #expect(names.contains("file.txt"))
-            #expect(names.contains("subfolder"))
-
-            let fileEntry = try #require(
-                entries.first { $0.name == "file.txt" }
-            )
-            #expect(!fileEntry.isDirectory)
-
-            let folderEntry = try #require(
-                entries.first { $0.name == "subfolder" }
-            )
-            #expect(folderEntry.isDirectory)
-        }
-
-        @Test func listEmptyDirectoryReturnsEmpty() async throws {
-            let session = try await getSession()
-
-            let emptyPath = "\(testFolderPath)/empty"
-            try TestData.createFolder(path: emptyPath)
-
-            let itemId = try await session.child(path: emptyPath)
-            let entries = try await session.list(for: itemId)
-
-            #expect(entries.isEmpty)
-        }
-
-        @Test func listEntriesHaveCorrectParent() async throws {
-            let session = try await getSession()
-
-            try TestData.createFile(
-                path: "\(testFolderPath)/child.txt",
-                contents: "data"
-            )
-
-            let parentId = try await session.child(path: testFolderPath)
-            let entries = try await session.list(for: parentId)
-
-            let child = try #require(
-                entries.first { $0.name == "child.txt" }
-            )
-            #expect(child.parentId == parentId.rawValue)
-        }
-    }
-
-    struct ExistsTests {
-        let testFolderPath = "session-exists"
-
-        init() throws {
-            try TestData.createFolder(path: testFolderPath)
-        }
-
-        @Test func existsReturnsTrueForExistingFile() async throws {
-            let session = try await getSession()
-
-            let path = "\(testFolderPath)/file.txt"
-            try TestData.createFile(path: path, contents: "data")
-
-            let itemId = try await session.child(path: path)
-            let result = await session.exists(for: itemId)
-            #expect(result == true)
-        }
-
-        @Test func existsReturnsFalseForMissingFile() async throws {
-            let session = try await getSession()
-
-            let itemId = try await session.child(
-                path: "\(testFolderPath)/missing.txt"
-            )
-            let result = await session.exists(for: itemId)
-            #expect(result == false)
         }
     }
 
