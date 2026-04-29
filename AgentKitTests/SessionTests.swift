@@ -7,7 +7,6 @@ import Testing
 @testable import AgentKit
 
 private func getSession() async throws -> Session {
-    DomainDB.urlFactory = { _ in TestData.domainDbStorePath }
     try await TestData.initAppDB()
 
     let config = try TestData.getConnectionConfig()
@@ -142,7 +141,7 @@ struct SessionTests {
             #expect(path == "\(TestData.mount.path())/file.txt")
         }
     }
-    
+
     struct InfoTests {
         let testFolderPath = "session-info"
 
@@ -186,7 +185,9 @@ struct SessionTests {
             try TestData.createFile(path: path, contents: "data")
 
             let itemId = try await session.child(path: path)
-            let parentId = try await session.child(path: "\(testFolderPath)/nested")
+            let parentId = try await session.child(
+                path: "\(testFolderPath)/nested"
+            )
             let info = try await session.info(for: itemId)
 
             #expect(info.parentId == parentId.rawValue)
@@ -635,6 +636,95 @@ struct SessionTests {
         }
     }
 
+    struct downloadTests {
+        let testFolderPath = "session-download-file"
+        let testFolderURL: URL
+
+        init() throws {
+            testFolderURL = try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func downloadSmallFileSucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/small-file.txt"
+            let contents = "Hello, World!"
+            try TestData.createFile(path: path, contents: contents)
+
+            let itemId = try await session.child(path: path)
+            let readProgress = Progress()
+            let (url, item) = try await session.download(
+                itemId: itemId,
+                progress: readProgress
+            )
+
+            #expect(item.name == "small-file.txt")
+            #expect(!item.isDirectory)
+            #expect(item.size == contents.count)
+            #expect(try String(contentsOf: url, encoding: .utf8) == contents)
+            #expect(readProgress.isFinished)
+        }
+
+        @Test func downloadLargeFileSucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/large-file.dat"
+            let data = Data(count: 10_485_760)
+            try TestData.createFile(path: path, data: data)
+
+            let itemId = try await session.child(path: path)
+            let readProgress = Progress()
+            let (url, item) = try await session.download(
+                itemId: itemId,
+                progress: readProgress
+            )
+
+            #expect(item.name == "large-file.dat")
+            #expect(item.size == data.count)
+            #expect(try Data(contentsOf: url) == data)
+            #expect(readProgress.isFinished)
+        }
+    }
+
+    struct WithFileTests {
+        let testFolderPath = "session-with-file"
+        let testFolderURL: URL
+
+        init() throws {
+            testFolderURL = try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func withFileReadSucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/read-file.txt"
+            let contents = "Hello, World!"
+            try TestData.createFile(path: path, contents: contents)
+
+            let data = try await session.withFile(
+                for: session.child(path: path),
+                accessType: .readOnly
+            ) { file in
+                try await file.read()
+            }
+
+            #expect(String(data: data, encoding: .utf8) == contents)
+        }
+
+        @Test func withFileMissingFileThrowsNoSuchItem() async throws {
+            let session = try await getSession()
+
+            await #expect {
+                try await session.withFile(
+                    for: session.child(
+                        path: "\(testFolderPath)/missing.txt"
+                    ),
+                    accessType: .readOnly
+                ) { _ in }
+            } throws: { error in isNoSuchItemError(error) }
+        }
+    }
+
     struct WithDirectoryTests {
         let testFolderPath = "session-with-directory"
 
@@ -682,45 +772,6 @@ struct SessionTests {
             }
 
             #expect(count == 0)
-        }
-    }
-
-    struct WithFileTests {
-        let testFolderPath = "session-with-file"
-        let testFolderURL: URL
-
-        init() throws {
-            testFolderURL = try TestData.createFolder(path: testFolderPath)
-        }
-
-        @Test func withFileReadSucceeds() async throws {
-            let session = try await getSession()
-
-            let path = "\(testFolderPath)/read-file.txt"
-            let contents = "Hello, World!"
-            try TestData.createFile(path: path, contents: contents)
-
-            let data = try await session.withFile(
-                for: session.child(path: path),
-                accessType: .readOnly
-            ) { file in
-                try await file.read()
-            }
-
-            #expect(String(data: data, encoding: .utf8) == contents)
-        }
-
-        @Test func withFileMissingFileThrowsNoSuchItem() async throws {
-            let session = try await getSession()
-
-            await #expect {
-                try await session.withFile(
-                    for: session.child(
-                        path: "\(testFolderPath)/missing.txt"
-                    ),
-                    accessType: .readOnly
-                ) { _ in }
-            } throws: { error in isNoSuchItemError(error) }
         }
     }
 }

@@ -15,11 +15,13 @@ public actor DomainDB {
     @discardableResult
     public static func open(id: UUID) async throws -> DomainDB {
         let schema = Schema([PathNode.self, FileChunk.self])
+        let url = urlFactory(id)
+        logger.info("Open DomainDB at \(url)")
 
         let db = try DomainDB(
             modelContainer: ModelContainer(
                 for: schema,
-                configurations: ModelConfiguration(url: urlFactory(id))
+                configurations: ModelConfiguration(url: url)
             )
         )
         try await db.configure()
