@@ -1,10 +1,6 @@
 import Foundation
 import SwiftLibSSH
 
-@objc public protocol AgentProtocol {
-    func perform(_ request: Data, reply: @escaping (Data) -> Void)
-}
-
 public enum OnExists: Codable {
     case fail
     case succeed
@@ -148,20 +144,5 @@ public enum AgentResult: Codable {
         case .success(let response): return response
         case .failure(let error): throw error.underlyingError
         }
-    }
-}
-
-public enum AgentCoding {
-    public static func encode<T: Encodable>(
-        _ value: T
-    ) throws -> Data {
-        try JSONEncoder().encode(value)
-    }
-
-    public static func decode<T: Decodable>(
-        _ type: T.Type,
-        from data: Data
-    ) throws -> T {
-        try JSONDecoder().decode(type, from: data)
     }
 }

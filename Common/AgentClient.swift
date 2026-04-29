@@ -1,62 +1,49 @@
 import FileProvider
 import Foundation
 import SwiftLibSSH
+import XPC
 
 private let logger = Logger(category: "AgentClient")
 
 public class AgentClient {
     private let domainId: UUID
-    private let connection: NSXPCConnection
+    private let session: XPCSession
 
     public convenience init(domainId: UUID) {
-        let connection = NSXPCConnection(
-            machServiceName: SSHadow.appServiceName
+        let session = try! XPCSession(
+            machService: SSHadow.appServiceName
         )
-        self.init(domainId: domainId, connection: connection)
+        self.init(domainId: domainId, session: session)
     }
 
-    public init(domainId: UUID, connection: NSXPCConnection) {
+    public init(domainId: UUID, session: XPCSession) {
         self.domainId = domainId
-        connection.remoteObjectInterface = NSXPCInterface(
-            with: AgentProtocol.self
-        )
-        connection.resume()
-        logger.info("Connecting to: \(connection)")
-        self.connection = connection
+        self.session = session
+        logger.info("Connected to: \(session)")
     }
 
     deinit {
-        connection.invalidate()
+        session.cancel(reason: "AgentClient deallocated")
     }
 
     private func perform(
         _ request: AgentRequest
     ) async throws -> AgentResponse {
-        try await withCheckedThrowingContinuation { continuation in
-            let proxy =
-                connection.remoteObjectProxyWithErrorHandler { error in
-                    logger.error("Failed to create proxy: \(error)")
-                    continuation.resume(throwing: error)
-                } as! AgentProtocol
-
+        return try await withCheckedThrowingContinuation { continuation in
             do {
-                logger.debug("Request: \(request)")
-                let requestData = try AgentCoding.encode(request)
-                proxy.perform(requestData) { responseData in
+                try session.send(request) {
+                    (result: Result<AgentResult, any Error>) in
                     do {
-                        let result = try AgentCoding.decode(
-                            AgentResult.self,
-                            from: responseData
+                        continuation.resume(
+                            returning: try result.get().get()
                         )
-                        continuation.resume(returning: try result.get())
-                        logger.debug("Result: \(request)")
                     } catch {
-                        logger.debug("Error: \(error)")
+                        logger.error("Request failed: \(error)")
                         continuation.resume(throwing: error)
                     }
                 }
             } catch {
-                logger.error("Failed to call proxy: \(error)")
+                logger.error("Failed to send request: \(error)")
                 continuation.resume(throwing: error)
             }
         }

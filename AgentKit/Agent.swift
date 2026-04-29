@@ -5,173 +5,165 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Agent")
 
-public class Agent: NSObject, AgentProtocol {
+public class Agent {
     private let sessions: SessionManager
 
     public init(appDbStorePath: URL? = nil) {
         self.sessions = SessionManager(appDbStorePath: appDbStorePath)
     }
 
-    public func perform(
-        _ requestData: Data,
-        reply: @escaping (Data) -> Void
-    ) {
-        Task {
-            do {
-                let request = try AgentCoding.decode(
-                    AgentRequest.self,
-                    from: requestData
-                )
-                logger.debug("Request: \(request)")
-                let response: AgentResponse =
-                    switch request {
+    public func handle(
+        _ request: AgentRequest
+    ) async -> AgentResult {
+        do {
+            logger.debug("Request: \(request)")
+            let response: AgentResponse =
+                switch request {
 
-                    case .name(
-                        let domainId,
-                        let itemId
-                    ):
-                        try await name(
-                            domainId: domainId,
-                            itemId: itemId
-                        )
+                case .name(
+                    let domainId,
+                    let itemId
+                ):
+                    try await name(
+                        domainId: domainId,
+                        itemId: itemId
+                    )
 
-                    case .child(
-                        let domainId,
-                        let parentId,
-                        let path,
-                        let ifNotExists
-                    ):
-                        try await child(
-                            domainId: domainId,
-                            parentId: parentId,
-                            path: path,
-                            ifNotExists: ifNotExists
-                        )
+                case .child(
+                    let domainId,
+                    let parentId,
+                    let path,
+                    let ifNotExists
+                ):
+                    try await child(
+                        domainId: domainId,
+                        parentId: parentId,
+                        path: path,
+                        ifNotExists: ifNotExists
+                    )
 
-                    case .parent(
-                        let domainId,
-                        let itemId
-                    ):
-                        try await parent(
-                            domainId: domainId,
-                            itemId: itemId
-                        )
+                case .parent(
+                    let domainId,
+                    let itemId
+                ):
+                    try await parent(
+                        domainId: domainId,
+                        itemId: itemId
+                    )
 
-                    case .pathForItem(
-                        let domainId,
-                        let itemId
-                    ):
-                        try await pathForItem(
-                            domainId: domainId,
-                            itemId: itemId
-                        )
+                case .pathForItem(
+                    let domainId,
+                    let itemId
+                ):
+                    try await pathForItem(
+                        domainId: domainId,
+                        itemId: itemId
+                    )
 
-                    case .pathForChild(
-                        let domainId,
-                        let name,
-                        let parentId
-                    ):
-                        try await pathForChild(
-                            domainId: domainId,
-                            name: name,
-                            parentId: parentId
-                        )
+                case .pathForChild(
+                    let domainId,
+                    let name,
+                    let parentId
+                ):
+                    try await pathForChild(
+                        domainId: domainId,
+                        name: name,
+                        parentId: parentId
+                    )
 
-                    case .setAttributes(
-                        let domainId,
-                        let itemId,
-                        let permissions,
-                        let accessTime,
-                        let modifyTime
-                    ):
-                        try await setAttributes(
-                            domainId: domainId,
-                            itemId: itemId,
-                            permissions: permissions,
-                            accessTime: accessTime,
-                            modifyTime: modifyTime
-                        )
+                case .setAttributes(
+                    let domainId,
+                    let itemId,
+                    let permissions,
+                    let accessTime,
+                    let modifyTime
+                ):
+                    try await setAttributes(
+                        domainId: domainId,
+                        itemId: itemId,
+                        permissions: permissions,
+                        accessTime: accessTime,
+                        modifyTime: modifyTime
+                    )
 
-                    case .createDirectory(
-                        let domainId,
-                        let itemId,
-                        let mode,
-                        let ifExists
-                    ):
-                        try await createDirectory(
-                            domainId: domainId,
-                            itemId: itemId,
-                            mode: mode,
-                            ifExists: ifExists
-                        )
+                case .createDirectory(
+                    let domainId,
+                    let itemId,
+                    let mode,
+                    let ifExists
+                ):
+                    try await createDirectory(
+                        domainId: domainId,
+                        itemId: itemId,
+                        mode: mode,
+                        ifExists: ifExists
+                    )
 
-                    case .move(
-                        let domainId,
-                        let itemId,
-                        let newParentId,
-                        let newName,
-                        let ifParentNotExists
-                    ):
-                        try await move(
-                            domainId: domainId,
-                            itemId: itemId,
-                            newParentId: newParentId,
-                            newName: newName,
-                            ifParentNotExists: ifParentNotExists
-                        )
+                case .move(
+                    let domainId,
+                    let itemId,
+                    let newParentId,
+                    let newName,
+                    let ifParentNotExists
+                ):
+                    try await move(
+                        domainId: domainId,
+                        itemId: itemId,
+                        newParentId: newParentId,
+                        newName: newName,
+                        ifParentNotExists: ifParentNotExists
+                    )
 
-                    case .removeFile(
-                        let domainId,
-                        let itemId
-                    ):
-                        try await removeFile(
-                            domainId: domainId,
-                            itemId: itemId
-                        )
+                case .removeFile(
+                    let domainId,
+                    let itemId
+                ):
+                    try await removeFile(
+                        domainId: domainId,
+                        itemId: itemId
+                    )
 
-                    case .removeDirectory(
-                        let domainId,
-                        let itemId
-                    ):
-                        try await removeDirectory(
-                            domainId: domainId,
-                            itemId: itemId
-                        )
+                case .removeDirectory(
+                    let domainId,
+                    let itemId
+                ):
+                    try await removeDirectory(
+                        domainId: domainId,
+                        itemId: itemId
+                    )
 
-                    case .list(
-                        let domainId,
-                        let itemId
-                    ):
-                        try await list(
-                            domainId: domainId,
-                            itemId: itemId
-                        )
+                case .list(
+                    let domainId,
+                    let itemId
+                ):
+                    try await list(
+                        domainId: domainId,
+                        itemId: itemId
+                    )
 
-                    case .info(
-                        let domainId,
-                        let itemId
-                    ):
-                        try await info(
-                            domainId: domainId,
-                            itemId: itemId
-                        )
+                case .info(
+                    let domainId,
+                    let itemId
+                ):
+                    try await info(
+                        domainId: domainId,
+                        itemId: itemId
+                    )
 
-                    case .exists(
-                        let domainId,
-                        let itemId
-                    ):
-                        try await exists(
-                            domainId: domainId,
-                            itemId: itemId
-                        )
-                    }
-                logger.debug("Response: \(response)")
-                reply(try AgentCoding.encode(AgentResult.success(response)))
-            } catch {
-                logger.error("Failed to handle request: \(error)")
-                let result = AgentResult.failure(AgentResultError(from: error))
-                reply(try AgentCoding.encode(result))
-            }
+                case .exists(
+                    let domainId,
+                    let itemId
+                ):
+                    try await exists(
+                        domainId: domainId,
+                        itemId: itemId
+                    )
+                }
+            logger.debug("Response: \(response)")
+            return .success(response)
+        } catch {
+            logger.error("Failed to handle request: \(error)")
+            return .failure(AgentResultError(from: error))
         }
     }
 
