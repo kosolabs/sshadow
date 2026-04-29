@@ -19,145 +19,32 @@ public class Agent {
             logger.debug("Request: \(request)")
             let response: AgentResponse =
                 switch request {
-
-                case .name(
-                    let domainId,
-                    let itemId
-                ):
-                    try await name(
-                        domainId: domainId,
-                        itemId: itemId
-                    )
-
-                case .child(
-                    let domainId,
-                    let parentId,
-                    let path,
-                    let ifNotExists
-                ):
-                    try await child(
-                        domainId: domainId,
-                        parentId: parentId,
-                        path: path,
-                        ifNotExists: ifNotExists
-                    )
-
-                case .parent(
-                    let domainId,
-                    let itemId
-                ):
-                    try await parent(
-                        domainId: domainId,
-                        itemId: itemId
-                    )
-
-                case .pathForItem(
-                    let domainId,
-                    let itemId
-                ):
-                    try await pathForItem(
-                        domainId: domainId,
-                        itemId: itemId
-                    )
-
-                case .pathForChild(
-                    let domainId,
-                    let name,
-                    let parentId
-                ):
-                    try await pathForChild(
-                        domainId: domainId,
-                        name: name,
-                        parentId: parentId
-                    )
-
-                case .setAttributes(
-                    let domainId,
-                    let itemId,
-                    let permissions,
-                    let accessTime,
-                    let modifyTime
-                ):
-                    try await setAttributes(
-                        domainId: domainId,
-                        itemId: itemId,
-                        permissions: permissions,
-                        accessTime: accessTime,
-                        modifyTime: modifyTime
-                    )
-
-                case .createDirectory(
-                    let domainId,
-                    let itemId,
-                    let mode,
-                    let ifExists
-                ):
-                    try await createDirectory(
-                        domainId: domainId,
-                        itemId: itemId,
-                        mode: mode,
-                        ifExists: ifExists
-                    )
-
-                case .move(
-                    let domainId,
-                    let itemId,
-                    let newParentId,
-                    let newName,
-                    let ifParentNotExists
-                ):
-                    try await move(
-                        domainId: domainId,
-                        itemId: itemId,
-                        newParentId: newParentId,
-                        newName: newName,
-                        ifParentNotExists: ifParentNotExists
-                    )
-
-                case .removeFile(
-                    let domainId,
-                    let itemId
-                ):
-                    try await removeFile(
-                        domainId: domainId,
-                        itemId: itemId
-                    )
-
-                case .removeDirectory(
-                    let domainId,
-                    let itemId
-                ):
-                    try await removeDirectory(
-                        domainId: domainId,
-                        itemId: itemId
-                    )
-
-                case .list(
-                    let domainId,
-                    let itemId
-                ):
-                    try await list(
-                        domainId: domainId,
-                        itemId: itemId
-                    )
-
-                case .info(
-                    let domainId,
-                    let itemId
-                ):
-                    try await info(
-                        domainId: domainId,
-                        itemId: itemId
-                    )
-
-                case .exists(
-                    let domainId,
-                    let itemId
-                ):
-                    try await exists(
-                        domainId: domainId,
-                        itemId: itemId
-                    )
+                case .name(let request):
+                    try await .name(name(request: request))
+                case .child(let request):
+                    try await .child(child(request: request))
+                case .parent(let request):
+                    try await .parent(parent(request: request))
+                case .pathForItem(let request):
+                    try await .path(pathForItem(request: request))
+                case .pathForChild(let request):
+                    try await .path(pathForChild(request: request))
+                case .info(let request):
+                    try await .info(info(request: request))
+                case .list(let request):
+                    try await .list(list(request: request))
+                case .exists(let request):
+                    try await .exists(exists(request: request))
+                case .setAttributes(let request):
+                    try await .setAttributes(setAttributes(request: request))
+                case .createDirectory(let request):
+                    try await .createDirectory(createDirectory(request: request))
+                case .move(let request):
+                    try await .move(move(request: request))
+                case .removeFile(let request):
+                    try await .removeFile(removeFile(request: request))
+                case .removeDirectory(let request):
+                    try await .removeDirectory(removeDirectory(request: request))
                 }
             logger.debug("Response: \(response)")
             return .success(response)
@@ -168,167 +55,143 @@ public class Agent {
     }
 
     func name(
-        domainId: UUID,
-        itemId: String
-    ) async throws -> AgentResponse {
-        let session = try await sessions.connect(id: domainId)
+        request: NameRequest
+    ) async throws -> NameResponse {
+        let session = try await sessions.connect(id: request.domainId)
         let name = try await session.name(
-            of: NSFileProviderItemIdentifier(itemId)
+            of: NSFileProviderItemIdentifier(request.itemId)
         )
-        return .name(name: name)
+        return NameResponse(name: name)
     }
 
     func child(
-        domainId: UUID,
-        parentId: String,
-        path: String,
-        ifNotExists: DomainDB.OnNotExists
-    ) async throws -> AgentResponse {
-        let session = try await sessions.connect(id: domainId)
+        request: ChildRequest
+    ) async throws -> ChildResponse {
+        let session = try await sessions.connect(id: request.domainId)
         let childId = try await session.child(
-            of: NSFileProviderItemIdentifier(parentId),
-            path: path,
-            ifNotExists: ifNotExists
+            of: NSFileProviderItemIdentifier(request.parentId),
+            path: request.path,
+            ifNotExists: request.ifNotExists
         )
-        return .child(itemId: childId.rawValue)
+        return ChildResponse(itemId: childId.rawValue)
     }
 
     func parent(
-        domainId: UUID,
-        itemId: String
-    ) async throws -> AgentResponse {
-        let session = try await sessions.connect(id: domainId)
+        request: ParentRequest
+    ) async throws -> ParentResponse {
+        let session = try await sessions.connect(id: request.domainId)
         let parentId = try await session.parent(
-            of: NSFileProviderItemIdentifier(itemId)
+            of: NSFileProviderItemIdentifier(request.itemId)
         )
-        return .parent(itemId: parentId.rawValue)
+        return ParentResponse(itemId: parentId.rawValue)
     }
 
     func pathForItem(
-        domainId: UUID,
-        itemId: String
-    ) async throws -> AgentResponse {
-        let session = try await sessions.connect(id: domainId)
+        request: PathForItemRequest
+    ) async throws -> PathResponse {
+        let session = try await sessions.connect(id: request.domainId)
         let path = await session.path(
-            for: NSFileProviderItemIdentifier(itemId)
+            for: NSFileProviderItemIdentifier(request.itemId)
         )
-        return .path(path: path)
+        return PathResponse(path: path)
     }
 
     func pathForChild(
-        domainId: UUID,
-        name: String,
-        parentId: String
-    ) async throws -> AgentResponse {
-        let session = try await sessions.connect(id: domainId)
+        request: PathForChildRequest
+    ) async throws -> PathResponse {
+        let session = try await sessions.connect(id: request.domainId)
         let path = await session.path(
-            for: name,
-            parentId: NSFileProviderItemIdentifier(parentId)
+            for: request.name,
+            parentId: NSFileProviderItemIdentifier(request.parentId)
         )
-        return .path(path: path)
+        return PathResponse(path: path)
     }
 
     func info(
-        domainId: UUID,
-        itemId: String
-    ) async throws -> AgentResponse {
-        let session = try await sessions.connect(id: domainId)
+        request: InfoRequest
+    ) async throws -> InfoResponse {
+        let session = try await sessions.connect(id: request.domainId)
         let info = try await session.info(
-            for: NSFileProviderItemIdentifier(itemId)
+            for: NSFileProviderItemIdentifier(request.itemId)
         )
-        return .info(info)
+        return InfoResponse(fileInfo: info)
     }
 
     func list(
-        domainId: UUID,
-        itemId: String
-    ) async throws -> AgentResponse {
-        let session = try await sessions.connect(id: domainId)
+        request: ListRequest
+    ) async throws -> ListResponse {
+        let session = try await sessions.connect(id: request.domainId)
         let entries = try await session.list(
-            for: NSFileProviderItemIdentifier(itemId)
+            for: NSFileProviderItemIdentifier(request.itemId)
         )
-        return .list(entries)
+        return ListResponse(fileInfos: entries)
     }
 
     func exists(
-        domainId: UUID,
-        itemId: String
-    ) async throws -> AgentResponse {
-        let session = try await sessions.connect(id: domainId)
+        request: ExistsRequest
+    ) async throws -> ExistsResponse {
+        let session = try await sessions.connect(id: request.domainId)
         let exists = await session.exists(
-            for: NSFileProviderItemIdentifier(itemId)
+            for: NSFileProviderItemIdentifier(request.itemId)
         )
-        return .exists(exists)
+        return ExistsResponse(exists: exists)
     }
 
     func setAttributes(
-        domainId: UUID,
-        itemId: String,
-        permissions: mode_t?,
-        accessTime: Date?,
-        modifyTime: Date?
-    ) async throws -> AgentResponse {
-        let session = try await sessions.connect(id: domainId)
+        request: SetAttributesRequest
+    ) async throws -> SetAttributesResponse {
+        let session = try await sessions.connect(id: request.domainId)
         try await session.setAttributes(
-            for: NSFileProviderItemIdentifier(itemId),
-            permissions: permissions,
-            accessTime: accessTime,
-            modifyTime: modifyTime
+            for: NSFileProviderItemIdentifier(request.itemId),
+            permissions: request.permissions,
+            accessTime: request.accessTime,
+            modifyTime: request.modifyTime
         )
-        return .setAttributes
+        return SetAttributesResponse()
     }
 
     func createDirectory(
-        domainId: UUID,
-        itemId: String,
-        mode: mode_t,
-        ifExists: OnExists
-    ) async throws -> AgentResponse {
-        let session = try await sessions.connect(id: domainId)
+        request: CreateDirectoryRequest
+    ) async throws -> CreateDirectoryResponse {
+        let session = try await sessions.connect(id: request.domainId)
         try await session.createDirectory(
-            for: NSFileProviderItemIdentifier(itemId),
-            mode: mode,
-            ifExists: ifExists
+            for: NSFileProviderItemIdentifier(request.itemId),
+            mode: request.mode,
+            ifExists: request.ifExists
         )
-        return .createDirectory
+        return CreateDirectoryResponse()
     }
 
     func move(
-        domainId: UUID,
-        itemId: String,
-        newParentId: String,
-        newName: String,
-        ifParentNotExists: OnParentNotExists
-    ) async throws -> AgentResponse {
-        let session = try await sessions.connect(id: domainId)
+        request: MoveRequest
+    ) async throws -> MoveResponse {
+        let session = try await sessions.connect(id: request.domainId)
         try await session.move(
-            NSFileProviderItemIdentifier(itemId),
-            toParent: NSFileProviderItemIdentifier(newParentId),
-            name: newName,
-            ifParentNotExists: ifParentNotExists
+            NSFileProviderItemIdentifier(request.itemId),
+            toParent: NSFileProviderItemIdentifier(request.newParentId),
+            name: request.newName,
+            ifParentNotExists: request.ifParentNotExists
         )
-        return .move
+        return MoveResponse()
     }
 
     func removeFile(
-        domainId: UUID,
-        itemId: String
-    ) async throws -> AgentResponse {
-        let session = try await sessions.connect(id: domainId)
+        request: RemoveFileRequest
+    ) async throws -> RemoveFileResponse {
+        let session = try await sessions.connect(id: request.domainId)
         try await session.removeFile(
-            for: NSFileProviderItemIdentifier(itemId)
+            for: NSFileProviderItemIdentifier(request.itemId)
         )
-        return .removeFile
+        return RemoveFileResponse()
     }
 
     func removeDirectory(
-        domainId: UUID,
-        itemId: String
-    ) async throws -> AgentResponse {
-        let session = try await sessions.connect(id: domainId)
+        request: RemoveDirectoryRequest
+    ) async throws -> RemoveDirectoryResponse {
+        let session = try await sessions.connect(id: request.domainId)
         try await session.removeDirectory(
-            for: NSFileProviderItemIdentifier(itemId)
+            for: NSFileProviderItemIdentifier(request.itemId)
         )
-        return .removeDirectory
+        return RemoveDirectoryResponse()
     }
 }

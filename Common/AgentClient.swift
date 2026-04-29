@@ -52,13 +52,13 @@ public class AgentClient {
     public func name(
         of itemId: NSFileProviderItemIdentifier
     ) async throws -> String {
-        let response = try await perform(
-            .name(domainId: domainId, itemId: itemId.rawValue)
+        let reply = try await perform(
+            .name(NameRequest(domainId: domainId, itemId: itemId.rawValue))
         )
-        guard case .name(let name) = response else {
+        guard case .name(let response) = reply else {
             throw CocoaError(.coderInvalidValue)
         }
-        return name
+        return response.name
     }
 
     public func child(
@@ -66,89 +66,115 @@ public class AgentClient {
         path: String,
         ifNotExists: DomainDB.OnNotExists = .create
     ) async throws -> NSFileProviderItemIdentifier {
-        let response = try await perform(
+        let reply = try await perform(
             .child(
-                domainId: domainId,
-                parentId: parentId.rawValue,
-                path: path,
-                ifNotExists: ifNotExists
+                ChildRequest(
+                    domainId: domainId,
+                    parentId: parentId.rawValue,
+                    path: path,
+                    ifNotExists: ifNotExists
+                )
             )
         )
-        guard case .child(let itemId) = response else {
+        guard case .child(let response) = reply else {
             throw CocoaError(.coderInvalidValue)
         }
-        return NSFileProviderItemIdentifier(itemId)
+        return NSFileProviderItemIdentifier(response.itemId)
     }
 
     public func parent(
         of itemId: NSFileProviderItemIdentifier
     ) async throws -> NSFileProviderItemIdentifier {
-        let response = try await perform(
+        let reply = try await perform(
             .parent(
-                domainId: domainId,
-                itemId: itemId.rawValue
+                ParentRequest(
+                    domainId: domainId,
+                    itemId: itemId.rawValue
+                )
             )
         )
-        guard case .parent(let parentId) = response else {
+        guard case .parent(let response) = reply else {
             throw CocoaError(.coderInvalidValue)
         }
-        return NSFileProviderItemIdentifier(parentId)
+        return NSFileProviderItemIdentifier(response.itemId)
     }
 
     public func path(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> String {
-        let response = try await perform(
+        let reply = try await perform(
             .pathForItem(
-                domainId: domainId,
-                itemId: itemId.rawValue
+                PathForItemRequest(
+                    domainId: domainId,
+                    itemId: itemId.rawValue
+                )
             )
         )
-        guard case .path(let path) = response else {
+        guard case .path(let response) = reply else {
             throw CocoaError(.coderInvalidValue)
         }
-        return path
+        return response.path
     }
 
     public func path(
         for name: String,
         parentId: NSFileProviderItemIdentifier
     ) async throws -> String {
-        let response = try await perform(
+        let reply = try await perform(
             .pathForChild(
-                domainId: domainId,
-                name: name,
-                parentId: parentId.rawValue
+                PathForChildRequest(
+                    domainId: domainId,
+                    name: name,
+                    parentId: parentId.rawValue
+                )
             )
         )
-        guard case .path(let path) = response else {
+        guard case .path(let response) = reply else {
             throw CocoaError(.coderInvalidValue)
         }
-        return path
+        return response.path
     }
 
     public func info(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> FileInfo {
-        let response = try await perform(
-            .info(domainId: domainId, itemId: itemId.rawValue)
+        let reply = try await perform(
+            .info(
+                InfoRequest(domainId: domainId, itemId: itemId.rawValue)
+            )
         )
-        guard case .info(let info) = response else {
+        guard case .info(let response) = reply else {
             throw CocoaError(.coderInvalidValue)
         }
-        return info
+        return response.fileInfo
     }
 
     public func list(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> [FileInfo] {
-        let response = try await perform(
-            .list(domainId: domainId, itemId: itemId.rawValue)
+        let reply = try await perform(
+            .list(
+                ListRequest(domainId: domainId, itemId: itemId.rawValue)
+            )
         )
-        guard case .list(let entries) = response else {
+        guard case .list(let response) = reply else {
             throw CocoaError(.coderInvalidValue)
         }
-        return entries
+        return response.fileInfos
+    }
+
+    public func exists(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> Bool {
+        let reply = try await perform(
+            .exists(
+                ExistsRequest(domainId: domainId, itemId: itemId.rawValue)
+            )
+        )
+        guard case .exists(let response) = reply else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        return response.exists
     }
 
     public func setAttributes(
@@ -157,16 +183,18 @@ public class AgentClient {
         accessTime: Date? = nil,
         modifyTime: Date? = nil
     ) async throws {
-        let response = try await perform(
+        let reply = try await perform(
             .setAttributes(
-                domainId: domainId,
-                itemId: itemId.rawValue,
-                permissions: permissions,
-                accessTime: accessTime,
-                modifyTime: modifyTime
+                SetAttributesRequest(
+                    domainId: domainId,
+                    itemId: itemId.rawValue,
+                    permissions: permissions,
+                    accessTime: accessTime,
+                    modifyTime: modifyTime
+                )
             )
         )
-        guard case .setAttributes = response else {
+        guard case .setAttributes = reply else {
             throw CocoaError(.coderInvalidValue)
         }
     }
@@ -176,15 +204,17 @@ public class AgentClient {
         mode: mode_t = 0o700,
         ifExists: OnExists = .fail
     ) async throws {
-        let response = try await perform(
+        let reply = try await perform(
             .createDirectory(
-                domainId: domainId,
-                itemId: itemId.rawValue,
-                mode: mode,
-                ifExists: ifExists
+                CreateDirectoryRequest(
+                    domainId: domainId,
+                    itemId: itemId.rawValue,
+                    mode: mode,
+                    ifExists: ifExists
+                )
             )
         )
-        guard case .createDirectory = response else {
+        guard case .createDirectory = reply else {
             throw CocoaError(.coderInvalidValue)
         }
     }
@@ -195,16 +225,18 @@ public class AgentClient {
         name newName: String,
         ifParentNotExists: OnParentNotExists = .fail
     ) async throws {
-        let response = try await perform(
+        let reply = try await perform(
             .move(
-                domainId: domainId,
-                itemId: itemId.rawValue,
-                newParentId: newParentId.rawValue,
-                newName: newName,
-                ifParentNotExists: ifParentNotExists
+                MoveRequest(
+                    domainId: domainId,
+                    itemId: itemId.rawValue,
+                    newParentId: newParentId.rawValue,
+                    newName: newName,
+                    ifParentNotExists: ifParentNotExists
+                )
             )
         )
-        guard case .move = response else {
+        guard case .move = reply else {
             throw CocoaError(.coderInvalidValue)
         }
     }
@@ -212,10 +244,12 @@ public class AgentClient {
     public func removeFile(
         for itemId: NSFileProviderItemIdentifier
     ) async throws {
-        let response = try await perform(
-            .removeFile(domainId: domainId, itemId: itemId.rawValue)
+        let reply = try await perform(
+            .removeFile(
+                RemoveFileRequest(domainId: domainId, itemId: itemId.rawValue)
+            )
         )
-        guard case .removeFile = response else {
+        guard case .removeFile = reply else {
             throw CocoaError(.coderInvalidValue)
         }
     }
@@ -223,23 +257,16 @@ public class AgentClient {
     public func removeDirectory(
         for itemId: NSFileProviderItemIdentifier
     ) async throws {
-        let response = try await perform(
-            .removeDirectory(domainId: domainId, itemId: itemId.rawValue)
+        let reply = try await perform(
+            .removeDirectory(
+                RemoveDirectoryRequest(
+                    domainId: domainId,
+                    itemId: itemId.rawValue
+                )
+            )
         )
-        guard case .removeDirectory = response else {
+        guard case .removeDirectory = reply else {
             throw CocoaError(.coderInvalidValue)
         }
-    }
-
-    public func exists(
-        for itemId: NSFileProviderItemIdentifier
-    ) async throws -> Bool {
-        let response = try await perform(
-            .exists(domainId: domainId, itemId: itemId.rawValue)
-        )
-        guard case .exists(let exists) = response else {
-            throw CocoaError(.coderInvalidValue)
-        }
-        return exists
     }
 }
