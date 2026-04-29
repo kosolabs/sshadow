@@ -12,84 +12,284 @@ public enum OnParentNotExists: Codable {
 }
 
 public enum AgentRequest: Codable {
-    case name(
-        domainId: UUID,
-        itemId: String
-    )
-    case child(
+    case name(NameRequest)
+    case child(ChildRequest)
+    case parent(ParentRequest)
+    case pathForItem(PathForItemRequest)
+    case pathForChild(PathForChildRequest)
+    case info(InfoRequest)
+    case list(ListRequest)
+    case exists(ExistsRequest)
+    case setAttributes(SetAttributesRequest)
+    case createDirectory(CreateDirectoryRequest)
+    case move(MoveRequest)
+    case removeFile(RemoveFileRequest)
+    case removeDirectory(RemoveDirectoryRequest)
+}
+
+public struct NameRequest: Codable {
+    public let domainId: UUID
+    public let itemId: String
+
+    public init(domainId: UUID, itemId: String) {
+        self.domainId = domainId
+        self.itemId = itemId
+    }
+}
+
+public struct ChildRequest: Codable {
+    public let domainId: UUID
+    public let parentId: String
+    public let path: String
+    public let ifNotExists: DomainDB.OnNotExists
+
+    public init(
         domainId: UUID,
         parentId: String,
         path: String,
         ifNotExists: DomainDB.OnNotExists
-    )
-    case parent(
-        domainId: UUID,
-        itemId: String
-    )
-    case pathForItem(
-        domainId: UUID,
-        itemId: String
-    )
-    case pathForChild(
-        domainId: UUID,
-        name: String,
-        parentId: String
-    )
-    case info(
-        domainId: UUID,
-        itemId: String
-    )
-    case list(
-        domainId: UUID,
-        itemId: String
-    )
-    case exists(
-        domainId: UUID,
-        itemId: String
-    )
-    case setAttributes(
+    ) {
+        self.domainId = domainId
+        self.parentId = parentId
+        self.path = path
+        self.ifNotExists = ifNotExists
+    }
+}
+
+public struct ParentRequest: Codable {
+    public let domainId: UUID
+    public let itemId: String
+
+    public init(domainId: UUID, itemId: String) {
+        self.domainId = domainId
+        self.itemId = itemId
+    }
+}
+
+public struct PathForItemRequest: Codable {
+    public let domainId: UUID
+    public let itemId: String
+
+    public init(domainId: UUID, itemId: String) {
+        self.domainId = domainId
+        self.itemId = itemId
+    }
+}
+
+public struct PathForChildRequest: Codable {
+    public let domainId: UUID
+    public let name: String
+    public let parentId: String
+
+    public init(domainId: UUID, name: String, parentId: String) {
+        self.domainId = domainId
+        self.name = name
+        self.parentId = parentId
+    }
+}
+
+public struct InfoRequest: Codable {
+    public let domainId: UUID
+    public let itemId: String
+
+    public init(domainId: UUID, itemId: String) {
+        self.domainId = domainId
+        self.itemId = itemId
+    }
+}
+
+public struct ListRequest: Codable {
+    public let domainId: UUID
+    public let itemId: String
+
+    public init(domainId: UUID, itemId: String) {
+        self.domainId = domainId
+        self.itemId = itemId
+    }
+}
+
+public struct ExistsRequest: Codable {
+    public let domainId: UUID
+    public let itemId: String
+
+    public init(domainId: UUID, itemId: String) {
+        self.domainId = domainId
+        self.itemId = itemId
+    }
+}
+
+public struct SetAttributesRequest: Codable {
+    public let domainId: UUID
+    public let itemId: String
+    public let permissions: mode_t?
+    public let accessTime: Date?
+    public let modifyTime: Date?
+
+    public init(
         domainId: UUID,
         itemId: String,
         permissions: mode_t?,
         accessTime: Date?,
         modifyTime: Date?
-    )
-    case createDirectory(
+    ) {
+        self.domainId = domainId
+        self.itemId = itemId
+        self.permissions = permissions
+        self.accessTime = accessTime
+        self.modifyTime = modifyTime
+    }
+}
+
+public struct CreateDirectoryRequest: Codable {
+    public let domainId: UUID
+    public let itemId: String
+    public let mode: mode_t
+    public let ifExists: OnExists
+
+    public init(
         domainId: UUID,
         itemId: String,
         mode: mode_t,
         ifExists: OnExists
-    )
-    case move(
+    ) {
+        self.domainId = domainId
+        self.itemId = itemId
+        self.mode = mode
+        self.ifExists = ifExists
+    }
+}
+
+public struct MoveRequest: Codable {
+    public let domainId: UUID
+    public let itemId: String
+    public let newParentId: String
+    public let newName: String
+    public let ifParentNotExists: OnParentNotExists
+
+    public init(
         domainId: UUID,
         itemId: String,
         newParentId: String,
         newName: String,
         ifParentNotExists: OnParentNotExists
-    )
-    case removeFile(
-        domainId: UUID,
-        itemId: String
-    )
-    case removeDirectory(
-        domainId: UUID,
-        itemId: String
-    )
+    ) {
+        self.domainId = domainId
+        self.itemId = itemId
+        self.newParentId = newParentId
+        self.newName = newName
+        self.ifParentNotExists = ifParentNotExists
+    }
+}
+
+public struct RemoveFileRequest: Codable {
+    public let domainId: UUID
+    public let itemId: String
+
+    public init(domainId: UUID, itemId: String) {
+        self.domainId = domainId
+        self.itemId = itemId
+    }
+}
+
+public struct RemoveDirectoryRequest: Codable {
+    public let domainId: UUID
+    public let itemId: String
+
+    public init(domainId: UUID, itemId: String) {
+        self.domainId = domainId
+        self.itemId = itemId
+    }
 }
 
 public enum AgentResponse: Codable {
-    case name(name: String)
-    case child(itemId: String)
-    case parent(itemId: String)
-    case path(path: String)
-    case info(FileInfo)
-    case list([FileInfo])
-    case setAttributes
-    case createDirectory
-    case move
-    case removeFile
-    case removeDirectory
-    case exists(Bool)
+    case name(NameResponse)
+    case child(ChildResponse)
+    case parent(ParentResponse)
+    case path(PathResponse)
+    case info(InfoResponse)
+    case list(ListResponse)
+    case setAttributes(SetAttributesResponse)
+    case createDirectory(CreateDirectoryResponse)
+    case move(MoveResponse)
+    case removeFile(RemoveFileResponse)
+    case removeDirectory(RemoveDirectoryResponse)
+    case exists(ExistsResponse)
+}
+
+public struct NameResponse: Codable {
+    let name: String
+
+    public init(name: String) {
+        self.name = name
+    }
+}
+
+public struct ChildResponse: Codable {
+    let itemId: String
+
+    public init(itemId: String) {
+        self.itemId = itemId
+    }
+}
+
+public struct ParentResponse: Codable {
+    let itemId: String
+
+    public init(itemId: String) {
+        self.itemId = itemId
+    }
+}
+
+public struct PathResponse: Codable {
+    let path: String
+
+    public init(path: String) {
+        self.path = path
+    }
+}
+
+public struct InfoResponse: Codable {
+    let fileInfo: FileInfo
+
+    public init(fileInfo: FileInfo) {
+        self.fileInfo = fileInfo
+    }
+}
+
+public struct ListResponse: Codable {
+    let fileInfos: [FileInfo]
+
+    public init(fileInfos: [FileInfo]) {
+        self.fileInfos = fileInfos
+    }
+}
+
+public struct ExistsResponse: Codable {
+    let exists: Bool
+
+    public init(exists: Bool) {
+        self.exists = exists
+    }
+}
+
+public struct SetAttributesResponse: Codable {
+    public init() {}
+}
+
+public struct CreateDirectoryResponse: Codable {
+    public init() {}
+}
+
+public struct MoveResponse: Codable {
+    public init() {}
+}
+
+public struct RemoveFileResponse: Codable {
+    public init() {}
+}
+
+public struct RemoveDirectoryResponse: Codable {
+    public init() {}
 }
 
 public enum AgentError: Codable, Error {
