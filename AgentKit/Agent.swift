@@ -20,31 +20,33 @@ public class Agent {
             let response: AgentResponse =
                 switch request {
                 case .name(let request):
-                    try await .name(name(request: request))
+                    try await .name(name(request))
                 case .child(let request):
-                    try await .child(child(request: request))
+                    try await .child(child(request))
                 case .parent(let request):
-                    try await .parent(parent(request: request))
+                    try await .parent(parent(request))
                 case .pathForItem(let request):
-                    try await .path(pathForItem(request: request))
+                    try await .path(pathForItem(request))
                 case .pathForChild(let request):
-                    try await .path(pathForChild(request: request))
+                    try await .path(pathForChild(request))
                 case .info(let request):
-                    try await .info(info(request: request))
+                    try await .info(info(request))
                 case .list(let request):
-                    try await .list(list(request: request))
+                    try await .list(list(request))
                 case .exists(let request):
-                    try await .exists(exists(request: request))
+                    try await .exists(exists(request))
                 case .setAttributes(let request):
-                    try await .setAttributes(setAttributes(request: request))
+                    try await .setAttributes(setAttributes(request))
                 case .createDirectory(let request):
-                    try await .createDirectory(createDirectory(request: request))
+                    try await .createDirectory(createDirectory(request))
                 case .move(let request):
-                    try await .move(move(request: request))
+                    try await .move(move(request))
                 case .removeFile(let request):
-                    try await .removeFile(removeFile(request: request))
+                    try await .removeFile(removeFile(request))
                 case .removeDirectory(let request):
-                    try await .removeDirectory(removeDirectory(request: request))
+                    try await .removeDirectory(removeDirectory(request))
+                case .download(let request):
+                    try await .download(download(request))
                 }
             logger.debug("Response: \(response)")
             return .success(response)
@@ -55,7 +57,7 @@ public class Agent {
     }
 
     func name(
-        request: NameRequest
+        _ request: NameRequest
     ) async throws -> NameResponse {
         let session = try await sessions.connect(id: request.domainId)
         let name = try await session.name(
@@ -65,7 +67,7 @@ public class Agent {
     }
 
     func child(
-        request: ChildRequest
+        _ request: ChildRequest
     ) async throws -> ChildResponse {
         let session = try await sessions.connect(id: request.domainId)
         let childId = try await session.child(
@@ -77,7 +79,7 @@ public class Agent {
     }
 
     func parent(
-        request: ParentRequest
+        _ request: ParentRequest
     ) async throws -> ParentResponse {
         let session = try await sessions.connect(id: request.domainId)
         let parentId = try await session.parent(
@@ -87,7 +89,7 @@ public class Agent {
     }
 
     func pathForItem(
-        request: PathForItemRequest
+        _ request: PathForItemRequest
     ) async throws -> PathResponse {
         let session = try await sessions.connect(id: request.domainId)
         let path = await session.path(
@@ -97,7 +99,7 @@ public class Agent {
     }
 
     func pathForChild(
-        request: PathForChildRequest
+        _ request: PathForChildRequest
     ) async throws -> PathResponse {
         let session = try await sessions.connect(id: request.domainId)
         let path = await session.path(
@@ -108,7 +110,7 @@ public class Agent {
     }
 
     func info(
-        request: InfoRequest
+        _ request: InfoRequest
     ) async throws -> InfoResponse {
         let session = try await sessions.connect(id: request.domainId)
         let info = try await session.info(
@@ -118,7 +120,7 @@ public class Agent {
     }
 
     func list(
-        request: ListRequest
+        _ request: ListRequest
     ) async throws -> ListResponse {
         let session = try await sessions.connect(id: request.domainId)
         let entries = try await session.list(
@@ -128,7 +130,7 @@ public class Agent {
     }
 
     func exists(
-        request: ExistsRequest
+        _ request: ExistsRequest
     ) async throws -> ExistsResponse {
         let session = try await sessions.connect(id: request.domainId)
         let exists = await session.exists(
@@ -138,7 +140,7 @@ public class Agent {
     }
 
     func setAttributes(
-        request: SetAttributesRequest
+        _ request: SetAttributesRequest
     ) async throws -> SetAttributesResponse {
         let session = try await sessions.connect(id: request.domainId)
         try await session.setAttributes(
@@ -151,7 +153,7 @@ public class Agent {
     }
 
     func createDirectory(
-        request: CreateDirectoryRequest
+        _ request: CreateDirectoryRequest
     ) async throws -> CreateDirectoryResponse {
         let session = try await sessions.connect(id: request.domainId)
         try await session.createDirectory(
@@ -163,7 +165,7 @@ public class Agent {
     }
 
     func move(
-        request: MoveRequest
+        _ request: MoveRequest
     ) async throws -> MoveResponse {
         let session = try await sessions.connect(id: request.domainId)
         try await session.move(
@@ -176,7 +178,7 @@ public class Agent {
     }
 
     func removeFile(
-        request: RemoveFileRequest
+        _ request: RemoveFileRequest
     ) async throws -> RemoveFileResponse {
         let session = try await sessions.connect(id: request.domainId)
         try await session.removeFile(
@@ -186,12 +188,27 @@ public class Agent {
     }
 
     func removeDirectory(
-        request: RemoveDirectoryRequest
+        _ request: RemoveDirectoryRequest
     ) async throws -> RemoveDirectoryResponse {
         let session = try await sessions.connect(id: request.domainId)
         try await session.removeDirectory(
             for: NSFileProviderItemIdentifier(request.itemId)
         )
         return RemoveDirectoryResponse()
+    }
+
+    func download(
+        _ request: DownloadRequest
+    ) async throws -> DownloadResponse {
+        let session = try await sessions.connect(id: request.domainId)
+
+        let sync = try XPCProgressPublisher(
+            endpoint: request.progressEndpoint
+        )
+        let (url, fileInfo) = try await session.download(
+            itemId: NSFileProviderItemIdentifier(request.itemId),
+            progress: sync.progress
+        )
+        return DownloadResponse(url: url, fileInfo: fileInfo)
     }
 }
