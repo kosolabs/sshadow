@@ -230,20 +230,19 @@ class Session {
     func download(
         itemId: NSFileProviderItemIdentifier,
         progress: Progress,
-    ) async throws -> (URL, SFTPAttributes) {
+    ) async throws -> (URL, FileInfo) {
         let itemRef = await id(of: itemId)
         let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
-        guard FileManager.default.createFile(atPath: url.path(), contents: nil)
-        else { throw NSFileProviderError(.insufficientQuota) }
+        logger.info("Download \(itemRef) into \(url)")
+        
+        try Data().write(to: url)
         let handle = try FileHandle(forWritingTo: url)
         defer { try? handle.close() }
-
-        let attributes = try await attributes(for: itemId)
-        logger.info("Download \(itemRef) into \(url.path())")
+        let info = try await info(for: itemId)
 
         progress.kind = .file
         progress.fileOperationKind = .downloading
-        progress.totalUnitCount = Int64(attributes.size)
+        progress.totalUnitCount = Int64(info.size)
         let speedometer = Speedometer(progress: progress)
 
         try await withFile(for: itemId, accessType: .readOnly) { file in
@@ -259,7 +258,7 @@ class Session {
         }
         
         logger.info("Downloaded \(itemRef): \(speedometer.finalize())")
-        return (url, attributes)
+        return (url, info)
     }
 
     func withFile<T: Sendable>(
