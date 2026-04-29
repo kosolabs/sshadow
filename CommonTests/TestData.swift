@@ -3,6 +3,7 @@ import Common
 import FileProvider
 import Foundation
 import SwiftData
+import XPC
 
 private let logger = Logger(category: "TestData")
 
@@ -124,20 +125,15 @@ enum TestData {
         return try await DomainDB.open(id: id)
     }
 
-    static func getAgentClient(id: UUID = id) -> AgentClient {
-        let delegate = AgentListenerDelegate(appDbStorePath: appDbStorePath)
-        let listener = NSXPCListener.anonymous()
-        listener.delegate = delegate
-        objc_setAssociatedObject(
-            listener,
-            "delegate",
-            delegate,
-            .OBJC_ASSOCIATION_RETAIN
-        )
-        listener.resume()
+    private static var testListener: XPCListener?
 
-        let connection = NSXPCConnection(listenerEndpoint: listener.endpoint)
-        return AgentClient(domainId: id, connection: connection)
+    static func getAgentClient(id: UUID = id) -> AgentClient {
+        let listener = AgentListener.createAnonymous(
+            appDbStorePath: appDbStorePath
+        )
+        testListener = listener
+        let session = try! XPCSession(endpoint: listener.endpoint)
+        return AgentClient(domainId: id, session: session)
     }
 
     static func getUrl(path: String) -> URL {

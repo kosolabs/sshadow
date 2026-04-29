@@ -2,19 +2,23 @@ import AgentKit
 import Common
 import SwiftData
 import SwiftUI
+import XPC
 
 private let logger = Logger(category: "SSHadowApp")
 
 private class AppXPCService {
     static let shared = AppXPCService()
 
-    private let delegate = AgentListenerDelegate()
-    private let listener: NSXPCListener
+    private let listener: XPCListener?
 
     private init() {
-        listener = NSXPCListener(machServiceName: SSHadow.appServiceName)
-        listener.delegate = delegate
-        listener.resume()
+        do {
+            listener = try AgentListener.create()
+        } catch {
+            listener = nil
+            logger.error("Failed to create XPC listener: \(error)")
+            return
+        }
         logger.info("App XPC: listening on \(SSHadow.appServiceName)")
     }
 }
