@@ -38,6 +38,12 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             await manager.close()
         }
     }
+    
+    func item(
+        for identifier: NSFileProviderItemIdentifier,
+    ) async throws -> Item {
+        try await Item(info: agent.info(for: identifier))
+    }
 
     public func item(
         for itemIdentifier: NSFileProviderItemIdentifier,
@@ -76,7 +82,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 )
             }
 
-            return try await session.item(for: itemIdentifier)
+            return try await item(for: itemIdentifier)
         }
     }
 
@@ -163,7 +169,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         progress: Progress,
         session: Session,
     ) async throws -> (URL, NSFileProviderItem, NSRange) {
-        let item = try await session.item(for: itemIdentifier)
+        let item = try await item(for: itemIdentifier)
 
         progress.kind = .file
         progress.fileOperationKind = .downloading
@@ -284,7 +290,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
         var createdItem: NSFileProviderItem?
         steps.add {
-            createdItem = try await session.item(for: itemIdentifier)
+            createdItem = try await self.item(for: itemIdentifier)
         }
 
         try await steps.execute()
@@ -395,7 +401,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
         var modifiedItem: NSFileProviderItem?
         steps.add {
-            modifiedItem = try await session.item(for: item.itemIdentifier)
+            modifiedItem = try await self.item(for: item.itemIdentifier)
         }
 
         try await steps.execute()
