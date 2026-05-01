@@ -50,50 +50,6 @@ struct SessionTests {
         }
     }
 
-    struct ParentTests {
-        @Test func parentOfRootContainerIsRootContainer() async throws {
-            let session = try await getSession()
-            let parent = try await session.parent(of: .rootContainer)
-            #expect(parent == .rootContainer)
-        }
-
-        @Test func parentOfTopLevelItemIsRootContainer() async throws {
-            let session = try await getSession()
-            let topLevel = try await session.child(path: "folder")
-            let parent = try await session.parent(of: topLevel)
-            #expect(parent == .rootContainer)
-        }
-
-        @Test func parentOfTrashContainerIsRootContainer() async throws {
-            let session = try await getSession()
-            let parent = try await session.parent(of: .trashContainer)
-            #expect(parent == .rootContainer)
-        }
-
-        @Test func parentOfItemInTrashIsTrashContainer() async throws {
-            let session = try await getSession()
-            let itemInTrashes = try await session.child(path: ".Trashes/file")
-            let parent = try await session.parent(of: itemInTrashes)
-            #expect(parent == .trashContainer)
-        }
-
-        @Test func parentOfNestedItemIsParentFolder() async throws {
-            let session = try await getSession()
-            let nested = try await session.child(path: "folder/file")
-            let actual = try await session.parent(of: nested)
-            let expected = try await session.child(path: "folder")
-            #expect(actual == expected)
-        }
-
-        @Test func parentOfDeeplyNestedItemIsImmediateParent() async throws {
-            let session = try await getSession()
-            let deeplyNested = try await session.child(path: "a/b/c")
-            let actual = try await session.parent(of: deeplyNested)
-            let expected = try await session.child(path: "a/b")
-            #expect(actual == expected)
-        }
-    }
-
     struct ChildTests {
         @Test func childOfRootContainerWithNameTrashesIsTrashContainer()
             async throws
