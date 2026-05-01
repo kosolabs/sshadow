@@ -434,15 +434,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         progress: Progress,
         session: Session,
     ) async throws {
-        let itemRef = await session.id(of: identifier)
-        logger.debug("Delete \(itemRef)")
-
+        logger.debug("Delete \(identifier.desc)")
         return try await progress.withChild {
-            let item = try await session.item(for: identifier)
-            if item.isDirectory {
-                try await session.removeDirectory(for: identifier)
+            let info = try await agent.info(for: identifier)
+            if info.isDirectory {
+                try await agent.removeDirectory(for: identifier)
             } else {
-                try await session.removeFile(for: identifier)
+                try await agent.removeFile(for: identifier)
             }
         }
     }
