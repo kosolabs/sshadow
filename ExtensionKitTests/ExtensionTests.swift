@@ -193,6 +193,7 @@ struct ExtensionTests {
 
     @Test func createFolderSucceeds() async throws {
         let ext = try await getExtension()
+        let agent = ext.agent
         let session = try await ext.manager.getSession()
 
         // mkdir extension-create-folder/folder
@@ -215,7 +216,7 @@ struct ExtensionTests {
         let createFolderProgress = Progress()
         _ = try await ext.createItem(
             basedOn: ItemTemplate(
-                parentItemIdentifier: session.parent(of: folderID),
+                parentItemIdentifier: agent.parent(of: folderID),
                 filename: session.name(of: folderID),
                 contentType: .folder,
                 capabilities: [.allowsReading, .allowsWriting],
@@ -247,7 +248,7 @@ struct ExtensionTests {
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: testID,
-                parentItemIdentifier: session.parent(of: testID),
+                parentItemIdentifier: agent.parent(of: testID),
                 filename: session.name(of: testID),
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
@@ -274,6 +275,7 @@ struct ExtensionTests {
 
     @Test func createFileSucceeds() async throws {
         let ext = try await getExtension()
+        let agent = ext.agent
         let session = try await ext.manager.getSession()
 
         // echo "Hello, World!" > extension-create-file/file.txt
@@ -304,7 +306,7 @@ struct ExtensionTests {
         let uploadProgress = Progress()
         _ = try await ext.createItem(
             basedOn: ItemTemplate(
-                parentItemIdentifier: session.parent(of: fileID),
+                parentItemIdentifier: agent.parent(of: fileID),
                 filename: session.name(of: fileID),
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
@@ -339,7 +341,7 @@ struct ExtensionTests {
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: testID,
-                parentItemIdentifier: session.parent(of: testID),
+                parentItemIdentifier: agent.parent(of: testID),
                 filename: session.name(of: testID),
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
@@ -366,6 +368,7 @@ struct ExtensionTests {
 
     @Test func createLargeFileSucceeds() async throws {
         let ext = try await getExtension()
+        let agent = ext.agent
         let session = try await ext.manager.getSession()
 
         // dd if=/dev/zero of=extension-create-large-file/file.txt bs=1m count=10
@@ -392,7 +395,7 @@ struct ExtensionTests {
         let uploadProgress = Progress()
         _ = try await ext.createItem(
             basedOn: ItemTemplate(
-                parentItemIdentifier: session.parent(of: fileID),
+                parentItemIdentifier: agent.parent(of: fileID),
                 filename: session.name(of: fileID),
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
@@ -425,7 +428,7 @@ struct ExtensionTests {
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: testID,
-                parentItemIdentifier: session.parent(of: testID),
+                parentItemIdentifier: agent.parent(of: testID),
                 filename: session.name(of: testID),
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
@@ -452,6 +455,7 @@ struct ExtensionTests {
 
     @Test func renameFileSucceeds() async throws {
         let ext = try await getExtension()
+        let agent = ext.agent
         let session = try await ext.manager.getSession()
 
         // mv extension-rename-file/src.txt extension-rename-file/dest.txt
@@ -509,7 +513,7 @@ struct ExtensionTests {
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: folderID,
-                parentItemIdentifier: session.parent(of: folderID),
+                parentItemIdentifier: agent.parent(of: folderID),
                 filename: session.name(of: folderID),
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
@@ -536,6 +540,7 @@ struct ExtensionTests {
 
     @Test func moveFileSucceeds() async throws {
         let ext = try await getExtension()
+        let agent = ext.agent
         let session = try await ext.manager.getSession()
 
         // mv extension-move-file/src/file.txt extension-move-file/dest/
@@ -600,7 +605,7 @@ struct ExtensionTests {
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: destFolderID,
-                parentItemIdentifier: session.parent(of: destFolderID),
+                parentItemIdentifier: agent.parent(of: destFolderID),
                 filename: session.name(of: destFolderID),
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
@@ -631,7 +636,7 @@ struct ExtensionTests {
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: srcFolderID,
-                parentItemIdentifier: session.parent(of: srcFolderID),
+                parentItemIdentifier: agent.parent(of: srcFolderID),
                 filename: session.name(of: srcFolderID),
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
@@ -896,6 +901,7 @@ struct ExtensionTests {
 
     @Test func setFileReadWriteSucceeds() async throws {
         let ext = try await getExtension()
+        let agent = ext.agent
         let session = try await ext.manager.getSession()
 
         // chmod 600 extension-permissions/file.txt
@@ -914,7 +920,7 @@ struct ExtensionTests {
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: fileID,
-                parentItemIdentifier: session.parent(of: fileID),
+                parentItemIdentifier: agent.parent(of: fileID),
                 filename: session.name(of: fileID),
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
@@ -937,6 +943,7 @@ struct ExtensionTests {
 
     @Test func setFolderReadWriteExecuteSucceeds() async throws {
         let ext = try await getExtension()
+        let agent = ext.agent
         let session = try await ext.manager.getSession()
 
         // chmod 700 extension-permissions/folder
@@ -954,7 +961,7 @@ struct ExtensionTests {
         _ = try await ext.modifyItem(
             ItemTemplate(
                 itemIdentifier: folderID,
-                parentItemIdentifier: session.parent(of: folderID),
+                parentItemIdentifier: agent.parent(of: folderID),
                 filename: session.name(of: folderID),
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],

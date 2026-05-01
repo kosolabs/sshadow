@@ -54,23 +54,10 @@ class Session {
         try await agent.child(of: parent, path: path, ifNotExists: ifNotExists)
     }
 
-    func parent(
-        of identifier: NSFileProviderItemIdentifier
-    ) async throws -> NSFileProviderItemIdentifier {
-        try await agent.parent(of: identifier)
-    }
-
     func path(
         for identifier: NSFileProviderItemIdentifier
     ) async throws -> String {
         try await agent.path(for: identifier)
-    }
-
-    func path(
-        for name: String,
-        parentId: NSFileProviderItemIdentifier
-    ) async throws -> String {
-        try await agent.path(for: name, parentId: parentId)
     }
 
     func withFile<T: Sendable>(
