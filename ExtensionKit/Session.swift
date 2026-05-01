@@ -79,20 +79,6 @@ class Session {
         try await Item(info: agent.info(for: identifier))
     }
 
-    func setAttributes(
-        for identifier: NSFileProviderItemIdentifier,
-        permissions: mode_t? = nil,
-        accessTime: Date? = nil,
-        modifyTime: Date? = nil
-    ) async throws {
-        try await agent.setAttributes(
-            for: identifier,
-            permissions: permissions,
-            accessTime: accessTime,
-            modifyTime: modifyTime
-        )
-    }
-
     func move(
         _ id: NSFileProviderItemIdentifier,
         toParent newParentId: NSFileProviderItemIdentifier,
