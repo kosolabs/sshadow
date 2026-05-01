@@ -22,6 +22,8 @@ private func getSession() async throws -> Session {
     )
 }
 
+// TODO: Remove this after migration to agent in main app
+@Suite(.serialized)
 struct SessionTests {
     struct NameTests {
         @Test func filePropertyReturnsFilenameForSimpleItem() async throws {
@@ -636,33 +638,98 @@ struct SessionTests {
         }
     }
 
-    struct downloadTests {
-        let testFolderPath = "session-download-file"
+    struct uploadTests {
+        let testFolderPath = "session-upload-file"
         let testFolderURL: URL
 
         init() throws {
             testFolderURL = try TestData.createFolder(path: testFolderPath)
         }
 
+        @Test func uploadSmallFileSucceeds() async throws {
+            let session = try await getSession()
+
+            let uploadUrl = FileManager.default.temporaryDirectory
+                .appending(path: UUID().uuidString)
+            let data = "Hello, World!\n"
+            try data.write(to: uploadUrl, atomically: false, encoding: .utf8)
+
+            let filePath = "\(testFolderPath)/small-file.txt"
+            try TestData.removeItem(path: filePath)
+            let url = TestData.getUrl(path: filePath)
+
+            let itemId = try await session.child(path: filePath)
+            let progress = Progress()
+            try await session.upload(
+                itemId: itemId,
+                contents: uploadUrl,
+                mode: 0o600,
+                bufferSize: session.sftp.limits.maxWriteLength,
+                progress: progress
+            )
+
+            #expect(FileManager.default.fileExists(at: url))
+            #expect(try String(contentsOf: url, encoding: .utf8) == data)
+            #expect(progress.isFinished)
+            #expect(try FileManager.default.permissions(of: url) == 0o600)
+        }
+
+        @Test func uploadLargeFileSucceeds() async throws {
+            let session = try await getSession()
+            
+            let uploadUrl = FileManager.default.temporaryDirectory
+                .appending(path: UUID().uuidString)
+            let data = Data(count: 10_485_760)
+            try data.write(to: uploadUrl)
+            
+            let filePath = "\(testFolderPath)/large-file.txt"
+            try TestData.removeItem(path: filePath)
+            let url = TestData.getUrl(path: filePath)
+            
+            let itemId = try await session.child(path: filePath)
+            let progress = Progress()
+            try await session.upload(
+                itemId: itemId,
+                contents: uploadUrl,
+                mode: 0o600,
+                bufferSize: session.sftp.limits.maxWriteLength,
+                progress: progress
+            )
+            
+            #expect(FileManager.default.fileExists(at: url))
+            #expect(try Data(contentsOf: url) == data)
+            #expect(progress.isFinished)
+            #expect(try FileManager.default.permissions(of: url) == 0o600)
+        }
+    }
+
+    struct downloadTests {
+        let testFolderPath = "session-download-file"
+        let testFolderUrl: URL
+
+        init() throws {
+            testFolderUrl = try TestData.createFolder(path: testFolderPath)
+        }
+
         @Test func downloadSmallFileSucceeds() async throws {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/small-file.txt"
-            let contents = "Hello, World!"
-            try TestData.createFile(path: path, contents: contents)
+            let data = "Hello, World!"
+            try TestData.createFile(path: path, contents: data)
 
             let itemId = try await session.child(path: path)
-            let readProgress = Progress()
+            let progress = Progress()
             let (url, item) = try await session.download(
                 itemId: itemId,
-                progress: readProgress
+                progress: progress
             )
 
             #expect(item.name == "small-file.txt")
             #expect(!item.isDirectory)
-            #expect(item.size == contents.count)
-            #expect(try String(contentsOf: url, encoding: .utf8) == contents)
-            #expect(readProgress.isFinished)
+            #expect(item.size == data.count)
+            #expect(try String(contentsOf: url, encoding: .utf8) == data)
+            #expect(progress.isFinished)
         }
 
         @Test func downloadLargeFileSucceeds() async throws {
@@ -673,16 +740,16 @@ struct SessionTests {
             try TestData.createFile(path: path, data: data)
 
             let itemId = try await session.child(path: path)
-            let readProgress = Progress()
+            let progress = Progress()
             let (url, item) = try await session.download(
                 itemId: itemId,
-                progress: readProgress
+                progress: progress
             )
 
             #expect(item.name == "large-file.dat")
             #expect(item.size == data.count)
             #expect(try Data(contentsOf: url) == data)
-            #expect(readProgress.isFinished)
+            #expect(progress.isFinished)
         }
     }
 

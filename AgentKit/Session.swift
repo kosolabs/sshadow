@@ -66,14 +66,6 @@ class Session {
         await config.path(for: db.path(for: name, in: parentId))
     }
 
-    func attributes(
-        for itemId: NSFileProviderItemIdentifier
-    ) async throws -> SFTPAttributes {
-        try await mapError(with: itemId) {
-            try await sftp.attributes(atPath: path(for: itemId))
-        }
-    }
-
     func info(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> FileInfo {
@@ -104,17 +96,19 @@ class Session {
                         of: itemId,
                         path: name
                     )
-                    entries.append(FileInfo(
-                        id: childId.rawValue,
-                        parentId: itemId.rawValue,
-                        name: name,
-                        isDirectory: attrs.type == .directory,
-                        size: attrs.size,
-                        permissions: attrs.permissions,
-                        accessTime: attrs.accessTime,
-                        modifyTime: attrs.modifyTime,
-                        createTime: attrs.createTime
-                    ))
+                    entries.append(
+                        FileInfo(
+                            id: childId.rawValue,
+                            parentId: itemId.rawValue,
+                            name: name,
+                            isDirectory: attrs.type == .directory,
+                            size: attrs.size,
+                            permissions: attrs.permissions,
+                            accessTime: attrs.accessTime,
+                            modifyTime: attrs.modifyTime,
+                            createTime: attrs.createTime
+                        )
+                    )
                 }
             }
             return entries
@@ -129,6 +123,14 @@ class Session {
             return true
         } catch {
             return false
+        }
+    }
+
+    func attributes(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> SFTPAttributes {
+        try await mapError(with: itemId) {
+            try await sftp.attributes(atPath: path(for: itemId))
         }
     }
 
@@ -227,6 +229,44 @@ class Session {
         }
     }
 
+    func upload(
+        itemId: NSFileProviderItemIdentifier,
+        contents url: URL,
+        mode: mode_t,
+        bufferSize: UInt64,
+        progress: Progress,
+    ) async throws {
+        let itemRef = await id(of: itemId)
+        let fp = try FileHandle(forReadingFrom: url)
+        defer { try? fp.close() }
+
+        logger.info("Upload \(itemRef) from \(url.path())")
+        let size = try FileManager.default.size(of: url)
+
+        progress.kind = .file
+        progress.fileOperationKind = .downloading
+        progress.totalUnitCount = Int64(size)
+        let speedometer = Speedometer(progress: progress)
+
+        try await withFile(for: itemId, accessType: .writeOnly, mode: mode) {
+            file in
+            try await file.withAsyncWriter { writer in
+                while let data = try fp.read(upToCount: Int(bufferSize)) {
+                    if progress.isCancelled {
+                        logger.info("Upload \(itemRef) cancelled")
+                        throw CocoaError(.userCancelled)
+                    }
+                    try await writer.write(data: data)
+                    if let progress = speedometer.update(delta: data.count) {
+                        logger.debug("Uploading \(itemRef): \(progress)")
+                    }
+                }
+            }
+        }
+
+        logger.info("Uploaded \(itemRef): \(speedometer.finalize())")
+    }
+
     func download(
         itemId: NSFileProviderItemIdentifier,
         progress: Progress,
@@ -234,7 +274,7 @@ class Session {
         let itemRef = await id(of: itemId)
         let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
         logger.info("Download \(itemRef) into \(url)")
-        
+
         try Data().write(to: url)
         let handle = try FileHandle(forWritingTo: url)
         defer { try? handle.close() }
@@ -248,6 +288,7 @@ class Session {
         try await withFile(for: itemId, accessType: .readOnly) { file in
             for try await data in file.stream() {
                 if progress.isCancelled {
+                    logger.info("Download \(itemRef) cancelled")
                     throw CocoaError(.userCancelled)
                 }
                 try handle.write(contentsOf: data)
@@ -256,7 +297,7 @@ class Session {
                 }
             }
         }
-        
+
         logger.info("Downloaded \(itemRef): \(speedometer.finalize())")
         return (url, info)
     }

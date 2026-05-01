@@ -76,7 +76,7 @@ class Session {
     func item(
         for identifier: NSFileProviderItemIdentifier,
     ) async throws -> Item {
-        Item(info: try await agent.info(for: identifier))
+        try await Item(info: agent.info(for: identifier))
     }
 
     func exists(for identifier: NSFileProviderItemIdentifier) async -> Bool {
