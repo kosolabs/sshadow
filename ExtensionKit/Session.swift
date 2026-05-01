@@ -111,12 +111,6 @@ class Session {
         )
     }
 
-    func removeFile(
-        for identifier: NSFileProviderItemIdentifier
-    ) async throws {
-        try await agent.removeFile(for: identifier)
-    }
-
     func createDirectory(
         for identifier: NSFileProviderItemIdentifier,
         mode: mode_t = 0o700,
@@ -127,12 +121,6 @@ class Session {
             mode: mode,
             ifExists: ifExists
         )
-    }
-
-    func removeDirectory(
-        for identifier: NSFileProviderItemIdentifier
-    ) async throws {
-        try await agent.removeDirectory(for: identifier)
     }
 
     func withFile<T: Sendable>(
