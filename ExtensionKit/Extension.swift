@@ -263,7 +263,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             }
         } else if item.contentType == .folder {
             steps.add {
-                try await session.createDirectory(for: itemIdentifier)
+                try await self.agent.createDirectory(for: itemIdentifier)
             }
         }
 

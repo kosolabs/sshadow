@@ -254,69 +254,6 @@ struct SessionTests {
         }
     }
 
-    struct CreateDirectoryTests {
-        let testFolderPath = "session-create-directory"
-        let testFolderURL: URL
-
-        init() throws {
-            testFolderURL = try TestData.createFolder(path: testFolderPath)
-        }
-
-        @Test func createDirectorySucceeds() async throws {
-            let session = try await getSession()
-
-            let path = "\(testFolderPath)/new-directory"
-            try TestData.removeItem(path: path)
-            let directoryURL = TestData.getUrl(path: path)
-            #expect(
-                !FileManager.default.fileExists(atPath: directoryURL.path())
-            )
-
-            try await session.createDirectory(
-                for: session.child(path: path)
-            )
-
-            #expect(
-                FileManager.default.fileExists(atPath: directoryURL.path())
-            )
-        }
-
-        @Test func createExistingDirectoryIfExistsSetSucceeds() async throws {
-            let session = try await getSession()
-
-            let path = "\(testFolderPath)/existing-directory"
-            try TestData.createFolder(path: path)
-            let directoryURL = TestData.getUrl(path: path)
-
-            try await session.createDirectory(
-                for: session.child(path: path),
-                ifExists: .succeed
-            )
-
-            #expect(
-                FileManager.default.fileExists(atPath: directoryURL.path())
-            )
-        }
-
-        @Test func createExistingDirectoryIfExistsNotSetThrows() async throws {
-            let session = try await getSession()
-
-            let path = "\(testFolderPath)/existing-directory"
-            try TestData.createFolder(path: path)
-
-            await #expect {
-                try await session.createDirectory(
-                    for: session.child(path: path),
-                    ifExists: .fail
-                )
-            } throws: { error in
-                (error as NSError).code
-                    == NSFileProviderError.filenameCollision.rawValue
-                    && (error as NSError).domain == NSFileProviderErrorDomain
-            }
-        }
-    }
-
     struct MoveTests {
         let testFolderPath = "session-move"
         let testFolderURL: URL

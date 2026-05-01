@@ -111,18 +111,6 @@ class Session {
         )
     }
 
-    func createDirectory(
-        for identifier: NSFileProviderItemIdentifier,
-        mode: mode_t = 0o700,
-        ifExists: OnExists = .fail
-    ) async throws {
-        try await agent.createDirectory(
-            for: identifier,
-            mode: mode,
-            ifExists: ifExists
-        )
-    }
-
     func withFile<T: Sendable>(
         for identifier: NSFileProviderItemIdentifier,
         accessType: AccessType,
