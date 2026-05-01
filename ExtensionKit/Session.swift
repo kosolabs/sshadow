@@ -174,16 +174,6 @@ class Session {
         return (cacheURL, byteRange.asNSRange())
     }
 
-    func enumerateItems(
-        for identifier: NSFileProviderItemIdentifier,
-        yield: @Sendable ([any NSFileProviderItemProtocol]) -> Void
-    ) async throws {
-        let entries = try await agent.list(for: identifier)
-        for entry in entries {
-            yield([Item(info: entry)])
-        }
-    }
-
     func mapError<T>(
         with identifier: NSFileProviderItemIdentifier,
         _ operation: () async throws -> T
