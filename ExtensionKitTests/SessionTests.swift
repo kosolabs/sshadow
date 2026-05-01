@@ -31,6 +31,8 @@ private func getSession() async throws -> Session {
     )
 }
 
+// TODO: Remove this after migration to agent in main app
+@Suite(.serialized)
 struct SessionTests {
     struct NameTests {
         @Test func filePropertyReturnsFilenameForSimpleItem() async throws {
