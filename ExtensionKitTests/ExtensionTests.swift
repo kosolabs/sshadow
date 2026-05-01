@@ -217,7 +217,7 @@ struct ExtensionTests {
         _ = try await ext.createItem(
             basedOn: ItemTemplate(
                 parentItemIdentifier: agent.parent(of: folderID),
-                filename: session.name(of: folderID),
+                filename: agent.name(of: folderID),
                 contentType: .folder,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [
@@ -249,7 +249,7 @@ struct ExtensionTests {
             ItemTemplate(
                 itemIdentifier: testID,
                 parentItemIdentifier: agent.parent(of: testID),
-                filename: session.name(of: testID),
+                filename: agent.name(of: testID),
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [
@@ -307,7 +307,7 @@ struct ExtensionTests {
         _ = try await ext.createItem(
             basedOn: ItemTemplate(
                 parentItemIdentifier: agent.parent(of: fileID),
-                filename: session.name(of: fileID),
+                filename: agent.name(of: fileID),
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [
@@ -342,7 +342,7 @@ struct ExtensionTests {
             ItemTemplate(
                 itemIdentifier: testID,
                 parentItemIdentifier: agent.parent(of: testID),
-                filename: session.name(of: testID),
+                filename: agent.name(of: testID),
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [
@@ -396,7 +396,7 @@ struct ExtensionTests {
         _ = try await ext.createItem(
             basedOn: ItemTemplate(
                 parentItemIdentifier: agent.parent(of: fileID),
-                filename: session.name(of: fileID),
+                filename: agent.name(of: fileID),
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [.userReadable, .userWritable],
@@ -429,7 +429,7 @@ struct ExtensionTests {
             ItemTemplate(
                 itemIdentifier: testID,
                 parentItemIdentifier: agent.parent(of: testID),
-                filename: session.name(of: testID),
+                filename: agent.name(of: testID),
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [
@@ -514,7 +514,7 @@ struct ExtensionTests {
             ItemTemplate(
                 itemIdentifier: folderID,
                 parentItemIdentifier: agent.parent(of: folderID),
-                filename: session.name(of: folderID),
+                filename: agent.name(of: folderID),
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [
@@ -606,7 +606,7 @@ struct ExtensionTests {
             ItemTemplate(
                 itemIdentifier: destFolderID,
                 parentItemIdentifier: agent.parent(of: destFolderID),
-                filename: session.name(of: destFolderID),
+                filename: agent.name(of: destFolderID),
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [
@@ -637,7 +637,7 @@ struct ExtensionTests {
             ItemTemplate(
                 itemIdentifier: srcFolderID,
                 parentItemIdentifier: agent.parent(of: srcFolderID),
-                filename: session.name(of: srcFolderID),
+                filename: agent.name(of: srcFolderID),
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [
@@ -764,6 +764,7 @@ struct ExtensionTests {
 
     @Test func trashFileSucceeds() async throws {
         let ext = try await getExtension()
+        let agent = ext.agent
         let session = try await ext.manager.getSession()
 
         // mv extension-trash-file/file.txt .Trashes/file.txt
@@ -783,7 +784,7 @@ struct ExtensionTests {
             ItemTemplate(
                 itemIdentifier: fileID,
                 parentItemIdentifier: .trashContainer,
-                filename: session.name(of: fileID),
+                filename: agent.name(of: fileID),
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [
@@ -921,7 +922,7 @@ struct ExtensionTests {
             ItemTemplate(
                 itemIdentifier: fileID,
                 parentItemIdentifier: agent.parent(of: fileID),
-                filename: session.name(of: fileID),
+                filename: agent.name(of: fileID),
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [
@@ -962,7 +963,7 @@ struct ExtensionTests {
             ItemTemplate(
                 itemIdentifier: folderID,
                 parentItemIdentifier: agent.parent(of: folderID),
-                filename: session.name(of: folderID),
+                filename: agent.name(of: folderID),
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [
