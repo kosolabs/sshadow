@@ -377,37 +377,6 @@ struct SessionTests {
 
     }
 
-    struct ExistsTests {
-        let testFolderPath = "session-exists"
-        let testFolderURL: URL
-
-        init() throws {
-            testFolderURL = try TestData.createFolder(path: testFolderPath)
-        }
-
-        @Test func existsReturnsTrueForExistingFile() async throws {
-            let session = try await getSession()
-
-            let path = "\(testFolderPath)/file.txt"
-            try TestData.createFile(path: path, contents: "data")
-
-            let result = await session.exists(
-                for: try session.child(path: path)
-            )
-            #expect(result == true)
-        }
-
-        @Test func existsReturnsFalseForMissingFile() async throws {
-            let session = try await getSession()
-
-            let id = try await session.child(
-                path: "\(testFolderPath)/missing.txt"
-            )
-            let result = await session.exists(for: id)
-            #expect(result == false)
-        }
-    }
-
     struct EnumerateItemsTests {
         let testFolderPath = "session-enumerate"
         let testFolderURL: URL

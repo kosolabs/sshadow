@@ -5,6 +5,7 @@ import SwiftLibSSH
 private let logger = Logger(category: "Enumerator")
 
 public class Enumerator: NSObject, NSFileProviderEnumerator {
+    private let agent: AgentClient
     private let manager: SessionManager
     private let itemIdentifier: NSFileProviderItemIdentifier
     private let anchor = NSFileProviderSyncAnchor(
@@ -12,10 +13,12 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
     )
 
     init(
+        agent: AgentClient,
         manager: SessionManager,
         itemIdentifier: NSFileProviderItemIdentifier
     ) {
         logger.debug("Init \(itemIdentifier.desc)")
+        self.agent = agent
         self.manager = manager
         self.itemIdentifier = itemIdentifier
         super.init()
@@ -73,7 +76,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         }
 
         if itemIdentifier == .trashContainer {
-            if await !session.exists(for: .trashContainer) {
+            if try await agent.exists(for: .trashContainer) {
                 return nil
             }
         }

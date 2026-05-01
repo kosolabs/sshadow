@@ -451,6 +451,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     ) throws -> NSFileProviderEnumerator {
         logger.debug("Create enumerator for \(containerItemIdentifier.desc)")
         return Enumerator(
+            agent: agent,
             manager: manager,
             itemIdentifier: containerItemIdentifier
         )
