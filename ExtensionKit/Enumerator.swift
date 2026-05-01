@@ -80,8 +80,11 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
                 return nil
             }
         }
-
-        try await session.enumerateItems(for: itemIdentifier, yield: yield)
+        
+        let entries = try await agent.list(for: itemIdentifier)
+        for entry in entries {
+            yield([Item(info: entry)])
+        }
 
         return nil
     }
