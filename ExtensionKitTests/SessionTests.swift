@@ -122,68 +122,6 @@ struct SessionTests {
         }
     }
 
-    struct ItemTests {
-        let testFolderPath = "session-item"
-        let testFolderURL: URL
-
-        init() throws {
-            testFolderURL = try TestData.createFolder(path: testFolderPath)
-        }
-
-        @Test func itemForFileSucceeds() async throws {
-            let session = try await getSession()
-
-            let path = "\(testFolderPath)/file.txt"
-            let contents = "Hello, World!"
-            try TestData.createFile(path: path, contents: contents)
-
-            let item = try await session.item(
-                for: session.child(path: path)
-            )
-
-            #expect(item.filename == "file.txt")
-            #expect(item.contentType == .text)
-            #expect(item.documentSize?.intValue == contents.utf8.count)
-        }
-
-        @Test func itemForFolderSucceeds() async throws {
-            let session = try await getSession()
-
-            let path = "\(testFolderPath)/folder"
-            try TestData.createFolder(path: path)
-
-            let item = try await session.item(
-                for: session.child(path: path)
-            )
-
-            #expect(item.filename == "folder")
-            #expect(item.contentType == .folder)
-        }
-
-        @Test func itemForRootSucceeds() async throws {
-            let session = try await getSession()
-
-            let item = try await session.item(for: .rootContainer)
-
-            #expect(
-                item.filename == ""
-            )
-            #expect(item.contentType == .folder)
-        }
-
-        @Test func itemForMissingFileThrowsNoSuchItem() async throws {
-            let session = try await getSession()
-
-            await #expect {
-                try await session.item(
-                    for: session.child(
-                        path: "\(testFolderPath)/missing.txt"
-                    )
-                )
-            } throws: { error in isNoSuchItemError(error) }
-        }
-    }
-
     struct WithFileTests {
         let testFolderPath = "session-with-file"
         let testFolderURL: URL

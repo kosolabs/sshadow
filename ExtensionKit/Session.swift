@@ -73,12 +73,6 @@ class Session {
         try await agent.path(for: name, parentId: parentId)
     }
 
-    func item(
-        for identifier: NSFileProviderItemIdentifier,
-    ) async throws -> Item {
-        try await Item(info: agent.info(for: identifier))
-    }
-
     func withFile<T: Sendable>(
         for identifier: NSFileProviderItemIdentifier,
         accessType: AccessType,
