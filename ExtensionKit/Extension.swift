@@ -503,7 +503,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         fields: NSFileProviderItemFields,
         session: Session
     ) async throws {
-        try await session.setAttributes(
+        try await agent.setAttributes(
             for: session.child(of: item.parentId, path: item.filename),
             permissions: fields.contains(.fileSystemFlags)
                 ? item.fileSystemFlags?.permissions : nil,
