@@ -43,7 +43,7 @@ struct AgentClientTests {
         let path = try await agent.path(for: "file.txt", parentId: parentId)
         #expect(path.hasSuffix("/folder/file.txt"))
     }
-    
+
     @Test func infoForFileSucceeds() async throws {
         let agent = try await getAgentClient()
 
@@ -71,7 +71,7 @@ struct AgentClientTests {
         #expect(info.name == "info-dir")
         #expect(info.isDirectory)
     }
-    
+
     @Test func listSucceeds() async throws {
         let agent = try await getAgentClient()
 
@@ -122,7 +122,7 @@ struct AgentClientTests {
 
         #expect(info.permissions & 0o777 == 0o644)
     }
-    
+
     @Test func createDirectorySucceeds() async throws {
         let agent = try await getAgentClient()
 
@@ -134,7 +134,7 @@ struct AgentClientTests {
 
         #expect(info.isDirectory)
     }
-    
+
     @Test func moveSucceeds() async throws {
         let agent = try await getAgentClient()
 
@@ -162,7 +162,7 @@ struct AgentClientTests {
 
         try await agent.removeFile(for: itemId)
         let exists = try await agent.exists(for: itemId)
-        
+
         #expect(exists == false)
     }
 
@@ -175,8 +175,57 @@ struct AgentClientTests {
 
         try await agent.removeDirectory(for: itemId)
         let exists = try await agent.exists(for: itemId)
-        
+
         #expect(exists == false)
+    }
+    
+    @Test func limitsSucceeds() async throws {
+        let agent = try await getAgentClient()
+        
+        let limits = try await agent.limits()
+        
+        #expect(limits.maxReadLength > 0)
+        #expect(limits.maxWriteLength > 0)
+    }
+
+    @Test func uploadSucceeds() async throws {
+        let agent = try await getAgentClient()
+
+        let path = "\(testFolderPath)/upload.txt"
+        let itemId = try await agent.child(path: path)
+        let contents = "uploaded content"
+        let localFile = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        try contents.write(to: localFile, atomically: true, encoding: .utf8)
+
+        try await agent.upload(
+            itemId: itemId,
+            file: localFile,
+            mode: 0o644,
+            progress: Progress()
+        )
+
+        let info = try await agent.info(for: itemId)
+        #expect(info.size == UInt64(contents.utf8.count))
+    }
+
+    @Test func downloadSucceeds() async throws {
+        let agent = try await getAgentClient()
+
+        let path = "\(testFolderPath)/download.txt"
+        let contents = "download me"
+        try TestData.createFile(path: path, contents: contents)
+        let itemId = try await agent.child(path: path)
+
+        let (url, fileInfo) = try await agent.download(
+            itemId: itemId,
+            progress: Progress()
+        )
+
+        let downloaded = try String(contentsOf: url, encoding: .utf8)
+        #expect(downloaded == contents)
+        #expect(fileInfo.name == "download.txt")
+        #expect(fileInfo.size == UInt64(contents.utf8.count))
     }
 }
 
