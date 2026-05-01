@@ -662,9 +662,8 @@ struct SessionTests {
             let progress = Progress()
             try await session.upload(
                 itemId: itemId,
-                contents: uploadUrl,
+                file: uploadUrl,
                 mode: 0o600,
-                bufferSize: session.sftp.limits.maxWriteLength,
                 progress: progress
             )
 
@@ -690,9 +689,8 @@ struct SessionTests {
             let progress = Progress()
             try await session.upload(
                 itemId: itemId,
-                contents: uploadUrl,
+                file: uploadUrl,
                 mode: 0o600,
-                bufferSize: session.sftp.limits.maxWriteLength,
                 progress: progress
             )
             

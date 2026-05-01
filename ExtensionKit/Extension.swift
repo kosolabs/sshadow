@@ -38,7 +38,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             await manager.close()
         }
     }
-    
+
     func item(
         for identifier: NSFileProviderItemIdentifier,
     ) async throws -> Item {
@@ -248,9 +248,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             }
 
             let fileSize = try FileManager.default.size(of: url)
-            let bufferSize = session.sftp.limits.writeLength()
+            let limits = try await agent.limits()
+            let chunkSize = limits.maxWriteLength
             let fileTransferUnits = Int64(
-                (fileSize + bufferSize - 1) / bufferSize
+                (fileSize + chunkSize - 1) / chunkSize
             )
             let fileSystemFlags =
                 remaining.contains(.fileSystemFlags)
@@ -258,13 +259,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             remaining.subtract([.fileSystemFlags, .contents])
 
             steps.add(weight: fileTransferUnits) { subprogress in
-                try await self.write(
-                    itemIdentifier,
-                    contents: url,
-                    fileSystemFlags: fileSystemFlags,
-                    bufferSize: bufferSize,
-                    progress: subprogress,
-                    session: session
+                try await self.agent.upload(
+                    itemId: itemIdentifier,
+                    file: url,
+                    mode: fileSystemFlags.permissions,
+                    progress: subprogress
                 )
             }
         } else if item.contentType == .folder {
@@ -360,13 +359,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             remaining.subtract([.fileSystemFlags, .contents])
 
             steps.add(weight: fileTransferUnits) { subprogress in
-                try await self.write(
-                    item.itemIdentifier,
-                    contents: newContents,
-                    fileSystemFlags: fileSystemFlags,
-                    bufferSize: bufferSize,
-                    progress: subprogress,
-                    session: session
+                try await self.agent.upload(
+                    itemId: item.itemIdentifier,
+                    file: newContents,
+                    mode: fileSystemFlags.permissions,
+                    progress: subprogress
                 )
             }
         }
@@ -461,47 +458,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             manager: manager,
             itemIdentifier: containerItemIdentifier
         )
-    }
-
-    private func write(
-        _ itemIdentifier: NSFileProviderItemIdentifier,
-        contents url: URL,
-        fileSystemFlags: NSFileProviderFileSystemFlags = [],
-        bufferSize: UInt64,
-        progress: Progress,
-        session: Session,
-    ) async throws {
-        let itemRef = await session.id(of: itemIdentifier)
-        let fp = try FileHandle(forReadingFrom: url)
-        defer { try? fp.close() }
-
-        logger.info("Upload \(itemRef) from \(url.path())")
-        let size = try FileManager.default.size(of: url)
-
-        progress.kind = .file
-        progress.fileOperationKind = .downloading
-        progress.totalUnitCount = Int64(size)
-        let speedometer = Speedometer(progress: progress)
-
-        try await session.withFile(
-            for: itemIdentifier,
-            accessType: .writeOnly,
-            mode: fileSystemFlags.permissions,
-        ) { file in
-            try await file.withAsyncWriter { writer in
-                while let data = try fp.read(upToCount: Int(bufferSize)) {
-                    if progress.isCancelled {
-                        throw CocoaError(.userCancelled)
-                    }
-                    try await writer.write(data: data)
-                    if let progress = speedometer.update(delta: data.count) {
-                        logger.debug("Uploading \(itemRef): \(progress)")
-                    }
-                }
-            }
-        }
-
-        logger.info("Uploaded \(itemRef): \(speedometer.finalize())")
     }
 
     private func setAttributes(

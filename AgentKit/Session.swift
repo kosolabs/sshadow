@@ -231,9 +231,9 @@ class Session {
 
     func upload(
         itemId: NSFileProviderItemIdentifier,
-        contents url: URL,
+        file url: URL,
         mode: mode_t,
-        bufferSize: UInt64,
+        chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
         progress: Progress,
     ) async throws {
         let itemRef = await id(of: itemId)
@@ -248,6 +248,7 @@ class Session {
         progress.totalUnitCount = Int64(size)
         let speedometer = Speedometer(progress: progress)
 
+        let bufferSize = sftp.limits.writeLength(for: chunkSize)
         try await withFile(for: itemId, accessType: .writeOnly, mode: mode) {
             file in
             try await file.withAsyncWriter { writer in
@@ -269,6 +270,7 @@ class Session {
 
     func download(
         itemId: NSFileProviderItemIdentifier,
+        chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
         progress: Progress,
     ) async throws -> (URL, FileInfo) {
         let itemRef = await id(of: itemId)
@@ -285,8 +287,9 @@ class Session {
         progress.totalUnitCount = Int64(info.size)
         let speedometer = Speedometer(progress: progress)
 
+        let bufferSize = sftp.limits.readLength(for: chunkSize)
         try await withFile(for: itemId, accessType: .readOnly) { file in
-            for try await data in file.stream() {
+            for try await data in file.stream(bufferSize: bufferSize) {
                 if progress.isCancelled {
                     logger.info("Download \(itemRef) cancelled")
                     throw CocoaError(.userCancelled)

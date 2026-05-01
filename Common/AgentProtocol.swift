@@ -25,6 +25,8 @@ public enum AgentRequest: Codable {
     case move(MoveRequest)
     case removeFile(RemoveFileRequest)
     case removeDirectory(RemoveDirectoryRequest)
+    case limits(LimitsRequest)
+    case upload(UploadRequest)
     case download(DownloadRequest)
 }
 
@@ -41,6 +43,8 @@ public enum AgentResponse: Codable {
     case move(MoveResponse)
     case removeFile(RemoveFileResponse)
     case removeDirectory(RemoveDirectoryResponse)
+    case limits(LimitsResponse)
+    case upload(UploadResponse)
     case download(DownloadResponse)
 }
 
@@ -294,18 +298,77 @@ public struct RemoveDirectoryResponse: Codable {
     public init() {}
 }
 
-public struct DownloadRequest: Codable {
+public struct LimitsRequest: Codable {
+    public let domainId: UUID
+
+    public init(domainId: UUID) {
+        self.domainId = domainId
+    }
+}
+
+public struct LimitsResponse: Codable {
+    public let maxOpenHandles: UInt64
+    public let maxPacketLength: UInt64
+    public let maxReadLength: UInt64
+    public let maxWriteLength: UInt64
+
+    public init(
+        maxOpenHandles: UInt64,
+        maxPacketLength: UInt64,
+        maxReadLength: UInt64,
+        maxWriteLength: UInt64
+    ) {
+        self.maxOpenHandles = maxOpenHandles
+        self.maxPacketLength = maxPacketLength
+        self.maxReadLength = maxReadLength
+        self.maxWriteLength = maxWriteLength
+    }
+}
+
+public struct UploadRequest: Codable {
     public let domainId: UUID
     public let itemId: String
+    public let file: URL
+    public let mode: mode_t
+    public let chunkSize: UInt64
     public let progressEndpoint: XPCEndpoint
 
     public init(
         domainId: UUID,
         itemId: String,
+        file: URL,
+        mode: mode_t,
+        chunkSize: UInt64,
         progressEndpoint: XPCEndpoint
     ) {
         self.domainId = domainId
         self.itemId = itemId
+        self.file = file
+        self.mode = mode
+        self.chunkSize = chunkSize
+        self.progressEndpoint = progressEndpoint
+    }
+}
+
+public struct UploadResponse: Codable {
+    public init() {}
+}
+
+public struct DownloadRequest: Codable {
+    public let domainId: UUID
+    public let itemId: String
+    public let chunkSize: UInt64
+    public let progressEndpoint: XPCEndpoint
+
+    public init(
+        domainId: UUID,
+        itemId: String,
+        chunkSize: UInt64,
+        progressEndpoint: XPCEndpoint
+    ) {
+        self.domainId = domainId
+        self.itemId = itemId
+        self.chunkSize = chunkSize
         self.progressEndpoint = progressEndpoint
     }
 }

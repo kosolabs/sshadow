@@ -45,6 +45,10 @@ public class Agent {
                     try await .removeFile(removeFile(request))
                 case .removeDirectory(let request):
                     try await .removeDirectory(removeDirectory(request))
+                case .limits(let request):
+                    try await .limits(limits(request))
+                case .upload(let request):
+                    try await .upload(upload(request))
                 case .download(let request):
                     try await .download(download(request))
                 }
@@ -195,6 +199,36 @@ public class Agent {
             for: NSFileProviderItemIdentifier(request.itemId)
         )
         return RemoveDirectoryResponse()
+    }
+
+    func limits(
+        _ request: LimitsRequest
+    ) async throws -> LimitsResponse {
+        let session = try await sessions.connect(id: request.domainId)
+        let limits = session.sftp.limits
+        return LimitsResponse(
+            maxOpenHandles: limits.maxOpenHandles,
+            maxPacketLength: limits.maxPacketLength,
+            maxReadLength: limits.maxReadLength,
+            maxWriteLength: limits.maxWriteLength
+        )
+    }
+
+    func upload(
+        _ request: UploadRequest
+    ) async throws -> UploadResponse {
+        let session = try await sessions.connect(id: request.domainId)
+
+        let sync = try XPCProgressPublisher(
+            endpoint: request.progressEndpoint
+        )
+        try await session.upload(
+            itemId: NSFileProviderItemIdentifier(request.itemId),
+            file: request.file,
+            mode: request.mode,
+            progress: sync.progress
+        )
+        return UploadResponse()
     }
 
     func download(

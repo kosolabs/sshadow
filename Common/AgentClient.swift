@@ -270,8 +270,58 @@ public class AgentClient {
         }
     }
 
+    public func limits() async throws -> Limits {
+        let reply = try await perform(
+            .limits(
+                LimitsRequest(
+                    domainId: domainId
+                )
+            )
+        )
+        guard case .limits(let response) = reply else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        return Limits(
+            maxReadLength: response.maxReadLength,
+            maxWriteLength: response.maxWriteLength
+        )
+    }
+
+    public func upload(
+        itemId: NSFileProviderItemIdentifier,
+        file: URL,
+        mode: mode_t,
+        chunkSize: UInt64 = Limits.defaultBufferSize,
+        progress: Progress
+    ) async throws {
+        let sharedUrl = SSHadow.groupUrl.appending(path: UUID().uuidString)
+        try FileManager.default.moveItem(at: file, to: sharedUrl)
+        defer { try? FileManager.default.moveItem(at: sharedUrl, to: file) }
+
+        progress.kind = .file
+        progress.fileOperationKind = .uploading
+
+        let sync = XPCProgressSubscriber(progress: progress)
+        let reply = try await perform(
+            .upload(
+                UploadRequest(
+                    domainId: domainId,
+                    itemId: itemId.rawValue,
+                    file: sharedUrl,
+                    mode: mode,
+                    chunkSize: chunkSize,
+                    progressEndpoint: sync.endpoint
+                )
+            )
+        )
+        guard case .upload = reply else {
+            throw CocoaError(.coderInvalidValue)
+        }
+    }
+
     public func download(
         itemId: NSFileProviderItemIdentifier,
+        chunkSize: UInt64 = Limits.defaultBufferSize,
         progress: Progress
     ) async throws -> (URL, FileInfo) {
         progress.kind = .file
@@ -283,6 +333,7 @@ public class AgentClient {
                 DownloadRequest(
                     domainId: domainId,
                     itemId: itemId.rawValue,
+                    chunkSize: chunkSize,
                     progressEndpoint: sync.endpoint
                 )
             )
