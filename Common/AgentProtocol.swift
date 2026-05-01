@@ -25,6 +25,23 @@ public enum AgentRequest: Codable {
     case move(MoveRequest)
     case removeFile(RemoveFileRequest)
     case removeDirectory(RemoveDirectoryRequest)
+    case download(DownloadRequest)
+}
+
+public enum AgentResponse: Codable {
+    case name(NameResponse)
+    case child(ChildResponse)
+    case parent(ParentResponse)
+    case path(PathResponse)
+    case info(InfoResponse)
+    case list(ListResponse)
+    case exists(ExistsResponse)
+    case setAttributes(SetAttributesResponse)
+    case createDirectory(CreateDirectoryResponse)
+    case move(MoveResponse)
+    case removeFile(RemoveFileResponse)
+    case removeDirectory(RemoveDirectoryResponse)
+    case download(DownloadResponse)
 }
 
 public struct NameRequest: Codable {
@@ -34,6 +51,14 @@ public struct NameRequest: Codable {
     public init(domainId: UUID, itemId: String) {
         self.domainId = domainId
         self.itemId = itemId
+    }
+}
+
+public struct NameResponse: Codable {
+    let name: String
+
+    public init(name: String) {
+        self.name = name
     }
 }
 
@@ -56,12 +81,28 @@ public struct ChildRequest: Codable {
     }
 }
 
+public struct ChildResponse: Codable {
+    let itemId: String
+
+    public init(itemId: String) {
+        self.itemId = itemId
+    }
+}
+
 public struct ParentRequest: Codable {
     public let domainId: UUID
     public let itemId: String
 
     public init(domainId: UUID, itemId: String) {
         self.domainId = domainId
+        self.itemId = itemId
+    }
+}
+
+public struct ParentResponse: Codable {
+    let itemId: String
+
+    public init(itemId: String) {
         self.itemId = itemId
     }
 }
@@ -88,6 +129,14 @@ public struct PathForChildRequest: Codable {
     }
 }
 
+public struct PathResponse: Codable {
+    let path: String
+
+    public init(path: String) {
+        self.path = path
+    }
+}
+
 public struct InfoRequest: Codable {
     public let domainId: UUID
     public let itemId: String
@@ -95,6 +144,14 @@ public struct InfoRequest: Codable {
     public init(domainId: UUID, itemId: String) {
         self.domainId = domainId
         self.itemId = itemId
+    }
+}
+
+public struct InfoResponse: Codable {
+    let fileInfo: FileInfo
+
+    public init(fileInfo: FileInfo) {
+        self.fileInfo = fileInfo
     }
 }
 
@@ -108,6 +165,14 @@ public struct ListRequest: Codable {
     }
 }
 
+public struct ListResponse: Codable {
+    let fileInfos: [FileInfo]
+
+    public init(fileInfos: [FileInfo]) {
+        self.fileInfos = fileInfos
+    }
+}
+
 public struct ExistsRequest: Codable {
     public let domainId: UUID
     public let itemId: String
@@ -115,6 +180,14 @@ public struct ExistsRequest: Codable {
     public init(domainId: UUID, itemId: String) {
         self.domainId = domainId
         self.itemId = itemId
+    }
+}
+
+public struct ExistsResponse: Codable {
+    let exists: Bool
+
+    public init(exists: Bool) {
+        self.exists = exists
     }
 }
 
@@ -140,6 +213,10 @@ public struct SetAttributesRequest: Codable {
     }
 }
 
+public struct SetAttributesResponse: Codable {
+    public init() {}
+}
+
 public struct CreateDirectoryRequest: Codable {
     public let domainId: UUID
     public let itemId: String
@@ -157,6 +234,10 @@ public struct CreateDirectoryRequest: Codable {
         self.mode = mode
         self.ifExists = ifExists
     }
+}
+
+public struct CreateDirectoryResponse: Codable {
+    public init() {}
 }
 
 public struct MoveRequest: Codable {
@@ -181,6 +262,10 @@ public struct MoveRequest: Codable {
     }
 }
 
+public struct MoveResponse: Codable {
+    public init() {}
+}
+
 public struct RemoveFileRequest: Codable {
     public let domainId: UUID
     public let itemId: String
@@ -189,6 +274,10 @@ public struct RemoveFileRequest: Codable {
         self.domainId = domainId
         self.itemId = itemId
     }
+}
+
+public struct RemoveFileResponse: Codable {
+    public init() {}
 }
 
 public struct RemoveDirectoryRequest: Codable {
@@ -201,95 +290,34 @@ public struct RemoveDirectoryRequest: Codable {
     }
 }
 
-public enum AgentResponse: Codable {
-    case name(NameResponse)
-    case child(ChildResponse)
-    case parent(ParentResponse)
-    case path(PathResponse)
-    case info(InfoResponse)
-    case list(ListResponse)
-    case setAttributes(SetAttributesResponse)
-    case createDirectory(CreateDirectoryResponse)
-    case move(MoveResponse)
-    case removeFile(RemoveFileResponse)
-    case removeDirectory(RemoveDirectoryResponse)
-    case exists(ExistsResponse)
-}
-
-public struct NameResponse: Codable {
-    let name: String
-
-    public init(name: String) {
-        self.name = name
-    }
-}
-
-public struct ChildResponse: Codable {
-    let itemId: String
-
-    public init(itemId: String) {
-        self.itemId = itemId
-    }
-}
-
-public struct ParentResponse: Codable {
-    let itemId: String
-
-    public init(itemId: String) {
-        self.itemId = itemId
-    }
-}
-
-public struct PathResponse: Codable {
-    let path: String
-
-    public init(path: String) {
-        self.path = path
-    }
-}
-
-public struct InfoResponse: Codable {
-    let fileInfo: FileInfo
-
-    public init(fileInfo: FileInfo) {
-        self.fileInfo = fileInfo
-    }
-}
-
-public struct ListResponse: Codable {
-    let fileInfos: [FileInfo]
-
-    public init(fileInfos: [FileInfo]) {
-        self.fileInfos = fileInfos
-    }
-}
-
-public struct ExistsResponse: Codable {
-    let exists: Bool
-
-    public init(exists: Bool) {
-        self.exists = exists
-    }
-}
-
-public struct SetAttributesResponse: Codable {
-    public init() {}
-}
-
-public struct CreateDirectoryResponse: Codable {
-    public init() {}
-}
-
-public struct MoveResponse: Codable {
-    public init() {}
-}
-
-public struct RemoveFileResponse: Codable {
-    public init() {}
-}
-
 public struct RemoveDirectoryResponse: Codable {
     public init() {}
+}
+
+public struct DownloadRequest: Codable {
+    public let domainId: UUID
+    public let itemId: String
+    public let progressEndpoint: XPCEndpoint
+
+    public init(
+        domainId: UUID,
+        itemId: String,
+        progressEndpoint: XPCEndpoint
+    ) {
+        self.domainId = domainId
+        self.itemId = itemId
+        self.progressEndpoint = progressEndpoint
+    }
+}
+
+public struct DownloadResponse: Codable {
+    let url: URL
+    let fileInfo: FileInfo
+
+    public init(url: URL, fileInfo: FileInfo) {
+        self.url = url
+        self.fileInfo = fileInfo
+    }
 }
 
 public enum AgentError: Codable, Error {

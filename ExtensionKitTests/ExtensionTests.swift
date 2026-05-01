@@ -16,6 +16,8 @@ private func getExtension(id: UUID = UUID()) async throws -> Extension {
     return Extension(domain: TestData.domain)
 }
 
+// TODO: Remove this after migration to agent in main app
+@Suite(.serialized)
 struct ExtensionTests {
     @Test func initializeValidConfigSucceeds() async throws {
         let ext = try await getExtension()
@@ -104,6 +106,11 @@ struct ExtensionTests {
 
         // Fetch FPItemID(<id>)
         let readProgress = Progress()
+        let observation = readProgress.observe(\.completedUnitCount) { p, _ in
+            print("\(p)")
+        }
+        defer { observation.invalidate() }
+
         let (url, item) = try await ext.fetchContents(
             for: session.child(path: path),
             version: nil,

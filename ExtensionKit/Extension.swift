@@ -108,41 +108,18 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         progress: Progress,
         session: Session,
     ) async throws -> (URL, NSFileProviderItem) {
-        let itemRef = await session.id(of: itemIdentifier)
-        let url = FileManager.default.temporaryDirectory
-            .appending(path: itemIdentifier.rawValue)
-        guard FileManager.default.createFile(atPath: url.path(), contents: nil)
-        else {
-            throw NSFileProviderError(.insufficientQuota)
-        }
-        let handle = try FileHandle(forWritingTo: url)
-        defer { try? handle.close() }
-
-        let item = try await session.item(for: itemIdentifier)
-        logger.info("Download \(itemRef) into \(url.path())")
-
-        progress.kind = .file
-        progress.fileOperationKind = .downloading
-        progress.totalUnitCount = Int64(item.size)
-        let speedometer = Speedometer(progress: progress)
-
-        try await session.withFile(
-            for: itemIdentifier,
-            accessType: .readOnly
-        ) { file in
-            for try await data in file.stream() {
-                if progress.isCancelled {
-                    throw CocoaError(.userCancelled)
-                }
-                try handle.write(contentsOf: data)
-                if let progress = speedometer.update(delta: data.count) {
-                    logger.debug("Downloading \(itemRef): \(progress)")
-                }
+        do {
+            let (url, info) = try await agent.download(
+                itemId: itemIdentifier,
+                progress: progress
+            )
+            return (url, Item(info: info))
+        } catch {
+            if progress.isCancelled {
+                throw CocoaError(.userCancelled)
             }
+            throw error
         }
-
-        logger.info("Downloaded \(itemRef): \(speedometer.finalize())")
-        return (url, item)
     }
 
     public func fetchPartialContents(

@@ -269,4 +269,27 @@ public class AgentClient {
             throw CocoaError(.coderInvalidValue)
         }
     }
+
+    public func download(
+        itemId: NSFileProviderItemIdentifier,
+        progress: Progress
+    ) async throws -> (URL, FileInfo) {
+        progress.kind = .file
+        progress.fileOperationKind = .downloading
+
+        let sync = XPCProgressSubscriber(progress: progress)
+        let reply = try await perform(
+            .download(
+                DownloadRequest(
+                    domainId: domainId,
+                    itemId: itemId.rawValue,
+                    progressEndpoint: sync.endpoint
+                )
+            )
+        )
+        guard case .download(let response) = reply else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        return (response.url, response.fileInfo)
+    }
 }
