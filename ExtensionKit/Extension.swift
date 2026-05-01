@@ -368,7 +368,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         if remaining.intersects(with: .nameFields) {
             remaining.subtract(.nameFields)
             steps.add {
-                try await session.move(
+                try await self.agent.move(
                     item.itemIdentifier,
                     toParent: item.parentId,
                     name: item.filename,
