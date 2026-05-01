@@ -79,10 +79,6 @@ class Session {
         try await Item(info: agent.info(for: identifier))
     }
 
-    func exists(for identifier: NSFileProviderItemIdentifier) async -> Bool {
-        (try? await agent.exists(for: identifier)) ?? false
-    }
-
     func setAttributes(
         for identifier: NSFileProviderItemIdentifier,
         permissions: mode_t? = nil,
