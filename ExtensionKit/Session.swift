@@ -79,20 +79,6 @@ class Session {
         try await Item(info: agent.info(for: identifier))
     }
 
-    func move(
-        _ id: NSFileProviderItemIdentifier,
-        toParent newParentId: NSFileProviderItemIdentifier,
-        name newName: String,
-        ifParentNotExists: OnParentNotExists = .fail
-    ) async throws {
-        try await agent.move(
-            id,
-            toParent: newParentId,
-            name: newName,
-            ifParentNotExists: ifParentNotExists
-        )
-    }
-
     func withFile<T: Sendable>(
         for identifier: NSFileProviderItemIdentifier,
         accessType: AccessType,
