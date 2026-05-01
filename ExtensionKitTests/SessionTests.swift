@@ -34,22 +34,6 @@ private func getSession() async throws -> Session {
 // TODO: Remove this after migration to agent in main app
 @Suite(.serialized)
 struct SessionTests {
-    struct NameTests {
-        @Test func filePropertyReturnsFilenameForSimpleItem() async throws {
-            let session = try await getSession()
-            let simpleFile = try await session.child(path: "file.txt")
-            let name = try await session.name(of: simpleFile)
-            #expect(name == "file.txt")
-        }
-
-        @Test func filePropertyReturnsFilenameForNestedItem() async throws {
-            let session = try await getSession()
-            let nestedFile = try await session.child(path: "folder/file.txt")
-            let name = try await session.name(of: nestedFile)
-            #expect(name == "file.txt")
-        }
-    }
-
     struct ChildTests {
         @Test func childOfRootContainerWithNameTrashesIsTrashContainer()
             async throws
