@@ -120,6 +120,13 @@ public class ConnectionProfile: CustomStringConvertible {
     public var description: String {
         "ConnectionProfile(id: \(id), name: \(name ?? "-"), enabled: \(enabled), url: \(url), authMethod: \(authMethod))"
     }
+    
+    public var domain: NSFileProviderDomain {
+        NSFileProviderDomain(
+            identifier: NSFileProviderDomainIdentifier(id.uuidString),
+            displayName: displayName,
+        )
+    }
 
     // MARK: - Enable / Disable
 
@@ -134,8 +141,6 @@ public class ConnectionProfile: CustomStringConvertible {
 
         let config = try ConnectionConfig(from: self)
         try await tester.test(config: config)
-        let userInfo = try UserInfo(from: self)
-        let domain = try getDomain(with: userInfo)
         try await NSFileProviderManager.add(domain)
         // TODO: Initialize the DB in the Agent
         try await DomainDB.open(id: id)
@@ -146,7 +151,6 @@ public class ConnectionProfile: CustomStringConvertible {
     }
 
     public func disable() async throws {
-        let domain = getDomain()
         try await NSFileProviderManager.remove(domain)
         // TODO: Deinit the DB in the Agent
         try await DomainDB.delete(id: id)
@@ -232,21 +236,6 @@ public class ConnectionProfile: CustomStringConvertible {
         Keychain.shared.delete(privateKeyPassphraseKey)
     }
 
-    public func getDomain() -> NSFileProviderDomain {
-        NSFileProviderDomain(
-            identifier: NSFileProviderDomainIdentifier(id.uuidString),
-            displayName: displayName,
-        )
-    }
-
-    public func getDomain(with userInfo: UserInfo) throws
-        -> NSFileProviderDomain
-    {
-        let domain = getDomain()
-        domain.userInfo = try userInfo.toDictionary()
-        return domain
-    }
-
     fileprivate func resolveConfigAuthMethod() throws
         -> ConnectionConfig.AuthMethod
     {
@@ -284,21 +273,6 @@ public class ConnectionProfile: CustomStringConvertible {
             )
         }
     }
-
-    fileprivate func resolveUserInfoAuthMethod() throws -> UserInfo.AuthMethod {
-        switch authMethod {
-        case .password:
-            guard getPassword() != nil else {
-                throw ValidationError.passwordNil
-            }
-            return .password
-        case .privateKey:
-            guard let bookmark = bookmark else {
-                throw ValidationError.privateKeyUrlNil
-            }
-            return .privateKey(bookmark: bookmark)
-        }
-    }
 }
 
 extension ModelContext {
@@ -324,20 +298,6 @@ extension ConnectionConfig {
             user: profile.effectiveUser,
             path: profile.effectivePath,
             authMethod: profile.resolveConfigAuthMethod()
-        )
-    }
-}
-
-extension UserInfo {
-    public init(from profile: ConnectionProfile) throws {
-        try self.init(
-            id: profile.id,
-            name: profile.displayName,
-            host: profile.host,
-            port: profile.effectivePort,
-            user: profile.effectiveUser,
-            path: profile.effectivePath,
-            authMethod: profile.resolveUserInfoAuthMethod()
         )
     }
 }

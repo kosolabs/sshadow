@@ -23,24 +23,17 @@ enum TestData {
         logger.info("Test server mount path: \(url.path())")
         return url
     }()
-    static let domain = getDomain()
+    static let domain = NSFileProviderDomain(
+        identifier: NSFileProviderDomainIdentifier(
+            rawValue: id.uuidString
+        ),
+        displayName: "Test"
+    )
     static let domainDbStorePath = FileManager.default.temporaryDirectory
         .appendingPathComponent("DomainDB-\(id.uuidString).store")
 
     static let appDbStorePath = FileManager.default.temporaryDirectory
         .appendingPathComponent("AppDB-test.store")
-
-    static func getDomain() -> NSFileProviderDomain {
-        let domain = NSFileProviderDomain(
-            identifier: NSFileProviderDomainIdentifier(
-                rawValue: id.uuidString
-            ),
-            displayName: "Test"
-        )
-        let userInfo = try! getUserInfo(id: id)
-        domain.userInfo = try! userInfo.toDictionary()
-        return domain
-    }
 
     static func initAppDB() async throws {
         let appDB = try AppDB.open(
@@ -60,24 +53,6 @@ enum TestData {
         )
 
         try await appDB.upsert(profile: profile)
-    }
-
-    static func getUserInfo(
-        id: UUID = id,
-        url: URL = mount,
-    ) throws -> UserInfo {
-        try UserInfo(
-            id: id,
-            name: name,
-            host: host,
-            port: port,
-            user: user,
-            path: url.path(),
-            authMethod: .privateKey(
-                bookmark: getPrivateKeyUrl().bookmarkData()
-            ),
-            testing: true
-        )
     }
 
     static func getConnectionConfig(
