@@ -13,19 +13,15 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         AgentClient(domainId: domainId)
     }
 
-    let manager: SessionManager
     let agent: AgentClient
 
     required public init(domain: NSFileProviderDomain) {
-
         do {
             let userInfo = try UserInfo.fromDictionary(domain.userInfo)
             let config = try ConnectionConfig(from: userInfo)
-            manager = SessionManager(domain: domain, config: config)
             agent = Self.agentClientFactory(config.id)
             logger.debug("Init \(config)")
         } catch {
-            manager = SessionManager(domain: domain, config: nil)
             agent = Self.agentClientFactory(UUID())
             logger.fault("Failed to retrieve connection config: \(error)")
         }
@@ -33,11 +29,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         super.init()
     }
 
-    public func invalidate() {
-        Task {
-            await manager.close()
-        }
-    }
+    public func invalidate() {}
 
     func item(
         for identifier: NSFileProviderItemIdentifier,
@@ -50,12 +42,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         completionHandler: @escaping (NSFileProviderItem?, Error?) -> Void
     ) -> Progress {
-        manager.withSession { session, progress in
+        withProgress { progress in
             try await self.item(
                 for: itemIdentifier,
                 request: request,
-                progress: progress,
-                session: session,
+                progress: progress
             )
         } onSuccess: { item in
             completionHandler(item, nil)
@@ -67,19 +58,14 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     func item(
         for itemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest,
-        progress: Progress,
-        session: Session,
+        progress: Progress
     ) async throws -> NSFileProviderItem {
-        let itemRef = await session.id(of: itemIdentifier)
-        logger.debug("Item \(itemRef)")
+        logger.debug("Item \(itemIdentifier.desc)")
 
         return try await progress.withChild {
             if itemIdentifier == .rootContainer || itemIdentifier == .workingSet
             {
-                return SpecialItem(
-                    domainName: session.config.name,
-                    itemIdentifier: itemIdentifier
-                )
+                return SpecialItem(itemIdentifier: itemIdentifier)
             }
 
             return try await item(for: itemIdentifier)
@@ -92,13 +78,12 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         completionHandler: @escaping (URL?, NSFileProviderItem?, Error?) -> Void
     ) -> Progress {
-        manager.withSession { session, progress in
+        withProgress { progress in
             try await self.fetchContents(
                 for: itemIdentifier,
                 version: requestedVersion,
                 request: request,
-                progress: progress,
-                session: session,
+                progress: progress
             )
         } onSuccess: { url, item in
             completionHandler(url, item, nil)
@@ -111,8 +96,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         for itemIdentifier: NSFileProviderItemIdentifier,
         version requestedVersion: NSFileProviderItemVersion?,
         request: NSFileProviderRequest,
-        progress: Progress,
-        session: Session,
+        progress: Progress
     ) async throws -> (URL, NSFileProviderItem) {
         do {
             let (url, info) = try await agent.download(
@@ -141,7 +125,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 NSFileProviderMaterializationFlags, (any Error)?
             ) -> Void
     ) -> Progress {
-        manager.withSession { session, progress in
+        withProgress { progress in
             try await self.fetchPartialContents(
                 for: itemIdentifier,
                 version: requestedVersion,
@@ -149,8 +133,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 minimalRange: range,
                 aligningTo: alignment,
                 options: options,
-                progress: progress,
-                session: session
+                progress: progress
             )
         } onSuccess: { url, item, range in
             completionHandler(url, item, range, [], nil)
@@ -163,36 +146,23 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         for itemIdentifier: NSFileProviderItemIdentifier,
         version requestedVersion: NSFileProviderItemVersion,
         request: NSFileProviderRequest,
-        minimalRange range: NSRange,
+        minimalRange requestedRange: NSRange,
         aligningTo alignment: Int,
         options: NSFileProviderFetchContentsOptions = [],
-        progress: Progress,
-        session: Session,
+        progress: Progress
     ) async throws -> (URL, NSFileProviderItem, NSRange) {
         let item = try await item(for: itemIdentifier)
 
         progress.kind = .file
         progress.fileOperationKind = .downloading
-        let speedometer = Speedometer(progress: progress)
 
-        let (url, fetchedRange) = try await session.stream(
-            for: itemIdentifier,
-            range: range,
-            alignment: alignment,
-            fileSize: item.size
-        ) { data in
-            if progress.isCancelled {
-                throw CocoaError(.userCancelled)
-            }
-            if let update = speedometer.update(delta: data.count) {
-                logger.debug("Streaming: \(update)")
-            }
-        }
+        let (url, fetchedRange) = try await agent.stream(
+            itemId: itemIdentifier,
+            range: requestedRange.asRange(),
+            progress: progress
+        )
 
-        progress.totalUnitCount = Int64(fetchedRange.length)
-        logger.info("Streamed: \(speedometer.finalize())")
-
-        return (url, item, fetchedRange)
+        return (url, item, fetchedRange.asNSRange())
     }
 
     public func createItem(
@@ -206,15 +176,14 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 NSFileProviderItem?, NSFileProviderItemFields, Bool, Error?
             ) -> Void
     ) -> Progress {
-        manager.withSession { session, progress in
+        withProgress { progress in
             try await self.createItem(
                 basedOn: itemTemplate,
                 fields: fields,
                 contents: url,
                 options: options,
                 request: request,
-                progress: progress,
-                session: session,
+                progress: progress
             )
         } onSuccess: { item, fields, shouldFetchContent in
             completionHandler(item, fields, shouldFetchContent, nil)
@@ -229,8 +198,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         contents url: URL?,
         options: NSFileProviderCreateItemOptions = [],
         request: NSFileProviderRequest,
-        progress: Progress,
-        session: Session,
+        progress: Progress
     ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
         logger.debug("Create \(item.desc) for \(fields.desc)")
 
@@ -275,11 +243,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         if remaining.intersects(with: .attrFields) {
             remaining.subtract(.attrFields)
             steps.add {
-                try await self.setAttributes(
-                    item,
-                    fields: fields,
-                    session: session
-                )
+                try await self.setAttributes(item, fields: fields)
             }
         }
 
@@ -308,7 +272,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 NSFileProviderItem?, NSFileProviderItemFields, Bool, Error?
             ) -> Void
     ) -> Progress {
-        manager.withSession { session, progress in
+        withProgress { progress in
             try await self.modifyItem(
                 item,
                 baseVersion: version,
@@ -316,8 +280,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 contents: newContents,
                 options: options,
                 request: request,
-                progress: progress,
-                session: session,
+                progress: progress
             )
         } onSuccess: { item, fields, shouldFetchContent in
             completionHandler(item, fields, shouldFetchContent, nil)
@@ -334,8 +297,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         contents newContents: URL?,
         options: NSFileProviderModifyItemOptions = [],
         request: NSFileProviderRequest,
-        progress: Progress,
-        session: Session,
+        progress: Progress
     ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
         logger.debug("Modify \(item.desc) for \(changedFields.desc)")
 
@@ -349,9 +311,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             }
 
             let fileSize = try FileManager.default.size(of: newContents)
-            let bufferSize = session.sftp.limits.writeLength()
+            let limits = try await agent.limits()
+            let chunkSize = limits.maxWriteLength
             let fileTransferUnits = Int64(
-                (fileSize + bufferSize - 1) / bufferSize
+                (fileSize + chunkSize - 1) / chunkSize
             )
             let fileSystemFlags =
                 remaining.contains(.fileSystemFlags)
@@ -384,11 +347,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         if remaining.intersects(with: .attrFields) {
             remaining.subtract(.attrFields)
             steps.add {
-                try await self.setAttributes(
-                    item,
-                    fields: changedFields,
-                    session: session
-                )
+                try await self.setAttributes(item, fields: changedFields)
             }
         }
 
@@ -412,14 +371,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         completionHandler: @escaping (Error?) -> Void
     ) -> Progress {
-        manager.withSession { session, progress in
+        withProgress { progress in
             try await self.deleteItem(
                 identifier: identifier,
                 baseVersion: version,
                 options: options,
                 request: request,
-                progress: progress,
-                session: session,
+                progress: progress
             )
         } onSuccess: {
             completionHandler(nil)
@@ -434,8 +392,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         baseVersion version: NSFileProviderItemVersion,
         options: NSFileProviderDeleteItemOptions = [],
         request: NSFileProviderRequest,
-        progress: Progress,
-        session: Session,
+        progress: Progress
     ) async throws {
         logger.debug("Delete \(identifier.desc)")
         return try await progress.withChild {
@@ -455,15 +412,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         logger.debug("Create enumerator for \(containerItemIdentifier.desc)")
         return Enumerator(
             agent: agent,
-            manager: manager,
             itemIdentifier: containerItemIdentifier
         )
     }
 
     private func setAttributes(
         _ item: NSFileProviderItem,
-        fields: NSFileProviderItemFields,
-        session: Session
+        fields: NSFileProviderItemFields
     ) async throws {
         try await agent.setAttributes(
             for: agent.child(of: item.parentId, path: item.filename),
@@ -475,4 +430,26 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 ? item.contentModificationDate ?? nil : nil,
         )
     }
+}
+
+private func withProgress<T>(
+    progress: Progress = Progress(),
+    _ perform: @escaping (Progress) async throws -> T,
+    onSuccess: @escaping (T) -> Void,
+    onError: @escaping (Error) -> Void,
+    file: String = #fileID,
+    line: Int = #line,
+) -> Progress {
+    let trace = StackTrace.capture(file: file, line: line)
+
+    Task {
+        do {
+            let result = try await perform(progress)
+            onSuccess(result)
+        } catch {
+            trace.log(logger, error: error)
+            onError(error)
+        }
+    }
+    return progress
 }

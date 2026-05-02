@@ -28,6 +28,7 @@ public enum AgentRequest: Codable {
     case limits(LimitsRequest)
     case upload(UploadRequest)
     case download(DownloadRequest)
+    case stream(StreamRequest)
 }
 
 public enum AgentResponse: Codable {
@@ -46,6 +47,7 @@ public enum AgentResponse: Codable {
     case limits(LimitsResponse)
     case upload(UploadResponse)
     case download(DownloadResponse)
+    case stream(StreamResponse)
 }
 
 public struct NameRequest: Codable {
@@ -380,6 +382,35 @@ public struct DownloadResponse: Codable {
     public init(url: URL, fileInfo: FileInfo) {
         self.url = url
         self.fileInfo = fileInfo
+    }
+}
+
+public struct StreamRequest: Codable {
+    public let domainId: UUID
+    public let itemId: String
+    public let range: Range<UInt64>
+    public let progressEndpoint: XPCEndpoint
+
+    public init(
+        domainId: UUID,
+        itemId: String,
+        range: Range<UInt64>,
+        progressEndpoint: XPCEndpoint
+    ) {
+        self.domainId = domainId
+        self.itemId = itemId
+        self.range = range
+        self.progressEndpoint = progressEndpoint
+    }
+}
+
+public struct StreamResponse: Codable {
+    let url: URL
+    let range: Range<UInt64>
+
+    public init(url: URL, range: Range<UInt64>) {
+        self.url = url
+        self.range = range
     }
 }
 

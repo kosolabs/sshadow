@@ -268,6 +268,12 @@ class Session {
         logger.info("Uploaded \(itemRef): \(speedometer.finalize())")
     }
 
+    private func create(file url: URL) throws {
+        if !FileManager.default.fileExists(atPath: url.path()) {
+            try Data().write(to: url)
+        }
+    }
+
     func download(
         itemId: NSFileProviderItemIdentifier,
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
@@ -277,7 +283,7 @@ class Session {
         let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
         logger.info("Download \(itemRef) into \(url)")
 
-        try Data().write(to: url)
+        try create(file: url)
         let handle = try FileHandle(forWritingTo: url)
         defer { try? handle.close() }
         let info = try await info(for: itemId)
@@ -303,6 +309,58 @@ class Session {
 
         logger.info("Downloaded \(itemRef): \(speedometer.finalize())")
         return (url, info)
+    }
+
+    func stream(
+        itemId: NSFileProviderItemIdentifier,
+        range: Range<UInt64>,
+        progress: Progress
+    ) async throws -> (URL, Range<UInt64>) {
+        let itemRef = await id(of: itemId)
+        let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
+        let chunkRange = FileChunk.chunkRange(for: range)
+        let info = try await info(for: itemId)
+        let byteRange = FileChunk.byteRange(for: chunkRange, fileSize: info.size)
+        let rangeId = "\(itemRef)(\(range))[\(chunkRange)->\(byteRange)]"
+        logger.info("Stream \(rangeId) into \(url)")
+
+        try create(file: url)
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+
+        progress.kind = .file
+        progress.fileOperationKind = .downloading
+        progress.totalUnitCount = Int64(byteRange.length)
+        let speedometer = Speedometer(progress: progress)
+
+        for chunkIndex in chunkRange {
+            let chunkId = "\(itemRef)[\(chunkIndex)]"
+            let bytes = FileChunk.byteRange(for: chunkIndex, fileSize: info.size)
+            guard !bytes.isEmpty else { continue }
+
+            if await db.isChunkCached(for: itemId, index: chunkIndex) {
+                logger.debug("Cache hit \(chunkId)")
+                speedometer.update(delta: bytes.count)
+                continue
+            }
+
+
+            try await withFile(for: itemId, accessType: .readOnly) { file in
+                for try await data in file.stream(
+                    offset: bytes.offset,
+                    length: bytes.length
+                ) {
+                    try handle.write(contentsOf: data)
+                    speedometer.update(delta: bytes.count)
+                }
+            }
+
+            try await db.recordChunk(for: itemId, index: chunkIndex)
+            logger.debug("Cached \(chunkId)")
+        }
+
+        logger.info("Streamed \(rangeId): \(speedometer.finalize())")
+        return (url, byteRange)
     }
 
     func withFile<T: Sendable>(

@@ -8,10 +8,7 @@ private let logger = Logger(category: "Item")
 public class SpecialItem: NSObject, NSFileProviderItem {
     public let itemIdentifier: NSFileProviderItemIdentifier
 
-    init(
-        domainName: String,
-        itemIdentifier: NSFileProviderItemIdentifier,
-    ) {
+    init(itemIdentifier: NSFileProviderItemIdentifier) {
         logger.debug("Init \(itemIdentifier.desc)")
         self.itemIdentifier = itemIdentifier
     }

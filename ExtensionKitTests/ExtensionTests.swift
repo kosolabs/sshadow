@@ -10,7 +10,6 @@ private let root = NSFileProviderItemIdentifier.rootContainer
 
 private func getExtension(id: UUID = UUID()) async throws -> Extension {
     Extension.agentClientFactory = TestData.getAgentClient
-    Session.agentClientFactory = TestData.getAgentClient
     DomainDB.urlFactory = { _ in TestData.domainDbStorePath }
     try await TestData.initAppDB()
     return Extension(domain: TestData.domain)
@@ -19,61 +18,13 @@ private func getExtension(id: UUID = UUID()) async throws -> Extension {
 // TODO: Remove this after migration to agent in main app
 @Suite(.serialized)
 struct ExtensionTests {
-    @Test func initializeValidConfigSucceeds() async throws {
-        let ext = try await getExtension()
-        let session = try await ext.manager.getSession()
-        let actualConfig = session.config
-
-        let id = actualConfig.id
-        let expectedConfig = try TestData.getConnectionConfig(id: id)
-
-        #expect(actualConfig == expectedConfig)
-    }
-
-    @Test func initializeInvalidConfigThrows() async throws {
-        let domain = NSFileProviderDomain(
-            identifier: NSFileProviderDomainIdentifier(rawValue: "id"),
-            displayName: "test"
-        )
-        let ext = Extension(domain: domain)
-
-        await #expect(throws: NSFileProviderError(.notAuthenticated).self) {
-            try await ext.manager.getSession()
-        }
-    }
-
-    @Test func initializeUnreachableServerThrows() async throws {
-        let id = UUID()
-        let domain = NSFileProviderDomain(
-            identifier: NSFileProviderDomainIdentifier(
-                rawValue: id.uuidString
-            ),
-            displayName: "test"
-        )
-        let userInfo = try UserInfo(
-            id: id,
-            name: "unreachable",
-            host: "unreachable",
-            port: 22,
-            user: NSUserName(),
-            path: "",
-            authMethod: .privateKey(
-                bookmark: TestData.getPrivateKeyUrl().bookmarkData()
-            )
-        )
-        domain.userInfo = try userInfo.toDictionary()
-        let ext = Extension(domain: domain)
-
-        await #expect(throws: NSFileProviderError(.serverUnreachable).self) {
-            try await ext.manager.getSession()
-        }
-    }
+    // TODO: Add a test for invalid config throws NSFileProviderError(.notAuthenticated)
+    // TODO: Add a test for unreachable server throws NSFileProviderError(.serverUnreachable)
 
     @Test func readSmallFileSucceeds() async throws {
         // cat extension-read-file/small-file.txt
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         let path = "extension-read-file/small-file.txt"
         let contents = "Hello, World!"
@@ -85,8 +36,7 @@ struct ExtensionTests {
             for: agent.child(path: path),
             version: nil,
             request: NSFileProviderRequest(),
-            progress: readProgress,
-            session: session,
+            progress: readProgress
         )
 
         #expect(item.filename == "small-file.txt")
@@ -100,7 +50,6 @@ struct ExtensionTests {
         // cat extension-read-file/large-file.dat
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         let path = "extension-read-file/large-file.dat"
         let data = Data(count: 10_485_760)
@@ -117,8 +66,7 @@ struct ExtensionTests {
             for: agent.child(path: path),
             version: nil,
             request: NSFileProviderRequest(),
-            progress: readProgress,
-            session: session,
+            progress: readProgress
         )
 
         #expect(item.filename == "large-file.dat")
@@ -131,7 +79,6 @@ struct ExtensionTests {
         // dd if=extension-read-file/partial-file.dat bs=1m skip=5 count=1
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         let path = "extension-read-file/partial-file.dat"
         let data = (0..<1024).reduce(into: Data()) { data, i in
@@ -148,8 +95,7 @@ struct ExtensionTests {
             request: NSFileProviderRequest(),
             minimalRange: requestedRange,
             aligningTo: 16384,
-            progress: readProgress,
-            session: session,
+            progress: readProgress
         )
 
         let chunkSize = FileChunk.size
@@ -172,7 +118,6 @@ struct ExtensionTests {
     @Test func readFileWithCancellation() async throws {
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         let path = "extension-read-file/cancellable-file.txt"
         let data = Data(count: 10_485_760)
@@ -184,8 +129,7 @@ struct ExtensionTests {
                 for: agent.child(path: path),
                 version: nil,
                 request: NSFileProviderRequest(),
-                progress: progress,
-                session: session,
+                progress: progress
             )
         }
         progress.cancel()
@@ -198,7 +142,6 @@ struct ExtensionTests {
     @Test func createFolderSucceeds() async throws {
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         // mkdir extension-create-folder/folder
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
@@ -239,8 +182,7 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: createFolderProgress,
-            session: session,
+            progress: createFolderProgress
         )
 
         #expect(FileManager.default.fileExists(at: folderURL))
@@ -268,8 +210,7 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: updateFolderProgress,
-            session: session,
+            progress: updateFolderProgress
         )
 
         let actualModifyDate = try FileManager.default.modifyDate(of: testURL)
@@ -280,7 +221,6 @@ struct ExtensionTests {
     @Test func createFileSucceeds() async throws {
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         // echo "Hello, World!" > extension-create-file/file.txt
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
@@ -330,8 +270,7 @@ struct ExtensionTests {
             contents: fileToUploadURL,
             options: [],
             request: NSFileProviderRequest(),
-            progress: uploadProgress,
-            session: session,
+            progress: uploadProgress
         )
 
         #expect(FileManager.default.fileExists(at: fileURL))
@@ -361,8 +300,7 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: updateFolderProgress,
-            session: session,
+            progress: updateFolderProgress
         )
 
         let actualModifyDate = try FileManager.default.modifyDate(of: testURL)
@@ -373,7 +311,6 @@ struct ExtensionTests {
     @Test func createLargeFileSucceeds() async throws {
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         // dd if=/dev/zero of=extension-create-large-file/file.txt bs=1m count=10
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
@@ -417,8 +354,7 @@ struct ExtensionTests {
             contents: fileToUploadURL,
             options: [],
             request: NSFileProviderRequest(),
-            progress: uploadProgress,
-            session: session,
+            progress: uploadProgress
         )
 
         #expect(FileManager.default.fileExists(at: fileURL))
@@ -448,8 +384,7 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: updateFolderProgress,
-            session: session,
+            progress: updateFolderProgress
         )
 
         let actualModifyDate = try FileManager.default.modifyDate(of: testURL)
@@ -460,7 +395,6 @@ struct ExtensionTests {
     @Test func renameFileSucceeds() async throws {
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         // mv extension-rename-file/src.txt extension-rename-file/dest.txt
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
@@ -504,8 +438,7 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: renameProgress,
-            session: session,
+            progress: renameProgress
         )
 
         #expect(FileManager.default.fileExists(at: destURL))
@@ -533,8 +466,7 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: updateFolderProgress,
-            session: session,
+            progress: updateFolderProgress
         )
 
         let actualModifyDate = try FileManager.default.modifyDate(of: folderURL)
@@ -545,7 +477,6 @@ struct ExtensionTests {
     @Test func moveFileSucceeds() async throws {
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         // mv extension-move-file/src/file.txt extension-move-file/dest/
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
@@ -596,8 +527,7 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: moveProgress,
-            session: try await ext.manager.getSession(),
+            progress: moveProgress
         )
 
         #expect(FileManager.default.fileExists(at: destURL))
@@ -625,8 +555,7 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: updateDestFolderProgress,
-            session: session,
+            progress: updateDestFolderProgress
         )
 
         let actualDestModifyDate = try FileManager.default.modifyDate(
@@ -656,8 +585,7 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: updateSrcFolderProgress,
-            session: session,
+            progress: updateSrcFolderProgress
         )
 
         let actualSrcModifyDate = try FileManager.default.modifyDate(
@@ -670,7 +598,6 @@ struct ExtensionTests {
     @Test func moveAndRenameFileSucceeds() async throws {
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         // mv extension-move-rename/src/old.txt extension-move-rename/dest/new.txt
         let srcFolderPath = "extension-move-rename/src"
@@ -706,8 +633,7 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: progress,
-            session: session,
+            progress: progress
         )
 
         #expect(FileManager.default.fileExists(at: destURL))
@@ -722,7 +648,6 @@ struct ExtensionTests {
     @Test func moveFilePreservesIdentifier() async throws {
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         // mv extension-move-preserve-id/file.txt extension-move-preserve-id/dest/
         let srcPath = "extension-move-preserve-id/file.txt"
@@ -753,16 +678,14 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: Progress(),
-            session: session,
+            progress: Progress()
         )
 
         // Original ID should still resolve to the moved file
         let item = try await ext.item(
             for: srcID,
             request: NSFileProviderRequest(),
-            progress: Progress(),
-            session: try await ext.manager.getSession()
+            progress: Progress()
         )
         #expect(item.filename == "file.txt")
         #expect(item.parentItemIdentifier == destFolderID)
@@ -771,7 +694,6 @@ struct ExtensionTests {
     @Test func trashFileSucceeds() async throws {
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         // mv extension-trash-file/file.txt .Trashes/file.txt
         let filePath = "extension-trash-file/file.txt"
@@ -804,8 +726,7 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: trashProgress,
-            session: session,
+            progress: trashProgress
         )
 
         #expect(FileManager.default.fileExists(at: trashedURL))
@@ -816,7 +737,6 @@ struct ExtensionTests {
     @Test func editFileSucceeds() async throws {
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         // echo "World!" >> extension-edit-file/file.txt
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
@@ -844,8 +764,7 @@ struct ExtensionTests {
             for: fileID,
             version: nil,
             request: NSFileProviderRequest(),
-            progress: fetchOldProgress,
-            session: session,
+            progress: fetchOldProgress
         )
 
         #expect(oldItem.filename == "file.txt")
@@ -882,8 +801,7 @@ struct ExtensionTests {
             contents: newContentURL,
             options: [],
             request: NSFileProviderRequest(),
-            progress: modifyProgress,
-            session: try await ext.manager.getSession(),
+            progress: modifyProgress
         )
 
         let actualModifyDate = try FileManager.default.modifyDate(of: fileURL)
@@ -897,8 +815,7 @@ struct ExtensionTests {
             for: fileID,
             version: nil,
             request: NSFileProviderRequest(),
-            progress: fetchNewProgress,
-            session: try await ext.manager.getSession(),
+            progress: fetchNewProgress
         )
 
         #expect(newItem.filename == "file.txt")
@@ -910,7 +827,6 @@ struct ExtensionTests {
     @Test func setFileReadWriteSucceeds() async throws {
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         // chmod 600 extension-permissions/file.txt
         let testPath = "extension-permissions"
@@ -941,8 +857,7 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: modifyProgress,
-            session: try await ext.manager.getSession(),
+            progress: modifyProgress
         )
 
         #expect(try FileManager.default.permissions(of: fileURL) == 0o600)
@@ -952,7 +867,6 @@ struct ExtensionTests {
     @Test func setFolderReadWriteExecuteSucceeds() async throws {
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         // chmod 700 extension-permissions/folder
         let testPath = "extension-permissions"
@@ -982,8 +896,7 @@ struct ExtensionTests {
             contents: nil,
             options: [],
             request: NSFileProviderRequest(),
-            progress: modifyProgress,
-            session: session,
+            progress: modifyProgress
         )
 
         #expect(try FileManager.default.permissions(of: folderURL) == 0o700)
@@ -993,7 +906,6 @@ struct ExtensionTests {
     @Test func deleteFolderSucceeds() async throws {
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         // rmdir extension-delete-item/folder
         let testPath = "extension-delete-item"
@@ -1008,8 +920,7 @@ struct ExtensionTests {
             identifier: folderID,
             baseVersion: NSFileProviderItemVersion(),
             request: NSFileProviderRequest(),
-            progress: progress,
-            session: session,
+            progress: progress
         )
 
         #expect(!FileManager.default.fileExists(at: folderURL))
@@ -1019,7 +930,6 @@ struct ExtensionTests {
     @Test func deleteFileSucceeds() async throws {
         let ext = try await getExtension()
         let agent = ext.agent
-        let session = try await ext.manager.getSession()
 
         // rm extension-delete-item/file.txt
         let testPath = "extension-delete-item"
@@ -1038,8 +948,7 @@ struct ExtensionTests {
             identifier: fileID,
             baseVersion: NSFileProviderItemVersion(),
             request: NSFileProviderRequest(),
-            progress: progress,
-            session: session,
+            progress: progress
         )
 
         #expect(!FileManager.default.fileExists(at: fileURL))
