@@ -7,18 +7,13 @@ private let logger = Logger(category: "SessionManager")
 
 actor SessionManager {
     private let db: AppDB
+    private let domainDbConfig: ModelConfiguration?
     private var sessions: [UUID: Session] = [:]
     private var connectTasks: [UUID: Task<Session, any Error>] = [:]
 
-    init(appDbStorePath: URL? = nil) {
-        if let appDbStorePath = appDbStorePath {
-            logger.info("Using: \(appDbStorePath)")
-            self.db = try! AppDB.open(
-                config: ModelConfiguration(url: appDbStorePath)
-            )
-        } else {
-            self.db = try! AppDB.open()
-        }
+    init(appDb: AppDB, domainDbConfig: ModelConfiguration? = nil) {
+        self.db = appDb
+        self.domainDbConfig = domainDbConfig
     }
 
     func connect(id: UUID) async throws -> Session {
@@ -34,11 +29,12 @@ actor SessionManager {
             return try await task.value
         }
 
+        let domainDbConfig = self.domainDbConfig ?? DomainDB.model(for: id)
         let task = Task {
             let config = try ConnectionConfig(from: profile)
             let ssh = try await SSHClient.connect(profile: profile)
             let sftp = try await ssh.sftp()
-            let db = try await DomainDB.open(id: id)
+            let db = try await DomainDB.open(config: domainDbConfig)
             return Session(config: config, ssh: ssh, sftp: sftp, db: db)
         }
         connectTasks[id] = task

@@ -7,22 +7,29 @@ private let logger = Logger(category: "DomainDB")
 
 @ModelActor
 public actor DomainDB {
-    public static var urlFactory: (UUID) -> URL = { id in
+    private static func url(for id: UUID) -> URL {
         SSHadow.groupUrl.appendingPathComponent(
             "DomainDB-\(id.uuidString).store"
         )
     }
 
+    public static func model(for id: UUID) -> ModelConfiguration {
+        ModelConfiguration(url: url(for: id))
+    }
+
     @discardableResult
-    public static func open(id: UUID) async throws -> DomainDB {
+    public static func open(
+        config: ModelConfiguration
+    ) async throws -> DomainDB {
         let schema = Schema([PathNode.self, FileChunk.self])
-        let url = urlFactory(id)
-        logger.info("Open DomainDB at \(url)")
+        if !config.isStoredInMemoryOnly {
+            logger.info("Open DomainDB: \(config.url.path)")
+        }
 
         let db = try DomainDB(
             modelContainer: ModelContainer(
                 for: schema,
-                configurations: ModelConfiguration(url: url)
+                configurations: config
             )
         )
         try await db.configure()
@@ -54,7 +61,7 @@ public actor DomainDB {
     }
 
     public static func delete(id: UUID) async throws {
-        let basePath = urlFactory(id).path
+        let basePath = url(for: id).path
 
         for suffix in ["", "-shm", "-wal"] {
             let path = basePath + suffix

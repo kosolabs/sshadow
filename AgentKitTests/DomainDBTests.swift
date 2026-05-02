@@ -6,10 +6,16 @@ import Testing
 
 @testable import AgentKit
 
+private func openInMemoryDb() async throws -> DomainDB {
+    try await DomainDB.open(
+        config: ModelConfiguration(isStoredInMemoryOnly: true)
+    )
+}
+
 struct DomainDBTests {
     struct FetchTests {
         @Test func fetchReturnsNilForUnknownId() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let result = await db.fetch(
                 id: NSFileProviderItemIdentifier(UUID().uuidString)
@@ -18,7 +24,7 @@ struct DomainDBTests {
         }
 
         @Test func fetchByParentIdAndName() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
             let id = NSFileProviderItemIdentifier(UUID().uuidString)
@@ -37,7 +43,7 @@ struct DomainDBTests {
         }
 
         @Test func fetchByParentIdAndNameReturnsNilWhenNotFound() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
 
@@ -59,7 +65,7 @@ struct DomainDBTests {
         }
 
         @Test func fetchByParentIdAndNameDistinguishesSiblings() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
 
@@ -80,7 +86,7 @@ struct DomainDBTests {
 
     struct InitTests {
         @Test func initialDbHasRootContainer() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let root = try #require(await db.fetch(id: .rootContainer))
 
@@ -89,7 +95,7 @@ struct DomainDBTests {
         }
 
         @Test func initialDbHasTrashContainer() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let trash = try #require(await db.fetch(id: .trashContainer))
 
@@ -98,7 +104,7 @@ struct DomainDBTests {
         }
 
         @Test func initialDbHasWorkingSet() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let workingSet = try #require(await db.fetch(id: .workingSet))
 
@@ -109,7 +115,7 @@ struct DomainDBTests {
 
     struct NameTests {
         @Test func nameReturnsNameForKnownId() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let id = NSFileProviderItemIdentifier(UUID().uuidString)
             try await db.upsert(
@@ -121,7 +127,7 @@ struct DomainDBTests {
         }
 
         @Test func nameThrowsForUnknownId() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
@@ -133,7 +139,7 @@ struct DomainDBTests {
 
     struct ParentTests {
         @Test func parentReturnsParentForKnownId() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
             let id = NSFileProviderItemIdentifier(UUID().uuidString)
@@ -146,7 +152,7 @@ struct DomainDBTests {
         }
 
         @Test func parentThrowsForUnknownId() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
@@ -158,7 +164,7 @@ struct DomainDBTests {
 
     struct ChildTests {
         @Test func childCreatesItemByDefault() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let id = try await db.child(path: "new-file.txt")
 
@@ -168,7 +174,7 @@ struct DomainDBTests {
         }
 
         @Test func childReturnsExistingItem() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let first = try await db.child(path: "same.txt")
             let second = try await db.child(path: "same.txt")
@@ -177,7 +183,7 @@ struct DomainDBTests {
         }
 
         @Test func childWithFailThrowsForMissingItem() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             await #expect(throws: NSFileProviderError.self) {
                 try await db.child(
@@ -188,7 +194,7 @@ struct DomainDBTests {
         }
 
         @Test func childWithFailSucceedsForExistingItem() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let created = try await db.child(path: "exists.txt")
             let found = try await db.child(
@@ -202,7 +208,7 @@ struct DomainDBTests {
 
     struct PathTests {
         @Test func pathBuildsFromNestedItems() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let fileId = try await db.child(path: "Documents/notes.txt")
 
@@ -211,7 +217,7 @@ struct DomainDBTests {
         }
 
         @Test func pathReturnsNameForDirectChildOfRoot() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let id = try await db.child(path: "file.txt")
 
@@ -220,21 +226,21 @@ struct DomainDBTests {
         }
 
         @Test func pathReturnsEmptyForRootContainer() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let path = await db.path(for: .rootContainer)
             #expect(path == "")
         }
 
         @Test func pathReturnsTrashesFolderForTrashContainer() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let path = await db.path(for: .trashContainer)
             #expect(path == ".Trashes")
         }
 
         @Test func pathSucceedsForFileInTrashContainer() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let fileId = try await db.child(of: .trashContainer, path: "file")
             let path = await db.path(for: fileId)
@@ -242,7 +248,7 @@ struct DomainDBTests {
         }
 
         @Test func pathReturnsEmptyForUnknownId() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
             let path = await db.path(for: unknownId)
@@ -250,7 +256,7 @@ struct DomainDBTests {
         }
 
         @Test func pathForNameInRootContainer() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let path = await db.path(
                 for: "file.txt",
@@ -260,7 +266,7 @@ struct DomainDBTests {
         }
 
         @Test func pathForNameInNestedParent() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let parentId = try await db.child(path: "Documents/Notes")
 
@@ -269,7 +275,7 @@ struct DomainDBTests {
         }
 
         @Test func pathForNameInTrashContainer() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let path = await db.path(
                 for: "deleted.txt",
@@ -281,7 +287,7 @@ struct DomainDBTests {
 
     struct MoveTests {
         @Test func moveUpdatesParentAndName() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let oldParent = NSFileProviderItemIdentifier(UUID().uuidString)
             let newParent = NSFileProviderItemIdentifier(UUID().uuidString)
@@ -298,7 +304,7 @@ struct DomainDBTests {
         }
 
         @Test func moveThrowsForUnknownId() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
             let newParent = NSFileProviderItemIdentifier(UUID().uuidString)
@@ -313,7 +319,7 @@ struct DomainDBTests {
         }
 
         @Test func moveUpdatesPath() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let fileId = try await db.child(path: "src/file.txt")
             let destId = try await db.child(path: "dst")
@@ -327,7 +333,7 @@ struct DomainDBTests {
 
     struct UpsertTests {
         @Test func upsertAndFetchById() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let id = NSFileProviderItemIdentifier(UUID().uuidString)
             let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
@@ -342,7 +348,7 @@ struct DomainDBTests {
         }
 
         @Test func upsertDuplicateIdUpdatesExistingItem() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let id = NSFileProviderItemIdentifier(UUID().uuidString)
             let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
@@ -359,7 +365,7 @@ struct DomainDBTests {
         }
 
         @Test func upsertMultipleItems() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
 
             let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
             let id1 = NSFileProviderItemIdentifier(UUID().uuidString)
@@ -382,14 +388,14 @@ struct DomainDBTests {
 
     struct ChunkTests {
         @Test func isChunkCachedReturnsFalseForNewItem() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
             let itemId = NSFileProviderItemIdentifier(UUID().uuidString)
 
             #expect(await !db.isChunkCached(for: itemId, index: 0))
         }
 
         @Test func recordAndQueryChunk() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
             let itemId = NSFileProviderItemIdentifier(UUID().uuidString)
 
             try await db.recordChunk(for: itemId, index: 3)
@@ -399,7 +405,7 @@ struct DomainDBTests {
         }
 
         @Test func recordChunkIsIdempotent() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
             let itemId = NSFileProviderItemIdentifier(UUID().uuidString)
 
             try await db.recordChunk(for: itemId, index: 0)
@@ -409,7 +415,7 @@ struct DomainDBTests {
         }
 
         @Test func chunksAreIsolatedPerItem() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
             let item1 = NSFileProviderItemIdentifier(UUID().uuidString)
             let item2 = NSFileProviderItemIdentifier(UUID().uuidString)
 
@@ -423,7 +429,7 @@ struct DomainDBTests {
         }
 
         @Test func deleteChunksRemovesAllForItem() async throws {
-            let db = try await TestData.getDomainDb()
+            let db = try await openInMemoryDb()
             let item1 = NSFileProviderItemIdentifier(UUID().uuidString)
             let item2 = NSFileProviderItemIdentifier(UUID().uuidString)
 

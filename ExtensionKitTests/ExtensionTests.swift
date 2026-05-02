@@ -8,13 +8,12 @@ import UniformTypeIdentifiers
 
 private let root = NSFileProviderItemIdentifier.rootContainer
 
-private func getExtension(id: UUID = UUID()) async throws -> Extension {
-    Extension.agentClientFactory = TestData.getAgentClient
-    try await TestData.initAppDB()
-    return Extension(domain: TestData.domain)
+private func getExtensionAndAgent() async throws -> (Extension, AgentClient) {
+    let agent = try await TestData.getAgentClient()
+    let ext = Extension(agent: agent)
+    return (ext, agent)
 }
 
-// TODO: Remove this after migration to agent in main app
 @Suite(.serialized)
 struct ExtensionTests {
     // TODO: Add a test for invalid config throws NSFileProviderError(.notAuthenticated)
@@ -22,8 +21,7 @@ struct ExtensionTests {
 
     @Test func readSmallFileSucceeds() async throws {
         // cat extension-read-file/small-file.txt
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         let path = "extension-read-file/small-file.txt"
         let contents = "Hello, World!"
@@ -47,8 +45,7 @@ struct ExtensionTests {
 
     @Test func readLargeFileSucceeds() async throws {
         // cat extension-read-file/large-file.dat
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         let path = "extension-read-file/large-file.dat"
         let data = Data(count: 10_485_760)
@@ -56,11 +53,6 @@ struct ExtensionTests {
 
         // Fetch FPItemID(<id>)
         let readProgress = Progress()
-        let observation = readProgress.observe(\.completedUnitCount) { p, _ in
-            print("\(p)")
-        }
-        defer { observation.invalidate() }
-
         let (url, item) = try await ext.fetchContents(
             for: agent.child(path: path),
             version: nil,
@@ -76,8 +68,7 @@ struct ExtensionTests {
 
     @Test func readPartialFileSucceeds() async throws {
         // dd if=extension-read-file/partial-file.dat bs=1m skip=5 count=1
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         let path = "extension-read-file/partial-file.dat"
         let data = (0..<1024).reduce(into: Data()) { data, i in
@@ -115,8 +106,7 @@ struct ExtensionTests {
     }
 
     @Test func readFileWithCancellation() async throws {
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         let path = "extension-read-file/cancellable-file.txt"
         let data = Data(count: 10_485_760)
@@ -139,8 +129,7 @@ struct ExtensionTests {
     }
 
     @Test func createFolderSucceeds() async throws {
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // mkdir extension-create-folder/folder
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
@@ -218,8 +207,7 @@ struct ExtensionTests {
     }
 
     @Test func createFileSucceeds() async throws {
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // echo "Hello, World!" > extension-create-file/file.txt
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
@@ -308,8 +296,7 @@ struct ExtensionTests {
     }
 
     @Test func createLargeFileSucceeds() async throws {
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // dd if=/dev/zero of=extension-create-large-file/file.txt bs=1m count=10
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
@@ -392,8 +379,7 @@ struct ExtensionTests {
     }
 
     @Test func renameFileSucceeds() async throws {
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // mv extension-rename-file/src.txt extension-rename-file/dest.txt
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
@@ -474,8 +460,7 @@ struct ExtensionTests {
     }
 
     @Test func moveFileSucceeds() async throws {
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // mv extension-move-file/src/file.txt extension-move-file/dest/
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
@@ -595,8 +580,7 @@ struct ExtensionTests {
     }
 
     @Test func moveAndRenameFileSucceeds() async throws {
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // mv extension-move-rename/src/old.txt extension-move-rename/dest/new.txt
         let srcFolderPath = "extension-move-rename/src"
@@ -645,8 +629,7 @@ struct ExtensionTests {
     }
 
     @Test func moveFilePreservesIdentifier() async throws {
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // mv extension-move-preserve-id/file.txt extension-move-preserve-id/dest/
         let srcPath = "extension-move-preserve-id/file.txt"
@@ -691,8 +674,7 @@ struct ExtensionTests {
     }
 
     @Test func trashFileSucceeds() async throws {
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // mv extension-trash-file/file.txt .Trashes/file.txt
         let filePath = "extension-trash-file/file.txt"
@@ -734,8 +716,7 @@ struct ExtensionTests {
     }
 
     @Test func editFileSucceeds() async throws {
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // echo "World!" >> extension-edit-file/file.txt
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
@@ -824,8 +805,7 @@ struct ExtensionTests {
     }
 
     @Test func setFileReadWriteSucceeds() async throws {
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // chmod 600 extension-permissions/file.txt
         let testPath = "extension-permissions"
@@ -864,8 +844,7 @@ struct ExtensionTests {
     }
 
     @Test func setFolderReadWriteExecuteSucceeds() async throws {
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // chmod 700 extension-permissions/folder
         let testPath = "extension-permissions"
@@ -903,8 +882,7 @@ struct ExtensionTests {
     }
 
     @Test func deleteFolderSucceeds() async throws {
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // rmdir extension-delete-item/folder
         let testPath = "extension-delete-item"
@@ -927,8 +905,7 @@ struct ExtensionTests {
     }
 
     @Test func deleteFileSucceeds() async throws {
-        let ext = try await getExtension()
-        let agent = ext.agent
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // rm extension-delete-item/file.txt
         let testPath = "extension-delete-item"

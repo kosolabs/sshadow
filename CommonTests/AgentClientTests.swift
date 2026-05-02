@@ -6,8 +6,7 @@ import Testing
 @testable import Common
 
 private func getAgentClient() async throws -> AgentClient {
-    try await TestData.initAppDB()
-    return TestData.getAgentClient()
+    try await TestData.getAgentClient()
 }
 
 struct AgentClientTests {
