@@ -3,6 +3,8 @@ import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
+private let logger = Logger(category: "ConnectionProfileEditView")
+
 struct ConnectionProfileEditView: View {
     @Environment(\.modelContext) private var modelContext
 
@@ -252,12 +254,12 @@ struct ConnectionProfileEditView: View {
                     relativeTo: nil
                 )
             } catch {
-                print(
+                logger.error(
                     "Failed to create bookmark data for URL \(url): \(error)"
                 )
             }
         case .failure(let error):
-            print(
+            logger.error(
                 "Failed to import file: \(error.localizedDescription)"
             )
         }

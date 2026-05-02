@@ -13,7 +13,7 @@ private class AppXPCService {
 
     private init() {
         do {
-            listener = try AgentListener.create()
+            listener = try Agent.create()
         } catch {
             listener = nil
             logger.error("Failed to create XPC listener: \(error)")

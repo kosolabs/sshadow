@@ -1,18 +1,19 @@
 import Common
 import FileProvider
 import Foundation
+import SwiftData
 import SwiftLibSSH
 import Testing
 
 @testable import AgentKit
 
 private func getSession() async throws -> Session {
-    try await TestData.initAppDB()
-
     let config = try TestData.getConnectionConfig()
     let ssh = try await SSHClient.connect(config: config)
     let sftp = try await ssh.sftp()
-    let db = try await TestData.getDomainDb()
+    let db = try await DomainDB.open(
+        config: ModelConfiguration(isStoredInMemoryOnly: true)
+    )
 
     return Session(
         config: config,
@@ -22,8 +23,6 @@ private func getSession() async throws -> Session {
     )
 }
 
-// TODO: Remove this after migration to agent in main app
-@Suite(.serialized)
 struct SessionTests {
     struct NameTests {
         @Test func filePropertyReturnsFilenameForSimpleItem() async throws {

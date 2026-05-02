@@ -8,18 +8,17 @@ private let logger = Logger(category: "Extension")
 public class Extension: NSObject, NSFileProviderReplicatedExtension,
     NSFileProviderPartialContentFetching
 {
-    static var agentClientFactory: (UUID) -> AgentClient = {
-        domainId in
-        AgentClient(domainId: domainId)
-    }
-
-    let agent: AgentClient
+    private let agent: AgentClient
 
     required public init(domain: NSFileProviderDomain) {
         let domainId = UUID(uuidString: domain.identifier.rawValue)!
-        agent = Self.agentClientFactory(domainId)
+        agent = AgentClient(domainId: domainId)
         logger.debug("Init \(domain)")
-
+        super.init()
+    }
+    
+    public init(agent: AgentClient) {
+        self.agent = agent
         super.init()
     }
 

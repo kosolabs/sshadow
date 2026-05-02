@@ -1,15 +1,67 @@
 import Common
 import FileProvider
 import Foundation
+import SwiftData
 import SwiftLibSSH
 
 private let logger = Logger(category: "Agent")
 
 public class Agent {
     private let sessions: SessionManager
+    private let domainDbConfig: ModelConfiguration?
 
-    public init(appDbStorePath: URL? = nil) {
-        self.sessions = SessionManager(appDbStorePath: appDbStorePath)
+    public init(
+        appDb: AppDB,
+        domainDbConfig: ModelConfiguration? = nil
+    ) {
+        self.domainDbConfig = domainDbConfig
+        self.sessions = SessionManager(
+            appDb: appDb,
+            domainDbConfig: domainDbConfig
+        )
+    }
+    
+    public static func create(
+        service: String = SSHadow.appServiceName,
+        appDB: AppDB? = nil,
+        domainDBConfig: ModelConfiguration? = nil
+    ) throws -> XPCListener {
+        let db = try appDB ?? AppDB.open()
+        return try XPCListener(service: service) { request in
+            accept(request: request, appDB: db, domainDBConfig: domainDBConfig)
+        }
+    }
+
+    public static func createAnonymous(
+        appDB: AppDB? = nil,
+        domainDBConfig: ModelConfiguration? = nil
+    ) -> XPCListener {
+        let db = try! appDB ?? AppDB.open()
+        return XPCListener(targetQueue: nil) { request in
+            accept(request: request, appDB: db, domainDBConfig: domainDBConfig)
+        }
+    }
+
+    private static func accept(
+        request: XPCListener.IncomingSessionRequest,
+        appDB: AppDB,
+        domainDBConfig: ModelConfiguration?
+    ) -> XPCListener.IncomingSessionRequest.Decision {
+        let agent = Agent(appDb: appDB, domainDbConfig: domainDBConfig)
+        return request.accept { message in
+            let agentRequest: AgentRequest
+            do {
+                agentRequest = try message.decode(as: AgentRequest.self)
+            } catch {
+                logger.error("Failed to decode request: \(error)")
+                return AgentResult.failure(AgentResultError(from: error))
+            }
+            Task {
+                let result = await agent.handle(agentRequest)
+                message.reply(result)
+            }
+            return nil
+        }
     }
 
     public func handle(
@@ -65,14 +117,16 @@ public class Agent {
             return .failure(AgentResultError(from: error))
         }
     }
-    
+
     func initDomain(
         _ request: InitDomainRequest
     ) async throws -> InitDomainResponse {
-        try await DomainDB.open(id: request.domainId)
+        let domainDbConfig =
+            self.domainDbConfig ?? DomainDB.model(for: request.domainId)
+        try await DomainDB.open(config: domainDbConfig)
         return InitDomainResponse()
     }
-    
+
     func deinitDomain(
         _ request: DeinitDomainRequest
     ) async throws -> DeinitDomainResponse {
@@ -265,7 +319,7 @@ public class Agent {
         )
         return DownloadResponse(url: url, fileInfo: fileInfo)
     }
-    
+
     func stream(
         _ request: StreamRequest
     ) async throws -> StreamResponse {

@@ -30,12 +30,9 @@ enum TestData {
         displayName: "Test"
     )
 
-    static let appDbStorePath = FileManager.default.temporaryDirectory
-        .appendingPathComponent("AppDB-test.store")
-
-    static func initAppDB() async throws {
-        let appDB = try AppDB.open(
-            config: ModelConfiguration(url: appDbStorePath)
+    private static func createAppDB() async throws -> AppDB {
+        let db = try AppDB.open(
+            config: ModelConfiguration(isStoredInMemoryOnly: true)
         )
 
         let profile = try ConnectionProfile(
@@ -50,7 +47,8 @@ enum TestData {
             bookmark: getPrivateKeyUrl().bookmarkData()
         )
 
-        try await appDB.upsert(profile: profile)
+        try await db.upsert(profile: profile)
+        return db
     }
 
     static func getConnectionConfig(
@@ -94,15 +92,13 @@ enum TestData {
         return url
     }
 
-    static func getDomainDb() async throws -> DomainDB {
-        return try await DomainDB.open(id: id)
-    }
-
     private static var testListener: XPCListener?
 
-    static func getAgentClient(id: UUID = id) -> AgentClient {
-        let listener = AgentListener.createAnonymous(
-            appDbStorePath: appDbStorePath
+    static func getAgentClient(id: UUID = id) async throws -> AgentClient {
+        let appDB = try await createAppDB()
+        let listener = Agent.createAnonymous(
+            appDB: appDB,
+            domainDBConfig: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         testListener = listener
         let session = try! XPCSession(endpoint: listener.endpoint)
