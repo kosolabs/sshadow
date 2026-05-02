@@ -6,7 +6,6 @@ private let logger = Logger(category: "Enumerator")
 
 public class Enumerator: NSObject, NSFileProviderEnumerator {
     private let agent: AgentClient
-    private let manager: SessionManager
     private let itemIdentifier: NSFileProviderItemIdentifier
     private let anchor = NSFileProviderSyncAnchor(
         "an anchor".data(using: .utf8)!
@@ -14,12 +13,10 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
 
     init(
         agent: AgentClient,
-        manager: SessionManager,
         itemIdentifier: NSFileProviderItemIdentifier
     ) {
         logger.debug("Init \(itemIdentifier.desc)")
         self.agent = agent
-        self.manager = manager
         self.itemIdentifier = itemIdentifier
         super.init()
     }
@@ -48,11 +45,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
 
         Task {
             do {
-                let session = try await manager.getSession()
-                let upTo = try await enumerateItems(
-                    startingAt: page,
-                    session: session
-                ) { items in
+                let upTo = try await enumerateItems(startingAt: page) { items in
                     observer.didEnumerate(items)
                 }
                 observer.finishEnumerating(upTo: upTo)
@@ -65,11 +58,9 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
 
     private func enumerateItems(
         startingAt page: NSFileProviderPage,
-        session: Session,
         yield: @Sendable ([any NSFileProviderItemProtocol]) -> Void,
     ) async throws -> NSFileProviderPage? {
-        let itemRef = await session.id(of: itemIdentifier)
-        logger.info("Enumerating \(itemRef)")
+        logger.info("Enumerating \(itemIdentifier.desc)")
 
         if itemIdentifier == .workingSet {
             return nil
@@ -80,7 +71,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
                 return nil
             }
         }
-        
+
         let entries = try await agent.list(for: itemIdentifier)
         for entry in entries {
             yield([Item(info: entry)])

@@ -343,4 +343,29 @@ public class AgentClient {
         }
         return (response.url, response.fileInfo)
     }
+    
+    public func stream(
+        itemId: NSFileProviderItemIdentifier,
+        range: Range<UInt64>,
+        progress: Progress
+    ) async throws -> (URL, Range<UInt64>) {
+        progress.kind = .file
+        progress.fileOperationKind = .downloading
+
+        let sync = XPCProgressSubscriber(progress: progress)
+        let reply = try await perform(
+            .stream(
+                StreamRequest(
+                    domainId: domainId,
+                    itemId: itemId.rawValue,
+                    range: range,
+                    progressEndpoint: sync.endpoint
+                )
+            )
+        )
+        guard case .stream(let response) = reply else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        return (response.url, response.range)
+    }
 }

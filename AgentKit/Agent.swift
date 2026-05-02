@@ -51,6 +51,8 @@ public class Agent {
                     try await .upload(upload(request))
                 case .download(let request):
                     try await .download(download(request))
+                case .stream(let request):
+                    try await .stream(stream(request))
                 }
             logger.debug("Response: \(response)")
             return .success(response)
@@ -244,5 +246,21 @@ public class Agent {
             progress: sync.progress
         )
         return DownloadResponse(url: url, fileInfo: fileInfo)
+    }
+    
+    func stream(
+        _ request: StreamRequest
+    ) async throws -> StreamResponse {
+        let session = try await sessions.connect(id: request.domainId)
+
+        let sync = try XPCProgressPublisher(
+            endpoint: request.progressEndpoint
+        )
+        let (url, range) = try await session.stream(
+            itemId: NSFileProviderItemIdentifier(request.itemId),
+            range: request.range,
+            progress: sync.progress
+        )
+        return StreamResponse(url: url, range: range)
     }
 }
