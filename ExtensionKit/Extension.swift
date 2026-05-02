@@ -16,15 +16,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     let agent: AgentClient
 
     required public init(domain: NSFileProviderDomain) {
-        do {
-            let userInfo = try UserInfo.fromDictionary(domain.userInfo)
-            let config = try ConnectionConfig(from: userInfo)
-            agent = Self.agentClientFactory(config.id)
-            logger.debug("Init \(config)")
-        } catch {
-            agent = Self.agentClientFactory(UUID())
-            logger.fault("Failed to retrieve connection config: \(error)")
-        }
+        let domainId = UUID(uuidString: domain.identifier.rawValue)!
+        agent = Self.agentClientFactory(domainId)
+        logger.debug("Init \(domain)")
 
         super.init()
     }
