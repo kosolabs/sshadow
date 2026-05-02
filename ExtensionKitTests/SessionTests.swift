@@ -34,34 +34,6 @@ private func getSession() async throws -> Session {
 // TODO: Remove this after migration to agent in main app
 @Suite(.serialized)
 struct SessionTests {
-    struct ChildTests {
-        @Test func childOfRootContainerWithNameTrashesIsTrashContainer()
-            async throws
-        {
-            let session = try await getSession()
-            let childOfRoot = try await session.child(path: ".Trashes")
-            #expect(childOfRoot == .trashContainer)
-        }
-
-        @Test func childOfTrashContainerReturnsItemInTrashes() async throws {
-            let session = try await getSession()
-            let actual = try await session.child(
-                of: .trashContainer,
-                path: "file"
-            )
-            let expected = try await session.child(path: ".Trashes/file")
-            #expect(actual == expected)
-        }
-
-        @Test func childOfItemReturnsNestedItem() async throws {
-            let session = try await getSession()
-            let parent = try await session.child(path: "folder")
-            let actual = try await session.child(of: parent, path: "file")
-            let expected = try await session.child(path: "folder/file")
-            #expect(actual == expected)
-        }
-    }
-
     struct WithFileTests {
         let testFolderPath = "session-with-file"
         let testFolderURL: URL
@@ -72,13 +44,14 @@ struct SessionTests {
 
         @Test func withFileReadSucceeds() async throws {
             let session = try await getSession()
+            let agent = session.agent
 
             let path = "\(testFolderPath)/read-file.txt"
             let contents = "Hello, World!"
             try TestData.createFile(path: path, contents: contents)
 
             let data = try await session.withFile(
-                for: session.child(path: path),
+                for: agent.child(path: path),
                 accessType: .readOnly
             ) { file in
                 try await file.read()
@@ -89,10 +62,11 @@ struct SessionTests {
 
         @Test func withFileMissingFileThrowsNoSuchItem() async throws {
             let session = try await getSession()
+            let agent = session.agent
 
             await #expect {
                 try await session.withFile(
-                    for: session.child(
+                    for: agent.child(
                         path: "\(testFolderPath)/missing.txt"
                     ),
                     accessType: .readOnly
