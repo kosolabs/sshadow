@@ -2,7 +2,7 @@ import FileProvider
 import Foundation
 import Testing
 
-@testable import Common
+@testable import AgentKit
 
 struct PathNodeTests {
     @Test func initSetsProperties() {

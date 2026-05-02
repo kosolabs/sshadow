@@ -19,6 +19,10 @@ public class Agent {
             logger.debug("Request: \(request)")
             let response: AgentResponse =
                 switch request {
+                case .initDomain(let request):
+                    try await .initDomain(initDomain(request))
+                case .deinitDomain(let request):
+                    try await .deinitDomain(deinitDomain(request))
                 case .name(let request):
                     try await .name(name(request))
                 case .child(let request):
@@ -60,6 +64,20 @@ public class Agent {
             logger.error("Failed to handle request: \(error)")
             return .failure(AgentResultError(from: error))
         }
+    }
+    
+    func initDomain(
+        _ request: InitDomainRequest
+    ) async throws -> InitDomainResponse {
+        try await DomainDB.open(id: request.domainId)
+        return InitDomainResponse()
+    }
+    
+    func deinitDomain(
+        _ request: DeinitDomainRequest
+    ) async throws -> DeinitDomainResponse {
+        try await DomainDB.delete(id: request.domainId)
+        return DeinitDomainResponse()
     }
 
     func name(

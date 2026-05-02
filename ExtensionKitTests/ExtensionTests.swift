@@ -10,7 +10,6 @@ private let root = NSFileProviderItemIdentifier.rootContainer
 
 private func getExtension(id: UUID = UUID()) async throws -> Extension {
     Extension.agentClientFactory = TestData.getAgentClient
-    DomainDB.urlFactory = { _ in TestData.domainDbStorePath }
     try await TestData.initAppDB()
     return Extension(domain: TestData.domain)
 }
@@ -98,7 +97,7 @@ struct ExtensionTests {
             progress: readProgress
         )
 
-        let chunkSize = FileChunk.size
+        let chunkSize = 64 * 1024  // FileChunk.size
         #expect(item.filename == "partial-file.dat")
         #expect(item.documentSize??.intValue == data.count)
         #expect(returnedRange == NSRange(0..<chunkSize))
