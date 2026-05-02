@@ -46,14 +46,6 @@ class Session {
         try await agent.name(of: identifier)
     }
 
-    func child(
-        of parent: NSFileProviderItemIdentifier = .rootContainer,
-        path: String,
-        ifNotExists: DomainDB.OnNotExists = .create
-    ) async throws -> NSFileProviderItemIdentifier {
-        try await agent.child(of: parent, path: path, ifNotExists: ifNotExists)
-    }
-
     func path(
         for identifier: NSFileProviderItemIdentifier
     ) async throws -> String {

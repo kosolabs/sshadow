@@ -234,7 +234,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
         logger.debug("Create \(item.desc) for \(fields.desc)")
 
-        let itemIdentifier = try await session.child(
+        let itemIdentifier = try await agent.child(
             of: item.parentItemIdentifier,
             path: item.filename
         )
@@ -466,7 +466,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         session: Session
     ) async throws {
         try await agent.setAttributes(
-            for: session.child(of: item.parentId, path: item.filename),
+            for: agent.child(of: item.parentId, path: item.filename),
             permissions: fields.contains(.fileSystemFlags)
                 ? item.fileSystemFlags?.permissions : nil,
             accessTime: fields.contains(.lastUsedDate)
