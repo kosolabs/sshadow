@@ -42,7 +42,7 @@ class Session {
     func child(
         of parentId: NSFileProviderItemIdentifier = .rootContainer,
         path: String,
-        ifNotExists: DomainDB.OnNotExists = .create
+        ifNotExists: OnNotExists = .create
     ) async throws -> NSFileProviderItemIdentifier {
         try await db.child(of: parentId, path: path, ifNotExists: ifNotExists)
     }

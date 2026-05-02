@@ -120,7 +120,7 @@ public class ConnectionProfile: CustomStringConvertible {
     public var description: String {
         "ConnectionProfile(id: \(id), name: \(name ?? "-"), enabled: \(enabled), url: \(url), authMethod: \(authMethod))"
     }
-    
+
     public var domain: NSFileProviderDomain {
         NSFileProviderDomain(
             identifier: NSFileProviderDomainIdentifier(id.uuidString),
@@ -136,24 +136,20 @@ public class ConnectionProfile: CustomStringConvertible {
 
     public func enable() async throws {
         let agent = AgentClient(domainId: id)
-        let name = try await agent.name(of: .rootContainer)
-        logger.info("Name of \(NSFileProviderItemIdentifier.rootContainer): \(name)")
-
         let config = try ConnectionConfig(from: self)
         try await tester.test(config: config)
+        try await agent.initDomain()
         try await NSFileProviderManager.add(domain)
-        // TODO: Initialize the DB in the Agent
-        try await DomainDB.open(id: id)
 
         self.enabled = true
-        
         logger.info("Enabled: \(self)")
     }
 
     public func disable() async throws {
+        let agent = AgentClient(domainId: id)
         try await NSFileProviderManager.remove(domain)
-        // TODO: Deinit the DB in the Agent
-        try await DomainDB.delete(id: id)
+        try await agent.deinitDomain()
+
         self.enabled = false
         logger.info("Disabled: \(self)")
     }
@@ -193,29 +189,29 @@ public class ConnectionProfile: CustomStringConvertible {
             return nil
         }
     }
-    
+
     public func getBase64PrivateKey() throws -> String {
-            guard let bookmark = bookmark else {
-                throw ValidationError.privateKeyUrlNil
-            }
-            var isStale = false
-            let url = try URL(
-                resolvingBookmarkData: bookmark,
-                bookmarkDataIsStale: &isStale
+        guard let bookmark = bookmark else {
+            throw ValidationError.privateKeyUrlNil
+        }
+        var isStale = false
+        let url = try URL(
+            resolvingBookmarkData: bookmark,
+            bookmarkDataIsStale: &isStale
+        )
+        guard url.startAccessingSecurityScopedResource() else {
+            throw ValidationError.privateKeyReadFailed
+        }
+        defer { url.stopAccessingSecurityScopedResource() }
+        guard
+            let base64PrivateKey = try? String(
+                data: Data(contentsOf: url),
+                encoding: .utf8
             )
-            guard url.startAccessingSecurityScopedResource() else {
-                throw ValidationError.privateKeyReadFailed
-            }
-            defer { url.stopAccessingSecurityScopedResource() }
-            guard
-                let base64PrivateKey = try? String(
-                    data: Data(contentsOf: url),
-                    encoding: .utf8
-                )
-            else {
-                throw ValidationError.privateKeyReadFailed
-            }
-            return base64PrivateKey
+        else {
+            throw ValidationError.privateKeyReadFailed
+        }
+        return base64PrivateKey
     }
 
     // MARK: - Private Key Passphrase Management

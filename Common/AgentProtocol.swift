@@ -6,12 +6,19 @@ public enum OnExists: Codable {
     case succeed
 }
 
+public enum OnNotExists: Codable {
+    case fail
+    case create
+}
+
 public enum OnParentNotExists: Codable {
     case fail
     case create
 }
 
 public enum AgentRequest: Codable {
+    case initDomain(InitDomainRequest)
+    case deinitDomain(DeinitDomainRequest)
     case name(NameRequest)
     case child(ChildRequest)
     case parent(ParentRequest)
@@ -32,6 +39,8 @@ public enum AgentRequest: Codable {
 }
 
 public enum AgentResponse: Codable {
+    case initDomain(InitDomainResponse)
+    case deinitDomain(DeinitDomainResponse)
     case name(NameResponse)
     case child(ChildResponse)
     case parent(ParentResponse)
@@ -48,6 +57,30 @@ public enum AgentResponse: Codable {
     case upload(UploadResponse)
     case download(DownloadResponse)
     case stream(StreamResponse)
+}
+
+public struct InitDomainRequest: Codable {
+    public let domainId: UUID
+
+    public init(domainId: UUID) {
+        self.domainId = domainId
+    }
+}
+
+public struct InitDomainResponse: Codable {
+    public init() {}
+}
+
+public struct DeinitDomainRequest: Codable {
+    public let domainId: UUID
+
+    public init(domainId: UUID) {
+        self.domainId = domainId
+    }
+}
+
+public struct DeinitDomainResponse: Codable {
+    public init() {}
 }
 
 public struct NameRequest: Codable {
@@ -72,13 +105,13 @@ public struct ChildRequest: Codable {
     public let domainId: UUID
     public let parentId: String
     public let path: String
-    public let ifNotExists: DomainDB.OnNotExists
+    public let ifNotExists: OnNotExists
 
     public init(
         domainId: UUID,
         parentId: String,
         path: String,
-        ifNotExists: DomainDB.OnNotExists
+        ifNotExists: OnNotExists
     ) {
         self.domainId = domainId
         self.parentId = parentId

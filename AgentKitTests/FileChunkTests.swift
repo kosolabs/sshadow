@@ -1,9 +1,9 @@
 import Foundation
 import Testing
 
-@testable import Common
+@testable import AgentKit
 
-struct SSHChunkTests {
+struct FileChunkTests {
     struct ChunkRangeTests {
         @Test func singleChunkForSmallRange() {
             let chunks = FileChunk.chunkRange(for: 0..<100)

@@ -49,6 +49,24 @@ public class AgentClient {
         }
     }
 
+    public func initDomain() async throws {
+        let reply = try await perform(
+            .initDomain(InitDomainRequest(domainId: domainId))
+        )
+        guard case .initDomain(let response) = reply else {
+            throw CocoaError(.coderInvalidValue)
+        }
+    }
+    
+    public func deinitDomain() async throws {
+        let reply = try await perform(
+            .deinitDomain(DeinitDomainRequest(domainId: domainId))
+        )
+        guard case .deinitDomain(let response) = reply else {
+            throw CocoaError(.coderInvalidValue)
+        }
+    }
+
     public func name(
         of itemId: NSFileProviderItemIdentifier
     ) async throws -> String {
@@ -64,7 +82,7 @@ public class AgentClient {
     public func child(
         of parentId: NSFileProviderItemIdentifier = .rootContainer,
         path: String,
-        ifNotExists: DomainDB.OnNotExists = .create
+        ifNotExists: OnNotExists = .create
     ) async throws -> NSFileProviderItemIdentifier {
         let reply = try await perform(
             .child(
@@ -343,7 +361,7 @@ public class AgentClient {
         }
         return (response.url, response.fileInfo)
     }
-    
+
     public func stream(
         itemId: NSFileProviderItemIdentifier,
         range: Range<UInt64>,

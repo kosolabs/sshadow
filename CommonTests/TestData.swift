@@ -29,8 +29,6 @@ enum TestData {
         ),
         displayName: "Test"
     )
-    static let domainDbStorePath = FileManager.default.temporaryDirectory
-        .appendingPathComponent("DomainDB-\(id.uuidString).store")
 
     static let appDbStorePath = FileManager.default.temporaryDirectory
         .appendingPathComponent("AppDB-test.store")

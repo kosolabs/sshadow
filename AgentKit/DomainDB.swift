@@ -1,3 +1,4 @@
+import Common
 import FileProvider
 import Foundation
 import SwiftData
@@ -91,11 +92,6 @@ public actor DomainDB {
             throw NSFileProviderError(.noSuchItem)
         }
         return item.name
-    }
-
-    public enum OnNotExists: Codable {
-        case fail
-        case create
     }
 
     private func child(
