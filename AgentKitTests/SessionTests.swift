@@ -920,6 +920,8 @@ struct SessionTests {
 }
 
 func isNoSuchItemError(_ error: any Error) -> Bool {
-    guard case AgentError.itemNotFound = error else { return false }
-    return true
+    if case AgentError.itemNotFound = error { return true }
+    let nsError = error as NSError
+    return nsError.domain == NSFileProviderErrorDomain
+        && nsError.code == NSFileProviderError.Code.noSuchItem.rawValue
 }
