@@ -1,6 +1,5 @@
 import FileProvider
 import Foundation
-import SwiftLibSSH
 import XPC
 
 private let logger = Logger(category: "AgentClient")

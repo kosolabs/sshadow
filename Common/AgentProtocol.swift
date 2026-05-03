@@ -1,5 +1,5 @@
+import FileProvider
 import Foundation
-import SwiftLibSSH
 
 public enum OnExists: Codable {
     case fail
@@ -449,22 +449,34 @@ public struct StreamResponse: Codable {
 
 public enum AgentError: Codable, Error {
     case profileNotFound(UUID)
+    case userCancelled
+    case itemNotFound(String)
+    case filenameCollision
+
+    public var asError: any Error {
+        switch self {
+        case .profileNotFound:
+            self
+        case .userCancelled:
+            CocoaError(.userCancelled)
+        case .itemNotFound(let itemId):
+            NSError.fileProviderErrorForNonExistentItem(
+                withIdentifier: NSFileProviderItemIdentifier(itemId)
+            )
+        case .filenameCollision:
+            NSFileProviderError(.filenameCollision)
+        }
+    }
 }
 
 public enum AgentResultError: Codable, Error {
     case agent(AgentError)
-    case ssh(SSHError)
-    case sftp(SFTPError)
     case unknown(domain: String, code: Int, message: String)
 
     public init(from error: any Error) {
         switch error {
         case let error as AgentError:
             self = .agent(error)
-        case let error as SSHError:
-            self = .ssh(error)
-        case let error as SFTPError:
-            self = .sftp(error)
         default:
             let nsError = error as NSError
             self = .unknown(
@@ -477,9 +489,7 @@ public enum AgentResultError: Codable, Error {
 
     public var underlyingError: any Error {
         switch self {
-        case .agent(let error): error
-        case .ssh(let error): error
-        case .sftp(let error): error
+        case .agent(let error): error.asError
         case .unknown(let domain, let code, let message):
             NSError(
                 domain: domain,
@@ -487,6 +497,11 @@ public enum AgentResultError: Codable, Error {
                 userInfo: [NSLocalizedDescriptionKey: message]
             )
         }
+    }
+
+    public var isUnknown: Bool {
+        if case .unknown = self { return true }
+        return false
     }
 }
 

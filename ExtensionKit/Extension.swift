@@ -90,18 +90,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> (URL, NSFileProviderItem) {
-        do {
-            let (url, info) = try await agent.download(
-                itemId: itemIdentifier,
-                progress: progress
-            )
-            return (url, Item(info: info))
-        } catch {
-            if progress.isCancelled {
-                throw CocoaError(.userCancelled)
-            }
-            throw error
-        }
+        let (url, info) = try await agent.download(
+            itemId: itemIdentifier,
+            progress: progress
+        )
+        return (url, Item(info: info))
     }
 
     public func fetchPartialContents(

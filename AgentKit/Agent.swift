@@ -114,7 +114,11 @@ public class Agent {
             return .success(response)
         } catch {
             logger.error("Failed to handle request: \(error)")
-            return .failure(AgentResultError(from: error))
+            let resultError = AgentResultError(from: error)
+            if resultError.isUnknown {
+                logger.warning("Unhandled error type at agent boundary, consider adding an AgentError case: \(error)")
+            }
+            return .failure(resultError)
         }
     }
 
