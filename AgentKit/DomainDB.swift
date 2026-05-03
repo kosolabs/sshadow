@@ -21,7 +21,7 @@ public actor DomainDB {
     public static func open(
         config: ModelConfiguration
     ) async throws -> DomainDB {
-        let schema = Schema([PathNode.self, FileChunk.self])
+        let schema = Schema([PathNode.self])
         if !config.isStoredInMemoryOnly {
             logger.info("Open DomainDB: \(config.url.path)")
         }
@@ -186,40 +186,4 @@ public actor DomainDB {
         try modelContext.save()
     }
 
-    // MARK: - Chunk Cache
-
-    public func isChunkCached(
-        for itemId: NSFileProviderItemIdentifier,
-        index: UInt64
-    ) -> Bool {
-        let rawItemId = itemId.rawValue
-        let descriptor = FetchDescriptor<FileChunk>(
-            predicate: #Predicate { chunk in
-                chunk.rawItemId == rawItemId && chunk.index == index
-            }
-        )
-        return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
-    }
-
-    public func recordChunk(
-        for itemId: NSFileProviderItemIdentifier,
-        index: UInt64
-    ) throws {
-        guard !isChunkCached(for: itemId, index: index) else { return }
-        modelContext.insert(FileChunk(itemId: itemId, index: index))
-        try modelContext.save()
-    }
-
-    public func deleteChunks(
-        for itemId: NSFileProviderItemIdentifier
-    ) throws {
-        let rawItemId = itemId.rawValue
-        try modelContext.delete(
-            model: FileChunk.self,
-            where: #Predicate { chunk in
-                chunk.rawItemId == rawItemId
-            }
-        )
-        try modelContext.save()
-    }
 }

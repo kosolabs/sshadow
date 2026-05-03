@@ -5,11 +5,24 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Session")
 
+private actor ChunkCache {
+    private var cached: [String: Set<UInt64>] = [:]
+
+    func contains(_ index: UInt64, for itemId: NSFileProviderItemIdentifier) -> Bool {
+        cached[itemId.rawValue]?.contains(index) ?? false
+    }
+
+    func record(_ index: UInt64, for itemId: NSFileProviderItemIdentifier) {
+        cached[itemId.rawValue, default: []].insert(index)
+    }
+}
+
 class Session {
     let config: ConnectionConfig
     let ssh: SSHClient
     let sftp: SFTPClient
     let db: DomainDB
+    private let chunkCache = ChunkCache()
 
     init(
         config: ConnectionConfig,
@@ -338,13 +351,13 @@ class Session {
             let bytes = FileChunk.byteRange(for: chunkIndex, fileSize: info.size)
             guard !bytes.isEmpty else { continue }
 
-            if await db.isChunkCached(for: itemId, index: chunkIndex) {
+            if await chunkCache.contains(chunkIndex, for: itemId) {
                 logger.debug("Cache hit \(chunkId)")
                 speedometer.update(delta: bytes.count)
                 continue
             }
 
-
+            try handle.seek(toOffset: bytes.offset)
             try await withFile(for: itemId, accessType: .readOnly) { file in
                 for try await data in file.stream(
                     offset: bytes.offset,
@@ -355,7 +368,7 @@ class Session {
                 }
             }
 
-            try await db.recordChunk(for: itemId, index: chunkIndex)
+            await chunkCache.record(chunkIndex, for: itemId)
             logger.debug("Cached \(chunkId)")
         }
 

@@ -674,16 +674,16 @@ struct SessionTests {
 
         @Test func uploadLargeFileSucceeds() async throws {
             let session = try await getSession()
-            
+
             let uploadUrl = FileManager.default.temporaryDirectory
                 .appending(path: UUID().uuidString)
             let data = Data(count: 10_485_760)
             try data.write(to: uploadUrl)
-            
+
             let filePath = "\(testFolderPath)/large-file.txt"
             try TestData.removeItem(path: filePath)
             let url = TestData.getUrl(path: filePath)
-            
+
             let itemId = try await session.child(path: filePath)
             let progress = Progress()
             try await session.upload(
@@ -692,7 +692,7 @@ struct SessionTests {
                 mode: 0o600,
                 progress: progress
             )
-            
+
             #expect(FileManager.default.fileExists(at: url))
             #expect(try Data(contentsOf: url) == data)
             #expect(progress.isFinished)
@@ -836,6 +836,84 @@ struct SessionTests {
             }
 
             #expect(count == 0)
+        }
+    }
+    struct StreamTests {
+        let testFolderPath = "session-stream"
+        let chunkSize = FileChunk.size
+
+        init() throws {
+            try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func streamSmallFileSucceeds() async throws {
+            let session = try await getSession()
+
+            let data = Data(repeating: 0xAB, count: Int(chunkSize))
+            let path = "\(testFolderPath)/small.dat"
+            try TestData.createFile(path: path, data: data)
+
+            let itemId = try await session.child(path: path)
+            let progress = Progress()
+            let (url, range) = try await session.stream(
+                itemId: itemId,
+                range: 0..<1,
+                progress: progress
+            )
+
+            #expect(range == 0..<chunkSize)
+            #expect(try Data(contentsOf: url) == data)
+            #expect(progress.isFinished)
+        }
+
+        @Test func streamExpandsRangeToChunkBoundary() async throws {
+            let session = try await getSession()
+
+            let data = Data(count: Int(chunkSize) * 2)
+            let path = "\(testFolderPath)/two-chunk-range.dat"
+            try TestData.createFile(path: path, data: data)
+
+            let itemId = try await session.child(path: path)
+            let requestedRange = (chunkSize + 100)..<(chunkSize + 200)
+            let (_, range) = try await session.stream(
+                itemId: itemId,
+                range: requestedRange,
+                progress: Progress()
+            )
+
+            #expect(range == chunkSize..<(chunkSize * 2))
+            #expect(range.lowerBound <= requestedRange.lowerBound)
+            #expect(range.upperBound >= requestedRange.upperBound)
+        }
+
+        @Test func streamWritesDataAtCorrectOffset() async throws {
+            let session = try await getSession()
+
+            // Two-chunk file: first chunk 0xAA, second chunk 0xBB
+            let data =
+                Data(repeating: 0xAA, count: Int(chunkSize))
+                + Data(repeating: 0xBB, count: Int(chunkSize))
+            let path = "\(testFolderPath)/offset.dat"
+            try TestData.createFile(path: path, data: data)
+
+            let itemId = try await session.child(path: path)
+            let requestedRange = (chunkSize + 100)..<(chunkSize + 200)
+            let (url, _) = try await session.stream(
+                itemId: itemId,
+                range: requestedRange,
+                progress: Progress()
+            )
+
+            let handle = try FileHandle(forReadingFrom: url)
+            defer { try? handle.close() }
+            try handle.seek(toOffset: requestedRange.lowerBound)
+            let count = Int(
+                requestedRange.upperBound - requestedRange.lowerBound
+            )
+            let actual = try handle.read(upToCount: Int(count))
+            let expected = Data(repeating: 0xBB, count: count)
+
+            #expect(actual == expected)
         }
     }
 }
