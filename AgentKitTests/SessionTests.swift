@@ -454,7 +454,8 @@ struct SessionTests {
             await #expect {
                 try await session.createDirectory(for: itemId)
             } throws: { error in
-                (error as NSError).domain == NSFileProviderErrorDomain
+                guard case AgentError.filenameCollision = error else { return false }
+                return true
             }
         }
     }
@@ -919,6 +920,6 @@ struct SessionTests {
 }
 
 func isNoSuchItemError(_ error: any Error) -> Bool {
-    (error as NSError).code == NSFileProviderError.noSuchItem.rawValue
-        && (error as NSError).domain == NSFileProviderErrorDomain
+    guard case AgentError.itemNotFound = error else { return false }
+    return true
 }

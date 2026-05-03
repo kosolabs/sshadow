@@ -26,6 +26,10 @@ public struct Logger: Sendable {
         logger.notice("\(message, privacy: .public)")
     }
 
+    public func warning(_ message: String) {
+        logger.warning("\(message, privacy: .public)")
+    }
+
     public func error(_ message: String) {
         logger.error("\(message, privacy: .public)")
     }
