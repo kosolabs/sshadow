@@ -113,10 +113,6 @@ public class ConnectionProfile: CustomStringConvertible {
         )
     }
 
-    public func absoluteUrl(for path: String) -> String {
-        effectivePath.isEmpty ? "\(url):\(path)" : "\(url)/\(path)"
-    }
-
     public var description: String {
         "ConnectionProfile(id: \(id), name: \(name ?? "-"), enabled: \(enabled), url: \(url), authMethod: \(authMethod))"
     }
