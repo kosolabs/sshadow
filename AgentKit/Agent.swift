@@ -23,31 +23,31 @@ public class Agent {
     
     public static func create(
         service: String = SSHadow.appServiceName,
-        appDB: AppDB? = nil,
-        domainDBConfig: ModelConfiguration? = nil
+        appDb: AppDB? = nil,
+        domainDbConfig: ModelConfiguration? = nil
     ) throws -> XPCListener {
-        let db = try appDB ?? AppDB.open()
+        let db = try appDb ?? AppDB.open()
         return try XPCListener(service: service) { request in
-            accept(request: request, appDB: db, domainDBConfig: domainDBConfig)
+            accept(request: request, appDb: db, domainDbConfig: domainDbConfig)
         }
     }
 
     public static func createAnonymous(
-        appDB: AppDB? = nil,
-        domainDBConfig: ModelConfiguration? = nil
+        appDb: AppDB? = nil,
+        domainDbConfig: ModelConfiguration? = nil
     ) -> XPCListener {
-        let db = try! appDB ?? AppDB.open()
+        let db = try! appDb ?? AppDB.open()
         return XPCListener(targetQueue: nil) { request in
-            accept(request: request, appDB: db, domainDBConfig: domainDBConfig)
+            accept(request: request, appDb: db, domainDbConfig: domainDbConfig)
         }
     }
 
     private static func accept(
         request: XPCListener.IncomingSessionRequest,
-        appDB: AppDB,
-        domainDBConfig: ModelConfiguration?
+        appDb: AppDB,
+        domainDbConfig: ModelConfiguration?
     ) -> XPCListener.IncomingSessionRequest.Decision {
-        let agent = Agent(appDb: appDB, domainDbConfig: domainDBConfig)
+        let agent = Agent(appDb: appDb, domainDbConfig: domainDbConfig)
         return request.accept { message in
             let agentRequest: AgentRequest
             do {

@@ -290,10 +290,10 @@ struct SessionTests {
 
     struct AttributesTests {
         let testFolderPath = "session-attributes"
-        let testFolderURL: URL
+        let testFolderUrl: URL
 
         init() throws {
-            testFolderURL = try TestData.createFolder(path: testFolderPath)
+            testFolderUrl = try TestData.createFolder(path: testFolderPath)
         }
 
         @Test func attributesForFileSucceeds() async throws {
@@ -639,10 +639,10 @@ struct SessionTests {
 
     struct uploadTests {
         let testFolderPath = "session-upload-file"
-        let testFolderURL: URL
+        let testFolderUrl: URL
 
         init() throws {
-            testFolderURL = try TestData.createFolder(path: testFolderPath)
+            testFolderUrl = try TestData.createFolder(path: testFolderPath)
         }
 
         @Test func uploadSmallFileSucceeds() async throws {
@@ -752,10 +752,10 @@ struct SessionTests {
 
     struct WithFileTests {
         let testFolderPath = "session-with-file"
-        let testFolderURL: URL
+        let testFolderUrl: URL
 
         init() throws {
-            testFolderURL = try TestData.createFolder(path: testFolderPath)
+            testFolderUrl = try TestData.createFolder(path: testFolderPath)
         }
 
         @Test func withFileReadSucceeds() async throws {
