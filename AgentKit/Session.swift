@@ -268,7 +268,7 @@ class Session {
                 while let data = try fp.read(upToCount: Int(bufferSize)) {
                     if progress.isCancelled {
                         logger.info("Upload \(itemRef) cancelled")
-                        throw CocoaError(.userCancelled)
+                        throw AgentError.userCancelled
                     }
                     try await writer.write(data: data)
                     if let progress = speedometer.update(delta: data.count) {
@@ -311,7 +311,7 @@ class Session {
             for try await data in file.stream(bufferSize: bufferSize) {
                 if progress.isCancelled {
                     logger.info("Download \(itemRef) cancelled")
-                    throw CocoaError(.userCancelled)
+                    throw AgentError.userCancelled
                 }
                 try handle.write(contentsOf: data)
                 if let progress = speedometer.update(delta: data.count) {
@@ -414,12 +414,10 @@ class Session {
             return try await operation()
         } catch SSHError.sftpError(.noSuchFile, _) {
             await logger.debug("\(id(of: itemId)) doesn't exist")
-            throw NSError.fileProviderErrorForNonExistentItem(
-                withIdentifier: itemId
-            )
+            throw AgentError.itemNotFound(itemId.rawValue)
         } catch SSHError.sftpError(.fileAlreadyExists, _) {
             await logger.debug("\(id(of: itemId)) already exists")
-            throw NSFileProviderError(.filenameCollision)
+            throw AgentError.filenameCollision
         }
     }
 }

@@ -20,7 +20,7 @@ public class Agent {
             domainDbConfig: domainDbConfig
         )
     }
-    
+
     public static func create(
         service: String = SSHadow.appServiceName,
         appDb: AppDB? = nil,
@@ -64,9 +64,7 @@ public class Agent {
         }
     }
 
-    public func handle(
-        _ request: AgentRequest
-    ) async -> AgentResult {
+    public func handle(_ request: AgentRequest) async -> AgentResult {
         do {
             logger.debug("Request: \(request)")
             let response: AgentResponse =
@@ -114,7 +112,11 @@ public class Agent {
             return .success(response)
         } catch {
             logger.error("Failed to handle request: \(error)")
-            return .failure(AgentResultError(from: error))
+            let resultError = AgentResultError(from: error)
+            if resultError.isUnknown {
+                logger.error("Unhandled error type: \(error)")
+            }
+            return .failure(resultError)
         }
     }
 
@@ -293,7 +295,7 @@ public class Agent {
     ) async throws -> UploadResponse {
         let session = try await sessions.connect(id: request.domainId)
 
-        let sync = try XPCProgressPublisher(
+        let sync = XPCProgressPublisher(
             endpoint: request.progressEndpoint
         )
         try await session.upload(
@@ -310,7 +312,7 @@ public class Agent {
     ) async throws -> DownloadResponse {
         let session = try await sessions.connect(id: request.domainId)
 
-        let sync = try XPCProgressPublisher(
+        let sync = XPCProgressPublisher(
             endpoint: request.progressEndpoint
         )
         let (url, fileInfo) = try await session.download(
@@ -325,7 +327,7 @@ public class Agent {
     ) async throws -> StreamResponse {
         let session = try await sessions.connect(id: request.domainId)
 
-        let sync = try XPCProgressPublisher(
+        let sync = XPCProgressPublisher(
             endpoint: request.progressEndpoint
         )
         let (url, range) = try await session.stream(
