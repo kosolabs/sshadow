@@ -72,10 +72,6 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
     public func path(for subpath: String) -> String {
         [path, subpath].filter { !$0.isEmpty }.joined(separator: "/")
     }
-
-    public func absoluteUrl(for path: String) -> String {
-        self.path.isEmpty ? "\(url):\(path)" : "\(url)/\(path)"
-    }
 }
 
 extension SSHClient {
