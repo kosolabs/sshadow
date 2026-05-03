@@ -923,5 +923,5 @@ func isNoSuchItemError(_ error: any Error) -> Bool {
     if case AgentError.itemNotFound = error { return true }
     let nsError = error as NSError
     return nsError.domain == NSFileProviderErrorDomain
-        && nsError.code == NSFileProviderError.Code.noSuchItem.rawValue
+        && nsError.code == NSFileProviderError.noSuchItem.rawValue
 }
