@@ -1,6 +1,5 @@
 import Common
 import FileProvider
-import SwiftLibSSH
 import UniformTypeIdentifiers
 
 private let logger = Logger(category: "Extension")

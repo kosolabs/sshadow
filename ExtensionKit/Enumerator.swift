@@ -1,6 +1,5 @@
 import Common
 import FileProvider
-import SwiftLibSSH
 
 private let logger = Logger(category: "Enumerator")
 

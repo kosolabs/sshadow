@@ -30,7 +30,7 @@ enum TestData {
         displayName: "Test"
     )
 
-    private static func createAppDB() async throws -> AppDB {
+    private static func createAppDb() async throws -> AppDB {
         let db = try AppDB.open(
             config: ModelConfiguration(isStoredInMemoryOnly: true)
         )
@@ -95,10 +95,10 @@ enum TestData {
     private static var testListener: XPCListener?
 
     static func getAgentClient(id: UUID = id) async throws -> AgentClient {
-        let appDB = try await createAppDB()
+        let appDb = try await createAppDb()
         let listener = Agent.createAnonymous(
-            appDB: appDB,
-            domainDBConfig: ModelConfiguration(isStoredInMemoryOnly: true)
+            appDb: appDb,
+            domainDbConfig: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         testListener = listener
         let session = try! XPCSession(endpoint: listener.endpoint)

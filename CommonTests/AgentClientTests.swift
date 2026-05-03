@@ -11,10 +11,10 @@ private func getAgentClient() async throws -> AgentClient {
 
 struct AgentClientTests {
     let testFolderPath = "agent-client"
-    let testFolderURL: URL
+    let testFolderUrl: URL
 
     init() throws {
-        testFolderURL = try TestData.createFolder(path: testFolderPath)
+        testFolderUrl = try TestData.createFolder(path: testFolderPath)
     }
 
     @Test func nameAndChildAndParentSucceed() async throws {
