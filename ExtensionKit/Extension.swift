@@ -90,21 +90,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> (URL, NSFileProviderItem) {
-        do {
-            let (url, info) = try await agent.download(
-                itemId: itemIdentifier,
-                progress: progress
-            )
-            return (url, Item(info: info))
-        } catch {
-            // If the progress was already cancelled when download started the
-            // XPC endpoint may have been invalidated before the agent could
-            // throw AgentError.userCancelled, resulting in a generic error.
-            if progress.isCancelled {
-                throw CocoaError(.userCancelled)
-            }
-            throw error
-        }
+        let (url, info) = try await agent.download(
+            itemId: itemIdentifier,
+            progress: progress
+        )
+        return (url, Item(info: info))
     }
 
     public func fetchPartialContents(

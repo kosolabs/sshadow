@@ -9,25 +9,26 @@ private enum XPCProgressUpdate: Codable {
 
 public final class XPCProgressPublisher {
     public let progress: Progress
-    private let session: XPCSession
+    private let session: XPCSession?
     private let observers: [NSKeyValueObservation]
 
-    public init(progress: Progress = Progress(), endpoint: XPCEndpoint) throws {
-        let session = try XPCSession(endpoint: endpoint) { _ in
+    public init(progress: Progress = Progress(), endpoint: XPCEndpoint) {
+        let session = try? XPCSession(endpoint: endpoint) { error in
+            logger.error("Failed to establish XPCSession: \(error)")
             progress.cancel()
         }
 
         var observers: [NSKeyValueObservation] = []
         observers.append(
             progress.observe(\.totalUnitCount) { p, _ in
-                try? session.send(
+                try? session?.send(
                     XPCProgressUpdate.totalUnitCount(p.totalUnitCount)
                 )
             }
         )
         observers.append(
             progress.observe(\.completedUnitCount) { p, _ in
-                try? session.send(
+                try? session?.send(
                     XPCProgressUpdate.completedUnitCount(p.completedUnitCount)
                 )
             }
@@ -42,7 +43,7 @@ public final class XPCProgressPublisher {
         for observer in observers {
             observer.invalidate()
         }
-        session.cancel(reason: "Complete")
+        session?.cancel(reason: "Complete")
     }
 }
 

@@ -9,7 +9,7 @@ struct XPCProgressTests {
         let sink = XPCProgressSubscriber(progress: sinkProgress)
 
         let sourceProgress = Progress()
-        let source = try XPCProgressPublisher(
+        let source = XPCProgressPublisher(
             progress: sourceProgress,
             endpoint: sink.endpoint
         )
@@ -28,7 +28,7 @@ struct XPCProgressTests {
 
         let sourceProgress = Progress()
         sourceProgress.totalUnitCount = 100
-        let source = try XPCProgressPublisher(
+        let source = XPCProgressPublisher(
             progress: sourceProgress,
             endpoint: sink.endpoint
         )
@@ -46,7 +46,7 @@ struct XPCProgressTests {
         let sink = XPCProgressSubscriber(progress: sinkProgress)
 
         let sourceProgress = Progress()
-        let source = try XPCProgressPublisher(
+        let source = XPCProgressPublisher(
             progress: sourceProgress,
             endpoint: sink.endpoint
         )
@@ -71,7 +71,7 @@ struct XPCProgressTests {
         let sink = XPCProgressSubscriber(progress: sinkProgress)
 
         let sourceProgress = Progress()
-        let source = try XPCProgressPublisher(
+        let source = XPCProgressPublisher(
             progress: sourceProgress,
             endpoint: sink.endpoint
         )

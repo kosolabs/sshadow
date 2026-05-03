@@ -52,7 +52,7 @@ public class AgentClient {
         let reply = try await perform(
             .initDomain(InitDomainRequest(domainId: domainId))
         )
-        guard case .initDomain(let response) = reply else {
+        guard case .initDomain = reply else {
             throw CocoaError(.coderInvalidValue)
         }
     }
@@ -61,7 +61,7 @@ public class AgentClient {
         let reply = try await perform(
             .deinitDomain(DeinitDomainRequest(domainId: domainId))
         )
-        guard case .deinitDomain(let response) = reply else {
+        guard case .deinitDomain = reply else {
             throw CocoaError(.coderInvalidValue)
         }
     }
