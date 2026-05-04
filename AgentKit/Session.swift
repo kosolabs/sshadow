@@ -324,7 +324,7 @@ class Session {
         return (url, info)
     }
 
-    private func cache(
+    func cache(
         chunkIndex: UInt64,
         itemId: NSFileProviderItemIdentifier,
         fileSize: UInt64
