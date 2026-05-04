@@ -327,20 +327,21 @@ class Session {
     private func cache(
         chunkIndex: UInt64,
         itemId: NSFileProviderItemIdentifier,
-        itemRef: String,
-        fileSize: UInt64,
-        handle: FileHandle,
-        speedometer: Speedometer
+        fileSize: UInt64
     ) async throws {
+        let itemRef = await id(of: itemId)
         let chunkId = "\(itemRef)[\(chunkIndex)]"
         let bytes = FileChunk.byteRange(for: chunkIndex, fileSize: fileSize)
         guard !bytes.isEmpty else { return }
 
         if await chunkCache.contains(chunkIndex, for: itemId) {
             logger.debug("Cache hit \(chunkId)")
-            speedometer.update(delta: bytes.count)
             return
         }
+
+        let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
 
         try handle.seek(toOffset: bytes.offset)
         try await withFile(for: itemId, accessType: .readOnly) { file in
@@ -349,7 +350,6 @@ class Session {
                 length: bytes.length
             ) {
                 try handle.write(contentsOf: data)
-                speedometer.update(delta: bytes.count)
             }
         }
 
@@ -371,8 +371,6 @@ class Session {
         logger.info("Stream \(rangeId) into \(url)")
 
         try create(file: url)
-        let handle = try FileHandle(forWritingTo: url)
-        defer { try? handle.close() }
 
         progress.kind = .file
         progress.fileOperationKind = .downloading
@@ -380,14 +378,9 @@ class Session {
         let speedometer = Speedometer(progress: progress)
 
         for chunkIndex in chunkRange {
-            try await cache(
-                chunkIndex: chunkIndex,
-                itemId: itemId,
-                itemRef: itemRef,
-                fileSize: info.size,
-                handle: handle,
-                speedometer: speedometer
-            )
+            let bytes = FileChunk.byteRange(for: chunkIndex, fileSize: info.size)
+            try await cache(chunkIndex: chunkIndex, itemId: itemId, fileSize: info.size)
+            speedometer.update(delta: bytes.count)
         }
 
         logger.info("Streamed \(rangeId): \(speedometer.finalize())")
