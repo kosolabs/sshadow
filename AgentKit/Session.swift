@@ -324,6 +324,39 @@ class Session {
         return (url, info)
     }
 
+    private func cache(
+        chunkIndex: UInt64,
+        itemId: NSFileProviderItemIdentifier,
+        itemRef: String,
+        fileSize: UInt64,
+        handle: FileHandle,
+        speedometer: Speedometer
+    ) async throws {
+        let chunkId = "\(itemRef)[\(chunkIndex)]"
+        let bytes = FileChunk.byteRange(for: chunkIndex, fileSize: fileSize)
+        guard !bytes.isEmpty else { return }
+
+        if await chunkCache.contains(chunkIndex, for: itemId) {
+            logger.debug("Cache hit \(chunkId)")
+            speedometer.update(delta: bytes.count)
+            return
+        }
+
+        try handle.seek(toOffset: bytes.offset)
+        try await withFile(for: itemId, accessType: .readOnly) { file in
+            for try await data in file.stream(
+                offset: bytes.offset,
+                length: bytes.length
+            ) {
+                try handle.write(contentsOf: data)
+                speedometer.update(delta: bytes.count)
+            }
+        }
+
+        await chunkCache.record(chunkIndex, for: itemId)
+        logger.debug("Cached \(chunkId)")
+    }
+
     func stream(
         itemId: NSFileProviderItemIdentifier,
         range: Range<UInt64>,
@@ -347,29 +380,14 @@ class Session {
         let speedometer = Speedometer(progress: progress)
 
         for chunkIndex in chunkRange {
-            let chunkId = "\(itemRef)[\(chunkIndex)]"
-            let bytes = FileChunk.byteRange(for: chunkIndex, fileSize: info.size)
-            guard !bytes.isEmpty else { continue }
-
-            if await chunkCache.contains(chunkIndex, for: itemId) {
-                logger.debug("Cache hit \(chunkId)")
-                speedometer.update(delta: bytes.count)
-                continue
-            }
-
-            try handle.seek(toOffset: bytes.offset)
-            try await withFile(for: itemId, accessType: .readOnly) { file in
-                for try await data in file.stream(
-                    offset: bytes.offset,
-                    length: bytes.length
-                ) {
-                    try handle.write(contentsOf: data)
-                    speedometer.update(delta: bytes.count)
-                }
-            }
-
-            await chunkCache.record(chunkIndex, for: itemId)
-            logger.debug("Cached \(chunkId)")
+            try await cache(
+                chunkIndex: chunkIndex,
+                itemId: itemId,
+                itemRef: itemRef,
+                fileSize: info.size,
+                handle: handle,
+                speedometer: speedometer
+            )
         }
 
         logger.info("Streamed \(rangeId): \(speedometer.finalize())")
