@@ -638,7 +638,7 @@ struct SessionTests {
         }
     }
 
-    struct uploadTests {
+    struct UploadTests {
         let testFolderPath = "session-upload-file"
         let testFolderUrl: URL
 
@@ -701,7 +701,7 @@ struct SessionTests {
         }
     }
 
-    struct downloadTests {
+    struct DownloadTests {
         let testFolderPath = "session-download-file"
         let testFolderUrl: URL
 
@@ -751,6 +751,170 @@ struct SessionTests {
         }
     }
 
+    struct CacheTests {
+        let testFolderPath = "session-cache"
+        let chunkSize = FileChunk.size
+
+        init() throws {
+            try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func cacheDownloadsChunk() async throws {
+            let session = try await getSession()
+
+            let data = Data(repeating: 0xAB, count: Int(chunkSize))
+            let path = "\(testFolderPath)/one-chunk.dat"
+            try TestData.createFile(path: path, data: data)
+
+            let itemId = try await session.child(path: path)
+            let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
+            try Data(count: Int(chunkSize)).write(to: url)
+
+            try await session.cache(chunkIndex: 0, itemId: itemId, fileSize: chunkSize)
+
+            #expect(try Data(contentsOf: url) == data)
+        }
+
+        @Test func cacheSkipsEmptyChunk() async throws {
+            let session = try await getSession()
+
+            let data = Data(repeating: 0xCD, count: Int(chunkSize))
+            let path = "\(testFolderPath)/skip-empty.dat"
+            try TestData.createFile(path: path, data: data)
+
+            let itemId = try await session.child(path: path)
+            let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
+            let initial = Data(count: Int(chunkSize))
+            try initial.write(to: url)
+
+            // chunkIndex 1 with fileSize == chunkSize → empty byte range, no download
+            try await session.cache(chunkIndex: 1, itemId: itemId, fileSize: chunkSize)
+
+            #expect(try Data(contentsOf: url) == initial)
+        }
+
+        @Test func cacheHitSkipsDownload() async throws {
+            let session = try await getSession()
+
+            let data = Data(repeating: 0xEF, count: Int(chunkSize))
+            let path = "\(testFolderPath)/cache-hit.dat"
+            try TestData.createFile(path: path, data: data)
+
+            let itemId = try await session.child(path: path)
+            let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
+            try Data(count: Int(chunkSize)).write(to: url)
+
+            try await session.cache(chunkIndex: 0, itemId: itemId, fileSize: chunkSize)
+            #expect(try Data(contentsOf: url) == data)
+
+            let sentinel = Data(repeating: 0x00, count: Int(chunkSize))
+            try sentinel.write(to: url)
+
+            try await session.cache(chunkIndex: 0, itemId: itemId, fileSize: chunkSize)
+            #expect(try Data(contentsOf: url) == sentinel)
+        }
+
+        @Test func cacheWritesAtCorrectOffset() async throws {
+            let session = try await getSession()
+
+            let data =
+                Data(repeating: 0xAA, count: Int(chunkSize))
+                + Data(repeating: 0xBB, count: Int(chunkSize))
+            let path = "\(testFolderPath)/two-chunk-offset.dat"
+            try TestData.createFile(path: path, data: data)
+
+            let itemId = try await session.child(path: path)
+            let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
+            try Data(count: Int(chunkSize) * 2).write(to: url)
+
+            try await session.cache(
+                chunkIndex: 1, itemId: itemId, fileSize: chunkSize * 2
+            )
+
+            let result = try Data(contentsOf: url)
+            #expect(result.dropFirst(Int(chunkSize)) == data.dropFirst(Int(chunkSize)))
+        }
+    }
+
+    struct StreamTests {
+        let testFolderPath = "session-stream"
+        let chunkSize = FileChunk.size
+
+        init() throws {
+            try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func streamSmallFileSucceeds() async throws {
+            let session = try await getSession()
+
+            let data = Data(repeating: 0xAB, count: Int(chunkSize))
+            let path = "\(testFolderPath)/small.dat"
+            try TestData.createFile(path: path, data: data)
+
+            let itemId = try await session.child(path: path)
+            let progress = Progress()
+            let (url, range) = try await session.stream(
+                itemId: itemId,
+                range: 0..<1,
+                progress: progress
+            )
+
+            #expect(range == 0..<chunkSize)
+            #expect(try Data(contentsOf: url) == data)
+            #expect(progress.isFinished)
+        }
+
+        @Test func streamExpandsRangeToChunkBoundary() async throws {
+            let session = try await getSession()
+
+            let data = Data(count: Int(chunkSize) * 2)
+            let path = "\(testFolderPath)/two-chunk-range.dat"
+            try TestData.createFile(path: path, data: data)
+
+            let itemId = try await session.child(path: path)
+            let requestedRange = (chunkSize + 100)..<(chunkSize + 200)
+            let (_, range) = try await session.stream(
+                itemId: itemId,
+                range: requestedRange,
+                progress: Progress()
+            )
+
+            #expect(range == chunkSize..<(chunkSize * 2))
+            #expect(range.lowerBound <= requestedRange.lowerBound)
+            #expect(range.upperBound >= requestedRange.upperBound)
+        }
+
+        @Test func streamWritesDataAtCorrectOffset() async throws {
+            let session = try await getSession()
+
+            // Two-chunk file: first chunk 0xAA, second chunk 0xBB
+            let data =
+                Data(repeating: 0xAA, count: Int(chunkSize))
+                + Data(repeating: 0xBB, count: Int(chunkSize))
+            let path = "\(testFolderPath)/offset.dat"
+            try TestData.createFile(path: path, data: data)
+
+            let itemId = try await session.child(path: path)
+            let requestedRange = (chunkSize + 100)..<(chunkSize + 200)
+            let (url, _) = try await session.stream(
+                itemId: itemId,
+                range: requestedRange,
+                progress: Progress()
+            )
+
+            let handle = try FileHandle(forReadingFrom: url)
+            defer { try? handle.close() }
+            try handle.seek(toOffset: requestedRange.lowerBound)
+            let count = Int(
+                requestedRange.upperBound - requestedRange.lowerBound
+            )
+            let actual = try handle.read(upToCount: Int(count))
+            let expected = Data(repeating: 0xBB, count: count)
+
+            #expect(actual == expected)
+        }
+    }
+    
     struct WithFileTests {
         let testFolderPath = "session-with-file"
         let testFolderUrl: URL
@@ -837,84 +1001,6 @@ struct SessionTests {
             }
 
             #expect(count == 0)
-        }
-    }
-    struct StreamTests {
-        let testFolderPath = "session-stream"
-        let chunkSize = FileChunk.size
-
-        init() throws {
-            try TestData.createFolder(path: testFolderPath)
-        }
-
-        @Test func streamSmallFileSucceeds() async throws {
-            let session = try await getSession()
-
-            let data = Data(repeating: 0xAB, count: Int(chunkSize))
-            let path = "\(testFolderPath)/small.dat"
-            try TestData.createFile(path: path, data: data)
-
-            let itemId = try await session.child(path: path)
-            let progress = Progress()
-            let (url, range) = try await session.stream(
-                itemId: itemId,
-                range: 0..<1,
-                progress: progress
-            )
-
-            #expect(range == 0..<chunkSize)
-            #expect(try Data(contentsOf: url) == data)
-            #expect(progress.isFinished)
-        }
-
-        @Test func streamExpandsRangeToChunkBoundary() async throws {
-            let session = try await getSession()
-
-            let data = Data(count: Int(chunkSize) * 2)
-            let path = "\(testFolderPath)/two-chunk-range.dat"
-            try TestData.createFile(path: path, data: data)
-
-            let itemId = try await session.child(path: path)
-            let requestedRange = (chunkSize + 100)..<(chunkSize + 200)
-            let (_, range) = try await session.stream(
-                itemId: itemId,
-                range: requestedRange,
-                progress: Progress()
-            )
-
-            #expect(range == chunkSize..<(chunkSize * 2))
-            #expect(range.lowerBound <= requestedRange.lowerBound)
-            #expect(range.upperBound >= requestedRange.upperBound)
-        }
-
-        @Test func streamWritesDataAtCorrectOffset() async throws {
-            let session = try await getSession()
-
-            // Two-chunk file: first chunk 0xAA, second chunk 0xBB
-            let data =
-                Data(repeating: 0xAA, count: Int(chunkSize))
-                + Data(repeating: 0xBB, count: Int(chunkSize))
-            let path = "\(testFolderPath)/offset.dat"
-            try TestData.createFile(path: path, data: data)
-
-            let itemId = try await session.child(path: path)
-            let requestedRange = (chunkSize + 100)..<(chunkSize + 200)
-            let (url, _) = try await session.stream(
-                itemId: itemId,
-                range: requestedRange,
-                progress: Progress()
-            )
-
-            let handle = try FileHandle(forReadingFrom: url)
-            defer { try? handle.close() }
-            try handle.seek(toOffset: requestedRange.lowerBound)
-            let count = Int(
-                requestedRange.upperBound - requestedRange.lowerBound
-            )
-            let actual = try handle.read(upToCount: Int(count))
-            let expected = Data(repeating: 0xBB, count: count)
-
-            #expect(actual == expected)
         }
     }
 }
