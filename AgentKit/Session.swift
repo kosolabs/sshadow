@@ -5,24 +5,13 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Session")
 
-private actor ChunkCache {
-    private var cached: [String: Set<UInt64>] = [:]
-
-    func contains(_ index: UInt64, for itemId: NSFileProviderItemIdentifier) -> Bool {
-        cached[itemId.rawValue]?.contains(index) ?? false
-    }
-
-    func record(_ index: UInt64, for itemId: NSFileProviderItemIdentifier) {
-        cached[itemId.rawValue, default: []].insert(index)
-    }
-}
-
 class Session {
-    let config: ConnectionConfig
-    let ssh: SSHClient
-    let sftp: SFTPClient
-    let db: DomainDB
-    private let chunkCache = ChunkCache()
+    private let config: ConnectionConfig
+    private let ssh: SSHClient
+    private let sftp: SFTPClient
+    private let db: DomainDB
+
+    private let pool = ChunkedFileCachePool()
 
     init(
         config: ConnectionConfig,
@@ -40,6 +29,10 @@ class Session {
         await sftp.close()
         await ssh.close()
         logger.info("Closed: \(config.url)")
+    }
+    
+    var limits: SFTPLimits {
+        sftp.limits
     }
 
     func id(of itemId: NSFileProviderItemIdentifier) async -> String {
@@ -324,37 +317,23 @@ class Session {
         return (url, info)
     }
 
-    func cache(
-        chunkIndex: UInt64,
-        itemId: NSFileProviderItemIdentifier,
-        fileSize: UInt64
-    ) async throws {
-        let itemRef = await id(of: itemId)
-        let chunkId = "\(itemRef)[\(chunkIndex)]"
-        let bytes = FileChunk.byteRange(for: chunkIndex, fileSize: fileSize)
-        guard !bytes.isEmpty else { return }
-
-        if await chunkCache.contains(chunkIndex, for: itemId) {
-            logger.debug("Cache hit \(chunkId)")
-            return
-        }
-
-        let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
-        let handle = try FileHandle(forWritingTo: url)
-        defer { try? handle.close() }
-
-        try handle.seek(toOffset: bytes.offset)
-        try await withFile(for: itemId, accessType: .readOnly) { file in
-            for try await data in file.stream(
-                offset: bytes.offset,
-                length: bytes.length
-            ) {
-                try handle.write(contentsOf: data)
+    private func cache(for file: ChunkedFile) async -> ChunkedFileCache {
+        await pool.cache(for: file) { [sftp] itemId, range in
+            try await sftp.withSftpFile(
+                atPath: await self.path(for: itemId),
+                accessType: .readOnly
+            ) { file in
+                try await file.read(range: range)
             }
         }
+    }
 
-        await chunkCache.record(chunkIndex, for: itemId)
-        logger.debug("Cached \(chunkId)")
+    private func file(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> ChunkedFile {
+        let path = await db.path(for: itemId)
+        let info = try await info(for: itemId)
+        return ChunkedFile(id: itemId, path: path, size: info.size)
     }
 
     func stream(
@@ -362,15 +341,17 @@ class Session {
         range: Range<UInt64>,
         progress: Progress
     ) async throws -> (URL, Range<UInt64>) {
-        let itemRef = await id(of: itemId)
-        let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
-        let chunkRange = FileChunk.chunkRange(for: range)
-        let info = try await info(for: itemId)
-        let byteRange = FileChunk.byteRange(for: chunkRange, fileSize: info.size)
-        let rangeId = "\(itemRef)(\(range))[\(chunkRange)->\(byteRange)]"
-        logger.info("Stream \(rangeId) into \(url)")
+        let file = try await file(for: itemId)
+        let cache = await cache(for: file)
+        let url = SSHadow.groupUrl.appending(path: "\(itemId.rawValue)")
+        logger.info("Stream \(file) into \(url)")
+
+        let chunkRange = file.chunkRange(for: range)
+        let byteRange = file.byteRange(for: chunkRange)
 
         try create(file: url)
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
 
         progress.kind = .file
         progress.fileOperationKind = .downloading
@@ -378,12 +359,22 @@ class Session {
         let speedometer = Speedometer(progress: progress)
 
         for chunkIndex in chunkRange {
-            let bytes = FileChunk.byteRange(for: chunkIndex, fileSize: info.size)
-            try await cache(chunkIndex: chunkIndex, itemId: itemId, fileSize: info.size)
-            speedometer.update(delta: bytes.count)
+            let data = try await cache.fetch(chunkId: chunkIndex)
+            try handle.seek(toOffset: file.byteOffset(for: chunkIndex))
+            try handle.write(contentsOf: data)
+            speedometer.update(delta: data.count)
         }
 
-        logger.info("Streamed \(rangeId): \(speedometer.finalize())")
+        let prefetchRange = chunkRange.upperBound..<chunkRange.upperBound + 2
+        if !prefetchRange.isEmpty {
+            Task {
+                for chunkIndex in prefetchRange {
+                    try await cache.fetch(chunkId: chunkIndex)
+                }
+            }
+        }
+
+        logger.info("Streamed \(file): \(speedometer.finalize())")
         return (url, byteRange)
     }
 

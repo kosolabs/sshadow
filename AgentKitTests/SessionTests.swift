@@ -751,94 +751,9 @@ struct SessionTests {
         }
     }
 
-    struct CacheTests {
-        let testFolderPath = "session-cache"
-        let chunkSize = FileChunk.size
-
-        init() throws {
-            try TestData.createFolder(path: testFolderPath)
-        }
-
-        @Test func cacheDownloadsChunk() async throws {
-            let session = try await getSession()
-
-            let data = Data(repeating: 0xAB, count: Int(chunkSize))
-            let path = "\(testFolderPath)/one-chunk.dat"
-            try TestData.createFile(path: path, data: data)
-
-            let itemId = try await session.child(path: path)
-            let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
-            try Data(count: Int(chunkSize)).write(to: url)
-
-            try await session.cache(chunkIndex: 0, itemId: itemId, fileSize: chunkSize)
-
-            #expect(try Data(contentsOf: url) == data)
-        }
-
-        @Test func cacheSkipsEmptyChunk() async throws {
-            let session = try await getSession()
-
-            let data = Data(repeating: 0xCD, count: Int(chunkSize))
-            let path = "\(testFolderPath)/skip-empty.dat"
-            try TestData.createFile(path: path, data: data)
-
-            let itemId = try await session.child(path: path)
-            let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
-            let initial = Data(count: Int(chunkSize))
-            try initial.write(to: url)
-
-            // chunkIndex 1 with fileSize == chunkSize → empty byte range, no download
-            try await session.cache(chunkIndex: 1, itemId: itemId, fileSize: chunkSize)
-
-            #expect(try Data(contentsOf: url) == initial)
-        }
-
-        @Test func cacheHitSkipsDownload() async throws {
-            let session = try await getSession()
-
-            let data = Data(repeating: 0xEF, count: Int(chunkSize))
-            let path = "\(testFolderPath)/cache-hit.dat"
-            try TestData.createFile(path: path, data: data)
-
-            let itemId = try await session.child(path: path)
-            let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
-            try Data(count: Int(chunkSize)).write(to: url)
-
-            try await session.cache(chunkIndex: 0, itemId: itemId, fileSize: chunkSize)
-            #expect(try Data(contentsOf: url) == data)
-
-            let sentinel = Data(repeating: 0x00, count: Int(chunkSize))
-            try sentinel.write(to: url)
-
-            try await session.cache(chunkIndex: 0, itemId: itemId, fileSize: chunkSize)
-            #expect(try Data(contentsOf: url) == sentinel)
-        }
-
-        @Test func cacheWritesAtCorrectOffset() async throws {
-            let session = try await getSession()
-
-            let data =
-                Data(repeating: 0xAA, count: Int(chunkSize))
-                + Data(repeating: 0xBB, count: Int(chunkSize))
-            let path = "\(testFolderPath)/two-chunk-offset.dat"
-            try TestData.createFile(path: path, data: data)
-
-            let itemId = try await session.child(path: path)
-            let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
-            try Data(count: Int(chunkSize) * 2).write(to: url)
-
-            try await session.cache(
-                chunkIndex: 1, itemId: itemId, fileSize: chunkSize * 2
-            )
-
-            let result = try Data(contentsOf: url)
-            #expect(result.dropFirst(Int(chunkSize)) == data.dropFirst(Int(chunkSize)))
-        }
-    }
-
     struct StreamTests {
         let testFolderPath = "session-stream"
-        let chunkSize = FileChunk.size
+        let chunkSize = ChunkedFile.defaultChunkSize
 
         init() throws {
             try TestData.createFolder(path: testFolderPath)
