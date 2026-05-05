@@ -281,7 +281,7 @@ public class Agent {
         _ request: LimitsRequest
     ) async throws -> LimitsResponse {
         let session = try await sessions.connect(id: request.domainId)
-        let limits = session.sftp.limits
+        let limits = session.limits
         return LimitsResponse(
             maxOpenHandles: limits.maxOpenHandles,
             maxPacketLength: limits.maxPacketLength,

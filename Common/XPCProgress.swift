@@ -14,7 +14,6 @@ public final class XPCProgressPublisher {
 
     public init(progress: Progress = Progress(), endpoint: XPCEndpoint) {
         let session = try? XPCSession(endpoint: endpoint) { error in
-            logger.error("Failed to establish XPCSession: \(error)")
             progress.cancel()
         }
 
