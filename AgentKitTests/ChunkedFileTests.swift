@@ -1,29 +1,41 @@
+import Common
 import FileProvider
 import Foundation
 import Testing
 
 @testable import AgentKit
 
-private let id = NSFileProviderItemIdentifier(UUID().uuidString)
-private let path = "file"
+private func info(size: UInt64) -> FileInfo {
+    FileInfo(
+        id: UUID().uuidString,
+        parentId: UUID().uuidString,
+        name: "file",
+        isDirectory: false,
+        size: size,
+        permissions: 0o644,
+        accessTime: nil,
+        modifyTime: nil,
+        createTime: nil
+    )
+}
 
 struct ChunkedFileTests {
     struct ChunkRangeTests {
         @Test func singleChunkForSmallRange() {
-            let file = ChunkedFile(id: id, path: path, size: 1024 * 1024)
+            let file = ChunkedFile(info: info(size: 1024 * 1024))
             let chunks = file.chunkRange(for: 0..<100)
             #expect(chunks == 0..<1)
         }
 
         @Test func singleChunkWhenRangeWithinFirstChunk() {
-            let file = ChunkedFile(id: id, path: path, size: 1024 * 1024)
+            let file = ChunkedFile(info: info(size: 1024 * 1024))
             let chunks = file.chunkRange(for: 10 * 1024..<20 * 1024)
             #expect(chunks == 0..<1)
         }
 
         @Test func multipleChunksForLargeRange() {
             let size = ChunkedFile.defaultChunkSize
-            let file = ChunkedFile(id: id, path: path, size: size * 10)
+            let file = ChunkedFile(info: info(size: size * 10))
             let range: Range<UInt64> = (size - 1000)..<(size + 1000)
             let chunks = file.chunkRange(for: range)
             #expect(chunks.count > 1)
@@ -32,41 +44,41 @@ struct ChunkedFileTests {
         }
 
         @Test func smallRange() {
-            let file = ChunkedFile(id: id, path: path, size: 1024 * 1024)
+            let file = ChunkedFile(info: info(size: 1024 * 1024))
             let chunks = file.chunkRange(for: 0..<1)
             #expect(chunks == 0..<1)
         }
 
         @Test func exactChunkBoundary() {
             let size = ChunkedFile.defaultChunkSize
-            let file = ChunkedFile(id: id, path: path, size: size)
+            let file = ChunkedFile(info: info(size: size))
             let chunks = file.chunkRange(for: 0..<size)
             #expect(chunks == 0..<1)
         }
 
         @Test func rangeSpanningChunkBoundary() {
             let size = ChunkedFile.defaultChunkSize
-            let file = ChunkedFile(id: id, path: path, size: size * 10)
+            let file = ChunkedFile(info: info(size: size * 10))
             let chunks = file.chunkRange(for: (size - 1)..<(size + 1))
             #expect(chunks == 0..<2)
         }
 
         @Test func clampsToChunkCount() {
             let size = ChunkedFile.defaultChunkSize
-            let file = ChunkedFile(id: id, path: path, size: size * 3)
+            let file = ChunkedFile(info: info(size: size * 3))
             let chunks = file.chunkRange(for: 0..<(size * 5))
             #expect(chunks == 0..<3)
         }
 
         @Test func clampsBeyondFileEnd() {
             let size = ChunkedFile.defaultChunkSize
-            let file = ChunkedFile(id: id, path: path, size: size * 2 + 100)
+            let file = ChunkedFile(info: info(size: size * 2 + 100))
             let chunks = file.chunkRange(for: (size * 2)..<(size * 5))
             #expect(chunks == 2..<3)
         }
 
         @Test func emptyForEmptyFile() {
-            let file = ChunkedFile(id: id, path: path, size: 0)
+            let file = ChunkedFile(info: info(size: 0))
             let chunks = file.chunkRange(for: 0..<100)
             #expect(chunks.isEmpty)
         }
@@ -75,14 +87,14 @@ struct ChunkedFileTests {
     struct ByteRangeForChunksTests {
         @Test func singleChunkInLargeFile() {
             let size = ChunkedFile.defaultChunkSize
-            let file = ChunkedFile(id: id, path: path, size: size * 10)
+            let file = ChunkedFile(info: info(size: size * 10))
             let range = file.byteRange(for: 0..<1)
             #expect(range == 0..<size)
         }
 
         @Test func multipleChunks() {
             let size = ChunkedFile.defaultChunkSize
-            let file = ChunkedFile(id: id, path: path, size: size * 10)
+            let file = ChunkedFile(info: info(size: size * 10))
             let range = file.byteRange(for: 2..<5)
             #expect(range == (2 * size)..<(5 * size))
         }
@@ -90,7 +102,7 @@ struct ChunkedFileTests {
         @Test func clampsToFileSize() {
             let size = ChunkedFile.defaultChunkSize
             let fileSize = size * 2 + 100
-            let file = ChunkedFile(id: id, path: path, size: fileSize)
+            let file = ChunkedFile(info: info(size: fileSize))
             let range = file.byteRange(for: 0..<3)
             #expect(range == 0..<fileSize)
         }
@@ -98,7 +110,7 @@ struct ChunkedFileTests {
         @Test func lastPartialChunk() {
             let size = ChunkedFile.defaultChunkSize
             let fileSize = size + 500
-            let file = ChunkedFile(id: id, path: path, size: fileSize)
+            let file = ChunkedFile(info: info(size: fileSize))
             let range = file.byteRange(for: 1..<2)
             #expect(range == size..<fileSize)
         }
@@ -107,14 +119,14 @@ struct ChunkedFileTests {
     struct ByteRangeForIndexTests {
         @Test func firstChunk() {
             let size = ChunkedFile.defaultChunkSize
-            let file = ChunkedFile(id: id, path: path, size: size * 10)
+            let file = ChunkedFile(info: info(size: size * 10))
             let range = file.byteRange(for: 0)
             #expect(range == 0..<size)
         }
 
         @Test func middleChunk() {
             let size = ChunkedFile.defaultChunkSize
-            let file = ChunkedFile(id: id, path: path, size: size * 10)
+            let file = ChunkedFile(info: info(size: size * 10))
             let range = file.byteRange(for: 3)
             #expect(range == (3 * size)..<(4 * size))
         }
@@ -122,7 +134,7 @@ struct ChunkedFileTests {
         @Test func lastPartialChunk() {
             let size = ChunkedFile.defaultChunkSize
             let fileSize = size * 3 + 1000
-            let file = ChunkedFile(id: id, path: path, size: fileSize)
+            let file = ChunkedFile(info: info(size: fileSize))
             let range = file.byteRange(for: 3)
             #expect(range == (3 * size)..<fileSize)
         }
@@ -130,14 +142,14 @@ struct ChunkedFileTests {
         @Test func lastFullChunk() {
             let size = ChunkedFile.defaultChunkSize
             let fileSize = size * 4
-            let file = ChunkedFile(id: id, path: path, size: fileSize)
+            let file = ChunkedFile(info: info(size: fileSize))
             let range = file.byteRange(for: 3)
             #expect(range == (3 * size)..<(4 * size))
         }
 
         @Test func emptyWhenBeyondFileSize() {
             let size = ChunkedFile.defaultChunkSize
-            let file = ChunkedFile(id: id, path: path, size: size * 3)
+            let file = ChunkedFile(info: info(size: size * 3))
             let range = file.byteRange(for: 5)
             #expect(range.isEmpty)
         }
@@ -145,23 +157,18 @@ struct ChunkedFileTests {
 
     struct ByteOffsetTests {
         @Test func firstChunk() {
-            let file = ChunkedFile(id: id, path: path, size: 1024 * 1024 * 10)
+            let file = ChunkedFile(info: info(size: 1024 * 1024 * 10))
             #expect(file.byteOffset(for: 0) == 0)
         }
 
         @Test func middleChunk() {
             let size = ChunkedFile.defaultChunkSize
-            let file = ChunkedFile(id: id, path: path, size: size * 10)
+            let file = ChunkedFile(info: info(size: size * 10))
             #expect(file.byteOffset(for: 3) == 3 * size)
         }
 
         @Test func customChunkSize() {
-            let file = ChunkedFile(
-                id: id,
-                path: path,
-                size: 5000,
-                chunkSize: 500
-            )
+            let file = ChunkedFile(info: info(size: 5000), chunkSize: 500)
             #expect(file.byteOffset(for: 4) == 2000)
         }
     }
@@ -177,7 +184,7 @@ struct ChunkedFileTests {
             ]
 
             for (range, fileSize) in cases {
-                let file = ChunkedFile(id: id, path: path, size: fileSize)
+                let file = ChunkedFile(info: info(size: fileSize))
                 let chunks = file.chunkRange(for: range)
                 let bytes = file.byteRange(for: chunks)
 

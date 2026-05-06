@@ -5,26 +5,32 @@ import Foundation
 struct ChunkedFile: CustomStringConvertible {
     static let defaultChunkSize: UInt64 = 1024 * 1024
 
-    let id: NSFileProviderItemIdentifier
-    let path: String
-    let size: UInt64
+    let info: FileInfo
     let chunkSize: UInt64
 
     init(
-        id: NSFileProviderItemIdentifier,
-        path: String,
-        size: UInt64,
+        info: FileInfo,
         chunkSize: UInt64 = defaultChunkSize
     ) {
-        self.id = id
-        self.path = path
-        self.size = size
+        self.info = info
         self.chunkSize = chunkSize
     }
 
+    var id: NSFileProviderItemIdentifier {
+        NSFileProviderItemIdentifier(info.id)
+    }
+
+    var name: String {
+        info.name
+    }
+
+    var size: UInt64 {
+        info.size
+    }
+
     var chunkCount: UInt64 {
-        guard size > 0 else { return 0 }
-        return (size + chunkSize - 1) / chunkSize
+        guard info.size > 0 else { return 0 }
+        return (info.size + chunkSize - 1) / chunkSize
     }
 
     func chunkRange(for range: Range<UInt64>) -> Range<UInt64> {
@@ -37,7 +43,7 @@ struct ChunkedFile: CustomStringConvertible {
     func byteRange(for chunks: Range<UInt64>) -> Range<UInt64> {
         let range =
             (chunks.lowerBound * chunkSize)..<(chunks.upperBound * chunkSize)
-        return range.clamped(to: 0..<size)
+        return range.clamped(to: 0..<info.size)
     }
 
     func byteRange(for chunk: UInt64) -> Range<UInt64> {
@@ -49,6 +55,6 @@ struct ChunkedFile: CustomStringConvertible {
     }
 
     var description: String {
-        "ChunkedFile(id: \(id), path: \(path), size: \(size), chunks: \(chunkCount)@\(chunkSize)b)"
+        "ChunkedFile(id: \(info.id), name: \(name), size: \(size), chunks: \(chunkCount)@\(chunkSize)b)"
     }
 }

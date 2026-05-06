@@ -16,7 +16,13 @@ public enum OnParentNotExists: Codable {
     case create
 }
 
-public enum AgentRequest: Codable {
+public enum AgentRequest: Codable, CustomStringConvertible {
+    public var description: String {
+        let mirror = Mirror(reflecting: self)
+        guard let child = mirror.children.first else { return "AgentRequest" }
+        return "\(child.label ?? "")(\(child.value))"
+    }
+
     case initDomain(InitDomainRequest)
     case deinitDomain(DeinitDomainRequest)
     case name(NameRequest)
@@ -38,7 +44,13 @@ public enum AgentRequest: Codable {
     case stream(StreamRequest)
 }
 
-public enum AgentResponse: Codable {
+public enum AgentResponse: Codable, CustomStringConvertible {
+    public var description: String {
+        let mirror = Mirror(reflecting: self)
+        guard let child = mirror.children.first else { return "AgentResponse" }
+        return "\(child.label ?? "")(\(child.value))"
+    }
+
     case initDomain(InitDomainResponse)
     case deinitDomain(DeinitDomainResponse)
     case name(NameResponse)

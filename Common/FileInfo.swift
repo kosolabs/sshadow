@@ -1,6 +1,12 @@
 import Foundation
 
-public struct FileInfo: Codable, Sendable {
+public struct FileInfo: Message, CustomStringConvertible {
+    public var description: String {
+        let mirror = Mirror(reflecting: self)
+        let fields = mirror.children.map { "\($0.label ?? ""): \($0.value)" }.joined(separator: ", ")
+        return "FileInfo(\(fields))"
+    }
+
     public let id: String
     public let parentId: String
     public let name: String
