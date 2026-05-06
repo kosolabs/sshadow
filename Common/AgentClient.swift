@@ -16,12 +16,13 @@ public class AgentClient {
     }
 
     public init(domainId: UUID, session: XPCSession) {
+        logger.debug("Opening agent: \(session)")
         self.domainId = domainId
         self.session = session
-        logger.info("Connected to: \(session)")
     }
 
     deinit {
+        logger.debug("Closing agent: \(session)")
         session.cancel(reason: "AgentClient deallocated")
     }
 

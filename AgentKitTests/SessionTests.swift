@@ -918,6 +918,69 @@ struct SessionTests {
             #expect(count == 0)
         }
     }
+    
+    struct MapErrorTests {
+        @Test func connectionFailedThrowsServerUnreachable() async throws {
+            let session = try await getSession()
+            await #expect {
+                try await session.mapError(with: .rootContainer) {
+                    throw SSHError.connectionFailed(message: "Connection reset by peer")
+                }
+            } throws: { error in
+                if case AgentError.serverUnreachable = error { return true }
+                return false
+            }
+        }
+
+        @Test func libraryErrorThrowsServerUnreachable() async throws {
+            let session = try await getSession()
+            await #expect {
+                try await session.mapError(with: .rootContainer) {
+                    throw SSHError.libraryError(code: 0, message: "")
+                }
+            } throws: { error in
+                if case AgentError.serverUnreachable = error { return true }
+                return false
+            }
+        }
+
+        @Test func sftpNoSuchFileThrowsItemNotFound() async throws {
+            let session = try await getSession()
+            let itemId = try await session.child(path: "missing.txt")
+            await #expect {
+                try await session.mapError(with: itemId) {
+                    throw SSHError.sftpError(.noSuchFile, message: "not found")
+                }
+            } throws: { error in
+                if case AgentError.itemNotFound = error { return true }
+                return false
+            }
+        }
+
+        @Test func sftpFileAlreadyExistsThrowsFilenameCollision() async throws {
+            let session = try await getSession()
+            await #expect {
+                try await session.mapError(with: .rootContainer) {
+                    throw SSHError.sftpError(.fileAlreadyExists, message: "exists")
+                }
+            } throws: { error in
+                if case AgentError.filenameCollision = error { return true }
+                return false
+            }
+        }
+
+        @Test func unmappedErrorPassesThrough() async throws {
+            let session = try await getSession()
+            await #expect {
+                try await session.mapError(with: .rootContainer) {
+                    throw SSHError.authenticationFailed(message: "bad key")
+                }
+            } throws: { error in
+                if case SSHError.authenticationFailed = error { return true }
+                return false
+            }
+        }
+    }
 }
 
 func isNoSuchItemError(_ error: any Error) -> Bool {

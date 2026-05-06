@@ -1,6 +1,8 @@
 import FileProvider
 import Foundation
 
+private let logger = Logger(category: "AgentProtocol")
+
 public enum OnExists: Codable {
     case fail
     case succeed
@@ -21,6 +23,49 @@ public enum AgentRequest: Codable, CustomStringConvertible {
         let mirror = Mirror(reflecting: self)
         guard let child = mirror.children.first else { return "AgentRequest" }
         return "\(child.label ?? "")(\(child.value))"
+    }
+    
+    public var domainId: UUID {
+        switch self {
+        case .initDomain(let request):
+            request.domainId
+        case .deinitDomain(let request):
+            request.domainId
+        case .name(let request):
+            request.domainId
+        case .child(let request):
+            request.domainId
+        case .parent(let request):
+            request.domainId
+        case .pathForItem(let request):
+            request.domainId
+        case .pathForChild(let request):
+            request.domainId
+        case .info(let request):
+            request.domainId
+        case .list(let request):
+            request.domainId
+        case .exists(let request):
+            request.domainId
+        case .setAttributes(let request):
+            request.domainId
+        case .createDirectory(let request):
+            request.domainId
+        case .move(let request):
+            request.domainId
+        case .removeFile(let request):
+            request.domainId
+        case .removeDirectory(let request):
+            request.domainId
+        case .limits(let request):
+            request.domainId
+        case .upload(let request):
+            request.domainId
+        case .download(let request):
+            request.domainId
+        case .stream(let request):
+            request.domainId
+        }
     }
 
     case initDomain(InitDomainRequest)
@@ -464,6 +509,7 @@ public enum AgentError: Codable, Error {
     case userCancelled
     case itemNotFound(String)
     case filenameCollision
+    case serverUnreachable
 
     public var asError: any Error {
         switch self {
@@ -477,6 +523,8 @@ public enum AgentError: Codable, Error {
             )
         case .filenameCollision:
             NSFileProviderError(.filenameCollision)
+        case .serverUnreachable:
+            NSFileProviderError(.serverUnreachable)
         }
     }
 }
@@ -490,6 +538,7 @@ public enum AgentResultError: Codable, Error {
         case let error as AgentError:
             self = .agent(error)
         default:
+            logger.error("Unhandled error type: \(error)")
             let nsError = error as NSError
             self = .unknown(
                 domain: nsError.domain,

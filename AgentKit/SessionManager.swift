@@ -29,6 +29,7 @@ actor SessionManager {
             return try await task.value
         }
 
+        logger.info("Connecting: \(profile.url)")
         let domainDbConfig = self.domainDbConfig ?? DomainDB.model(for: id)
         let task = Task {
             let config = try ConnectionConfig(from: profile)
@@ -56,6 +57,7 @@ actor SessionManager {
         connectTasks[id] = nil
         if let session = sessions.removeValue(forKey: id) {
             await session.close()
+            logger.info("Disconnected: \(session.url)")
         }
     }
 

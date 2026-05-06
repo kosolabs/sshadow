@@ -112,11 +112,10 @@ public class Agent {
             return .success(response)
         } catch {
             logger.error("Failed to handle request: \(error)")
-            let resultError = AgentResultError(from: error)
-            if resultError.isUnknown {
-                logger.error("Unhandled error type: \(error)")
+            if case AgentError.serverUnreachable = error {
+                await sessions.disconnect(id: request.domainId)
             }
-            return .failure(resultError)
+            return .failure(AgentResultError(from: error))
         }
     }
 
