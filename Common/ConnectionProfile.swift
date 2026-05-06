@@ -174,10 +174,16 @@ public class ConnectionProfile: CustomStringConvertible {
         }
         do {
             var isStale = false
-            return try URL(
+            let url = try URL(
                 resolvingBookmarkData: bookmark,
+                options: .withSecurityScope,
+                relativeTo: nil,
                 bookmarkDataIsStale: &isStale
             )
+            if isStale {
+                refreshBookmark(from: url)
+            }
+            return url
         } catch {
             logger.error(
                 "Failed to resolve bookmark data for id: \(self.id), error: \(error)"
@@ -193,8 +199,13 @@ public class ConnectionProfile: CustomStringConvertible {
         var isStale = false
         let url = try URL(
             resolvingBookmarkData: bookmark,
+            options: .withSecurityScope,
+            relativeTo: nil,
             bookmarkDataIsStale: &isStale
         )
+        if isStale {
+            refreshBookmark(from: url)
+        }
         guard url.startAccessingSecurityScopedResource() else {
             throw ValidationError.privateKeyReadFailed
         }
@@ -208,6 +219,24 @@ public class ConnectionProfile: CustomStringConvertible {
             throw ValidationError.privateKeyReadFailed
         }
         return base64PrivateKey
+    }
+
+    private func refreshBookmark(from url: URL) {
+        guard url.startAccessingSecurityScopedResource() else {
+            return
+        }
+        defer { url.stopAccessingSecurityScopedResource() }
+        do {
+            self.bookmark = try url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+        } catch {
+            logger.error(
+                "Failed to refresh stale bookmark for id: \(self.id), error: \(error)"
+            )
+        }
     }
 
     // MARK: - Private Key Passphrase Management
@@ -244,8 +273,13 @@ public class ConnectionProfile: CustomStringConvertible {
             var isStale = false
             let url = try URL(
                 resolvingBookmarkData: bookmark,
+                options: .withSecurityScope,
+                relativeTo: nil,
                 bookmarkDataIsStale: &isStale
             )
+            if isStale {
+                refreshBookmark(from: url)
+            }
             guard url.startAccessingSecurityScopedResource() else {
                 throw ValidationError.privateKeyReadFailed
             }
