@@ -44,7 +44,11 @@ enum TestData {
             user: user,
             path: mount.path(),
             authMethod: .privateKey,
-            bookmark: getPrivateKeyUrl().bookmarkData()
+            bookmark: try getPrivateKeyUrl().bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
         )
 
         try await db.upsert(profile: profile)

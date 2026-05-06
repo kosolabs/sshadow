@@ -250,6 +250,7 @@ struct ConnectionProfileEditView: View {
             do {
                 config.authMethod = .privateKey
                 config.bookmark = try url.bookmarkData(
+                    options: .withSecurityScope,
                     includingResourceValuesForKeys: nil,
                     relativeTo: nil
                 )
