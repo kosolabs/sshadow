@@ -30,7 +30,7 @@ class Session {
         await ssh.close()
         logger.info("Closed: \(config.url)")
     }
-    
+
     var limits: SFTPLimits {
         sftp.limits
     }
@@ -285,36 +285,35 @@ class Session {
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
         progress: Progress,
     ) async throws -> (URL, FileInfo) {
-        let itemRef = await id(of: itemId)
+        let file = try await ChunkedFile(info: info(for: itemId))
         let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
-        logger.info("Download \(itemRef) into \(url)")
+        logger.info("Download \(file) into \(url)")
 
         try create(file: url)
         let handle = try FileHandle(forWritingTo: url)
         defer { try? handle.close() }
-        let info = try await info(for: itemId)
 
         progress.kind = .file
         progress.fileOperationKind = .downloading
-        progress.totalUnitCount = Int64(info.size)
+        progress.totalUnitCount = Int64(file.info.size)
         let speedometer = Speedometer(progress: progress)
 
         let bufferSize = sftp.limits.readLength(for: chunkSize)
         try await withFile(for: itemId, accessType: .readOnly) { file in
             for try await data in file.stream(bufferSize: bufferSize) {
                 if progress.isCancelled {
-                    logger.info("Download \(itemRef) cancelled")
+                    logger.info("Download \(file) cancelled")
                     throw AgentError.userCancelled
                 }
                 try handle.write(contentsOf: data)
                 if let progress = speedometer.update(delta: data.count) {
-                    logger.debug("Downloading \(itemRef): \(progress)")
+                    logger.debug("Downloading \(file): \(progress)")
                 }
             }
         }
 
-        logger.info("Downloaded \(itemRef): \(speedometer.finalize())")
-        return (url, info)
+        logger.info("Downloaded \(file): \(speedometer.finalize())")
+        return (url, file.info)
     }
 
     private func cache(for file: ChunkedFile) async -> ChunkedFileCache {
@@ -328,20 +327,12 @@ class Session {
         }
     }
 
-    private func file(
-        for itemId: NSFileProviderItemIdentifier
-    ) async throws -> ChunkedFile {
-        let path = await db.path(for: itemId)
-        let info = try await info(for: itemId)
-        return ChunkedFile(id: itemId, path: path, size: info.size)
-    }
-
     func stream(
         itemId: NSFileProviderItemIdentifier,
         range: Range<UInt64>,
         progress: Progress
     ) async throws -> (URL, Range<UInt64>) {
-        let file = try await file(for: itemId)
+        let file = try await ChunkedFile(info: info(for: itemId))
         let cache = await cache(for: file)
         let url = SSHadow.groupUrl.appending(path: "\(itemId.rawValue)")
         logger.info("Stream \(file) into \(url)")
