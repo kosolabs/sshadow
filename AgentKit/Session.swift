@@ -28,7 +28,10 @@ class Session {
     func close() async {
         await sftp.close()
         await ssh.close()
-        logger.info("Closed: \(config.url)")
+    }
+    
+    var url: String {
+        config.url
     }
 
     var limits: SFTPLimits {
@@ -405,6 +408,10 @@ class Session {
     ) async throws -> T {
         do {
             return try await operation()
+        } catch SSHError.connectionFailed(_) {
+            throw AgentError.serverUnreachable
+        } catch SSHError.libraryError(code: _, message: _) {
+            throw AgentError.serverUnreachable
         } catch SSHError.sftpError(.noSuchFile, _) {
             await logger.debug("\(id(of: itemId)) doesn't exist")
             throw AgentError.itemNotFound(itemId.rawValue)
