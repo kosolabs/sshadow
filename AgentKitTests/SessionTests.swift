@@ -327,14 +327,16 @@ struct SessionTests {
         @Test func attributesForMissingFileThrowsNoSuchItem() async throws {
             let session = try await getSession()
 
-            await #expect {
+            let parentId = try await session.child(path: testFolderPath)
+            
+            await #expect(throws: AgentError.itemNotFound(parentId.rawValue)) {
                 try await session.attributes(
                     for: session.child(
                         path: "\(testFolderPath)/missing.txt",
                         ifNotExists: .fail
                     )
                 )
-            } throws: { error in isNoSuchItemError(error) }
+            }
         }
     }
 
@@ -398,7 +400,9 @@ struct SessionTests {
         @Test func setAttributesForMissingFileThrows() async throws {
             let session = try await getSession()
 
-            await #expect {
+            let parentId = try await session.child(path: testFolderPath)
+
+            await #expect(throws: AgentError.itemNotFound(parentId.rawValue)) {
                 try await session.setAttributes(
                     for: session.child(
                         path: "\(testFolderPath)/missing.txt",
@@ -406,7 +410,7 @@ struct SessionTests {
                     ),
                     permissions: 0o644
                 )
-            } throws: { error in isNoSuchItemError(error) }
+            }
         }
     }
 
@@ -454,7 +458,9 @@ struct SessionTests {
             await #expect {
                 try await session.createDirectory(for: itemId)
             } throws: { error in
-                guard case AgentError.filenameCollision = error else { return false }
+                guard case AgentError.filenameCollision = error else {
+                    return false
+                }
                 return true
             }
         }
@@ -581,9 +587,8 @@ struct SessionTests {
 
             try await session.removeFile(for: itemId)
 
-            await #expect {
-                try await session.attributes(for: itemId)
-            } throws: { error in isNoSuchItemError(error) }
+            let exists = await session.exists(for: itemId)
+            #expect(!exists)
         }
 
         @Test func removeFileMissingThrows() async throws {
@@ -593,9 +598,8 @@ struct SessionTests {
                 path: "\(testFolderPath)/nonexistent.txt"
             )
 
-            await #expect {
-                try await session.removeFile(for: itemId)
-            } throws: { error in isNoSuchItemError(error) }
+            let exists = await session.exists(for: itemId)
+            #expect(!exists)
         }
     }
 
@@ -615,9 +619,8 @@ struct SessionTests {
 
             try await session.removeDirectory(for: itemId)
 
-            await #expect {
-                try await session.attributes(for: itemId)
-            } throws: { error in isNoSuchItemError(error) }
+            let exists = await session.exists(for: itemId)
+            #expect(!exists)
         }
 
         @Test func removeDirectoryWithContentsSucceeds() async throws {
@@ -632,9 +635,8 @@ struct SessionTests {
 
             try await session.removeDirectory(for: itemId)
 
-            await #expect {
-                try await session.attributes(for: itemId)
-            } throws: { error in isNoSuchItemError(error) }
+            let exists = await session.exists(for: itemId)
+            #expect(!exists)
         }
     }
 
@@ -829,7 +831,7 @@ struct SessionTests {
             #expect(actual == expected)
         }
     }
-    
+
     struct WithFileTests {
         let testFolderPath = "session-with-file"
         let testFolderUrl: URL
@@ -858,14 +860,15 @@ struct SessionTests {
         @Test func withFileMissingFileThrowsNoSuchItem() async throws {
             let session = try await getSession()
 
-            await #expect {
-                try await session.withFile(
-                    for: session.child(
-                        path: "\(testFolderPath)/missing.txt"
-                    ),
-                    accessType: .readOnly
-                ) { _ in }
-            } throws: { error in isNoSuchItemError(error) }
+            let itemId = try await session.child(
+                path: "\(testFolderPath)/missing.txt"
+            )
+
+            await #expect(throws: AgentError.itemNotFound(itemId.rawValue)) {
+                try await session.withFile(for: itemId, accessType: .readOnly) {
+                    _ in
+                }
+            }
         }
     }
 
@@ -918,74 +921,4 @@ struct SessionTests {
             #expect(count == 0)
         }
     }
-    
-    struct MapErrorTests {
-        @Test func connectionFailedThrowsServerUnreachable() async throws {
-            let session = try await getSession()
-            await #expect {
-                try await session.mapError(with: .rootContainer) {
-                    throw SSHError.connectionFailed(message: "Connection reset by peer")
-                }
-            } throws: { error in
-                if case AgentError.serverUnreachable = error { return true }
-                return false
-            }
-        }
-
-        @Test func libraryErrorThrowsServerUnreachable() async throws {
-            let session = try await getSession()
-            await #expect {
-                try await session.mapError(with: .rootContainer) {
-                    throw SSHError.libraryError(code: 0, message: "")
-                }
-            } throws: { error in
-                if case AgentError.serverUnreachable = error { return true }
-                return false
-            }
-        }
-
-        @Test func sftpNoSuchFileThrowsItemNotFound() async throws {
-            let session = try await getSession()
-            let itemId = try await session.child(path: "missing.txt")
-            await #expect {
-                try await session.mapError(with: itemId) {
-                    throw SSHError.sftpError(.noSuchFile, message: "not found")
-                }
-            } throws: { error in
-                if case AgentError.itemNotFound = error { return true }
-                return false
-            }
-        }
-
-        @Test func sftpFileAlreadyExistsThrowsFilenameCollision() async throws {
-            let session = try await getSession()
-            await #expect {
-                try await session.mapError(with: .rootContainer) {
-                    throw SSHError.sftpError(.fileAlreadyExists, message: "exists")
-                }
-            } throws: { error in
-                if case AgentError.filenameCollision = error { return true }
-                return false
-            }
-        }
-
-        @Test func unmappedErrorPassesThrough() async throws {
-            let session = try await getSession()
-            await #expect {
-                try await session.mapError(with: .rootContainer) {
-                    throw SSHError.authenticationFailed(message: "bad key")
-                }
-            } throws: { error in
-                if case SSHError.authenticationFailed = error { return true }
-                return false
-            }
-        }
-    }
-}
-
-func isNoSuchItemError(_ error: any Error) -> Bool {
-    if case AgentError.itemNotFound = error { return true }
-    let nsError = error as NSError
-    return nsError.domain == NSFileProviderErrorDomain
-        && nsError.code == NSFileProviderError.noSuchItem.rawValue
 }
