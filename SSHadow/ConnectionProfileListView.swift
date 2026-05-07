@@ -16,14 +16,11 @@ struct ConnectionProfileListView: View {
                 ForEach(configs) { config in
                     NavigationLink(value: config) {
                         HStack {
-                            Image(
-                                systemName:
-                                    "externaldrive.connected.to.line.below"
-                            )
-                            .font(.system(size: 18))
-                            .foregroundColor(
-                                config.isEnabled() ? .green : .secondary
-                            )
+                            Image(systemName: "externaldrive.badge.icloud")
+                                .font(.system(size: 18))
+                                .foregroundColor(
+                                    config.isEnabled() ? .green : .secondary
+                                )
                             VStack(alignment: .leading) {
                                 if let name = config.name {
                                     Text(name)
@@ -34,9 +31,7 @@ struct ConnectionProfileListView: View {
                             }
                         }
                     }
-                    .accessibilityIdentifier(
-                        "connectionLink_\(config.url)"
-                    )
+                    .accessibilityIdentifier("connectionLink_\(config.url)")
                 }
             }
             .frame(minWidth: 250, minHeight: 500)
