@@ -104,15 +104,6 @@ public class ConnectionProfile: CustomStringConvertible {
         return p.count > 1 && p.hasSuffix("/") ? String(p.dropLast()) : p
     }
 
-    public func path(for subpath: String) -> String {
-        if effectivePath == "/" {
-            return "/\(subpath)"
-        }
-        return [effectivePath, subpath].filter { !$0.isEmpty }.joined(
-            separator: "/"
-        )
-    }
-
     public var description: String {
         "ConnectionProfile(id: \(id), name: \(name ?? "-"), enabled: \(enabled), url: \(url), authMethod: \(authMethod))"
     }
@@ -168,44 +159,12 @@ public class ConnectionProfile: CustomStringConvertible {
         Keychain.shared.delete(passwordKey)
     }
 
-    public func privateKeyUrl() -> URL? {
-        guard let bookmark = bookmark else {
-            return nil
-        }
-        do {
-            var isStale = false
-            let url = try URL(
-                resolvingBookmarkData: bookmark,
-                options: .withSecurityScope,
-                relativeTo: nil,
-                bookmarkDataIsStale: &isStale
-            )
-            if isStale {
-                refreshBookmark(from: url)
-            }
-            return url
-        } catch {
-            logger.error(
-                "Failed to resolve bookmark data for id: \(self.id), error: \(error)"
-            )
-            return nil
-        }
+    public func privateKeyUrl() throws -> URL {
+        try resolveBookmark()
     }
 
     public func getBase64PrivateKey() throws -> String {
-        guard let bookmark = bookmark else {
-            throw ValidationError.privateKeyUrlNil
-        }
-        var isStale = false
-        let url = try URL(
-            resolvingBookmarkData: bookmark,
-            options: .withSecurityScope,
-            relativeTo: nil,
-            bookmarkDataIsStale: &isStale
-        )
-        if isStale {
-            refreshBookmark(from: url)
-        }
+        let url = try resolveBookmark()
         guard url.startAccessingSecurityScopedResource() else {
             throw ValidationError.privateKeyReadFailed
         }
@@ -221,22 +180,29 @@ public class ConnectionProfile: CustomStringConvertible {
         return base64PrivateKey
     }
 
-    private func refreshBookmark(from url: URL) {
-        guard url.startAccessingSecurityScopedResource() else {
-            return
+    private func resolveBookmark() throws -> URL {
+        guard let bookmark = bookmark else {
+            throw ValidationError.privateKeyUrlNil
         }
-        defer { url.stopAccessingSecurityScopedResource() }
-        do {
+        var isStale = false
+        let url = try URL(
+            resolvingBookmarkData: bookmark,
+            options: .withSecurityScope,
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        )
+        if isStale {
+            guard url.startAccessingSecurityScopedResource() else {
+                return url
+            }
+            defer { url.stopAccessingSecurityScopedResource() }
             self.bookmark = try url.bookmarkData(
                 options: .withSecurityScope,
                 includingResourceValuesForKeys: nil,
                 relativeTo: nil
             )
-        } catch {
-            logger.error(
-                "Failed to refresh stale bookmark for id: \(self.id), error: \(error)"
-            )
         }
+        return url
     }
 
     // MARK: - Private Key Passphrase Management
@@ -267,31 +233,7 @@ public class ConnectionProfile: CustomStringConvertible {
             }
             return .password(password)
         case .privateKey:
-            guard let bookmark = bookmark else {
-                throw ValidationError.privateKeyUrlNil
-            }
-            var isStale = false
-            let url = try URL(
-                resolvingBookmarkData: bookmark,
-                options: .withSecurityScope,
-                relativeTo: nil,
-                bookmarkDataIsStale: &isStale
-            )
-            if isStale {
-                refreshBookmark(from: url)
-            }
-            guard url.startAccessingSecurityScopedResource() else {
-                throw ValidationError.privateKeyReadFailed
-            }
-            defer { url.stopAccessingSecurityScopedResource() }
-            guard
-                let base64PrivateKey = try? String(
-                    data: Data(contentsOf: url),
-                    encoding: .utf8
-                )
-            else {
-                throw ValidationError.privateKeyReadFailed
-            }
+            let base64PrivateKey = try getBase64PrivateKey()
             let passphrase = getPrivateKeyPassphrase()
             return .privateKey(
                 base64PrivateKey: base64PrivateKey,
@@ -325,52 +267,5 @@ extension ConnectionConfig {
             path: profile.effectivePath,
             authMethod: profile.resolveConfigAuthMethod()
         )
-    }
-}
-
-extension SSHClient {
-    public static func connect(
-        profile: ConnectionProfile
-    ) async throws -> SSHClient {
-        switch profile.authMethod {
-        case .password:
-            guard let password = profile.getPassword() else {
-                throw ConnectionProfile.ValidationError.passwordNil
-            }
-            return try await SSHClient.connect(
-                host: profile.host,
-                port: profile.effectivePort,
-                user: profile.effectiveUser,
-                password: password,
-            )
-        case .privateKey:
-            let base64PrivateKey = try profile.getBase64PrivateKey()
-            let passphrase = profile.getPrivateKeyPassphrase()
-            return try await SSHClient.connect(
-                host: profile.host,
-                port: profile.effectivePort,
-                user: profile.effectiveUser,
-                base64PrivateKey: base64PrivateKey,
-                passphrase: passphrase,
-            )
-        }
-    }
-
-    @discardableResult
-    public static func withSession<T: Sendable>(
-        profile: ConnectionProfile,
-        perform: @Sendable (SSHClient, SFTPClient) async throws -> T
-    ) async throws -> T {
-        let sshClient = try await connect(profile: profile)
-        do {
-            let result = try await sshClient.withSftp { sftpClient in
-                try await perform(sshClient, sftpClient)
-            }
-            await sshClient.close()
-            return result
-        } catch {
-            await sshClient.close()
-            throw error
-        }
     }
 }

@@ -44,7 +44,7 @@ enum TestData {
             user: user,
             path: mount.path(),
             authMethod: .privateKey,
-            bookmark: try getPrivateKeyUrl().bookmarkData(
+            bookmark: getPrivateKeyUrl().bookmarkData(
                 options: .withSecurityScope,
                 includingResourceValuesForKeys: nil,
                 relativeTo: nil
