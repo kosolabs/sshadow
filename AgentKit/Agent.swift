@@ -54,13 +54,11 @@ public class Agent {
                 agentRequest = try message.decode(as: AgentRequest.self)
             } catch {
                 logger.error("Failed to decode request: \(error)")
-                return AgentResult.failure(AgentError(from: error))
+                return AgentResult.failure(AgentResultError(from: error))
             }
             Task {
-                logger.debug("Request: \(agentRequest)")
-                let agentResult = await agent.handle(agentRequest)
-                logger.debug("Result: \(agentResult)")
-                message.reply(agentResult)
+                let result = await agent.handle(agentRequest)
+                message.reply(result)
             }
             return nil
         }
@@ -68,6 +66,7 @@ public class Agent {
 
     public func handle(_ request: AgentRequest) async -> AgentResult {
         do {
+            logger.debug("Request: \(request)")
             let response: AgentResponse =
                 switch request {
                 case .initDomain(let request):
@@ -109,14 +108,14 @@ public class Agent {
                 case .stream(let request):
                     try await .stream(stream(request))
                 }
+            logger.debug("Response: \(response)")
             return .success(response)
-        } catch SSHError.connectionFailed {
-            await sessions.disconnect(id: request.domainId)
-            return .failure(.serverUnreachable)
-        } catch SSHError.authenticationFailed(_) {
-            return .failure(.notAuthenticated)
         } catch {
-            return .failure(AgentError(from: error))
+            logger.error("Failed to handle request: \(error)")
+            if case AgentError.serverUnreachable = error {
+                await sessions.disconnect(id: request.domainId)
+            }
+            return .failure(AgentResultError(from: error))
         }
     }
 

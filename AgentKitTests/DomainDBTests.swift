@@ -156,7 +156,7 @@ struct DomainDBTests {
 
             let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-            await #expect(throws: AgentError.itemNotFound(unknownId.rawValue)) {
+            await #expect(throws: NSFileProviderError.self) {
                 try await db.parent(of: unknownId)
             }
         }
@@ -185,9 +185,7 @@ struct DomainDBTests {
         @Test func childWithFailThrowsForMissingItem() async throws {
             let db = try await openInMemoryDb()
 
-            let itemId = NSFileProviderItemIdentifier.rootContainer
-
-            await #expect(throws: AgentError.itemNotFound(itemId.rawValue)) {
+            await #expect(throws: NSFileProviderError.self) {
                 try await db.child(
                     path: "nonexistent.txt",
                     ifNotExists: .fail

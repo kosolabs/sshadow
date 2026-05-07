@@ -111,7 +111,7 @@ public actor DomainDB {
         }
 
         if ifNotExists == .fail {
-            throw AgentError.itemNotFound(parent.rawValue)
+            throw NSFileProviderError(.noSuchItem)
         }
 
         let item = PathNode(parentId: parent, name: name)
@@ -140,7 +140,7 @@ public actor DomainDB {
     ) throws -> NSFileProviderItemIdentifier {
         guard let item = fetch(id: id) else {
             logger.error("Parent not found for item: \(id.rawValue)")
-            throw AgentError.itemNotFound(id.rawValue)
+            throw NSFileProviderError(.noSuchItem)
         }
         return item.parentId
     }
