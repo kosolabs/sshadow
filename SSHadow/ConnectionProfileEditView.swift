@@ -179,7 +179,7 @@ struct ConnectionProfileEditView: View {
                         .accessibilityIdentifier("usePrivateKeyToggle")
                     if usePrivateKey.wrappedValue {
                         LabeledContent("Private Key") {
-                            if let url = config.privateKeyUrl() {
+                            if let url = try? config.privateKeyUrl() {
                                 Text(url.tildePath)
                                     .foregroundStyle(.primary)
                                     .lineLimit(1)

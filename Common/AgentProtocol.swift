@@ -505,16 +505,16 @@ public struct StreamResponse: Codable {
 }
 
 public enum AgentError: Codable, Error {
-    case profileNotFound(UUID)
+    case notAuthenticated
+    case serverUnreachable
     case userCancelled
     case itemNotFound(String)
     case filenameCollision
-    case serverUnreachable
 
     public var asError: any Error {
         switch self {
-        case .profileNotFound:
-            self
+        case .notAuthenticated:
+            NSFileProviderError(.notAuthenticated)
         case .userCancelled:
             CocoaError(.userCancelled)
         case .itemNotFound(let itemId):

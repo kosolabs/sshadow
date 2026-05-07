@@ -17,10 +17,6 @@ actor SessionManager {
     }
 
     func connect(id: UUID) async throws -> Session {
-        guard let profile = await db.fetch(id: id) else {
-            throw AgentError.profileNotFound(id)
-        }
-
         if let session = sessions[id] {
             return session
         }
@@ -29,11 +25,15 @@ actor SessionManager {
             return try await task.value
         }
 
-        logger.info("Connecting: \(profile.url)")
+        guard let profile = await db.fetch(id: id) else {
+            throw AgentError.notAuthenticated
+        }
+        let config = try ConnectionConfig(from: profile)
+
+        logger.info("Connecting: \(config.url)")
         let domainDbConfig = self.domainDbConfig ?? DomainDB.model(for: id)
         let task = Task {
-            let config = try ConnectionConfig(from: profile)
-            let ssh = try await SSHClient.connect(profile: profile)
+            let ssh = try await SSHClient.connect(config: config)
             let sftp = try await ssh.sftp()
             let db = try await DomainDB.open(config: domainDbConfig)
             return Session(config: config, ssh: ssh, sftp: sftp, db: db)
@@ -44,7 +44,7 @@ actor SessionManager {
             let session = try await task.value
             sessions[id] = session
             connectTasks[id] = nil
-            logger.info("Connected: \(profile.url)")
+            logger.info("Connected: \(config.url)")
             return session
         } catch {
             connectTasks[id] = nil
