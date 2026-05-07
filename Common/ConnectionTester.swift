@@ -8,6 +8,7 @@ public enum ConnectionTestError: Error, Equatable {
     case connectionRefused
     case timeout
     case userauthPasswordFailed
+    case invalidPrivateKey
     case pathNotADirectory
     case pathNotFound
 }
@@ -30,38 +31,36 @@ public struct DefaultConnectionTester: ConnectionTester {
                     throw ConnectionTestError.pathNotADirectory
                 }
             }
+        } catch SSHError.connectionFailed(let message)
+            where message.contains("Failed to resolve hostname")
+        {
+            logger.info("Unknown host: \(message)")
+            throw ConnectionTestError.unknownHost
+        } catch SSHError.connectionFailed(let message)
+            where message.contains("Connection refused")
+            || message.contains("Socket error")
+            || message.contains("Bad file descriptor")
+        {
+            logger.info("Connection refused: \(message)")
+            throw ConnectionTestError.connectionRefused
+        } catch SSHError.connectionFailed(let message)
+            where message.contains("Timeout")
+        {
+            logger.info("Connection timeout: \(message)")
+            throw ConnectionTestError.timeout
+        } catch SSHError.authenticationFailed(let message)
+            where message.contains("Failed to import private key")
+        {
+            logger.info("Invalid private key")
+            throw ConnectionTestError.invalidPrivateKey
+        } catch SSHError.authenticationFailed(let message) {
+            logger.info("Authentication failed: \(message)")
+            throw ConnectionTestError.userauthPasswordFailed
+        } catch SSHError.sftpError(.noSuchFile, let path) {
+            logger.info("No such file: \(path)")
+            throw ConnectionTestError.pathNotFound
         } catch {
-            logger.error("Error while testing connection: \(error)")
-            guard let sshError = error as? SSHError else {
-                throw error
-            }
-
-            switch sshError {
-            case .connectionFailed(let message):
-                if message.contains("Failed to resolve hostname") {
-                    throw ConnectionTestError.unknownHost
-                }
-                if message.contains("Connection refused")
-                    || message.contains("Socket error")
-                    || message.contains("Bad file descriptor")
-                {
-                    throw ConnectionTestError.connectionRefused
-                }
-                if message.contains("Timeout") {
-                    throw ConnectionTestError.timeout
-                }
-            case .authenticationFailed:
-                throw ConnectionTestError.userauthPasswordFailed
-            case .sftpError(let sftpError, _):
-                switch sftpError {
-                case .noSuchFile:
-                    throw ConnectionTestError.pathNotFound
-                default:
-                    throw error
-                }
-            default:
-                throw error
-            }
+            logger.error("Unhandled error: \(error)")
             throw error
         }
     }

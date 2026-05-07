@@ -29,7 +29,7 @@ class Session {
         await sftp.close()
         await ssh.close()
     }
-    
+
     var url: String {
         config.url
     }
@@ -176,16 +176,17 @@ class Session {
         await logger.info(
             "Create directory \(id(of: itemId)) with permissions \(String(mode, radix: 8))"
         )
-        try await mapError(with: itemId) {
-            do {
-                try await sftp.createDirectory(
-                    atPath: path(for: itemId),
-                    mode: mode
-                )
-            } catch SSHError.sftpError(.fileAlreadyExists, _)
-                where ifExists == .succeed
-            {
+        do {
+            try await sftp.createDirectory(
+                atPath: path(for: itemId),
+                mode: mode
+            )
+        } catch SSHError.sftpError(.fileAlreadyExists, _) {
+            switch ifExists {
+            case .succeed:
                 logger.info("Directory already exists for \(itemId.rawValue)")
+            case .fail:
+                throw AgentError.filenameCollision
             }
         }
     }
@@ -213,9 +214,8 @@ class Session {
                 )
                 try await sftp.move(from: oldPath, to: newPath)
             }
+            try await db.move(itemId, toParent: newParentId, name: newName)
         }
-
-        try await db.move(itemId, toParent: newParentId, name: newName)
     }
 
     func removeFile(
@@ -322,7 +322,7 @@ class Session {
     private func cache(for file: ChunkedFile) async -> ChunkedFileCache {
         await pool.cache(for: file) { [sftp] itemId, range in
             try await sftp.withSftpFile(
-                atPath: await self.path(for: itemId),
+                atPath: self.path(for: itemId),
                 accessType: .readOnly
             ) { file in
                 try await file.read(range: range)
@@ -401,23 +401,17 @@ class Session {
             )
         }
     }
+}
 
-    func mapError<T>(
-        with itemId: NSFileProviderItemIdentifier,
-        _ operation: () async throws -> T
-    ) async throws -> T {
-        do {
-            return try await operation()
-        } catch SSHError.connectionFailed(_) {
-            throw AgentError.serverUnreachable
-        } catch SSHError.libraryError(code: _, message: _) {
-            throw AgentError.serverUnreachable
-        } catch SSHError.sftpError(.noSuchFile, _) {
-            await logger.debug("\(id(of: itemId)) doesn't exist")
-            throw AgentError.itemNotFound(itemId.rawValue)
-        } catch SSHError.sftpError(.fileAlreadyExists, _) {
-            await logger.debug("\(id(of: itemId)) already exists")
-            throw AgentError.filenameCollision
-        }
+func mapError<T>(
+    with itemId: NSFileProviderItemIdentifier,
+    _ operation: () async throws -> T
+) async throws -> T {
+    do {
+        return try await operation()
+    } catch SSHError.sftpError(.noSuchFile, _) {
+        throw AgentError.itemNotFound(itemId.rawValue)
+    } catch SSHError.sftpError(.fileAlreadyExists, _) {
+        throw AgentError.filenameCollision
     }
 }

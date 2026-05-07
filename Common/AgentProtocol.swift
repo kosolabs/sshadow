@@ -18,13 +18,7 @@ public enum OnParentNotExists: Codable {
     case create
 }
 
-public enum AgentRequest: Codable, CustomStringConvertible {
-    public var description: String {
-        let mirror = Mirror(reflecting: self)
-        guard let child = mirror.children.first else { return "AgentRequest" }
-        return "\(child.label ?? "")(\(child.value))"
-    }
-    
+public enum AgentRequest: Codable {
     public var domainId: UUID {
         switch self {
         case .initDomain(let request):
@@ -89,13 +83,19 @@ public enum AgentRequest: Codable, CustomStringConvertible {
     case stream(StreamRequest)
 }
 
-public enum AgentResponse: Codable, CustomStringConvertible {
-    public var description: String {
-        let mirror = Mirror(reflecting: self)
-        guard let child = mirror.children.first else { return "AgentResponse" }
-        return "\(child.label ?? "")(\(child.value))"
-    }
+public enum AgentResult: Codable {
+    case success(AgentResponse)
+    case failure(AgentError)
 
+    public func get() throws -> AgentResponse {
+        switch self {
+        case .success(let response): return response
+        case .failure(let error): throw error.asError
+        }
+    }
+}
+
+public enum AgentResponse: Codable {
     case initDomain(InitDomainResponse)
     case deinitDomain(DeinitDomainResponse)
     case name(NameResponse)
@@ -114,6 +114,57 @@ public enum AgentResponse: Codable, CustomStringConvertible {
     case upload(UploadResponse)
     case download(DownloadResponse)
     case stream(StreamResponse)
+}
+
+public enum AgentError: Codable, Equatable, Error{
+    case notAuthenticated
+    case serverUnreachable
+    case userCancelled
+    case itemNotFound(String)
+    case filenameCollision
+    case unknown(domain: String, code: Int, message: String)
+
+    public init(from error: any Error) {
+        if let agentError = error as? AgentError {
+            self = agentError
+            return
+        }
+        logger.error("Unhandled error type: \(error)")
+        let nsError = error as NSError
+        self = .unknown(
+            domain: nsError.domain,
+            code: nsError.code,
+            message: nsError.localizedDescription
+        )
+    }
+
+    public var asError: any Error {
+        switch self {
+        case .notAuthenticated:
+            NSFileProviderError(.notAuthenticated)
+        case .userCancelled:
+            CocoaError(.userCancelled)
+        case .itemNotFound(let itemId):
+            NSError.fileProviderErrorForNonExistentItem(
+                withIdentifier: NSFileProviderItemIdentifier(itemId)
+            )
+        case .filenameCollision:
+            NSFileProviderError(.filenameCollision)
+        case .serverUnreachable:
+            NSFileProviderError(.serverUnreachable)
+        case .unknown(let domain, let code, let message):
+            NSError(
+                domain: domain,
+                code: code,
+                userInfo: [NSLocalizedDescriptionKey: message]
+            )
+        }
+    }
+
+    public var isUnknown: Bool {
+        if case .unknown = self { return true }
+        return false
+    }
 }
 
 public struct InitDomainRequest: Codable {
@@ -501,79 +552,5 @@ public struct StreamResponse: Codable {
     public init(url: URL, range: Range<UInt64>) {
         self.url = url
         self.range = range
-    }
-}
-
-public enum AgentError: Codable, Error {
-    case notAuthenticated
-    case serverUnreachable
-    case userCancelled
-    case itemNotFound(String)
-    case filenameCollision
-
-    public var asError: any Error {
-        switch self {
-        case .notAuthenticated:
-            NSFileProviderError(.notAuthenticated)
-        case .userCancelled:
-            CocoaError(.userCancelled)
-        case .itemNotFound(let itemId):
-            NSError.fileProviderErrorForNonExistentItem(
-                withIdentifier: NSFileProviderItemIdentifier(itemId)
-            )
-        case .filenameCollision:
-            NSFileProviderError(.filenameCollision)
-        case .serverUnreachable:
-            NSFileProviderError(.serverUnreachable)
-        }
-    }
-}
-
-public enum AgentResultError: Codable, Error {
-    case agent(AgentError)
-    case unknown(domain: String, code: Int, message: String)
-
-    public init(from error: any Error) {
-        switch error {
-        case let error as AgentError:
-            self = .agent(error)
-        default:
-            logger.error("Unhandled error type: \(error)")
-            let nsError = error as NSError
-            self = .unknown(
-                domain: nsError.domain,
-                code: nsError.code,
-                message: nsError.localizedDescription
-            )
-        }
-    }
-
-    public var underlyingError: any Error {
-        switch self {
-        case .agent(let error): error.asError
-        case .unknown(let domain, let code, let message):
-            NSError(
-                domain: domain,
-                code: code,
-                userInfo: [NSLocalizedDescriptionKey: message]
-            )
-        }
-    }
-
-    public var isUnknown: Bool {
-        if case .unknown = self { return true }
-        return false
-    }
-}
-
-public enum AgentResult: Codable {
-    case success(AgentResponse)
-    case failure(AgentResultError)
-
-    public func get() throws -> AgentResponse {
-        switch self {
-        case .success(let response): return response
-        case .failure(let error): throw error.underlyingError
-        }
     }
 }
