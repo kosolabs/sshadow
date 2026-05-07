@@ -55,6 +55,12 @@ struct ConnectionTestStatusView: View {
                     systemImage: "network.slash"
                 )
                 .foregroundStyle(.red)
+            case .invalidPrivateKey:
+                Label(
+                    "Invalid private key",
+                    systemImage: "lock.circle"
+                )
+                .foregroundStyle(.red)
             case .userauthPasswordFailed:
                 Label(
                     "Password authentication failed",
@@ -80,7 +86,6 @@ struct ConnectionTestStatusView: View {
                 systemImage: "bolt.slash"
             )
             .foregroundStyle(.red)
-
         } else {
             EmptyView()
         }
