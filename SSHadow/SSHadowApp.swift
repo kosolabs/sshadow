@@ -25,21 +25,34 @@ private class AppXPCService {
 
 @main
 struct SSHadowApp: App {
+    private let modelContainer: ModelContainer
+
+    @State private var isBusy = false
+
     init() {
         _ = AppXPCService.shared
+        modelContainer = try! AppDB.getModelContainer(
+            config: ModelConfiguration(
+                isStoredInMemoryOnly: ProcessInfo.processInfo
+                    .arguments
+                    .contains("-uiTesting")
+            )
+        )
     }
 
     var body: some Scene {
-        WindowGroup {
+        MenuBarExtra(
+            "SSHadow",
+            systemImage: isBusy
+                ? "externaldrive.badge.timemachine"
+                : "externaldrive.badge.icloud"
+        ) {
+            MainMenuView(isBusy: $isBusy).modelContainer(modelContainer)
+        }
+
+        Window("SSHadow Settings", id: "settings") {
             ConnectionProfileListView()
         }
-        .modelContainer(
-            try! AppDB.getModelContainer(
-                config: ModelConfiguration(
-                    isStoredInMemoryOnly: ProcessInfo.processInfo.arguments
-                        .contains("-uiTesting")
-                )
-            )
-        )
+        .modelContainer(modelContainer)
     }
 }
