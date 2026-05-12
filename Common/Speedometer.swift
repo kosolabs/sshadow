@@ -8,7 +8,12 @@ public struct Speedometer: Sendable, ~Copyable {
     private let lastUpdate: Atomic<UInt64>
     private let pending: Atomic<Int>
 
-    public init(progress: Progress, frequency: TimeInterval = 1.0) {
+    public init(
+        progress: Progress,
+        totalUnitCount: Int64,
+        completedUnitCount: Int64 = 0,
+        frequency: TimeInterval = 1.0
+    ) {
         self.progress = progress
         self.frequency = UInt64(frequency * 1_000_000_000)
 
@@ -16,6 +21,8 @@ public struct Speedometer: Sendable, ~Copyable {
         self.lastUpdate = Atomic(start)
         self.pending = Atomic(0)
 
+        self.progress.totalUnitCount = totalUnitCount
+        self.progress.completedUnitCount = completedUnitCount
         self.progress.fileTotalCount = 1
         self.progress.fileCompletedCount = 0
     }
@@ -40,7 +47,7 @@ public struct Speedometer: Sendable, ~Copyable {
     private func update(bytes: Int? = nil, interval: UInt64) -> String {
         let bytes = bytes ?? Int(self.progress.totalUnitCount)
 
-        if interval > 0 {
+        if interval > 0 && bytes > 0 {
             let total = Double(progress.totalUnitCount)
             let completed = Double(progress.completedUnitCount)
             let throughput = Double(bytes) / Double(interval) * 1_000_000_000
@@ -49,6 +56,11 @@ public struct Speedometer: Sendable, ~Copyable {
         } else {
             progress.throughput = 0
             progress.estimatedTimeRemaining = nil
+        }
+
+        if progress.totalUnitCount == 0 && progress.completedUnitCount == 0 {
+            progress.totalUnitCount = 1
+            progress.completedUnitCount = 1
         }
 
         if progress.isFinished {

@@ -701,6 +701,32 @@ struct SessionTests {
             #expect(progress.isFinished)
             #expect(try FileManager.default.permissions(of: url) == 0o600)
         }
+
+        @Test func uploadEmptyFileSucceeds() async throws {
+            let session = try await getSession()
+
+            let uploadUrl = FileManager.default.temporaryDirectory
+                .appending(path: UUID().uuidString)
+            try Data().write(to: uploadUrl)
+
+            let filePath = "\(testFolderPath)/empty-file.txt"
+            try TestData.removeItem(path: filePath)
+            let url = TestData.getUrl(path: filePath)
+
+            let itemId = try await session.child(path: filePath)
+            let progress = Progress()
+            try await session.upload(
+                itemId: itemId,
+                file: uploadUrl,
+                mode: 0o600,
+                progress: progress
+            )
+
+            #expect(FileManager.default.fileExists(at: url))
+            #expect(try Data(contentsOf: url).isEmpty)
+            #expect(progress.isFinished)
+            #expect(try FileManager.default.permissions(of: url) == 0o600)
+        }
     }
 
     struct DownloadTests {
@@ -751,6 +777,25 @@ struct SessionTests {
             #expect(try Data(contentsOf: url) == data)
             #expect(progress.isFinished)
         }
+
+        @Test func downloadEmptyFileSucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/empty-file.txt"
+            try TestData.createFile(path: path, contents: "")
+
+            let itemId = try await session.child(path: path)
+            let progress = Progress()
+            let (url, item) = try await session.download(
+                itemId: itemId,
+                progress: progress
+            )
+
+            #expect(item.name == "empty-file.txt")
+            #expect(item.size == 0)
+            #expect(try Data(contentsOf: url).isEmpty)
+            #expect(progress.isFinished)
+        }
     }
 
     struct StreamTests {
@@ -778,6 +823,25 @@ struct SessionTests {
 
             #expect(range == 0..<chunkSize)
             #expect(try Data(contentsOf: url) == data)
+            #expect(progress.isFinished)
+        }
+
+        @Test func streamEmptyFileSucceeds() async throws {
+            let session = try await getSession()
+
+            let path = "\(testFolderPath)/empty.dat"
+            try TestData.createFile(path: path, data: Data())
+
+            let itemId = try await session.child(path: path)
+            let progress = Progress()
+            let (url, range) = try await session.stream(
+                itemId: itemId,
+                range: 0..<0,
+                progress: progress
+            )
+
+            #expect(range == 0..<0)
+            #expect(try Data(contentsOf: url).isEmpty)
             #expect(progress.isFinished)
         }
 
