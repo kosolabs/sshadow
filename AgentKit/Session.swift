@@ -253,9 +253,11 @@ class Session {
         let size = try FileManager.default.size(of: url)
 
         progress.kind = .file
-        progress.fileOperationKind = .downloading
-        progress.totalUnitCount = Int64(size)
-        let speedometer = Speedometer(progress: progress)
+        progress.fileOperationKind = .uploading
+        let speedometer = Speedometer(
+            progress: progress,
+            totalUnitCount: Int64(size)
+        )
 
         let bufferSize = sftp.limits.writeLength(for: chunkSize)
         try await withFile(for: itemId, accessType: .writeOnly, mode: mode) {
@@ -298,8 +300,10 @@ class Session {
 
         progress.kind = .file
         progress.fileOperationKind = .downloading
-        progress.totalUnitCount = Int64(file.info.size)
-        let speedometer = Speedometer(progress: progress)
+        let speedometer = Speedometer(
+            progress: progress,
+            totalUnitCount: Int64(file.info.size)
+        )
 
         let bufferSize = sftp.limits.readLength(for: chunkSize)
         try await withFile(for: itemId, accessType: .readOnly) { file in
@@ -349,8 +353,10 @@ class Session {
 
         progress.kind = .file
         progress.fileOperationKind = .downloading
-        progress.totalUnitCount = Int64(byteRange.length)
-        let speedometer = Speedometer(progress: progress)
+        let speedometer = Speedometer(
+            progress: progress,
+            totalUnitCount: Int64(byteRange.length)
+        )
 
         for chunkIndex in chunkRange {
             let data = try await cache.fetch(chunkId: chunkIndex)
@@ -401,7 +407,7 @@ class Session {
             )
         }
     }
-    
+
     func mapError<T>(
         with itemId: NSFileProviderItemIdentifier,
         _ operation: () async throws -> T
