@@ -39,7 +39,7 @@ class Session {
     }
 
     func id(of itemId: NSFileProviderItemIdentifier) async -> String {
-        await "FPItemID(\(itemId.rawValue), \(db.path(for: itemId)))"
+        await "FPItemID(\(itemId.rawValue), \(path(for: itemId)))"
     }
 
     func name(
@@ -81,11 +81,22 @@ class Session {
         let parentId = try await parent(of: itemId)
         let name = try await name(of: itemId)
         let attrs = try await attributes(for: itemId)
+
+        let type: FileInfo.FileType =
+            switch attrs.type {
+            case .directory:
+                .folder
+            case .symlink:
+                .symlink(target: try await symlink(for: itemId))
+            default:
+                .file
+            }
+
         return FileInfo(
             id: itemId.rawValue,
             parentId: parentId.rawValue,
             name: name,
-            isDirectory: attrs.type == .directory,
+            type: type,
             size: attrs.size,
             permissions: attrs.permissions,
             accessTime: attrs.accessTime,
@@ -105,12 +116,21 @@ class Session {
                         of: itemId,
                         path: name
                     )
+                    let type: FileInfo.FileType =
+                        switch attrs.type {
+                        case .directory:
+                            .folder
+                        case .symlink:
+                            .symlink(target: try await symlink(for: childId))
+                        default:
+                            .file
+                        }
                     entries.append(
                         FileInfo(
                             id: childId.rawValue,
                             parentId: itemId.rawValue,
                             name: name,
-                            isDirectory: attrs.type == .directory,
+                            type: type,
                             size: attrs.size,
                             permissions: attrs.permissions,
                             accessTime: attrs.accessTime,
@@ -135,11 +155,22 @@ class Session {
         }
     }
 
+    func symlink(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> String {
+        try await mapError(with: itemId) {
+            try await sftp.symlinkDestination(atPath: path(for: itemId))
+        }
+    }
+
     func attributes(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> SFTPAttributes {
         try await mapError(with: itemId) {
-            try await sftp.attributes(atPath: path(for: itemId))
+            try await sftp.attributes(
+                atPath: path(for: itemId),
+                followSymlinks: false
+            )
         }
     }
 

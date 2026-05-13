@@ -46,9 +46,25 @@ public class Item: NSObject, NSFileProviderItem {
 
     public var creationDate: Date? { info.createTime }
 
-    public var isDirectory: Bool { info.isDirectory }
+    public var isDirectory: Bool { info.type == .folder }
+
+    public var symlinkTargetPath: String? {
+        switch info.type {
+        case .symlink(let target):
+            target
+        default:
+            nil
+        }
+    }
 
     public var contentType: UTType {
-        info.isDirectory ? .folder : .text
+        switch info.type {
+        case .file:
+            .text
+        case .folder:
+            .folder
+        case .symlink(_):
+            .symbolicLink
+        }
     }
 }

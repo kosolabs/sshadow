@@ -382,7 +382,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         logger.debug("Delete \(identifier.desc)")
         return try await progress.withChild {
             let info = try await agent.info(for: identifier)
-            if info.isDirectory {
+            if info.type == .folder {
                 try await agent.removeDirectory(for: identifier)
             } else {
                 try await agent.removeFile(for: identifier)
