@@ -54,11 +54,11 @@ struct AgentClientTests {
         let info = try await agent.info(for: itemId)
 
         #expect(info.name == "info-file.txt")
-        #expect(!info.isDirectory)
+        #expect(info.type == .file)
         #expect(info.size == UInt64(contents.utf8.count))
     }
 
-    @Test func infoForDirectorySucceeds() async throws {
+    @Test func infoForFolderSucceeds() async throws {
         let agent = try await getAgentClient()
 
         let path = "\(testFolderPath)/info-dir"
@@ -68,7 +68,23 @@ struct AgentClientTests {
         let info = try await agent.info(for: itemId)
 
         #expect(info.name == "info-dir")
-        #expect(info.isDirectory)
+        #expect(info.type == .folder)
+    }
+
+    @Test func infoForSymlinkSucceeds() async throws {
+        let agent = try await getAgentClient()
+
+        let target = "\(testFolderPath)/info-symlink-target.txt"
+        let contents = "Hello, World!"
+        try TestData.createFile(path: target, contents: contents)
+        let symlink = "\(testFolderPath)/info-symlink-link.txt"
+        try TestData.createSymlink(path: symlink, target: target)
+
+        let itemId = try await agent.child(path: symlink)
+        let info = try await agent.info(for: itemId)
+
+        #expect(info.name == "info-symlink-link.txt")
+        #expect(info.type == .symlink(target: target))
     }
 
     @Test func listSucceeds() async throws {
@@ -89,12 +105,12 @@ struct AgentClientTests {
         #expect(names.contains("subfolder"))
 
         let fileEntry = try #require(entries.first { $0.name == "file.txt" })
-        #expect(!fileEntry.isDirectory)
+        #expect(fileEntry.type == .file)
 
         let folderEntry = try #require(
             entries.first { $0.name == "subfolder" }
         )
-        #expect(folderEntry.isDirectory)
+        #expect(folderEntry.type == .folder)
     }
 
     @Test func listEmptyDirectorySucceeds() async throws {
@@ -131,7 +147,7 @@ struct AgentClientTests {
         try await agent.createDirectory(for: itemId, mode: 0o755)
         let info = try await agent.info(for: itemId)
 
-        #expect(info.isDirectory)
+        #expect(info.type == .folder)
     }
 
     @Test func moveSucceeds() async throws {
@@ -177,12 +193,12 @@ struct AgentClientTests {
 
         #expect(exists == false)
     }
-    
+
     @Test func limitsSucceeds() async throws {
         let agent = try await getAgentClient()
-        
+
         let limits = try await agent.limits()
-        
+
         #expect(limits.maxReadLength > 0)
         #expect(limits.maxWriteLength > 0)
     }

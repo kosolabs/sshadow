@@ -155,6 +155,28 @@ enum TestData {
     }
 
     @discardableResult
+    static func createSymlink(
+        path: String,
+        target: String
+    ) throws -> URL {
+        let link = getUrl(path: path)
+        let folder = link.deletingLastPathComponent()
+
+        try FileManager.default.createDirectory(
+            at: folder,
+            withIntermediateDirectories: true
+        )
+
+        try? FileManager.default.removeItem(at: link)
+        try FileManager.default.createSymbolicLink(
+            atPath: link.path(),
+            withDestinationPath: target
+        )
+
+        return link
+    }
+
+    @discardableResult
     static func createFile(
         path: String,
         contents: String,

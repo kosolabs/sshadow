@@ -10,7 +10,7 @@ private func info(size: UInt64) -> FileInfo {
         id: UUID().uuidString,
         parentId: UUID().uuidString,
         name: "file",
-        isDirectory: false,
+        type: .file,
         size: size,
         permissions: 0o644,
         accessTime: nil,

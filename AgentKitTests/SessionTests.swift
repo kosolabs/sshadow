@@ -161,12 +161,12 @@ struct SessionTests {
             let info = try await session.info(for: itemId)
 
             #expect(info.name == "file.txt")
-            #expect(!info.isDirectory)
+            #expect(info.type == .file)
             #expect(info.size == UInt64(contents.utf8.count))
             #expect(info.id == itemId.rawValue)
         }
 
-        @Test func infoForDirectorySucceeds() async throws {
+        @Test func infoForFolderSucceeds() async throws {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/folder"
@@ -176,7 +176,23 @@ struct SessionTests {
             let info = try await session.info(for: itemId)
 
             #expect(info.name == "folder")
-            #expect(info.isDirectory)
+            #expect(info.type == .folder)
+        }
+        
+        @Test func infoForSymlinkSucceeds() async throws {
+            let session = try await getSession()
+
+            let target = "\(testFolderPath)/info-symlink-target.txt"
+            let contents = "Hello, World!"
+            try TestData.createFile(path: target, contents: contents)
+            let symlink = "\(testFolderPath)/info-symlink-link.txt"
+            try TestData.createSymlink(path: symlink, target: target)
+
+            let itemId = try await session.child(path: symlink)
+            let info = try await session.info(for: itemId)
+
+            #expect(info.name == "info-symlink-link.txt")
+            #expect(info.type == .symlink(target: target))
         }
 
         @Test func infoHasCorrectParent() async throws {
@@ -202,14 +218,20 @@ struct SessionTests {
             try TestData.createFolder(path: testFolderPath)
         }
 
-        @Test func listReturnsFilesAndFolders() async throws {
+        @Test func listReturnsFilesFoldersAndSymlinks() async throws {
             let session = try await getSession()
 
             try TestData.createFile(
                 path: "\(testFolderPath)/file.txt",
                 contents: "hello"
             )
-            try TestData.createFolder(path: "\(testFolderPath)/subfolder")
+            try TestData.createFolder(
+                path: "\(testFolderPath)/subfolder"
+            )
+            try TestData.createSymlink(
+                path: "\(testFolderPath)/link.txt",
+                target: "file.txt"
+            )
 
             let itemId = try await session.child(path: testFolderPath)
             let entries = try await session.list(for: itemId)
@@ -221,12 +243,17 @@ struct SessionTests {
             let fileEntry = try #require(
                 entries.first { $0.name == "file.txt" }
             )
-            #expect(!fileEntry.isDirectory)
+            #expect(fileEntry.type == .file)
 
             let folderEntry = try #require(
                 entries.first { $0.name == "subfolder" }
             )
-            #expect(folderEntry.isDirectory)
+            #expect(folderEntry.type == .folder)
+
+            let symlinkEntry = try #require(
+                entries.first { $0.name == "link.txt" }
+            )
+            #expect(symlinkEntry.type == .symlink(target: "file.txt"))
         }
 
         @Test func listEmptyDirectoryReturnsEmpty() async throws {
@@ -328,7 +355,7 @@ struct SessionTests {
             let session = try await getSession()
 
             let parentId = try await session.child(path: testFolderPath)
-            
+
             await #expect(throws: AgentError.itemNotFound(parentId.rawValue)) {
                 try await session.attributes(
                     for: session.child(
@@ -752,7 +779,7 @@ struct SessionTests {
             )
 
             #expect(item.name == "small-file.txt")
-            #expect(!item.isDirectory)
+            #expect(item.type == .file)
             #expect(item.size == data.count)
             #expect(try String(contentsOf: url, encoding: .utf8) == data)
             #expect(progress.isFinished)
