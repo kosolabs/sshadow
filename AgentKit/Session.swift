@@ -76,18 +76,41 @@ class Session {
     }
 
     func info(
-        for itemId: NSFileProviderItemIdentifier
+        for name: String,
+        parentId: NSFileProviderItemIdentifier,
+        attrs: SFTPAttributes? = nil
     ) async throws -> FileInfo {
-        let parentId = try await parent(of: itemId)
-        let name = try await name(of: itemId)
-        let attrs = try await attributes(for: itemId)
+        return try await info(
+            for: child(of: parentId, path: name),
+            parentId: parentId,
+            attrs: attrs
+        )
+    }
+
+    func info(
+        for itemId: NSFileProviderItemIdentifier,
+        parentId: NSFileProviderItemIdentifier? = nil,
+        attrs: SFTPAttributes? = nil
+    ) async throws -> FileInfo {
+        let parentId =
+            if let parentId { parentId } else {
+                try await parent(of: itemId)
+            }
+        let attrs =
+            if let attrs { attrs } else {
+                try await attributes(for: itemId)
+            }
+        let name =
+            if let name = attrs.name { name } else {
+                try await name(of: itemId)
+            }
 
         let type: FileInfo.FileType =
             switch attrs.type {
             case .directory:
                 .folder
             case .symlink:
-                .symlink(target: try await symlink(for: itemId))
+                .symlink(target: try await symlinkTarget(for: itemId))
             default:
                 .file
             }
@@ -112,30 +135,11 @@ class Session {
             var entries: [FileInfo] = []
             for try await attrs in dir {
                 if let name = attrs.name {
-                    let childId = try await self.child(
-                        of: itemId,
-                        path: name
-                    )
-                    let type: FileInfo.FileType =
-                        switch attrs.type {
-                        case .directory:
-                            .folder
-                        case .symlink:
-                            .symlink(target: try await symlink(for: childId))
-                        default:
-                            .file
-                        }
                     entries.append(
-                        FileInfo(
-                            id: childId.rawValue,
-                            parentId: itemId.rawValue,
-                            name: name,
-                            type: type,
-                            size: attrs.size,
-                            permissions: attrs.permissions,
-                            accessTime: attrs.accessTime,
-                            modifyTime: attrs.modifyTime,
-                            createTime: attrs.createTime
+                        try await info(
+                            for: name,
+                            parentId: itemId,
+                            attrs: attrs
                         )
                     )
                 }
@@ -152,14 +156,6 @@ class Session {
             return true
         } catch {
             return false
-        }
-    }
-
-    func symlink(
-        for itemId: NSFileProviderItemIdentifier
-    ) async throws -> String {
-        try await mapError(with: itemId) {
-            try await sftp.symlinkDestination(atPath: path(for: itemId))
         }
     }
 
@@ -196,6 +192,23 @@ class Session {
                 accessTime: accessTime,
                 modifyTime: modifyTime
             )
+        }
+    }
+    
+    func symlinkTarget(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> String {
+        try await mapError(with: itemId) {
+            try await sftp.symlinkDestination(atPath: path(for: itemId))
+        }
+    }
+
+    func createSymlink(
+        at itemId: NSFileProviderItemIdentifier,
+        to target: String
+    ) async throws {
+        try await mapError(with: itemId) {
+            try await sftp.createSymlink(to: target, at: path(for: itemId))
         }
     }
 

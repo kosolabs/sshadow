@@ -216,6 +216,24 @@ public class AgentClient {
             throw CocoaError(.coderInvalidValue)
         }
     }
+    
+    public func createSymlink(
+        at itemId: NSFileProviderItemIdentifier,
+        to target: String
+    ) async throws {
+        let reply = try await perform(
+            .createSymlink(
+                CreateSymlinkRequest(
+                    domainId: domainId,
+                    itemId: itemId.rawValue,
+                    target: target
+                )
+            )
+        )
+        guard case .createSymlink = reply else {
+            throw CocoaError(.coderInvalidValue)
+        }
+    }
 
     public func createDirectory(
         for itemId: NSFileProviderItemIdentifier,

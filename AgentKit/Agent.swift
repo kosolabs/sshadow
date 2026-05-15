@@ -92,6 +92,8 @@ public class Agent {
                     try await .exists(exists(request))
                 case .setAttributes(let request):
                     try await .setAttributes(setAttributes(request))
+                case .createSymlink(let request):
+                    try await .createSymlink(createSymlink(request))
                 case .createDirectory(let request):
                     try await .createDirectory(createDirectory(request))
                 case .move(let request):
@@ -230,6 +232,17 @@ public class Agent {
             modifyTime: request.modifyTime
         )
         return SetAttributesResponse()
+    }
+
+    func createSymlink(
+        _ request: CreateSymlinkRequest
+    ) async throws -> CreateSymlinkResponse {
+        let session = try await sessions.connect(id: request.domainId)
+        try await session.createSymlink(
+            at: NSFileProviderItemIdentifier(request.itemId),
+            to: request.target
+        )
+        return CreateSymlinkResponse()
     }
 
     func createDirectory(
