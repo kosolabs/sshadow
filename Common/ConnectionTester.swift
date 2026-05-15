@@ -25,7 +25,7 @@ public struct DefaultConnectionTester: ConnectionTester {
             try await SSHClient.withSession(config: config) { _, sftp in
                 logger.debug("SFTP Limits for \(config.socket): \(sftp.limits)")
                 let attrs = try await sftp.attributes(
-                    atPath: config.path == "" ? "." : config.path
+                    at: config.path == "" ? "." : config.path
                 )
                 if attrs.type != .directory {
                     throw ConnectionTestError.pathNotADirectory

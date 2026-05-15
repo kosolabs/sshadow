@@ -164,7 +164,7 @@ class Session {
     ) async throws -> SFTPAttributes {
         try await mapError(with: itemId) {
             try await sftp.attributes(
-                atPath: path(for: itemId),
+                at: path(for: itemId),
                 followSymlinks: false
             )
         }
@@ -187,19 +187,19 @@ class Session {
         )
         try await mapError(with: itemId) {
             try await sftp.setAttributes(
-                atPath: path(for: itemId),
+                at: path(for: itemId),
                 permissions: permissions,
                 accessTime: accessTime,
                 modifyTime: modifyTime
             )
         }
     }
-    
+
     func symlinkTarget(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> String {
         try await mapError(with: itemId) {
-            try await sftp.symlinkDestination(atPath: path(for: itemId))
+            try await sftp.symlinkTarget(at: path(for: itemId))
         }
     }
 
@@ -221,10 +221,7 @@ class Session {
             "Create directory \(id(of: itemId)) with permissions \(String(mode, radix: 8))"
         )
         do {
-            try await sftp.createDirectory(
-                atPath: path(for: itemId),
-                mode: mode
-            )
+            try await sftp.createDirectory(at: path(for: itemId), mode: mode)
         } catch SSHError.sftpError(.fileAlreadyExists, _) {
             switch ifExists {
             case .succeed:
@@ -253,7 +250,7 @@ class Session {
             {
                 logger.info("Parent doesn't exist, creating")
                 try await sftp.createDirectory(
-                    atPath: await path(for: newParentId),
+                    at: path(for: newParentId),
                     mode: 0o700
                 )
                 try await sftp.move(from: oldPath, to: newPath)
@@ -267,7 +264,7 @@ class Session {
     ) async throws {
         await logger.info("Remove \(id(of: itemId))")
         try await mapError(with: itemId) {
-            try await sftp.removeFile(atPath: path(for: itemId))
+            try await sftp.removeFile(at: path(for: itemId))
         }
     }
 
@@ -276,9 +273,7 @@ class Session {
     ) async throws {
         await logger.info("Remove directory \(id(of: itemId))")
         try await mapError(with: itemId) {
-            try await sftp.removeDirectoryRecursively(
-                atPath: path(for: itemId)
-            )
+            try await sftp.removeDirectoryRecursively(at: path(for: itemId))
         }
     }
 
@@ -370,7 +365,7 @@ class Session {
     private func cache(for file: ChunkedFile) async -> ChunkedFileCache {
         await pool.cache(for: file) { [sftp] itemId, range in
             try await sftp.withSftpFile(
-                atPath: self.path(for: itemId),
+                at: self.path(for: itemId),
                 accessType: .readOnly
             ) { file in
                 try await file.read(range: range)
@@ -431,7 +426,7 @@ class Session {
         await logger.info("With \(accessType) file \(id(of: itemId))")
         return try await mapError(with: itemId) {
             try await sftp.withSftpFile(
-                atPath: path(for: itemId),
+                at: path(for: itemId),
                 accessType: accessType,
                 mode: mode,
                 perform: perform
@@ -446,7 +441,7 @@ class Session {
         await logger.info("With directory \(id(of: itemId))")
         return try await mapError(with: itemId) {
             try await sftp.withDirectory(
-                atPath: path(for: itemId),
+                at: path(for: itemId),
                 perform: perform
             )
         }
