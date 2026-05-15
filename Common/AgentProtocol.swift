@@ -43,6 +43,8 @@ public enum AgentRequest: Codable {
             request.domainId
         case .setAttributes(let request):
             request.domainId
+        case .createSymlink(let request):
+            request.domainId
         case .createDirectory(let request):
             request.domainId
         case .move(let request):
@@ -73,6 +75,7 @@ public enum AgentRequest: Codable {
     case list(ListRequest)
     case exists(ExistsRequest)
     case setAttributes(SetAttributesRequest)
+    case createSymlink(CreateSymlinkRequest)
     case createDirectory(CreateDirectoryRequest)
     case move(MoveRequest)
     case removeFile(RemoveFileRequest)
@@ -106,6 +109,7 @@ public enum AgentResponse: Codable {
     case list(ListResponse)
     case exists(ExistsResponse)
     case setAttributes(SetAttributesResponse)
+    case createSymlink(CreateSymlinkResponse)
     case createDirectory(CreateDirectoryResponse)
     case move(MoveResponse)
     case removeFile(RemoveFileResponse)
@@ -361,6 +365,26 @@ public struct SetAttributesRequest: Codable {
 }
 
 public struct SetAttributesResponse: Codable {
+    public init() {}
+}
+
+public struct CreateSymlinkRequest: Codable {
+    public let domainId: UUID
+    public let itemId: String
+    public let target: String
+
+    public init(
+        domainId: UUID,
+        itemId: String,
+        target: String
+    ) {
+        self.domainId = domainId
+        self.itemId = itemId
+        self.target = target
+    }
+}
+
+public struct CreateSymlinkResponse: Codable {
     public init() {}
 }
 

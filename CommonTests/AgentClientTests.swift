@@ -138,6 +138,21 @@ struct AgentClientTests {
         #expect(info.permissions & 0o777 == 0o644)
     }
 
+    @Test func createSymlinkSucceeds() async throws {
+        let agent = try await getAgentClient()
+
+        let target = "\(testFolderPath)/symlink-target.txt"
+        try TestData.createFile(path: target, contents: "hello")
+
+        let symlinkPath = "\(testFolderPath)/symlink-link.txt"
+        let itemId = try await agent.child(path: symlinkPath)
+
+        try await agent.createSymlink(at: itemId, to: target)
+        let info = try await agent.info(for: itemId)
+
+        #expect(info.type == .symlink(target: target))
+    }
+
     @Test func createDirectorySucceeds() async throws {
         let agent = try await getAgentClient()
 

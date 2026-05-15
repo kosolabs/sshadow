@@ -18,6 +18,11 @@ extension NSFileProviderItem {
         if let contentType = contentType {
             components.append("contentType: \(contentType)")
         }
+        if let symlinkTargetPath = symlinkTargetPath ?? nil {
+            components.append(
+                "target: \(symlinkTargetPath)"
+            )
+        }
         if let typeAndCreator = typeAndCreator {
             if typeAndCreator.type != 0 || typeAndCreator.creator != 0 {
                 components.append("typeAndCreator: \(typeAndCreator)")

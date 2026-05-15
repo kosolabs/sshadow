@@ -147,7 +147,7 @@ struct ExtensionTests {
         let folderUrl = TestData.getUrl(path: folderPath)
         let folderId = try await agent.child(path: folderPath)
 
-        // Create FPItem(id: FPItemID(__fp/fs/fileId(17967944)), parentId: FPItemID(<pid>), filename: folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), createTime: 2026-03-04 07:05:26 +0000, modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1478, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID(<pid>), filename: folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), createTime: 2026-03-04 07:05:26 +0000, modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1478, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let createFolderProgress = Progress()
         _ = try await ext.createItem(
             basedOn: ItemTemplate(
@@ -225,7 +225,7 @@ struct ExtensionTests {
         let fileUrl = TestData.getUrl(path: filePath)
         let fileId = try await agent.child(path: filePath)
 
-        // Create FPItem(id: FPItemID(__fp/fs/docId(10961)), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 14, createTime: 2026-03-04 21:51:16 +0000, modifyTime: 2026-03-04 21:51:16 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 14, createTime: 2026-03-04 21:51:16 +0000, modifyTime: 2026-03-04 21:51:16 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let fileToUploadUrl = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString)
         let content = "Hello, World!\n"
@@ -314,7 +314,7 @@ struct ExtensionTests {
         let fileUrl = TestData.getUrl(path: filePath)
         let fileId = try await agent.child(path: filePath)
 
-        // Create FPItem(id: FPItemID(__fp/fs/docId(10965)), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 10485760, createTime: 2026-03-04 22:15:29 +0000, modifyTime: 2026-03-04 22:15:29 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 10485760, createTime: 2026-03-04 22:15:29 +0000, modifyTime: 2026-03-04 22:15:29 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let fileToUploadUrl = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString)
         let content = Data(count: 10_485_760)
@@ -349,7 +349,7 @@ struct ExtensionTests {
         #expect(uploadProgress.isFinished)
         #expect(try FileManager.default.permissions(of: fileUrl) == 0o600)
 
-        // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID.rootContainer, filename: extension-create-large-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 22:15:29 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<pid>), parentId: .rootContainer, filename: extension-create-large-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 22:15:29 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -376,6 +376,56 @@ struct ExtensionTests {
         let actualModifyDate = try FileManager.default.modifyDate(of: testUrl)
         #expect(actualModifyDate == newDate)
         #expect(updateFolderProgress.isFinished)
+    }
+
+    @Test func createSymlinkSucceeds() async throws {
+        let (ext, agent) = try await getExtensionAndAgent()
+
+        // ln -s target.md extension-symlink-file/symlink.md
+        let newDate = Date(timeIntervalSince1970: 1_760_000_000)
+
+        let testPath = "extension-symlink-file"
+        try TestData.createFolder(path: testPath)
+        let target = "target.md"
+        try TestData.createFile(path: "\(testPath)/\(target)", contents: "data")
+
+        let symlinkPath = "\(testPath)/symlink.md"
+        try TestData.removeItem(path: symlinkPath)
+        let symlinkUrl = TestData.getUrl(path: symlinkPath)
+        let symlinkId = try await agent.child(path: symlinkPath)
+
+        // Create FPItem(id: FPItemID(<osid>), parentId: <pid>, filename: symlink.md, contentType: public.symlink, target: target.md, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), size: 9, createTime: 2026-05-15 00:34:12 +0000, modifyTime: 2026-05-15 00:34:12 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        let createSymlinkProgress = Progress()
+        _ = try await ext.createItem(
+            basedOn: ItemTemplate(
+                parentItemIdentifier: agent.parent(of: symlinkId),
+                filename: agent.name(of: symlinkId),
+                contentType: .symbolicLink,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [
+                    .userExecutable, .userReadable, .userWritable,
+                ],
+                documentSize: NSNumber(value: target.count),
+                creationDate: newDate,
+                contentModificationDate: newDate,
+                symlinkTargetPath: target,
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true,
+            ),
+            fields: [
+                .contents, .filename, .parentItemIdentifier, .creationDate,
+                .contentModificationDate, .fileSystemFlags, .typeAndCreator,
+            ],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: createSymlinkProgress
+        )
+
+        let actualTarget = try FileManager.default
+            .destinationOfSymbolicLink(atPath: symlinkUrl.path())
+        #expect(actualTarget == target)
+        #expect(createSymlinkProgress.isFinished)
     }
 
     @Test func renameFileSucceeds() async throws {
@@ -944,6 +994,7 @@ final class ItemTemplate: NSObject, NSFileProviderItem {
     var creationDate: Date?
     var contentModificationDate: Date?
     var lastUsedDate: Date?
+    var symlinkTargetPath: String?
     var isDownloaded: Bool
     var isMostRecentVersionDownloaded: Bool
 
@@ -963,6 +1014,7 @@ final class ItemTemplate: NSObject, NSFileProviderItem {
         creationDate: Date? = nil,
         contentModificationDate: Date? = nil,
         lastUsedDate: Date? = nil,
+        symlinkTargetPath: String? = nil,
         isDownloaded: Bool = false,
         isMostRecentVersionDownloaded: Bool = false,
     ) {
@@ -977,6 +1029,7 @@ final class ItemTemplate: NSObject, NSFileProviderItem {
         self.creationDate = creationDate
         self.contentModificationDate = contentModificationDate
         self.lastUsedDate = lastUsedDate
+        self.symlinkTargetPath = symlinkTargetPath
         self.isDownloaded = isDownloaded
         self.isMostRecentVersionDownloaded = isMostRecentVersionDownloaded
     }

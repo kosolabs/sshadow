@@ -15,7 +15,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         logger.debug("Init \(domain)")
         super.init()
     }
-    
+
     public init(agent: AgentClient) {
         self.agent = agent
         super.init()
@@ -194,12 +194,27 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         var remaining = fields.subtracting(.nameFields)
         let steps = progress.steps()
 
-        if remaining.intersects(with: .writeFields) {
-            guard let url = url else {
-                logger.fault("Missing contents URL for \(item.desc)")
-                throw CocoaError(.fileReadUnsupportedScheme)
-            }
+        if item.contentType == .symbolicLink,
+            remaining.intersects(with: .writeFields),
+            let target = item.symlinkTargetPath ?? nil
+        {
+            remaining.subtract([.contents])
 
+            steps.add {
+                try await self.agent.createSymlink(
+                    at: itemIdentifier,
+                    to: target
+                )
+            }
+        }
+
+        if item.contentType == .folder {
+            steps.add {
+                try await self.agent.createDirectory(for: itemIdentifier)
+            }
+        }
+
+        if let url = url, remaining.intersects(with: .writeFields) {
             let fileSize = try FileManager.default.size(of: url)
             let limits = try await agent.limits()
             let chunkSize = limits.maxWriteLength
@@ -218,10 +233,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     mode: fileSystemFlags.permissions,
                     progress: subprogress
                 )
-            }
-        } else if item.contentType == .folder {
-            steps.add {
-                try await self.agent.createDirectory(for: itemIdentifier)
             }
         }
 
