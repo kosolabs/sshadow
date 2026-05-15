@@ -22,6 +22,17 @@ public class Item: NSObject, NSFileProviderItem {
 
     public var filename: String { info.name }
 
+    public var contentType: UTType {
+        switch info.type {
+        case .file:
+            .text
+        case .folder:
+            .folder
+        case .symlink(_):
+            .symbolicLink
+        }
+    }
+
     public var capabilities: NSFileProviderItemCapabilities {
         return [
             .allowsReading, .allowsWriting, .allowsRenaming, .allowsReparenting,
@@ -29,24 +40,34 @@ public class Item: NSObject, NSFileProviderItem {
         ]
     }
 
+    public var fileSystemFlags: NSFileProviderFileSystemFlags {
+        NSFileProviderFileSystemFlags(
+            mode: mode_t(truncatingIfNeeded: info.permissions)
+        )
+    }
+
+    public var documentSize: NSNumber? {
+        info.size as NSNumber
+    }
+
+    public var creationDate: Date? {
+        info.createTime
+    }
+
+    public var contentModificationDate: Date? {
+        info.modifyTime
+    }
+
+    public var lastUsedDate: Date? {
+        info.accessTime
+    }
+    
     public var itemVersion: NSFileProviderItemVersion {
         NSFileProviderItemVersion(
             contentVersion: "a content version".data(using: .utf8)!,
             metadataVersion: "a metadata version".data(using: .utf8)!
         )
     }
-
-    public var size: UInt64 { info.size }
-
-    public var documentSize: NSNumber? { info.size as NSNumber }
-
-    public var lastUsedDate: Date? { info.accessTime }
-
-    public var contentModificationDate: Date? { info.modifyTime }
-
-    public var creationDate: Date? { info.createTime }
-
-    public var isDirectory: Bool { info.type == .folder }
 
     public var symlinkTargetPath: String? {
         switch info.type {
@@ -57,14 +78,7 @@ public class Item: NSObject, NSFileProviderItem {
         }
     }
 
-    public var contentType: UTType {
-        switch info.type {
-        case .file:
-            .text
-        case .folder:
-            .folder
-        case .symlink(_):
-            .symbolicLink
-        }
+    public var size: UInt64 {
+        info.size
     }
 }

@@ -68,4 +68,34 @@ struct FileSystemFlagsExtensionsTests {
         let permissions = flags.permissions
         #expect(permissions == 0o000)
     }
+
+    @Test func flagsFromMode600IsReadableWritable() {
+        let flags = NSFileProviderFileSystemFlags(mode: 0o600)
+        #expect(flags == [.userReadable, .userWritable])
+    }
+
+    @Test func flagsFromMode400IsReadable() {
+        let flags = NSFileProviderFileSystemFlags(mode: 0o400)
+        #expect(flags == [.userReadable])
+    }
+
+    @Test func flagsFromMode200IsWritable() {
+        let flags = NSFileProviderFileSystemFlags(mode: 0o200)
+        #expect(flags == [.userWritable])
+    }
+
+    @Test func flagsFromMode100IsExecutable() {
+        let flags = NSFileProviderFileSystemFlags(mode: 0o100)
+        #expect(flags == [.userExecutable])
+    }
+
+    @Test func flagsFromMode000IsEmpty() {
+        let flags = NSFileProviderFileSystemFlags(mode: 0o000)
+        #expect(flags == [])
+    }
+
+    @Test func flagsFromMode755IgnoresGroupAndOtherBits() {
+        let flags = NSFileProviderFileSystemFlags(mode: 0o755)
+        #expect(flags == [.userReadable, .userWritable, .userExecutable])
+    }
 }

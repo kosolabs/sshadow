@@ -1,6 +1,20 @@
 import Foundation
 
-public struct FileInfo: Message {
+public struct FileInfo: Message, CustomStringConvertible {
+    public var description: String {
+        let mirror = Mirror(reflecting: self)
+        let fields = mirror.children.map { field in
+            if field.label == "permissions",
+                let value = field.value as? UInt32
+            {
+                "permissions: 0o\(String(value, radix: 8))"
+            } else {
+                "\(field.label ?? ""): \(field.value)"
+            }
+        }.joined(separator: ", ")
+        return "FileInfo(\(fields))"
+    }
+
     public enum FileType: Message {
         case file
         case folder
