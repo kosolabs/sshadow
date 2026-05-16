@@ -455,6 +455,8 @@ class Session {
             return try await operation()
         } catch SSHError.sftpError(.noSuchFile, _) {
             throw AgentError.itemNotFound(itemId.rawValue)
+        } catch SSHError.sftpError(.permissionDenied, _) {
+            throw AgentError.permissionDenied
         } catch SSHError.sftpError(.fileAlreadyExists, _) {
             throw AgentError.filenameCollision
         }

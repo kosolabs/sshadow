@@ -124,6 +124,7 @@ public enum AgentError: Codable, Equatable, Error{
     case notAuthenticated
     case serverUnreachable
     case userCancelled
+    case permissionDenied
     case itemNotFound(String)
     case filenameCollision
     case unknown(domain: String, code: Int, message: String)
@@ -146,16 +147,18 @@ public enum AgentError: Codable, Equatable, Error{
         switch self {
         case .notAuthenticated:
             NSFileProviderError(.notAuthenticated)
+        case .serverUnreachable:
+            NSFileProviderError(.serverUnreachable)
         case .userCancelled:
             CocoaError(.userCancelled)
+        case .permissionDenied:
+            CocoaError(.fileWriteNoPermission)
         case .itemNotFound(let itemId):
             NSError.fileProviderErrorForNonExistentItem(
                 withIdentifier: NSFileProviderItemIdentifier(itemId)
             )
         case .filenameCollision:
             NSFileProviderError(.filenameCollision)
-        case .serverUnreachable:
-            NSFileProviderError(.serverUnreachable)
         case .unknown(let domain, let code, let message):
             NSError(
                 domain: domain,
