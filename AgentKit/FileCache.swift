@@ -4,34 +4,34 @@ import Foundation
 
 private let logger = Logger(category: "Session")
 
-typealias ChunkReader =
+typealias Reader =
     @Sendable (
         NSFileProviderItemIdentifier, Range<UInt64>
     ) async throws -> Data
 
-actor ChunkedFileCachePool {
-    private var entries: [String: ChunkedFileCache] = [:]
+actor FileCachePool {
+    private var entries: [String: FileCache] = [:]
 
     func cache(
-        for file: ChunkedFile,
-        read: @escaping ChunkReader
-    ) -> ChunkedFileCache {
+        for file: File,
+        read: @escaping Reader
+    ) -> FileCache {
         let key = file.id.rawValue
         if let existing = entries[key] {
             return existing
         }
-        let cache = ChunkedFileCache(file: file, read: read)
+        let cache = FileCache(file: file, read: read)
         entries[key] = cache
         return cache
     }
 }
 
-actor ChunkedFileCache {
-    private let file: ChunkedFile
-    private let read: ChunkReader
+actor FileCache {
+    private let file: File
+    private let read: Reader
     private var cache: [UInt64: Task<Data, any Error>] = [:]
 
-    init(file: ChunkedFile, read: @escaping ChunkReader) {
+    init(file: File, read: @escaping Reader) {
         self.file = file
         self.read = read
     }

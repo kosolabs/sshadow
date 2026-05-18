@@ -11,7 +11,7 @@ class Session {
     private let sftp: SFTPClient
     private let db: DomainDB
 
-    private let pool = ChunkedFileCachePool()
+    private let pool = FileCachePool()
 
     init(
         config: ConnectionConfig,
@@ -329,7 +329,7 @@ class Session {
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
         progress: Progress,
     ) async throws -> (URL, FileInfo) {
-        let file = try await ChunkedFile(info: info(for: itemId))
+        let file = try await File(info: info(for: itemId))
         let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
         logger.info("Download \(file) into \(url)")
 
@@ -345,8 +345,8 @@ class Session {
         )
 
         let bufferSize = sftp.limits.readLength(for: chunkSize)
-        try await withFile(for: itemId, accessType: .readOnly) { file in
-            for try await data in file.stream(bufferSize: bufferSize) {
+        try await withFile(for: itemId, accessType: .readOnly) { fp in
+            for try await data in fp.stream(bufferSize: bufferSize) {
                 if progress.isCancelled {
                     logger.info("Download \(file) cancelled")
                     throw AgentError.userCancelled
@@ -362,7 +362,7 @@ class Session {
         return (url, file.info)
     }
 
-    private func cache(for file: ChunkedFile) async -> ChunkedFileCache {
+    private func cache(for file: File) async -> FileCache {
         await pool.cache(for: file) { [sftp] itemId, range in
             try await sftp.withSftpFile(
                 at: self.path(for: itemId),
@@ -378,7 +378,7 @@ class Session {
         range: Range<UInt64>,
         progress: Progress
     ) async throws -> (URL, Range<UInt64>) {
-        let file = try await ChunkedFile(info: info(for: itemId))
+        let file = try await File(info: info(for: itemId))
         let cache = await cache(for: file)
         let url = SSHadow.groupUrl.appending(path: "\(itemId.rawValue)")
         logger.info("Stream \(file) into \(url)")

@@ -827,7 +827,7 @@ struct SessionTests {
 
     struct StreamTests {
         let testFolderPath = "session-stream"
-        let chunkSize = ChunkedFile.defaultChunkSize
+        let chunkSize = File.defaultChunkSize
 
         init() throws {
             try TestData.createFolder(path: testFolderPath)
@@ -941,8 +941,8 @@ struct SessionTests {
             let data = try await session.withFile(
                 for: session.child(path: path),
                 accessType: .readOnly
-            ) { file in
-                try await file.read()
+            ) { fp in
+                try await fp.read()
             }
 
             #expect(String(data: data, encoding: .utf8) == contents)

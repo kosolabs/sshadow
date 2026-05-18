@@ -3,22 +3,22 @@ import Foundation
 
 private let logger = Logger(category: "AgentProtocol")
 
-public enum OnExists: Codable {
+public enum OnExists: Codable, PrettyDescribable {
     case fail
     case succeed
 }
 
-public enum OnNotExists: Codable {
+public enum OnNotExists: Codable, PrettyDescribable {
     case fail
     case create
 }
 
-public enum OnParentNotExists: Codable {
+public enum OnParentNotExists: Codable, PrettyDescribable {
     case fail
     case create
 }
 
-public enum AgentRequest: Codable {
+public enum AgentRequest: Codable, PrettyDescribable {
     public var domainId: UUID {
         switch self {
         case .initDomain(let request):
@@ -86,7 +86,7 @@ public enum AgentRequest: Codable {
     case stream(StreamRequest)
 }
 
-public enum AgentResult: Codable {
+public enum AgentResult: Codable, PrettyDescribable {
     case success(AgentResponse)
     case failure(AgentError)
 
@@ -98,7 +98,7 @@ public enum AgentResult: Codable {
     }
 }
 
-public enum AgentResponse: Codable {
+public enum AgentResponse: Codable, PrettyDescribable {
     case initDomain(InitDomainResponse)
     case deinitDomain(DeinitDomainResponse)
     case name(NameResponse)
@@ -120,7 +120,7 @@ public enum AgentResponse: Codable {
     case stream(StreamResponse)
 }
 
-public enum AgentError: Codable, Equatable, Error{
+public enum AgentError: Codable, PrettyDescribable, Equatable, Error {
     case notAuthenticated
     case serverUnreachable
     case userCancelled
@@ -174,7 +174,7 @@ public enum AgentError: Codable, Equatable, Error{
     }
 }
 
-public struct InitDomainRequest: Codable {
+public struct InitDomainRequest: Codable, PrettyDescribable {
     public let domainId: UUID
 
     public init(domainId: UUID) {
@@ -182,11 +182,11 @@ public struct InitDomainRequest: Codable {
     }
 }
 
-public struct InitDomainResponse: Codable {
+public struct InitDomainResponse: Codable, PrettyDescribable {
     public init() {}
 }
 
-public struct DeinitDomainRequest: Codable {
+public struct DeinitDomainRequest: Codable, PrettyDescribable {
     public let domainId: UUID
 
     public init(domainId: UUID) {
@@ -194,11 +194,11 @@ public struct DeinitDomainRequest: Codable {
     }
 }
 
-public struct DeinitDomainResponse: Codable {
+public struct DeinitDomainResponse: Codable, PrettyDescribable {
     public init() {}
 }
 
-public struct NameRequest: Codable {
+public struct NameRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -208,7 +208,7 @@ public struct NameRequest: Codable {
     }
 }
 
-public struct NameResponse: Codable {
+public struct NameResponse: Codable, PrettyDescribable {
     let name: String
 
     public init(name: String) {
@@ -216,7 +216,7 @@ public struct NameResponse: Codable {
     }
 }
 
-public struct ChildRequest: Codable {
+public struct ChildRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let parentId: String
     public let path: String
@@ -235,7 +235,7 @@ public struct ChildRequest: Codable {
     }
 }
 
-public struct ChildResponse: Codable {
+public struct ChildResponse: Codable, PrettyDescribable {
     let itemId: String
 
     public init(itemId: String) {
@@ -243,7 +243,7 @@ public struct ChildResponse: Codable {
     }
 }
 
-public struct ParentRequest: Codable {
+public struct ParentRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -253,7 +253,7 @@ public struct ParentRequest: Codable {
     }
 }
 
-public struct ParentResponse: Codable {
+public struct ParentResponse: Codable, PrettyDescribable {
     let itemId: String
 
     public init(itemId: String) {
@@ -261,7 +261,7 @@ public struct ParentResponse: Codable {
     }
 }
 
-public struct PathForItemRequest: Codable {
+public struct PathForItemRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -271,7 +271,7 @@ public struct PathForItemRequest: Codable {
     }
 }
 
-public struct PathForChildRequest: Codable {
+public struct PathForChildRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let name: String
     public let parentId: String
@@ -283,7 +283,7 @@ public struct PathForChildRequest: Codable {
     }
 }
 
-public struct PathResponse: Codable {
+public struct PathResponse: Codable, PrettyDescribable {
     let path: String
 
     public init(path: String) {
@@ -291,7 +291,7 @@ public struct PathResponse: Codable {
     }
 }
 
-public struct InfoRequest: Codable {
+public struct InfoRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -301,7 +301,7 @@ public struct InfoRequest: Codable {
     }
 }
 
-public struct InfoResponse: Codable {
+public struct InfoResponse: Codable, PrettyDescribable {
     let fileInfo: FileInfo
 
     public init(fileInfo: FileInfo) {
@@ -309,7 +309,7 @@ public struct InfoResponse: Codable {
     }
 }
 
-public struct ListRequest: Codable {
+public struct ListRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -319,7 +319,7 @@ public struct ListRequest: Codable {
     }
 }
 
-public struct ListResponse: Codable {
+public struct ListResponse: Codable, PrettyDescribable {
     let fileInfos: [FileInfo]
 
     public init(fileInfos: [FileInfo]) {
@@ -327,7 +327,7 @@ public struct ListResponse: Codable {
     }
 }
 
-public struct ExistsRequest: Codable {
+public struct ExistsRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -337,7 +337,7 @@ public struct ExistsRequest: Codable {
     }
 }
 
-public struct ExistsResponse: Codable {
+public struct ExistsResponse: Codable, PrettyDescribable {
     let exists: Bool
 
     public init(exists: Bool) {
@@ -345,7 +345,7 @@ public struct ExistsResponse: Codable {
     }
 }
 
-public struct SetAttributesRequest: Codable {
+public struct SetAttributesRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
     public let permissions: mode_t?
@@ -367,11 +367,11 @@ public struct SetAttributesRequest: Codable {
     }
 }
 
-public struct SetAttributesResponse: Codable {
+public struct SetAttributesResponse: Codable, PrettyDescribable {
     public init() {}
 }
 
-public struct CreateSymlinkRequest: Codable {
+public struct CreateSymlinkRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
     public let target: String
@@ -387,11 +387,11 @@ public struct CreateSymlinkRequest: Codable {
     }
 }
 
-public struct CreateSymlinkResponse: Codable {
+public struct CreateSymlinkResponse: Codable, PrettyDescribable {
     public init() {}
 }
 
-public struct CreateDirectoryRequest: Codable {
+public struct CreateDirectoryRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
     public let mode: mode_t
@@ -410,11 +410,11 @@ public struct CreateDirectoryRequest: Codable {
     }
 }
 
-public struct CreateDirectoryResponse: Codable {
+public struct CreateDirectoryResponse: Codable, PrettyDescribable {
     public init() {}
 }
 
-public struct MoveRequest: Codable {
+public struct MoveRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
     public let newParentId: String
@@ -436,11 +436,11 @@ public struct MoveRequest: Codable {
     }
 }
 
-public struct MoveResponse: Codable {
+public struct MoveResponse: Codable, PrettyDescribable {
     public init() {}
 }
 
-public struct RemoveFileRequest: Codable {
+public struct RemoveFileRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -450,11 +450,11 @@ public struct RemoveFileRequest: Codable {
     }
 }
 
-public struct RemoveFileResponse: Codable {
+public struct RemoveFileResponse: Codable, PrettyDescribable {
     public init() {}
 }
 
-public struct RemoveDirectoryRequest: Codable {
+public struct RemoveDirectoryRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -464,11 +464,11 @@ public struct RemoveDirectoryRequest: Codable {
     }
 }
 
-public struct RemoveDirectoryResponse: Codable {
+public struct RemoveDirectoryResponse: Codable, PrettyDescribable {
     public init() {}
 }
 
-public struct LimitsRequest: Codable {
+public struct LimitsRequest: Codable, PrettyDescribable {
     public let domainId: UUID
 
     public init(domainId: UUID) {
@@ -476,7 +476,7 @@ public struct LimitsRequest: Codable {
     }
 }
 
-public struct LimitsResponse: Codable {
+public struct LimitsResponse: Codable, PrettyDescribable {
     public let maxOpenHandles: UInt64
     public let maxPacketLength: UInt64
     public let maxReadLength: UInt64
@@ -495,7 +495,7 @@ public struct LimitsResponse: Codable {
     }
 }
 
-public struct UploadRequest: Codable {
+public struct UploadRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
     public let file: URL
@@ -520,11 +520,11 @@ public struct UploadRequest: Codable {
     }
 }
 
-public struct UploadResponse: Codable {
+public struct UploadResponse: Codable, PrettyDescribable {
     public init() {}
 }
 
-public struct DownloadRequest: Codable {
+public struct DownloadRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
     public let chunkSize: UInt64
@@ -543,7 +543,7 @@ public struct DownloadRequest: Codable {
     }
 }
 
-public struct DownloadResponse: Codable {
+public struct DownloadResponse: Codable, PrettyDescribable {
     let url: URL
     let fileInfo: FileInfo
 
@@ -553,7 +553,7 @@ public struct DownloadResponse: Codable {
     }
 }
 
-public struct StreamRequest: Codable {
+public struct StreamRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
     public let range: Range<UInt64>
@@ -572,7 +572,7 @@ public struct StreamRequest: Codable {
     }
 }
 
-public struct StreamResponse: Codable {
+public struct StreamResponse: Codable, PrettyDescribable {
     let url: URL
     let range: Range<UInt64>
 
