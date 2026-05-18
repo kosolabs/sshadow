@@ -2,7 +2,7 @@ import Common
 import FileProvider
 import Foundation
 
-struct ChunkedFile: CustomStringConvertible {
+struct File: PrettyDescribable {
     static let defaultChunkSize: UInt64 = 1024 * 1024
 
     let info: FileInfo
@@ -52,9 +52,5 @@ struct ChunkedFile: CustomStringConvertible {
 
     func byteOffset(for chunk: UInt64) -> UInt64 {
         chunk * chunkSize
-    }
-
-    var description: String {
-        "ChunkedFile(id: \(info.id), name: \(name), size: \(size), chunks: \(chunkCount)@\(chunkSize)b)"
     }
 }
