@@ -76,34 +76,11 @@ class Session {
     }
 
     func info(
-        for name: String,
-        parentId: NSFileProviderItemIdentifier,
-        attrs: SFTPAttributes? = nil
+        for itemId: NSFileProviderItemIdentifier
     ) async throws -> FileInfo {
-        return try await info(
-            for: child(of: parentId, path: name),
-            parentId: parentId,
-            attrs: attrs
-        )
-    }
-
-    func info(
-        for itemId: NSFileProviderItemIdentifier,
-        parentId: NSFileProviderItemIdentifier? = nil,
-        attrs: SFTPAttributes? = nil
-    ) async throws -> FileInfo {
-        let parentId =
-            if let parentId { parentId } else {
-                try await parent(of: itemId)
-            }
-        let attrs =
-            if let attrs { attrs } else {
-                try await attributes(for: itemId)
-            }
-        let name =
-            if let name = attrs.name { name } else {
-                try await name(of: itemId)
-            }
+        let parentId = try await parent(of: itemId)
+        let attrs = try await attributes(for: itemId)
+        let name = try await name(of: itemId)
 
         let type: FileInfo.FileType =
             switch attrs.type {
@@ -129,20 +106,34 @@ class Session {
     }
 
     func list(
-        for itemId: NSFileProviderItemIdentifier
+        for parentId: NSFileProviderItemIdentifier
     ) async throws -> [FileInfo] {
-        try await withDirectory(for: itemId) { dir in
+        try await withDirectory(for: parentId) { dir in
             var entries: [FileInfo] = []
             for try await attrs in dir {
-                if let name = attrs.name {
-                    entries.append(
-                        try await info(
-                            for: name,
-                            parentId: itemId,
-                            attrs: attrs
-                        )
-                    )
-                }
+                guard let name = attrs.name else { continue }
+                let itemId = try await child(of: parentId, path: name)
+                let type: FileInfo.FileType =
+                    switch attrs.type {
+                    case .directory:
+                        .folder
+                    case .symlink:
+                        .symlink(target: nil)
+                    default:
+                        .file
+                    }
+                let info = FileInfo(
+                    id: itemId.rawValue,
+                    parentId: parentId.rawValue,
+                    name: name,
+                    type: type,
+                    size: attrs.size,
+                    permissions: attrs.permissions,
+                    accessTime: attrs.accessTime,
+                    modifyTime: attrs.modifyTime,
+                    createTime: attrs.createTime
+                )
+                entries.append(info)
             }
             return entries
         }

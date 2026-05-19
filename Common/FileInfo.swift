@@ -18,7 +18,7 @@ public struct FileInfo: Message, CustomStringConvertible {
     public enum FileType: Message {
         case file
         case folder
-        case symlink(target: String)
+        case symlink(target: String?)
     }
 
     public let id: String

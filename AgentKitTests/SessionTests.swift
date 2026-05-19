@@ -253,7 +253,7 @@ struct SessionTests {
             let symlinkEntry = try #require(
                 entries.first { $0.name == "link.txt" }
             )
-            #expect(symlinkEntry.type == .symlink(target: "file.txt"))
+            #expect(symlinkEntry.type == .symlink(target: nil))
         }
 
         @Test func listEmptyDirectoryReturnsEmpty() async throws {
