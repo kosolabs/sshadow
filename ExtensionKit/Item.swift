@@ -70,11 +70,6 @@ public class Item: NSObject, NSFileProviderItem {
     }
 
     public var symlinkTargetPath: String? {
-        switch info.type {
-        case .symlink(let target):
-            target
-        default:
-            nil
-        }
+        if case .symlink(let target) = info.type { target } else { nil }
     }
 }
