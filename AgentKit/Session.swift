@@ -11,7 +11,7 @@ class Session {
     private let sftp: SFTPClient
     private let db: DomainDB
 
-    private let pool = FileCachePool()
+    private let cache: FileCache
 
     init(
         config: ConnectionConfig,
@@ -23,6 +23,15 @@ class Session {
         self.ssh = ssh
         self.sftp = sftp
         self.db = db
+        self.cache = FileCache { itemId, range in
+            let path = await config.path(for: db.path(for: itemId))
+            return try await sftp.withSftpFile(
+                at: path,
+                accessType: .readOnly
+            ) { file in
+                try await file.read(range: range)
+            }
+        }
     }
 
     func close() async {
@@ -353,30 +362,27 @@ class Session {
         return (url, file.info)
     }
 
-    private func cache(for file: File) async -> FileCache {
-        await pool.cache(for: file) { [sftp] itemId, range in
-            try await sftp.withSftpFile(
-                at: self.path(for: itemId),
-                accessType: .readOnly
-            ) { file in
-                try await file.read(range: range)
-            }
-        }
-    }
-
     func stream(
         itemId: NSFileProviderItemIdentifier,
         range: Range<UInt64>,
         progress: Progress
     ) async throws -> (URL, Range<UInt64>) {
         let file = try await File(info: info(for: itemId))
-        let cache = await cache(for: file)
         let url = SSHadow.groupUrl.appending(path: "\(itemId.rawValue)")
-        logger.info("Stream \(file) into \(url)")
-
         let chunkRange = file.chunkRange(for: range)
         let byteRange = file.byteRange(for: chunkRange)
 
+        let fields = [
+            "\(chunkRange)/\(file.chunkCount)",
+            "range: \(range) -> \(byteRange)",
+            "item: \(itemId.rawValue)",
+            "name: \(file.name)",
+            "size: \(file.size)",
+            "chunkSize: \(file.chunkSize)"
+        ].joined(separator: ", ")
+        let repr = "ChunkRange(\(fields))"
+
+        logger.info("Stream \(repr) into \(url)")
         try create(file: url)
         let handle = try FileHandle(forWritingTo: url)
         defer { try? handle.close() }
@@ -389,22 +395,22 @@ class Session {
         )
 
         for chunkIndex in chunkRange {
-            let data = try await cache.fetch(chunkId: chunkIndex)
+            let data = try await cache.fetch(Chunk(file: file, id: chunkIndex))
             try handle.seek(toOffset: file.byteOffset(for: chunkIndex))
             try handle.write(contentsOf: data)
             speedometer.update(delta: data.count)
         }
 
-        let prefetchRange = chunkRange.upperBound..<chunkRange.upperBound + 2
+        let prefetchRange =
+            chunkRange.upperBound..<chunkRange.upperBound
+            + FileCache.prefetchWindow
         if !prefetchRange.isEmpty {
-            Task {
-                for chunkIndex in prefetchRange {
-                    try await cache.fetch(chunkId: chunkIndex)
-                }
+            for chunkIndex in prefetchRange {
+                await cache.prefetch(Chunk(file: file, id: chunkIndex))
             }
         }
 
-        logger.info("Streamed \(file): \(speedometer.finalize())")
+        logger.info("Streamed \(repr): \(speedometer.finalize())")
         return (url, byteRange)
     }
 

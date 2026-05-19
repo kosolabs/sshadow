@@ -3,7 +3,7 @@ import FileProvider
 import Foundation
 
 struct File: PrettyDescribable {
-    static let defaultChunkSize: UInt64 = 1024 * 1024
+    static let defaultChunkSize: UInt64 = 256 * 1024
 
     let info: FileInfo
     let chunkSize: UInt64
