@@ -25,12 +25,12 @@ struct File: PrettyDescribable {
     }
 
     var size: UInt64 {
-        info.size
+        info.size ?? 0
     }
 
     var chunkCount: UInt64 {
-        guard info.size > 0 else { return 0 }
-        return (info.size + chunkSize - 1) / chunkSize
+        guard size > 0 else { return 0 }
+        return (size + chunkSize - 1) / chunkSize
     }
 
     func chunkRange(for range: Range<UInt64>) -> Range<UInt64> {
@@ -43,7 +43,7 @@ struct File: PrettyDescribable {
     func byteRange(for chunks: Range<UInt64>) -> Range<UInt64> {
         let range =
             (chunks.lowerBound * chunkSize)..<(chunks.upperBound * chunkSize)
-        return range.clamped(to: 0..<info.size)
+        return range.clamped(to: 0..<size)
     }
 
     func byteRange(for chunk: UInt64) -> Range<UInt64> {

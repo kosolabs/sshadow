@@ -42,16 +42,16 @@ public class Item: NSObject, NSFileProviderItem {
 
     public var fileSystemFlags: NSFileProviderFileSystemFlags {
         NSFileProviderFileSystemFlags(
-            mode: mode_t(truncatingIfNeeded: info.permissions)
+            mode: mode_t(truncatingIfNeeded: info.permissions ?? 0o700)
         )
     }
 
     public var documentSize: NSNumber? {
-        info.size as NSNumber
+        info.size as? NSNumber
     }
 
     public var creationDate: Date? {
-        info.createTime
+        info.createTime ?? info.modifyTime
     }
 
     public var contentModificationDate: Date? {
@@ -61,7 +61,7 @@ public class Item: NSObject, NSFileProviderItem {
     public var lastUsedDate: Date? {
         info.accessTime
     }
-    
+
     public var itemVersion: NSFileProviderItemVersion {
         NSFileProviderItemVersion(
             contentVersion: "a content version".data(using: .utf8)!,
@@ -76,9 +76,5 @@ public class Item: NSObject, NSFileProviderItem {
         default:
             nil
         }
-    }
-
-    public var size: UInt64 {
-        info.size
     }
 }
