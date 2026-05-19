@@ -134,8 +134,9 @@ struct AgentClientTests {
 
         try await agent.setAttributes(for: itemId, permissions: 0o644)
         let info = try await agent.info(for: itemId)
-
-        #expect(info.permissions & 0o777 == 0o644)
+        
+        let permissions = try #require(info.permissions)
+        #expect(permissions & 0o777 == 0o644)
     }
 
     @Test func createSymlinkSucceeds() async throws {

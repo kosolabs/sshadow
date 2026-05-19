@@ -25,8 +25,8 @@ public struct FileInfo: Message, CustomStringConvertible {
     public let parentId: String
     public let name: String
     public let type: FileType
-    public let size: UInt64
-    public let permissions: UInt32
+    public let size: UInt64?
+    public let permissions: UInt32?
     public let accessTime: Date?
     public let modifyTime: Date?
     public let createTime: Date?
@@ -36,8 +36,8 @@ public struct FileInfo: Message, CustomStringConvertible {
         parentId: String,
         name: String,
         type: FileType,
-        size: UInt64,
-        permissions: UInt32,
+        size: UInt64?,
+        permissions: UInt32?,
         accessTime: Date?,
         modifyTime: Date?,
         createTime: Date?

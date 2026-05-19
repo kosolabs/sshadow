@@ -387,7 +387,8 @@ struct SessionTests {
             )
 
             let attrs = try await session.attributes(for: itemId)
-            #expect(attrs.permissions & 0o777 == 0o644)
+            let permissions = try #require(attrs.permissions)
+            #expect(permissions & 0o777 == 0o644)
         }
 
         @Test func setModifyTimeSucceeds() async throws {
@@ -458,7 +459,8 @@ struct SessionTests {
 
             let attrs = try await session.attributes(for: itemId)
             #expect(attrs.type == .directory)
-            #expect(attrs.permissions & 0o777 == 0o755)
+            let permissions = try #require(attrs.permissions)
+            #expect(permissions & 0o777 == 0o755)
         }
 
         @Test func createDirectoryWithIfExistsSucceedDoesNotThrow() async throws
@@ -780,7 +782,8 @@ struct SessionTests {
 
             #expect(item.name == "small-file.txt")
             #expect(item.type == .file)
-            #expect(item.size == data.count)
+            let size = try #require(item.size)
+            #expect(size == data.count)
             #expect(try String(contentsOf: url, encoding: .utf8) == data)
             #expect(progress.isFinished)
         }
@@ -800,7 +803,8 @@ struct SessionTests {
             )
 
             #expect(item.name == "large-file.dat")
-            #expect(item.size == data.count)
+            let size = try #require(item.size)
+            #expect(size == data.count)
             #expect(try Data(contentsOf: url) == data)
             #expect(progress.isFinished)
         }

@@ -341,7 +341,7 @@ class Session {
         progress.fileOperationKind = .downloading
         let speedometer = Speedometer(
             progress: progress,
-            totalUnitCount: Int64(file.info.size)
+            totalUnitCount: Int64(file.info.size ?? 0)
         )
 
         let bufferSize = sftp.limits.readLength(for: chunkSize)
