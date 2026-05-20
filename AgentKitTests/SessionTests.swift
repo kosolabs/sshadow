@@ -20,6 +20,7 @@ private func getSession() async throws -> Session {
         ssh: ssh,
         sftp: sftp,
         db: db,
+        sharedUrl: TestData.sharedUrl
     )
 }
 

@@ -10,6 +10,7 @@ class Session {
     private let ssh: SSHClient
     private let sftp: SFTPClient
     private let db: DomainDB
+    private let sharedUrl: URL
 
     private let cache: FileCache
 
@@ -17,12 +18,14 @@ class Session {
         config: ConnectionConfig,
         ssh: SSHClient,
         sftp: SFTPClient,
-        db: DomainDB
+        db: DomainDB,
+        sharedUrl: URL = SSHadow.groupUrl
     ) {
         self.config = config
         self.ssh = ssh
         self.sftp = sftp
         self.db = db
+        self.sharedUrl = sharedUrl
         self.cache = FileCache { itemId, range in
             let path = await config.path(for: db.path(for: itemId))
             return try await sftp.withSftpFile(
@@ -330,7 +333,7 @@ class Session {
         progress: Progress,
     ) async throws -> (URL, Item) {
         let item = try await item(for: itemId)
-        let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
+        let url = sharedUrl.appending(path: itemId.rawValue)
         logger.info("Download \(item) into \(url)")
 
         try create(file: url)
@@ -368,7 +371,7 @@ class Session {
         progress: Progress
     ) async throws -> (URL, Range<UInt64>) {
         let file = try await File(item: item(for: itemId))
-        let url = SSHadow.groupUrl.appending(path: "\(itemId.rawValue)")
+        let url = sharedUrl.appending(path: "\(itemId.rawValue)")
         let slice = file.slice(for: range)
 
         logger.info("Stream \(range) -> \(slice) into \(url)")

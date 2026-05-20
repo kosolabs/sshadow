@@ -23,6 +23,16 @@ enum TestData {
         logger.info("Test server mount path: \(url.path())")
         return url
     }()
+    static let sharedUrl: URL = {
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        try? FileManager.default.createDirectory(
+            at: url,
+            withIntermediateDirectories: true
+        )
+        logger.info("Test shared path: \(url.path())")
+        return url
+    }()
     static let domain = NSFileProviderDomain(
         identifier: NSFileProviderDomainIdentifier(
             rawValue: id.uuidString
@@ -102,11 +112,16 @@ enum TestData {
         let appDb = try await createAppDb()
         let listener = Agent.createAnonymous(
             appDb: appDb,
-            domainDbConfig: ModelConfiguration(isStoredInMemoryOnly: true)
+            domainDbConfig: ModelConfiguration(isStoredInMemoryOnly: true),
+            sharedUrl: sharedUrl
         )
         testListener = listener
         let session = try! XPCSession(endpoint: listener.endpoint)
-        return AgentClient(domainId: id, session: session)
+        return AgentClient(
+            domainId: id,
+            session: session,
+            sharedUrl: sharedUrl
+        )
     }
 
     static func getUrl(path: String) -> URL {
