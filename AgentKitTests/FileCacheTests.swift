@@ -6,11 +6,11 @@ import Testing
 @testable import AgentKit
 
 private func file(size: UInt64 = 10 * File.defaultChunkSize) -> File {
-    File(info: FileInfo(
+    File(item: Item(
         id: UUID().uuidString,
         parentId: UUID().uuidString,
         name: "file",
-        type: .file,
+        kind: .file,
         size: size,
         permissions: 0o644,
         accessTime: nil,
@@ -47,8 +47,8 @@ struct FileCacheTests {
         let log = CallLog()
         let cache = makeCache(log: log, capacity: 2)
         let f = file()
-        _ = try await cache.fetch(Chunk(file: f, id: 0))
-        _ = try await cache.fetch(Chunk(file: f, id: 0))
+        _ = try await cache.fetch(f.chunk(at: 0))
+        _ = try await cache.fetch(f.chunk(at: 0))
         #expect(await log.count(for: f.id, 0) == 1)
     }
 
@@ -56,10 +56,10 @@ struct FileCacheTests {
         let log = CallLog()
         let cache = makeCache(log: log, capacity: 2)
         let f = file()
-        _ = try await cache.fetch(Chunk(file: f, id: 0))
-        _ = try await cache.fetch(Chunk(file: f, id: 1))
-        _ = try await cache.fetch(Chunk(file: f, id: 2))
-        _ = try await cache.fetch(Chunk(file: f, id: 0))
+        _ = try await cache.fetch(f.chunk(at: 0))
+        _ = try await cache.fetch(f.chunk(at: 1))
+        _ = try await cache.fetch(f.chunk(at: 2))
+        _ = try await cache.fetch(f.chunk(at: 0))
         #expect(await log.count(for: f.id, 0) == 2)
         #expect(await log.count(for: f.id, 1) == 1)
         #expect(await log.count(for: f.id, 2) == 1)
@@ -69,12 +69,12 @@ struct FileCacheTests {
         let log = CallLog()
         let cache = makeCache(log: log, capacity: 2)
         let f = file()
-        _ = try await cache.fetch(Chunk(file: f, id: 0))
-        _ = try await cache.fetch(Chunk(file: f, id: 1))
-        _ = try await cache.fetch(Chunk(file: f, id: 0))
-        _ = try await cache.fetch(Chunk(file: f, id: 2))
-        _ = try await cache.fetch(Chunk(file: f, id: 0))
-        _ = try await cache.fetch(Chunk(file: f, id: 1))
+        _ = try await cache.fetch(f.chunk(at: 0))
+        _ = try await cache.fetch(f.chunk(at: 1))
+        _ = try await cache.fetch(f.chunk(at: 0))
+        _ = try await cache.fetch(f.chunk(at: 2))
+        _ = try await cache.fetch(f.chunk(at: 0))
+        _ = try await cache.fetch(f.chunk(at: 1))
         #expect(await log.count(for: f.id, 0) == 1)
         #expect(await log.count(for: f.id, 1) == 2)
         #expect(await log.count(for: f.id, 2) == 1)
@@ -85,10 +85,10 @@ struct FileCacheTests {
         let cache = makeCache(log: log, capacity: 4)
         let f0 = file()
         let f1 = file()
-        _ = try await cache.fetch(Chunk(file: f0, id: 0))
-        _ = try await cache.fetch(Chunk(file: f1, id: 0))
-        _ = try await cache.fetch(Chunk(file: f0, id: 0))
-        _ = try await cache.fetch(Chunk(file: f1, id: 0))
+        _ = try await cache.fetch(f0.chunk(at: 0))
+        _ = try await cache.fetch(f1.chunk(at: 0))
+        _ = try await cache.fetch(f0.chunk(at: 0))
+        _ = try await cache.fetch(f1.chunk(at: 0))
         #expect(await log.count(for: f0.id, 0) == 1)
         #expect(await log.count(for: f1.id, 0) == 1)
     }
@@ -99,10 +99,10 @@ struct FileCacheTests {
         let f0 = file()
         let f1 = file()
         let f2 = file()
-        _ = try await cache.fetch(Chunk(file: f0, id: 0))
-        _ = try await cache.fetch(Chunk(file: f1, id: 0))
-        _ = try await cache.fetch(Chunk(file: f2, id: 0))
-        _ = try await cache.fetch(Chunk(file: f0, id: 0))
+        _ = try await cache.fetch(f0.chunk(at: 0))
+        _ = try await cache.fetch(f1.chunk(at: 0))
+        _ = try await cache.fetch(f2.chunk(at: 0))
+        _ = try await cache.fetch(f0.chunk(at: 0))
         #expect(await log.count(for: f0.id, 0) == 2)
         #expect(await log.count(for: f1.id, 0) == 1)
         #expect(await log.count(for: f2.id, 0) == 1)

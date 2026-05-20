@@ -73,7 +73,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
 
         let entries = try await agent.list(for: itemIdentifier)
         for entry in entries {
-            yield([Item(info: entry)])
+            yield([FPItem(item: entry)])
         }
 
         return nil

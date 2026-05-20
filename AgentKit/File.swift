@@ -2,30 +2,22 @@ import Common
 import FileProvider
 import Foundation
 
-struct File: PrettyDescribable {
+struct File: Sendable, CustomStringConvertible {
     static let defaultChunkSize: UInt64 = 256 * 1024
 
-    let info: FileInfo
+    let id: NSFileProviderItemIdentifier
+    let name: String
+    let size: UInt64
     let chunkSize: UInt64
 
     init(
-        info: FileInfo,
+        item: Item,
         chunkSize: UInt64 = defaultChunkSize
     ) {
-        self.info = info
+        self.id = NSFileProviderItemIdentifier(item.id)
+        self.name = item.name
+        self.size = item.size ?? 0
         self.chunkSize = chunkSize
-    }
-
-    var id: NSFileProviderItemIdentifier {
-        NSFileProviderItemIdentifier(info.id)
-    }
-
-    var name: String {
-        info.name
-    }
-
-    var size: UInt64 {
-        info.size ?? 0
     }
 
     var chunkCount: UInt64 {
@@ -33,24 +25,76 @@ struct File: PrettyDescribable {
         return (size + chunkSize - 1) / chunkSize
     }
 
-    func chunkRange(for range: Range<UInt64>) -> Range<UInt64> {
-        let aligned = range.aligned(to: chunkSize)
-        return
+    func chunk(at index: UInt64) -> Chunk {
+        Chunk(file: self, index: index)
+    }
+
+    func slice(for byteRange: Range<UInt64>) -> Slice {
+        let aligned = byteRange.aligned(to: chunkSize)
+        let chunks =
             ((aligned.lowerBound / chunkSize)..<(aligned.upperBound / chunkSize))
             .clamped(to: 0..<chunkCount)
+        return Slice(file: self, chunks: chunks)
     }
 
-    func byteRange(for chunks: Range<UInt64>) -> Range<UInt64> {
-        let range =
-            (chunks.lowerBound * chunkSize)..<(chunks.upperBound * chunkSize)
-        return range.clamped(to: 0..<size)
+    func byteRange(forChunks chunks: Range<UInt64>) -> Range<UInt64> {
+        ((chunks.lowerBound * chunkSize)..<(chunks.upperBound * chunkSize))
+            .clamped(to: 0..<size)
     }
 
-    func byteRange(for chunk: UInt64) -> Range<UInt64> {
-        byteRange(for: chunk..<chunk + 1)
+    var description: String {
+        let fields = [
+            "id: \(id.rawValue)",
+            "name: \(name)",
+            "size: \(size)",
+            "chunkSize: \(chunkSize)",
+        ].joined(separator: ", ")
+        return "File(\(fields))"
     }
 
-    func byteOffset(for chunk: UInt64) -> UInt64 {
-        chunk * chunkSize
+    struct Chunk: Sendable, CustomStringConvertible {
+        let file: File
+        let index: UInt64
+
+        var byteRange: Range<UInt64> {
+            file.byteRange(forChunks: index..<index + 1)
+        }
+
+        var key: Key {
+            Key(fileId: file.id, index: index)
+        }
+
+        struct Key: Hashable, Sendable {
+            let fileId: NSFileProviderItemIdentifier
+            let index: UInt64
+        }
+
+        var description: String {
+            "File.Chunk(index: \(index)/\(file.chunkCount), byteRange: \(byteRange), \(file))"
+        }
+    }
+
+    struct Slice: Sendable, Sequence, CustomStringConvertible {
+        let file: File
+        let chunks: Range<UInt64>
+
+        var byteRange: Range<UInt64> {
+            file.byteRange(forChunks: chunks)
+        }
+
+        func makeIterator() -> AnyIterator<Chunk> {
+            var index = chunks.lowerBound
+            let upperBound = chunks.upperBound
+            let file = self.file
+            return AnyIterator {
+                guard index < upperBound else { return nil }
+                defer { index += 1 }
+                return file.chunk(at: index)
+            }
+        }
+
+        var description: String {
+            "File.Slice(chunks: \(chunks)/\(file.chunkCount), byteRange: \(byteRange), \(file))"
+        }
     }
 }

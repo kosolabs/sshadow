@@ -2,7 +2,7 @@ import Common
 import FileProvider
 import UniformTypeIdentifiers
 
-private let logger = Logger(category: "Item")
+private let logger = Logger(category: "FPItem")
 
 public class SpecialItem: NSObject, NSFileProviderItem {
     public let itemIdentifier: NSFileProviderItemIdentifier

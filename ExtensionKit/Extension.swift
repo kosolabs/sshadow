@@ -25,8 +25,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
     func item(
         for identifier: NSFileProviderItemIdentifier,
-    ) async throws -> Item {
-        try await Item(info: agent.info(for: identifier))
+    ) async throws -> FPItem {
+        try await FPItem(item: agent.item(for: identifier))
     }
 
     public func item(
@@ -90,11 +90,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> (URL, NSFileProviderItem) {
-        let (url, info) = try await agent.download(
+        let (url, item) = try await agent.download(
             itemId: itemIdentifier,
             progress: progress
         )
-        return (url, Item(info: info))
+        return (url, FPItem(item: item))
     }
 
     public func fetchPartialContents(
@@ -392,8 +392,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     ) async throws {
         logger.debug("Delete \(identifier.desc)")
         return try await progress.withChild {
-            let info = try await agent.info(for: identifier)
-            if info.type == .folder {
+            let item = try await agent.item(for: identifier)
+            if item.kind == .folder {
                 try await agent.removeDirectory(for: identifier)
             } else {
                 try await agent.removeFile(for: identifier)

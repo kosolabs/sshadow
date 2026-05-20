@@ -84,14 +84,14 @@ class Session {
         await config.path(for: db.path(for: name, in: parentId))
     }
 
-    func info(
+    func item(
         for itemId: NSFileProviderItemIdentifier
-    ) async throws -> FileInfo {
+    ) async throws -> Item {
         let parentId = try await parent(of: itemId)
         let attrs = try await attributes(for: itemId)
         let name = try await name(of: itemId)
 
-        let type: FileInfo.FileType =
+        let type: Item.Kind =
             switch attrs.type {
             case .directory:
                 .folder
@@ -101,11 +101,11 @@ class Session {
                 .file
             }
 
-        return FileInfo(
+        return Item(
             id: itemId.rawValue,
             parentId: parentId.rawValue,
             name: name,
-            type: type,
+            kind: type,
             size: attrs.size,
             permissions: attrs.permissions,
             accessTime: attrs.accessTime,
@@ -116,13 +116,13 @@ class Session {
 
     func list(
         for parentId: NSFileProviderItemIdentifier
-    ) async throws -> [FileInfo] {
+    ) async throws -> [Item] {
         try await withDirectory(for: parentId) { dir in
-            var entries: [FileInfo] = []
+            var entries: [Item] = []
             for try await attrs in dir {
                 guard let name = attrs.name else { continue }
                 let itemId = try await child(of: parentId, path: name)
-                let type: FileInfo.FileType =
+                let type: Item.Kind =
                     switch attrs.type {
                     case .directory:
                         .folder
@@ -131,18 +131,18 @@ class Session {
                     default:
                         .file
                     }
-                let info = FileInfo(
+                let item = Item(
                     id: itemId.rawValue,
                     parentId: parentId.rawValue,
                     name: name,
-                    type: type,
+                    kind: type,
                     size: attrs.size,
                     permissions: attrs.permissions,
                     accessTime: attrs.accessTime,
                     modifyTime: attrs.modifyTime,
                     createTime: attrs.createTime
                 )
-                entries.append(info)
+                entries.append(item)
             }
             return entries
         }
@@ -284,11 +284,11 @@ class Session {
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
         progress: Progress,
     ) async throws {
-        let itemRef = await id(of: itemId)
+        let item = await id(of: itemId)
         let fp = try FileHandle(forReadingFrom: url)
         defer { try? fp.close() }
 
-        logger.info("Upload \(itemRef) from \(url.path())")
+        logger.info("Upload \(item) from \(url.path())")
         let size = try FileManager.default.size(of: url)
 
         progress.kind = .file
@@ -304,18 +304,18 @@ class Session {
             try await file.withAsyncWriter { writer in
                 while let data = try fp.read(upToCount: Int(bufferSize)) {
                     if progress.isCancelled {
-                        logger.info("Upload \(itemRef) cancelled")
+                        logger.info("Upload \(item) cancelled")
                         throw AgentError.userCancelled
                     }
                     try await writer.write(data: data)
                     if let progress = speedometer.update(delta: data.count) {
-                        logger.debug("Uploading \(itemRef): \(progress)")
+                        logger.debug("Uploading \(item): \(progress)")
                     }
                 }
             }
         }
 
-        logger.info("Uploaded \(itemRef): \(speedometer.finalize())")
+        logger.info("Uploaded \(item): \(speedometer.finalize())")
     }
 
     private func create(file url: URL) throws {
@@ -328,10 +328,10 @@ class Session {
         itemId: NSFileProviderItemIdentifier,
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
         progress: Progress,
-    ) async throws -> (URL, FileInfo) {
-        let file = try await File(info: info(for: itemId))
+    ) async throws -> (URL, Item) {
+        let item = try await item(for: itemId)
         let url = SSHadow.groupUrl.appending(path: itemId.rawValue)
-        logger.info("Download \(file) into \(url)")
+        logger.info("Download \(item) into \(url)")
 
         try create(file: url)
         let handle = try FileHandle(forWritingTo: url)
@@ -341,25 +341,25 @@ class Session {
         progress.fileOperationKind = .downloading
         let speedometer = Speedometer(
             progress: progress,
-            totalUnitCount: Int64(file.info.size ?? 0)
+            totalUnitCount: Int64(item.size ?? 0)
         )
 
         let bufferSize = sftp.limits.readLength(for: chunkSize)
         try await withFile(for: itemId, accessType: .readOnly) { fp in
             for try await data in fp.stream(bufferSize: bufferSize) {
                 if progress.isCancelled {
-                    logger.info("Download \(file) cancelled")
+                    logger.info("Download \(item) cancelled")
                     throw AgentError.userCancelled
                 }
                 try handle.write(contentsOf: data)
                 if let progress = speedometer.update(delta: data.count) {
-                    logger.debug("Downloading \(file): \(progress)")
+                    logger.debug("Downloading \(item): \(progress)")
                 }
             }
         }
 
-        logger.info("Downloaded \(file): \(speedometer.finalize())")
-        return (url, file.info)
+        logger.info("Downloaded \(item): \(speedometer.finalize())")
+        return (url, item)
     }
 
     func stream(
@@ -367,22 +367,11 @@ class Session {
         range: Range<UInt64>,
         progress: Progress
     ) async throws -> (URL, Range<UInt64>) {
-        let file = try await File(info: info(for: itemId))
+        let file = try await File(item: item(for: itemId))
         let url = SSHadow.groupUrl.appending(path: "\(itemId.rawValue)")
-        let chunkRange = file.chunkRange(for: range)
-        let byteRange = file.byteRange(for: chunkRange)
+        let slice = file.slice(for: range)
 
-        let fields = [
-            "\(chunkRange)/\(file.chunkCount)",
-            "range: \(range) -> \(byteRange)",
-            "item: \(itemId.rawValue)",
-            "name: \(file.name)",
-            "size: \(file.size)",
-            "chunkSize: \(file.chunkSize)"
-        ].joined(separator: ", ")
-        let repr = "ChunkRange(\(fields))"
-
-        logger.info("Stream \(repr) into \(url)")
+        logger.info("Stream \(range) -> \(slice) into \(url)")
         try create(file: url)
         let handle = try FileHandle(forWritingTo: url)
         defer { try? handle.close() }
@@ -391,27 +380,27 @@ class Session {
         progress.fileOperationKind = .downloading
         let speedometer = Speedometer(
             progress: progress,
-            totalUnitCount: Int64(byteRange.length)
+            totalUnitCount: Int64(slice.byteRange.length)
         )
 
-        for chunkIndex in chunkRange {
-            let data = try await cache.fetch(Chunk(file: file, id: chunkIndex))
-            try handle.seek(toOffset: file.byteOffset(for: chunkIndex))
+        for chunk in slice {
+            let data = try await cache.fetch(chunk)
+            try handle.seek(toOffset: chunk.byteRange.lowerBound)
             try handle.write(contentsOf: data)
             speedometer.update(delta: data.count)
         }
 
         let prefetchRange =
-            chunkRange.upperBound..<chunkRange.upperBound
+            slice.chunks.upperBound..<slice.chunks.upperBound
             + FileCache.prefetchWindow
         if !prefetchRange.isEmpty {
             for chunkIndex in prefetchRange {
-                await cache.prefetch(Chunk(file: file, id: chunkIndex))
+                await cache.prefetch(file.chunk(at: chunkIndex))
             }
         }
 
-        logger.info("Streamed \(repr): \(speedometer.finalize())")
-        return (url, byteRange)
+        logger.info("Streamed \(slice): \(speedometer.finalize())")
+        return (url, slice.byteRange)
     }
 
     func withFile<T: Sendable>(

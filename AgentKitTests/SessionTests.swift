@@ -143,14 +143,14 @@ struct SessionTests {
         }
     }
 
-    struct InfoTests {
-        let testFolderPath = "session-info"
+    struct ItemTests {
+        let testFolderPath = "session-item"
 
         init() throws {
             try TestData.createFolder(path: testFolderPath)
         }
 
-        @Test func infoForFileSucceeds() async throws {
+        @Test func itemForFileSucceeds() async throws {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/file.txt"
@@ -158,44 +158,44 @@ struct SessionTests {
             try TestData.createFile(path: path, contents: contents)
 
             let itemId = try await session.child(path: path)
-            let info = try await session.info(for: itemId)
+            let item = try await session.item(for: itemId)
 
-            #expect(info.name == "file.txt")
-            #expect(info.type == .file)
-            #expect(info.size == UInt64(contents.utf8.count))
-            #expect(info.id == itemId.rawValue)
+            #expect(item.name == "file.txt")
+            #expect(item.kind == .file)
+            #expect(item.size == UInt64(contents.utf8.count))
+            #expect(item.id == itemId.rawValue)
         }
 
-        @Test func infoForFolderSucceeds() async throws {
+        @Test func itemForFolderSucceeds() async throws {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/folder"
             try TestData.createFolder(path: path)
 
             let itemId = try await session.child(path: path)
-            let info = try await session.info(for: itemId)
+            let item = try await session.item(for: itemId)
 
-            #expect(info.name == "folder")
-            #expect(info.type == .folder)
+            #expect(item.name == "folder")
+            #expect(item.kind == .folder)
         }
         
-        @Test func infoForSymlinkSucceeds() async throws {
+        @Test func itemForSymlinkSucceeds() async throws {
             let session = try await getSession()
 
-            let target = "\(testFolderPath)/info-symlink-target.txt"
+            let target = "\(testFolderPath)/item-symlink-target.txt"
             let contents = "Hello, World!"
             try TestData.createFile(path: target, contents: contents)
-            let symlink = "\(testFolderPath)/info-symlink-link.txt"
+            let symlink = "\(testFolderPath)/item-symlink-link.txt"
             try TestData.createSymlink(path: symlink, target: target)
 
             let itemId = try await session.child(path: symlink)
-            let info = try await session.info(for: itemId)
+            let item = try await session.item(for: itemId)
 
-            #expect(info.name == "info-symlink-link.txt")
-            #expect(info.type == .symlink(target: target))
+            #expect(item.name == "item-symlink-link.txt")
+            #expect(item.kind == .symlink(target: target))
         }
 
-        @Test func infoHasCorrectParent() async throws {
+        @Test func itemHasCorrectParent() async throws {
             let session = try await getSession()
 
             let path = "\(testFolderPath)/nested/file.txt"
@@ -205,9 +205,9 @@ struct SessionTests {
             let parentId = try await session.child(
                 path: "\(testFolderPath)/nested"
             )
-            let info = try await session.info(for: itemId)
+            let item = try await session.item(for: itemId)
 
-            #expect(info.parentId == parentId.rawValue)
+            #expect(item.parentId == parentId.rawValue)
         }
     }
 
@@ -243,17 +243,17 @@ struct SessionTests {
             let fileEntry = try #require(
                 entries.first { $0.name == "file.txt" }
             )
-            #expect(fileEntry.type == .file)
+            #expect(fileEntry.kind == .file)
 
             let folderEntry = try #require(
                 entries.first { $0.name == "subfolder" }
             )
-            #expect(folderEntry.type == .folder)
+            #expect(folderEntry.kind == .folder)
 
             let symlinkEntry = try #require(
                 entries.first { $0.name == "link.txt" }
             )
-            #expect(symlinkEntry.type == .symlink(target: nil))
+            #expect(symlinkEntry.kind == .symlink(target: nil))
         }
 
         @Test func listEmptyDirectoryReturnsEmpty() async throws {
@@ -781,7 +781,7 @@ struct SessionTests {
             )
 
             #expect(item.name == "small-file.txt")
-            #expect(item.type == .file)
+            #expect(item.kind == .file)
             let size = try #require(item.size)
             #expect(size == data.count)
             #expect(try String(contentsOf: url, encoding: .utf8) == data)

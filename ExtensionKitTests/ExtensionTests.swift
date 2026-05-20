@@ -89,7 +89,7 @@ struct ExtensionTests {
             progress: readProgress
         )
 
-        let chunkSize = 1024 * 1024  // FileChunk.size
+        let chunkSize = 256 * 1024  // FileChunk.size
         #expect(item.filename == "partial-file.dat")
         #expect(item.documentSize??.intValue == data.count)
         #expect(returnedRange == NSRange(0..<chunkSize))

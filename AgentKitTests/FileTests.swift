@@ -5,12 +5,12 @@ import Testing
 
 @testable import AgentKit
 
-private func info(size: UInt64) -> FileInfo {
-    FileInfo(
+private func item(size: UInt64) -> Item {
+    Item(
         id: UUID().uuidString,
         parentId: UUID().uuidString,
         name: "file",
-        type: .file,
+        kind: .file,
         size: size,
         permissions: 0o644,
         accessTime: nil,
@@ -20,161 +20,159 @@ private func info(size: UInt64) -> FileInfo {
 }
 
 struct FileTests {
-    struct ChunkRangeTests {
+    struct SliceTests {
         @Test func singleChunkForSmallRange() {
-            let file = File(info: info(size: 1024 * 1024))
-            let chunks = file.chunkRange(for: 0..<100)
-            #expect(chunks == 0..<1)
+            let file = File(item: item(size: 1024 * 1024))
+            let slice = file.slice(for: 0..<100)
+            #expect(slice.chunks == 0..<1)
         }
 
         @Test func singleChunkWhenRangeWithinFirstChunk() {
-            let file = File(info: info(size: 1024 * 1024))
-            let chunks = file.chunkRange(for: 10 * 1024..<20 * 1024)
-            #expect(chunks == 0..<1)
+            let file = File(item: item(size: 1024 * 1024))
+            let slice = file.slice(for: 10 * 1024..<20 * 1024)
+            #expect(slice.chunks == 0..<1)
         }
 
         @Test func multipleChunksForLargeRange() {
             let size = File.defaultChunkSize
-            let file = File(info: info(size: size * 10))
+            let file = File(item: item(size: size * 10))
             let range: Range<UInt64> = (size - 1000)..<(size + 1000)
-            let chunks = file.chunkRange(for: range)
-            #expect(chunks.count > 1)
-            #expect(chunks.lowerBound * file.chunkSize <= range.lowerBound)
-            #expect(chunks.upperBound * file.chunkSize >= range.upperBound)
+            let slice = file.slice(for: range)
+            #expect(slice.chunks.count > 1)
+            #expect(slice.chunks.lowerBound * file.chunkSize <= range.lowerBound)
+            #expect(slice.chunks.upperBound * file.chunkSize >= range.upperBound)
         }
 
         @Test func smallRange() {
-            let file = File(info: info(size: 1024 * 1024))
-            let chunks = file.chunkRange(for: 0..<1)
-            #expect(chunks == 0..<1)
+            let file = File(item: item(size: 1024 * 1024))
+            let slice = file.slice(for: 0..<1)
+            #expect(slice.chunks == 0..<1)
         }
 
         @Test func exactChunkBoundary() {
             let size = File.defaultChunkSize
-            let file = File(info: info(size: size))
-            let chunks = file.chunkRange(for: 0..<size)
-            #expect(chunks == 0..<1)
+            let file = File(item: item(size: size))
+            let slice = file.slice(for: 0..<size)
+            #expect(slice.chunks == 0..<1)
         }
 
         @Test func rangeSpanningChunkBoundary() {
             let size = File.defaultChunkSize
-            let file = File(info: info(size: size * 10))
-            let chunks = file.chunkRange(for: (size - 1)..<(size + 1))
-            #expect(chunks == 0..<2)
+            let file = File(item: item(size: size * 10))
+            let slice = file.slice(for: (size - 1)..<(size + 1))
+            #expect(slice.chunks == 0..<2)
         }
 
         @Test func clampsToChunkCount() {
             let size = File.defaultChunkSize
-            let file = File(info: info(size: size * 3))
-            let chunks = file.chunkRange(for: 0..<(size * 5))
-            #expect(chunks == 0..<3)
+            let file = File(item: item(size: size * 3))
+            let slice = file.slice(for: 0..<(size * 5))
+            #expect(slice.chunks == 0..<3)
         }
 
         @Test func clampsBeyondFileEnd() {
             let size = File.defaultChunkSize
-            let file = File(info: info(size: size * 2 + 100))
-            let chunks = file.chunkRange(for: (size * 2)..<(size * 5))
-            #expect(chunks == 2..<3)
+            let file = File(item: item(size: size * 2 + 100))
+            let slice = file.slice(for: (size * 2)..<(size * 5))
+            #expect(slice.chunks == 2..<3)
         }
 
         @Test func emptyForEmptyFile() {
-            let file = File(info: info(size: 0))
-            let chunks = file.chunkRange(for: 0..<100)
-            #expect(chunks.isEmpty)
+            let file = File(item: item(size: 0))
+            let slice = file.slice(for: 0..<100)
+            #expect(slice.chunks.isEmpty)
         }
     }
 
-    struct ByteRangeForChunksTests {
+    struct SliceByteRangeTests {
         @Test func singleChunkInLargeFile() {
             let size = File.defaultChunkSize
-            let file = File(info: info(size: size * 10))
-            let range = file.byteRange(for: 0..<1)
-            #expect(range == 0..<size)
+            let file = File(item: item(size: size * 10))
+            let slice = File.Slice(file: file, chunks: 0..<1)
+            #expect(slice.byteRange == 0..<size)
         }
 
         @Test func multipleChunks() {
             let size = File.defaultChunkSize
-            let file = File(info: info(size: size * 10))
-            let range = file.byteRange(for: 2..<5)
-            #expect(range == (2 * size)..<(5 * size))
+            let file = File(item: item(size: size * 10))
+            let slice = File.Slice(file: file, chunks: 2..<5)
+            #expect(slice.byteRange == (2 * size)..<(5 * size))
         }
 
         @Test func clampsToFileSize() {
             let size = File.defaultChunkSize
             let fileSize = size * 2 + 100
-            let file = File(info: info(size: fileSize))
-            let range = file.byteRange(for: 0..<3)
-            #expect(range == 0..<fileSize)
+            let file = File(item: item(size: fileSize))
+            let slice = File.Slice(file: file, chunks: 0..<3)
+            #expect(slice.byteRange == 0..<fileSize)
         }
 
         @Test func lastPartialChunk() {
             let size = File.defaultChunkSize
             let fileSize = size + 500
-            let file = File(info: info(size: fileSize))
-            let range = file.byteRange(for: 1..<2)
-            #expect(range == size..<fileSize)
+            let file = File(item: item(size: fileSize))
+            let slice = File.Slice(file: file, chunks: 1..<2)
+            #expect(slice.byteRange == size..<fileSize)
         }
     }
 
-    struct ByteRangeForIndexTests {
+    struct ChunkByteRangeTests {
         @Test func firstChunk() {
             let size = File.defaultChunkSize
-            let file = File(info: info(size: size * 10))
-            let range = file.byteRange(for: 0)
-            #expect(range == 0..<size)
+            let file = File(item: item(size: size * 10))
+            #expect(file.chunk(at: 0).byteRange == 0..<size)
         }
 
         @Test func middleChunk() {
             let size = File.defaultChunkSize
-            let file = File(info: info(size: size * 10))
-            let range = file.byteRange(for: 3)
-            #expect(range == (3 * size)..<(4 * size))
+            let file = File(item: item(size: size * 10))
+            #expect(file.chunk(at: 3).byteRange == (3 * size)..<(4 * size))
         }
 
         @Test func lastPartialChunk() {
             let size = File.defaultChunkSize
             let fileSize = size * 3 + 1000
-            let file = File(info: info(size: fileSize))
-            let range = file.byteRange(for: 3)
-            #expect(range == (3 * size)..<fileSize)
+            let file = File(item: item(size: fileSize))
+            #expect(file.chunk(at: 3).byteRange == (3 * size)..<fileSize)
         }
 
         @Test func lastFullChunk() {
             let size = File.defaultChunkSize
             let fileSize = size * 4
-            let file = File(info: info(size: fileSize))
-            let range = file.byteRange(for: 3)
-            #expect(range == (3 * size)..<(4 * size))
+            let file = File(item: item(size: fileSize))
+            #expect(file.chunk(at: 3).byteRange == (3 * size)..<(4 * size))
         }
 
         @Test func emptyWhenBeyondFileSize() {
             let size = File.defaultChunkSize
-            let file = File(info: info(size: size * 3))
-            let range = file.byteRange(for: 5)
-            #expect(range.isEmpty)
-        }
-    }
-
-    struct ByteOffsetTests {
-        @Test func firstChunk() {
-            let file = File(info: info(size: 1024 * 1024 * 10))
-            #expect(file.byteOffset(for: 0) == 0)
-        }
-
-        @Test func middleChunk() {
-            let size = File.defaultChunkSize
-            let file = File(info: info(size: size * 10))
-            #expect(file.byteOffset(for: 3) == 3 * size)
+            let file = File(item: item(size: size * 3))
+            #expect(file.chunk(at: 5).byteRange.isEmpty)
         }
 
         @Test func customChunkSize() {
-            let file = File(info: info(size: 5000), chunkSize: 500)
-            #expect(file.byteOffset(for: 4) == 2000)
+            let file = File(item: item(size: 5000), chunkSize: 500)
+            #expect(file.chunk(at: 4).byteRange.lowerBound == 2000)
+        }
+    }
+
+    struct SliceIterationTests {
+        @Test func iteratesChunksInOrder() {
+            let size = File.defaultChunkSize
+            let file = File(item: item(size: size * 10))
+            let slice = file.slice(for: (size - 1)..<(size * 3 + 1))
+            let indices = slice.map(\.index)
+            #expect(indices == [0, 1, 2, 3])
+        }
+
+        @Test func chunksCarryFileId() {
+            let file = File(item: item(size: File.defaultChunkSize * 3))
+            let slice = file.slice(for: 0..<file.size)
+            #expect(slice.allSatisfy { $0.file.id == file.id })
         }
     }
 
     struct RoundTripTests {
-        @Test func chunkRangeThenByteRangeCoversOriginal() {
+        @Test func sliceByteRangeCoversOriginalRange() {
             let cases: [(Range<UInt64>, UInt64)] = [
                 (UInt64(10 * 1024)..<UInt64(20 * 1024), 1024 * 1024),
                 (0..<100, 1024 * 1024),
@@ -184,9 +182,9 @@ struct FileTests {
             ]
 
             for (range, fileSize) in cases {
-                let file = File(info: info(size: fileSize))
-                let chunks = file.chunkRange(for: range)
-                let bytes = file.byteRange(for: chunks)
+                let file = File(item: item(size: fileSize))
+                let slice = file.slice(for: range)
+                let bytes = slice.byteRange
 
                 #expect(bytes.lowerBound <= range.lowerBound)
                 #expect(bytes.upperBound >= min(range.upperBound, fileSize))
