@@ -8,12 +8,18 @@ private let logger = Logger(category: "SessionManager")
 actor SessionManager {
     private let db: AppDB
     private let domainDbConfig: ModelConfiguration?
+    private let sharedUrl: URL
     private var sessions: [UUID: Session] = [:]
     private var connectTasks: [UUID: Task<Session, any Error>] = [:]
 
-    init(appDb: AppDB, domainDbConfig: ModelConfiguration? = nil) {
+    init(
+        appDb: AppDB,
+        domainDbConfig: ModelConfiguration? = nil,
+        sharedUrl: URL = SSHadow.groupUrl
+    ) {
         self.db = appDb
         self.domainDbConfig = domainDbConfig
+        self.sharedUrl = sharedUrl
     }
 
     func connect(id: UUID) async throws -> Session {
@@ -32,11 +38,18 @@ actor SessionManager {
 
         logger.info("Connecting: \(config.url)")
         let domainDbConfig = self.domainDbConfig ?? DomainDB.model(for: id)
+        let sharedUrl = self.sharedUrl
         let task = Task {
             let ssh = try await SSHClient.connect(config: config)
             let sftp = try await ssh.sftp()
             let db = try await DomainDB.open(config: domainDbConfig)
-            return Session(config: config, ssh: ssh, sftp: sftp, db: db)
+            return Session(
+                config: config,
+                ssh: ssh,
+                sftp: sftp,
+                db: db,
+                sharedUrl: sharedUrl
+            )
         }
         connectTasks[id] = task
 

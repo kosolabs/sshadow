@@ -7,6 +7,7 @@ private let logger = Logger(category: "AgentClient")
 public class AgentClient {
     private let domainId: UUID
     private let session: XPCSession
+    private let sharedUrl: URL
 
     public convenience init(domainId: UUID) {
         let session = try! XPCSession(
@@ -15,10 +16,15 @@ public class AgentClient {
         self.init(domainId: domainId, session: session)
     }
 
-    public init(domainId: UUID, session: XPCSession) {
+    public init(
+        domainId: UUID,
+        session: XPCSession,
+        sharedUrl: URL = SSHadow.groupUrl
+    ) {
         logger.debug("Opening agent: \(session)")
         self.domainId = domainId
         self.session = session
+        self.sharedUrl = sharedUrl
     }
 
     deinit {
@@ -330,9 +336,9 @@ public class AgentClient {
         chunkSize: UInt64 = Limits.defaultBufferSize,
         progress: Progress
     ) async throws {
-        let sharedUrl = SSHadow.groupUrl.appending(path: UUID().uuidString)
-        try FileManager.default.moveItem(at: file, to: sharedUrl)
-        defer { try? FileManager.default.moveItem(at: sharedUrl, to: file) }
+        let stagedUrl = sharedUrl.appending(path: UUID().uuidString)
+        try FileManager.default.moveItem(at: file, to: stagedUrl)
+        defer { try? FileManager.default.moveItem(at: stagedUrl, to: file) }
 
         progress.kind = .file
         progress.fileOperationKind = .uploading
@@ -343,7 +349,7 @@ public class AgentClient {
                 UploadRequest(
                     domainId: domainId,
                     itemId: itemId.rawValue,
-                    file: sharedUrl,
+                    file: stagedUrl,
                     mode: mode,
                     chunkSize: chunkSize,
                     progressEndpoint: sync.endpoint

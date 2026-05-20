@@ -12,42 +12,61 @@ public class Agent {
 
     public init(
         appDb: AppDB,
-        domainDbConfig: ModelConfiguration? = nil
+        domainDbConfig: ModelConfiguration? = nil,
+        sharedUrl: URL = SSHadow.groupUrl
     ) {
         self.domainDbConfig = domainDbConfig
         self.sessions = SessionManager(
             appDb: appDb,
-            domainDbConfig: domainDbConfig
+            domainDbConfig: domainDbConfig,
+            sharedUrl: sharedUrl
         )
     }
 
     public static func create(
         service: String = SSHadow.appServiceName,
         appDb: AppDB? = nil,
-        domainDbConfig: ModelConfiguration? = nil
+        domainDbConfig: ModelConfiguration? = nil,
+        sharedUrl: URL = SSHadow.groupUrl
     ) throws -> XPCListener {
         let db = try appDb ?? AppDB.open()
         return try XPCListener(service: service) { request in
-            accept(request: request, appDb: db, domainDbConfig: domainDbConfig)
+            accept(
+                request: request,
+                appDb: db,
+                domainDbConfig: domainDbConfig,
+                sharedUrl: sharedUrl
+            )
         }
     }
 
     public static func createAnonymous(
         appDb: AppDB? = nil,
-        domainDbConfig: ModelConfiguration? = nil
+        domainDbConfig: ModelConfiguration? = nil,
+        sharedUrl: URL = SSHadow.groupUrl
     ) -> XPCListener {
         let db = try! appDb ?? AppDB.open()
         return XPCListener(targetQueue: nil) { request in
-            accept(request: request, appDb: db, domainDbConfig: domainDbConfig)
+            accept(
+                request: request,
+                appDb: db,
+                domainDbConfig: domainDbConfig,
+                sharedUrl: sharedUrl
+            )
         }
     }
 
     private static func accept(
         request: XPCListener.IncomingSessionRequest,
         appDb: AppDB,
-        domainDbConfig: ModelConfiguration?
+        domainDbConfig: ModelConfiguration?,
+        sharedUrl: URL
     ) -> XPCListener.IncomingSessionRequest.Decision {
-        let agent = Agent(appDb: appDb, domainDbConfig: domainDbConfig)
+        let agent = Agent(
+            appDb: appDb,
+            domainDbConfig: domainDbConfig,
+            sharedUrl: sharedUrl
+        )
         return request.accept { message in
             let agentRequest: AgentRequest
             do {
