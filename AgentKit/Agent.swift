@@ -84,8 +84,8 @@ public class Agent {
                     try await .path(pathForItem(request))
                 case .pathForChild(let request):
                     try await .path(pathForChild(request))
-                case .info(let request):
-                    try await .info(info(request))
+                case .item(let request):
+                    try await .item(item(request))
                 case .list(let request):
                     try await .list(list(request))
                 case .exists(let request):
@@ -191,14 +191,14 @@ public class Agent {
         return PathResponse(path: path)
     }
 
-    func info(
-        _ request: InfoRequest
-    ) async throws -> InfoResponse {
+    func item(
+        _ request: ItemRequest
+    ) async throws -> ItemResponse {
         let session = try await sessions.connect(id: request.domainId)
-        let info = try await session.info(
+        let item = try await session.item(
             for: NSFileProviderItemIdentifier(request.itemId)
         )
-        return InfoResponse(fileInfo: info)
+        return ItemResponse(item: item)
     }
 
     func list(
@@ -328,11 +328,11 @@ public class Agent {
         let sync = XPCProgressPublisher(
             endpoint: request.progressEndpoint
         )
-        let (url, fileInfo) = try await session.download(
+        let (url, item) = try await session.download(
             itemId: NSFileProviderItemIdentifier(request.itemId),
             progress: sync.progress
         )
-        return DownloadResponse(url: url, fileInfo: fileInfo)
+        return DownloadResponse(url: url, item: item)
     }
 
     func stream(

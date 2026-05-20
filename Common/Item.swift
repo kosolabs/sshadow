@@ -1,6 +1,6 @@
 import Foundation
 
-public struct FileInfo: Message, CustomStringConvertible {
+public struct Item: Message, CustomStringConvertible {
     public var description: String {
         let mirror = Mirror(reflecting: self)
         let fields = mirror.children.map { field in
@@ -12,10 +12,10 @@ public struct FileInfo: Message, CustomStringConvertible {
                 "\(field.label ?? ""): \(field.value)"
             }
         }.joined(separator: ", ")
-        return "FileInfo(\(fields))"
+        return "Item(\(fields))"
     }
 
-    public enum FileType: Message {
+    public enum Kind: Message {
         case file
         case folder
         case symlink(target: String?)
@@ -24,7 +24,7 @@ public struct FileInfo: Message, CustomStringConvertible {
     public let id: String
     public let parentId: String
     public let name: String
-    public let type: FileType
+    public let kind: Kind
     public let size: UInt64?
     public let permissions: UInt32?
     public let accessTime: Date?
@@ -35,7 +35,7 @@ public struct FileInfo: Message, CustomStringConvertible {
         id: String,
         parentId: String,
         name: String,
-        type: FileType,
+        kind: Kind,
         size: UInt64?,
         permissions: UInt32?,
         accessTime: Date?,
@@ -45,7 +45,7 @@ public struct FileInfo: Message, CustomStringConvertible {
         self.id = id
         self.parentId = parentId
         self.name = name
-        self.type = type
+        self.kind = kind
         self.size = size
         self.permissions = permissions
         self.accessTime = accessTime

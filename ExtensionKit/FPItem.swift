@@ -2,28 +2,28 @@ import Common
 import FileProvider
 import UniformTypeIdentifiers
 
-private let logger = Logger(category: "Item")
+private let logger = Logger(category: "FPItem")
 
-public class Item: NSObject, NSFileProviderItem {
-    private let info: FileInfo
+public class FPItem: NSObject, NSFileProviderItem {
+    private let item: Item
 
-    public init(info: FileInfo) {
-        self.info = info
-        logger.debug("Init FPItemID(\(info.id), \(info.name))")
+    public init(item: Item) {
+        self.item = item
+        logger.debug("Init FPItemID(\(item.id), \(item.name))")
     }
 
     public var itemIdentifier: NSFileProviderItemIdentifier {
-        NSFileProviderItemIdentifier(info.id)
+        NSFileProviderItemIdentifier(item.id)
     }
 
     public var parentItemIdentifier: NSFileProviderItemIdentifier {
-        NSFileProviderItemIdentifier(info.parentId)
+        NSFileProviderItemIdentifier(item.parentId)
     }
 
-    public var filename: String { info.name }
+    public var filename: String { item.name }
 
     public var contentType: UTType {
-        switch info.type {
+        switch item.kind {
         case .file:
             .text
         case .folder:
@@ -42,24 +42,24 @@ public class Item: NSObject, NSFileProviderItem {
 
     public var fileSystemFlags: NSFileProviderFileSystemFlags {
         NSFileProviderFileSystemFlags(
-            mode: mode_t(truncatingIfNeeded: info.permissions ?? 0o700)
+            mode: mode_t(truncatingIfNeeded: item.permissions ?? 0o700)
         )
     }
 
     public var documentSize: NSNumber? {
-        info.size as? NSNumber
+        item.size as? NSNumber
     }
 
     public var creationDate: Date? {
-        info.createTime ?? info.modifyTime
+        item.createTime ?? item.modifyTime
     }
 
     public var contentModificationDate: Date? {
-        info.modifyTime
+        item.modifyTime
     }
 
     public var lastUsedDate: Date? {
-        info.accessTime
+        item.accessTime
     }
 
     public var itemVersion: NSFileProviderItemVersion {
@@ -70,6 +70,6 @@ public class Item: NSObject, NSFileProviderItem {
     }
 
     public var symlinkTargetPath: String? {
-        if case .symlink(let target) = info.type { target } else { nil }
+        if case .symlink(let target) = item.kind { target } else { nil }
     }
 }

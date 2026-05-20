@@ -1,6 +1,7 @@
 import Common
 import FileProvider
 import Foundation
+import OrderedCollections
 
 private let logger = Logger(category: "Session")
 
@@ -9,48 +10,58 @@ typealias Reader =
         NSFileProviderItemIdentifier, Range<UInt64>
     ) async throws -> Data
 
-actor FileCachePool {
-    private var entries: [String: FileCache] = [:]
-
-    func cache(
-        for file: File,
-        read: @escaping Reader
-    ) -> FileCache {
-        let key = file.id.rawValue
-        if let existing = entries[key] {
-            return existing
-        }
-        let cache = FileCache(file: file, read: read)
-        entries[key] = cache
-        return cache
-    }
-}
+typealias FetchTask = Task<Data, any Error>
 
 actor FileCache {
-    private let file: File
-    private let read: Reader
-    private var cache: [UInt64: Task<Data, any Error>] = [:]
+    static let prefetchWindow: UInt64 = 2
+    static let defaultCapacity: Int = 32
 
-    init(file: File, read: @escaping Reader) {
-        self.file = file
+    private let read: Reader
+    private let capacity: Int
+    private var cache: OrderedDictionary<File.Chunk.Key, FetchTask> = [:]
+
+    init(
+        read: @escaping Reader,
+        capacity: Int = defaultCapacity
+    ) {
         self.read = read
+        self.capacity = capacity
     }
 
     @discardableResult
-    func fetch(chunkId: UInt64) async throws -> Data {
-        if let task = cache[chunkId] {
-            logger.debug("Cache hit \(file)[\(chunkId)]")
+    func prefetch(_ chunk: File.Chunk) -> FetchTask {
+        if let task = cache.removeValue(forKey: chunk.key) {
+            cache[chunk.key] = task
+            return task
+        }
+        logger.debug("Prefetch \(chunk)")
+        let task = FetchTask {
+            let data = try await read(chunk.file.id, chunk.byteRange)
+            logger.debug("Prefetched \(chunk)")
+            return data
+        }
+        insert(chunk, task: task)
+        return task
+    }
+
+    func fetch(_ chunk: File.Chunk) async throws -> Data {
+        if let task = cache.removeValue(forKey: chunk.key) {
+            cache[chunk.key] = task
+            logger.debug("Cache hit \(chunk)")
             return try await task.value
         }
-
-        logger.debug("Caching \(file)[\(chunkId)]")
-        let task = Task<Data, any Error> {
-            try await read(file.id, file.byteRange(for: chunkId))
+        logger.debug("Cache miss \(chunk)")
+        let task = FetchTask {
+            try await read(chunk.file.id, chunk.byteRange)
         }
-        cache[chunkId] = task
-        let data = try await task.value
+        insert(chunk, task: task)
+        return try await task.value
+    }
 
-        logger.debug("Cached \(file)[\(chunkId)]")
-        return data
+    private func insert(_ chunk: File.Chunk, task: FetchTask) {
+        cache[chunk.key] = task
+        if cache.count > capacity {
+            cache.removeFirst()
+        }
     }
 }

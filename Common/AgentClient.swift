@@ -153,23 +153,23 @@ public class AgentClient {
         return response.path
     }
 
-    public func info(
+    public func item(
         for itemId: NSFileProviderItemIdentifier
-    ) async throws -> FileInfo {
+    ) async throws -> Item {
         let reply = try await perform(
-            .info(
-                InfoRequest(domainId: domainId, itemId: itemId.rawValue)
+            .item(
+                ItemRequest(domainId: domainId, itemId: itemId.rawValue)
             )
         )
-        guard case .info(let response) = reply else {
+        guard case .item(let response) = reply else {
             throw CocoaError(.coderInvalidValue)
         }
-        return response.fileInfo
+        return response.item
     }
 
     public func list(
         for itemId: NSFileProviderItemIdentifier
-    ) async throws -> [FileInfo] {
+    ) async throws -> [Item] {
         let reply = try await perform(
             .list(
                 ListRequest(domainId: domainId, itemId: itemId.rawValue)
@@ -359,7 +359,7 @@ public class AgentClient {
         itemId: NSFileProviderItemIdentifier,
         chunkSize: UInt64 = Limits.defaultBufferSize,
         progress: Progress
-    ) async throws -> (URL, FileInfo) {
+    ) async throws -> (URL, Item) {
         progress.kind = .file
         progress.fileOperationKind = .downloading
 
@@ -377,7 +377,7 @@ public class AgentClient {
         guard case .download(let response) = reply else {
             throw CocoaError(.coderInvalidValue)
         }
-        return (response.url, response.fileInfo)
+        return (response.url, response.item)
     }
 
     public func stream(

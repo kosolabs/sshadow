@@ -35,7 +35,7 @@ public enum AgentRequest: Codable, PrettyDescribable {
             request.domainId
         case .pathForChild(let request):
             request.domainId
-        case .info(let request):
+        case .item(let request):
             request.domainId
         case .list(let request):
             request.domainId
@@ -71,7 +71,7 @@ public enum AgentRequest: Codable, PrettyDescribable {
     case parent(ParentRequest)
     case pathForItem(PathForItemRequest)
     case pathForChild(PathForChildRequest)
-    case info(InfoRequest)
+    case item(ItemRequest)
     case list(ListRequest)
     case exists(ExistsRequest)
     case setAttributes(SetAttributesRequest)
@@ -105,7 +105,7 @@ public enum AgentResponse: Codable, PrettyDescribable {
     case child(ChildResponse)
     case parent(ParentResponse)
     case path(PathResponse)
-    case info(InfoResponse)
+    case item(ItemResponse)
     case list(ListResponse)
     case exists(ExistsResponse)
     case setAttributes(SetAttributesResponse)
@@ -291,7 +291,7 @@ public struct PathResponse: Codable, PrettyDescribable {
     }
 }
 
-public struct InfoRequest: Codable, PrettyDescribable {
+public struct ItemRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -301,11 +301,11 @@ public struct InfoRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct InfoResponse: Codable, PrettyDescribable {
-    let fileInfo: FileInfo
+public struct ItemResponse: Codable, PrettyDescribable {
+    let item: Item
 
-    public init(fileInfo: FileInfo) {
-        self.fileInfo = fileInfo
+    public init(item: Item) {
+        self.item = item
     }
 }
 
@@ -320,9 +320,9 @@ public struct ListRequest: Codable, PrettyDescribable {
 }
 
 public struct ListResponse: Codable, PrettyDescribable {
-    let fileInfos: [FileInfo]
+    let fileInfos: [Item]
 
-    public init(fileInfos: [FileInfo]) {
+    public init(fileInfos: [Item]) {
         self.fileInfos = fileInfos
     }
 }
@@ -545,11 +545,11 @@ public struct DownloadRequest: Codable, PrettyDescribable {
 
 public struct DownloadResponse: Codable, PrettyDescribable {
     let url: URL
-    let fileInfo: FileInfo
+    let item: Item
 
-    public init(url: URL, fileInfo: FileInfo) {
+    public init(url: URL, item: Item) {
         self.url = url
-        self.fileInfo = fileInfo
+        self.item = item
     }
 }
 

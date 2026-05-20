@@ -18,6 +18,7 @@
 		7322A9282F294D5400D8117D /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 7322A9272F294D5400D8117D /* SwiftLibSSH */; };
 		7369DF3F2F45513300F709F8 /* UnitTests.xctestplan in Resources */ = {isa = PBXBuildFile; fileRef = 7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */; };
 		736F08DA2F3D7B7C009669F4 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 736F08D92F3D7B7C009669F4 /* SwiftLibSSH */; };
+		737720C92FBD039600FC5390 /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 737720C82FBD039600FC5390 /* OrderedCollections */; };
 		73799A492F9811DD00A15109 /* AgentKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* AgentKit.framework */; };
 		73799A532F9811DD00A15109 /* AgentKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* AgentKit.framework */; };
 		73799A542F9811DD00A15109 /* AgentKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* AgentKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -414,6 +415,7 @@
 			files = (
 				73799A642F98129E00A15109 /* Common.framework in Frameworks */,
 				73799A6A2F9812A200A15109 /* SwiftLibSSH in Frameworks */,
+				737720C92FBD039600FC5390 /* OrderedCollections in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -656,6 +658,7 @@
 			name = AgentKit;
 			packageProductDependencies = (
 				73799A692F9812A200A15109 /* SwiftLibSSH */,
+				737720C82FBD039600FC5390 /* OrderedCollections */,
 			);
 			productName = AgentKit;
 			productReference = 73799A3E2F9811DD00A15109 /* AgentKit.framework */;
@@ -815,6 +818,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */,
+				737720C72FBD039600FC5390 /* XCRemoteSwiftPackageReference "swift-collections" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7334708A2F22037100B8181D /* Products */;
@@ -1869,6 +1873,14 @@
 				minimumVersion = 1.17.3;
 			};
 		};
+		737720C72FBD039600FC5390 /* XCRemoteSwiftPackageReference "swift-collections" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-collections.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.5.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1891,6 +1903,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
 			productName = SwiftLibSSH;
+		};
+		737720C82FBD039600FC5390 /* OrderedCollections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 737720C72FBD039600FC5390 /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = OrderedCollections;
 		};
 		73799A692F9812A200A15109 /* SwiftLibSSH */ = {
 			isa = XCSwiftPackageProductDependency;
