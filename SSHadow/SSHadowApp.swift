@@ -1,10 +1,30 @@
 import AgentKit
 import Common
+import FileProvider
 import SwiftData
 import SwiftUI
 import XPC
 
 private let logger = Logger(category: "SSHadowApp")
+
+private func reconnectAllDomains() {
+    Task {
+        let domains: [NSFileProviderDomain]
+        do {
+            domains = try await NSFileProviderManager.domains()
+        } catch {
+            logger.error("Failed to list domains: \(error)")
+            return
+        }
+        for domain in domains {
+            do {
+                try await domain.reconnect()
+            } catch {
+                logger.error("Failed to reconnect \(domain): \(error)")
+            }
+        }
+    }
+}
 
 private class AppXPCService {
     static let shared = AppXPCService()
@@ -20,6 +40,8 @@ private class AppXPCService {
             return
         }
         logger.info("App XPC: listening on \(SSHadow.appServiceName)")
+
+        reconnectAllDomains()
     }
 }
 

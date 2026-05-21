@@ -1,17 +1,37 @@
 import Common
 import FileProvider
+import Synchronization
 import UniformTypeIdentifiers
 
 private let logger = Logger(category: "Extension")
+
+private func disconnect(domain: NSFileProviderDomain) {
+    Task {
+        do {
+            try await domain.disconnect()
+        } catch {
+            logger.error("Failed to disconnect \(domain): \(error)")
+        }
+    }
+}
 
 public class Extension: NSObject, NSFileProviderReplicatedExtension,
     NSFileProviderPartialContentFetching
 {
     private let agent: AgentClient
+    private let invalidated: Flag = Flag(false)
 
     required public init(domain: NSFileProviderDomain) {
         let domainId = UUID(uuidString: domain.identifier.rawValue)!
-        agent = AgentClient(domainId: domainId)
+        let invalidated = self.invalidated
+        agent = AgentClient(
+            domainId: domainId,
+            cancellationHandler: { _ in
+                if !invalidated.isSet {
+                    disconnect(domain: domain)
+                }
+            }
+        )
         logger.debug("Init \(domain)")
         super.init()
     }
@@ -21,7 +41,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         super.init()
     }
 
-    public func invalidate() {}
+    public func invalidate() {
+        invalidated.set()
+    }
 
     func item(
         for identifier: NSFileProviderItemIdentifier,
