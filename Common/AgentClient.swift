@@ -9,9 +9,13 @@ public class AgentClient {
     private let session: XPCSession
     private let sharedUrl: URL
 
-    public convenience init(domainId: UUID) {
+    public convenience init(
+        domainId: UUID,
+        cancellationHandler: (@Sendable (XPCRichError) -> Void)? = nil
+    ) {
         let session = try! XPCSession(
-            machService: SSHadow.appServiceName
+            machService: SSHadow.appServiceName,
+            cancellationHandler: cancellationHandler
         )
         self.init(domainId: domainId, session: session)
     }
@@ -35,23 +39,25 @@ public class AgentClient {
     private func perform(
         _ request: AgentRequest
     ) async throws -> AgentResponse {
-        return try await withCheckedThrowingContinuation { continuation in
-            do {
-                try session.send(request) {
-                    (result: Result<AgentResult, any Error>) in
-                    do {
+        do {
+            return try await withCheckedThrowingContinuation { continuation in
+                do {
+                    try session.send(request) {
+                        (result: Result<AgentResult, any Error>) in
                         continuation.resume(
-                            returning: try result.get().get()
+                            with: Result { try result.get().get() }
                         )
-                    } catch {
-                        logger.error("Request failed: \(error)")
-                        continuation.resume(throwing: error)
                     }
+                } catch {
+                    continuation.resume(throwing: error)
                 }
-            } catch {
-                logger.error("Failed to send request: \(error)")
-                continuation.resume(throwing: error)
             }
+        } catch let error as XPCRichError {
+            logger.error("XPC failure: \(error)")
+            throw NSFileProviderError(.serverUnreachable)
+        } catch {
+            logger.error("Request failed: \(error)")
+            throw error
         }
     }
 
@@ -63,7 +69,7 @@ public class AgentClient {
             throw CocoaError(.coderInvalidValue)
         }
     }
-    
+
     public func deinitDomain() async throws {
         let reply = try await perform(
             .deinitDomain(DeinitDomainRequest(domainId: domainId))
@@ -222,7 +228,7 @@ public class AgentClient {
             throw CocoaError(.coderInvalidValue)
         }
     }
-    
+
     public func createSymlink(
         at itemId: NSFileProviderItemIdentifier,
         to target: String

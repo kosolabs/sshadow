@@ -126,7 +126,7 @@ public class ConnectionProfile: CustomStringConvertible {
         let config = try ConnectionConfig(from: self)
         try await tester.test(config: config)
         try await agent.initDomain()
-        try await NSFileProviderManager.add(domain)
+        try await domain.add()
 
         self.enabled = true
         logger.info("Enabled: \(self)")
@@ -134,7 +134,7 @@ public class ConnectionProfile: CustomStringConvertible {
 
     public func disable() async throws {
         let agent = AgentClient(domainId: id)
-        try await NSFileProviderManager.remove(domain)
+        try await domain.remove()
         try await agent.deinitDomain()
 
         self.enabled = false
