@@ -7,13 +7,10 @@ private let logger = Logger(category: "ConnectionProfileEditView")
 
 struct ConnectionProfileEditView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(ConnectionCoordinator.self) private var coordinator
 
     var config = ConnectionProfile()
     @State private var isImportingKey: Bool = false
-
-    @State private var enableTask: Task<(), Never>? = nil
-    @State private var testing: Bool = false
-    @State private var error: Error? = nil
 
     private var name: Binding<String> {
         Binding<String>(
@@ -25,33 +22,7 @@ struct ConnectionProfileEditView: View {
     private var enabled: Binding<Bool> {
         Binding<Bool>(
             get: { config.isEnabled() },
-            set: { shouldEnable in
-                if shouldEnable {
-                    enableTask = Task {
-                        self.testing = true
-                        self.error = nil
-                        do {
-                            try await config.enable()
-                        } catch {
-                            if !Task.isCancelled {
-                                self.error = error
-                            }
-                        }
-                        self.testing = false
-                    }
-                } else {
-                    enableTask = Task {
-                        self.error = nil
-                        do {
-                            try await config.disable()
-                        } catch {
-                            if !Task.isCancelled {
-                                self.error = error
-                            }
-                        }
-                    }
-                }
-            }
+            set: { coordinator.setEnabled($0, on: config) }
         )
     }
 
@@ -139,12 +110,12 @@ struct ConnectionProfileEditView: View {
                                 Text("Enabled")
                                 Spacer()
                                 ConnectionTestStatusView(
-                                    testing: testing,
-                                    error: error
+                                    testing: coordinator.isBusy(config),
+                                    error: coordinator.error(config)
                                 )
                             }
                         }
-                        .disabled(testing)
+                        .disabled(coordinator.isBusy(config))
                         .accessibilityIdentifier("enabledToggle")
                     }
                 }
@@ -223,14 +194,6 @@ struct ConnectionProfileEditView: View {
                 allowsMultipleSelection: false,
                 onCompletion: handlePrivateKeyImport
             )
-            .onChange(of: config) {
-                if let task = enableTask {
-                    task.cancel()
-                }
-                enableTask = nil
-                testing = false
-                error = nil
-            }
         }
         .padding()
     }
@@ -282,4 +245,5 @@ extension URL {
 
 #Preview {
     ConnectionProfileEditView()
+        .environment(ConnectionCoordinator())
 }

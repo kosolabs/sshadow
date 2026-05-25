@@ -48,8 +48,7 @@ private class AppXPCService {
 @main
 struct SSHadowApp: App {
     private let modelContainer: ModelContainer
-
-    @State private var isBusy = false
+    @State private var coordinator = ConnectionCoordinator()
 
     init() {
         _ = AppXPCService.shared
@@ -62,19 +61,28 @@ struct SSHadowApp: App {
         )
     }
 
-    var body: some Scene {
-        MenuBarExtra(
-            "SSHadow",
-            systemImage: isBusy
-                ? "externaldrive.badge.timemachine"
-                : "externaldrive.badge.icloud"
-        ) {
-            MainMenuView(isBusy: $isBusy).modelContainer(modelContainer)
+    var menuIcon: String {
+        if coordinator.isAnyBusy {
+            return "externaldrive.badge.timemachine"
         }
+        if coordinator.isAnyError {
+            return "externaldrive.trianglebadge.exclamationmark"
+        }
+        return "externaldrive.badge.icloud"
+    }
+
+    var body: some Scene {
+        MenuBarExtra("SSHadow", systemImage: menuIcon) {
+            RichMenuMainView()
+        }
+        .menuBarExtraStyle(.window)
+        .modelContainer(modelContainer)
+        .environment(coordinator)
 
         Window("SSHadow Settings", id: "settings") {
             ConnectionProfileListView()
         }
         .modelContainer(modelContainer)
+        .environment(coordinator)
     }
 }
