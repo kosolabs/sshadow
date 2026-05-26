@@ -1,3 +1,4 @@
+import Common
 import FileProvider
 
 extension NSFileProviderItem {
@@ -94,21 +95,6 @@ extension NSFileProviderItem {
     }
 }
 
-extension NSFileProviderItemIdentifier {
-    public var desc: String {
-        switch self {
-        case .rootContainer:
-            return ".rootContainer"
-        case .workingSet:
-            return ".workingSet"
-        case .trashContainer:
-            return ".trashContainer"
-        default:
-            return rawValue
-        }
-    }
-}
-
 public let allItemFields: [(NSFileProviderItemFields, String)] = [
     (.contents, "contents"),
     (.filename, "filename"),
@@ -194,7 +180,7 @@ extension NSFileProviderFileSystemFlags {
         }
         self = flags
     }
-    
+
     public var permissions: mode_t {
         var mode: mode_t = 0
         if contains(.userReadable) {

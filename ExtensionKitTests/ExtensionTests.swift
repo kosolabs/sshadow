@@ -784,7 +784,7 @@ struct ExtensionTests {
     @Test func trashFileSucceeds() async throws {
         let (ext, agent) = try await getExtensionAndAgent()
 
-        // mv extension-trash-file/file.txt .Trashes/file.txt
+        // mv extension-trash-file/file.txt .sshadow/trash/file.txt
         let filename = "file.txt"
         let filePath = "extension-trash-file/\(filename)"
         let fileUrl = try TestData.createFile(
@@ -793,8 +793,8 @@ struct ExtensionTests {
         )
         let fileId = try await agent.child(path: filePath)
 
-        try TestData.removeItem(path: ".Trashes")
-        let trashedUrl = TestData.getUrl(path: ".Trashes/\(filename)")
+        try TestData.removeItem(path: ".sshadow")
+        let trashedUrl = TestData.getUrl(path: ".sshadow/trash/\(filename)")
 
         // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID.trashContainer, filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 4, parentItemIdentifier)
         let trashProgress = Progress()

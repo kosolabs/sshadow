@@ -1,3 +1,4 @@
+import Common
 import FileProvider
 import Foundation
 import Testing
@@ -23,12 +24,21 @@ struct PathNodeTests {
         )
         #expect(item.id == .rootContainer)
     }
+    
+    @Test func idReturnsSSHadowContainer() {
+        let item = PathNode(
+            id: .sshadowContainer,
+            parentId: .rootContainer,
+            name: ".sshadow"
+        )
+        #expect(item.id == .sshadowContainer)
+    }
 
     @Test func idReturnsTrashContainer() {
         let item = PathNode(
             id: .trashContainer,
-            parentId: .rootContainer,
-            name: ".Trashes"
+            parentId: .sshadowContainer,
+            name: "trash"
         )
         #expect(item.id == .trashContainer)
     }

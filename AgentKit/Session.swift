@@ -252,7 +252,7 @@ class Session {
                 where ifParentNotExists == .create
             {
                 logger.info("Parent doesn't exist, creating")
-                try await sftp.createDirectory(
+                try await sftp.createDirectoryRecursively(
                     at: path(for: newParentId),
                     mode: 0o700
                 )

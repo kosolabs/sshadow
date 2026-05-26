@@ -94,13 +94,22 @@ struct DomainDBTests {
             #expect(root.name == "")
         }
 
+        @Test func initialDbHasSSHadowFolder() async throws {
+            let db = try await openInMemoryDb()
+
+            let folder = try #require(await db.fetch(id: .sshadowContainer))
+
+            #expect(folder.parentId == .rootContainer)
+            #expect(folder.name == ".sshadow")
+        }
+
         @Test func initialDbHasTrashContainer() async throws {
             let db = try await openInMemoryDb()
 
             let trash = try #require(await db.fetch(id: .trashContainer))
 
-            #expect(trash.parentId == .rootContainer)
-            #expect(trash.name == ".Trashes")
+            #expect(trash.parentId == .sshadowContainer)
+            #expect(trash.name == "trash")
         }
 
         @Test func initialDbHasWorkingSet() async throws {
@@ -238,7 +247,7 @@ struct DomainDBTests {
             let db = try await openInMemoryDb()
 
             let path = await db.path(for: .trashContainer)
-            #expect(path == ".Trashes")
+            #expect(path == ".sshadow/trash")
         }
 
         @Test func pathSucceedsForFileInTrashContainer() async throws {
@@ -246,7 +255,7 @@ struct DomainDBTests {
 
             let fileId = try await db.child(of: .trashContainer, path: "file")
             let path = await db.path(for: fileId)
-            #expect(path == ".Trashes/file")
+            #expect(path == ".sshadow/trash/file")
         }
 
         @Test func pathReturnsEmptyForUnknownId() async throws {
@@ -283,7 +292,7 @@ struct DomainDBTests {
                 for: "deleted.txt",
                 in: .trashContainer
             )
-            #expect(path == ".Trashes/deleted.txt")
+            #expect(path == ".sshadow/trash/deleted.txt")
         }
     }
 

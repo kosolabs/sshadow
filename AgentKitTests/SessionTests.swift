@@ -55,15 +55,17 @@ struct SessionTests {
             #expect(parent == .rootContainer)
         }
 
-        @Test func parentOfTrashContainerIsRootContainer() async throws {
+        @Test func parentOfTrashContainerIsSSHadowFolder() async throws {
             let session = try await getSession()
             let parent = try await session.parent(of: .trashContainer)
-            #expect(parent == .rootContainer)
+            #expect(parent == .sshadowContainer)
         }
 
         @Test func parentOfItemInTrashIsTrashContainer() async throws {
             let session = try await getSession()
-            let itemInTrashes = try await session.child(path: ".Trashes/file")
+            let itemInTrashes = try await session.child(
+                path: ".sshadow/trash/file"
+            )
             let parent = try await session.parent(of: itemInTrashes)
             #expect(parent == .trashContainer)
         }
@@ -90,7 +92,7 @@ struct SessionTests {
             async throws
         {
             let session = try await getSession()
-            let childOfRoot = try await session.child(path: ".Trashes")
+            let childOfRoot = try await session.child(path: ".sshadow/trash")
             #expect(childOfRoot == .trashContainer)
         }
 
@@ -100,7 +102,9 @@ struct SessionTests {
                 of: .trashContainer,
                 path: "file"
             )
-            let expected = try await session.child(path: ".Trashes/file")
+            let expected = try await session.child(
+                path: ".sshadow/trash/file"
+            )
             #expect(actual == expected)
         }
 
@@ -179,7 +183,7 @@ struct SessionTests {
             #expect(item.name == "folder")
             #expect(item.kind == .folder)
         }
-        
+
         @Test func itemForSymlinkSucceeds() async throws {
             let session = try await getSession()
 
