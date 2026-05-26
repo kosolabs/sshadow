@@ -46,9 +46,16 @@ public actor DomainDB {
         )
         try upsert(
             PathNode(
-                id: .trashContainer,
+                id: .sshadowContainer,
                 parentId: .rootContainer,
-                name: ".Trashes"
+                name: ".sshadow"
+            )
+        )
+        try upsert(
+            PathNode(
+                id: .trashContainer,
+                parentId: .sshadowContainer,
+                name: "trash"
             )
         )
         try upsert(

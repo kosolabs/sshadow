@@ -264,20 +264,6 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		7332E7CD2F91689000C8A14C /* Exceptions for "Common" folder in "Common" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				"Alignment+ExtensionsTests.swift",
-			);
-			target = 730980FE2F318825009F7AA2 /* Common */;
-		};
-		7332E7D02F91689C00C8A14C /* Exceptions for "Common" folder in "CommonTests" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				"Alignment+ExtensionsTests.swift",
-			);
-			target = 730981082F318825009F7AA2 /* CommonTests */;
-		};
 		7393A9D12F3134FB00213730 /* Exceptions for "Extension" folder in "Extension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -313,10 +299,6 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		730981002F318825009F7AA2 /* Common */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				7332E7CD2F91689000C8A14C /* Exceptions for "Common" folder in "Common" target */,
-				7332E7D02F91689C00C8A14C /* Exceptions for "Common" folder in "CommonTests" target */,
-			);
 			path = Common;
 			sourceTree = "<group>";
 		};
@@ -1870,7 +1852,7 @@
 			repositoryURL = "https://github.com/kosolabs/swift-lib-ssh.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.17.3;
+				minimumVersion = 1.18.0;
 			};
 		};
 		737720C72FBD039600FC5390 /* XCRemoteSwiftPackageReference "swift-collections" */ = {
