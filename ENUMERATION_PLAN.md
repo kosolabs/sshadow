@@ -70,22 +70,36 @@ Mechanical rename, kept as its own PR so the step 1/2 diffs stay focused.
 Pure protocol + lifecycle refactor; no schema change. Establishes the
 invariant "every `ItemModel` row is server-confirmed," which step 2 relies on.
 
-- [ ] Change RPC signatures in `Common/AgentProtocol.swift` and
+- [x] Change RPC signatures in `Common/AgentProtocol.swift` and
       `Common/AgentClient.swift` from `(itemId, …)` to
       `(parentId, name, …) -> Item`:
       `createDirectory`, `createSymlink`, `upload`.
-- [ ] In `Session`, each operation: resolve parent path → run SFTP op →
+- [x] In `Session`, each operation: resolve parent path → run SFTP op →
       stat → insert `ItemModel(id: UUID, parentId, name)` → return `Item`.
-- [ ] Update `Extension.createItem` (Extension.swift:202-278): drop the
+- [x] Update `Extension.createItem` (Extension.swift:202-278): drop the
       upfront `agent.child(...)`, call the new RPC, return the resulting
       `Item` directly. The trailing `item(for: itemIdentifier)` lookup
       goes away.
-- [ ] Leave `Session.list()`'s `child(of:path:)` call (Session.swift:127)
+- [x] Leave `Session.list()`'s `child(of:path:)` call (Session.swift:127)
       alone — it has full metadata at hand and writes a real `ItemModel`.
-- [ ] Tests: failed create leaves zero new rows; successful create leaves
+- [x] Tests: failed create leaves zero new rows; successful create leaves
       exactly one row matching the returned `Item.id`.
-- [ ] Migrate existing tests that use `child(...,.create)` to fabricate
+- [x] Migrate existing tests that use `child(...,.create)` to fabricate
       ids for files they then create — they should use the new RPCs.
+
+**Follow-up (separate PR):** With the create RPCs owning row insertion,
+`AgentClient.child`'s `ifNotExists: .create` mode is no longer needed by
+production callers. The only remaining caller is `Extension.setAttributes`
+(Extension.swift:450), and by the time it runs the row always exists.
+`Session.list` still upserts by name internally via `db.child`, which is
+unaffected. Plan:
+
+- [ ] Drop `ifNotExists` from `AgentClient.child` / `ChildRequest` (always
+      `.fail`); rename to something like `lookup` if a clearer name helps.
+- [ ] Migrate test scaffolding that currently fabricates ids via
+      `agent.child(path: ...)` to either `agent.list(for: parentId)` +
+      pick-by-name, or to the create RPCs when the test itself is creating
+      the file.
 
 **Acceptance:** failing a create leaves no row in `ItemModel`; a
 successful create leaves exactly one row with `(id, parentId, name)`

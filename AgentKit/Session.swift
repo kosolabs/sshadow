@@ -207,32 +207,74 @@ class Session {
     }
 
     func createSymlink(
-        at itemId: NSFileProviderItemIdentifier,
-        to target: String
-    ) async throws {
-        try await mapError(with: itemId) {
-            try await sftp.createSymlink(to: target, at: path(for: itemId))
+        parentId: NSFileProviderItemIdentifier,
+        name: String,
+        target: String
+    ) async throws -> Item {
+        let path = await self.path(for: name, parentId: parentId)
+        logger.info("Create symlink \(path) -> \(target)")
+        try await mapError(with: parentId) {
+            try await sftp.createSymlink(to: target, at: path)
         }
+        return try await record(
+            parentId: parentId,
+            name: name,
+            kind: .symlink(target: target)
+        )
     }
 
     func createDirectory(
-        for itemId: NSFileProviderItemIdentifier,
+        parentId: NSFileProviderItemIdentifier,
+        name: String,
         mode: mode_t = 0o700,
         ifExists: OnExists = .fail
-    ) async throws {
-        await logger.info(
-            "Create directory \(id(of: itemId)) with permissions \(String(mode, radix: 8))"
+    ) async throws -> Item {
+        let path = await self.path(for: name, parentId: parentId)
+        logger.info(
+            "Create directory \(path) with permissions \(String(mode, radix: 8))"
         )
         do {
-            try await sftp.createDirectory(at: path(for: itemId), mode: mode)
+            try await sftp.createDirectory(at: path, mode: mode)
         } catch SSHError.sftpError(.fileAlreadyExists, _) {
             switch ifExists {
             case .succeed:
-                logger.info("Directory already exists for \(itemId.rawValue)")
+                logger.info("Directory already exists at \(path)")
             case .fail:
                 throw AgentError.filenameCollision
             }
         }
+        return try await record(
+            parentId: parentId,
+            name: name,
+            kind: .folder
+        )
+    }
+
+    private func record(
+        parentId: NSFileProviderItemIdentifier,
+        name: String,
+        kind: Item.Kind
+    ) async throws -> Item {
+        let path = await self.path(for: name, parentId: parentId)
+        let attrs = try await mapError(with: parentId) {
+            try await sftp.attributes(at: path, followSymlinks: false)
+        }
+        let itemId = try await db.child(
+            of: parentId,
+            path: name,
+            ifNotExists: .create
+        )
+        return Item(
+            id: itemId.rawValue,
+            parentId: parentId.rawValue,
+            name: name,
+            kind: kind,
+            size: attrs.size,
+            permissions: attrs.permissions,
+            accessTime: attrs.accessTime,
+            modifyTime: attrs.modifyTime,
+            createTime: attrs.createTime
+        )
     }
 
     func move(
@@ -281,17 +323,18 @@ class Session {
     }
 
     func upload(
-        itemId: NSFileProviderItemIdentifier,
+        parentId: NSFileProviderItemIdentifier,
+        name: String,
         file url: URL,
         mode: mode_t,
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
         progress: Progress,
-    ) async throws {
-        let item = await id(of: itemId)
+    ) async throws -> Item {
+        let path = await self.path(for: name, parentId: parentId)
         let fp = try FileHandle(forReadingFrom: url)
         defer { try? fp.close() }
 
-        logger.info("Upload \(item) from \(url.path())")
+        logger.info("Upload \(path) from \(url.path())")
         let size = try FileManager.default.size(of: url)
 
         progress.kind = .file
@@ -302,23 +345,29 @@ class Session {
         )
 
         let bufferSize = sftp.limits.writeLength(for: chunkSize)
-        try await withFile(for: itemId, accessType: .writeOnly, mode: mode) {
-            file in
-            try await file.withAsyncWriter { writer in
-                while let data = try fp.read(upToCount: Int(bufferSize)) {
-                    if progress.isCancelled {
-                        logger.info("Upload \(item) cancelled")
-                        throw AgentError.userCancelled
-                    }
-                    try await writer.write(data: data)
-                    if let progress = speedometer.update(delta: data.count) {
-                        logger.debug("Uploading \(item): \(progress)")
+        try await mapError(with: parentId) {
+            try await sftp.withSftpFile(
+                at: path,
+                accessType: .writeOnly,
+                mode: mode
+            ) { file in
+                try await file.withAsyncWriter { writer in
+                    while let data = try fp.read(upToCount: Int(bufferSize)) {
+                        if progress.isCancelled {
+                            logger.info("Upload \(path) cancelled")
+                            throw AgentError.userCancelled
+                        }
+                        try await writer.write(data: data)
+                        if let progress = speedometer.update(delta: data.count) {
+                            logger.debug("Uploading \(path): \(progress)")
+                        }
                     }
                 }
             }
         }
 
-        logger.info("Uploaded \(item): \(speedometer.finalize())")
+        logger.info("Uploaded \(path): \(speedometer.finalize())")
+        return try await record(parentId: parentId, name: name, kind: .file)
     }
 
     private func create(file url: URL) throws {

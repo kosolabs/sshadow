@@ -257,23 +257,25 @@ public class Agent {
         _ request: CreateSymlinkRequest
     ) async throws -> CreateSymlinkResponse {
         let session = try await sessions.connect(id: request.domainId)
-        try await session.createSymlink(
-            at: NSFileProviderItemIdentifier(request.itemId),
-            to: request.target
+        let item = try await session.createSymlink(
+            parentId: NSFileProviderItemIdentifier(request.parentId),
+            name: request.name,
+            target: request.target
         )
-        return CreateSymlinkResponse()
+        return CreateSymlinkResponse(item: item)
     }
 
     func createDirectory(
         _ request: CreateDirectoryRequest
     ) async throws -> CreateDirectoryResponse {
         let session = try await sessions.connect(id: request.domainId)
-        try await session.createDirectory(
-            for: NSFileProviderItemIdentifier(request.itemId),
+        let item = try await session.createDirectory(
+            parentId: NSFileProviderItemIdentifier(request.parentId),
+            name: request.name,
             mode: request.mode,
             ifExists: request.ifExists
         )
-        return CreateDirectoryResponse()
+        return CreateDirectoryResponse(item: item)
     }
 
     func move(
@@ -330,13 +332,14 @@ public class Agent {
         let sync = XPCProgressPublisher(
             endpoint: request.progressEndpoint
         )
-        try await session.upload(
-            itemId: NSFileProviderItemIdentifier(request.itemId),
+        let item = try await session.upload(
+            parentId: NSFileProviderItemIdentifier(request.parentId),
+            name: request.name,
             file: request.file,
             mode: request.mode,
             progress: sync.progress
         )
-        return UploadResponse()
+        return UploadResponse(item: item)
     }
 
     func download(
