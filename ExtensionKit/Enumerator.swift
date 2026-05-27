@@ -55,11 +55,11 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         }
     }
 
-    private func enumerateItems(
+    func enumerateItems(
         startingAt page: NSFileProviderPage,
         yield: @Sendable ([any NSFileProviderItemProtocol]) -> Void,
     ) async throws -> NSFileProviderPage? {
-        logger.info("Enumerating \(itemIdentifier.desc)")
+        logger.debug("Enumerate \(itemIdentifier.desc)")
 
         if itemIdentifier == .workingSet {
             return nil
