@@ -5,11 +5,11 @@ import Testing
 
 @testable import AgentKit
 
-struct PathNodeTests {
+struct ItemModelTests {
     @Test func initSetsProperties() {
         let id = NSFileProviderItemIdentifier(UUID().uuidString)
         let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
-        let item = PathNode(id: id, parentId: parentId, name: "file.txt")
+        let item = ItemModel(id: id, parentId: parentId, name: "file.txt")
 
         #expect(item.id == id)
         #expect(item.parentId == parentId)
@@ -17,16 +17,16 @@ struct PathNodeTests {
     }
 
     @Test func idReturnsRootContainer() {
-        let item = PathNode(
+        let item = ItemModel(
             id: .rootContainer,
             parentId: .rootContainer,
             name: ""
         )
         #expect(item.id == .rootContainer)
     }
-    
+
     @Test func idReturnsSSHadowContainer() {
-        let item = PathNode(
+        let item = ItemModel(
             id: .sshadowContainer,
             parentId: .rootContainer,
             name: ".sshadow"
@@ -35,7 +35,7 @@ struct PathNodeTests {
     }
 
     @Test func idReturnsTrashContainer() {
-        let item = PathNode(
+        let item = ItemModel(
             id: .trashContainer,
             parentId: .sshadowContainer,
             name: "trash"
@@ -44,7 +44,7 @@ struct PathNodeTests {
     }
 
     @Test func idReturnsWorkingSet() {
-        let item = PathNode(
+        let item = ItemModel(
             id: .workingSet,
             parentId: .rootContainer,
             name: ""
@@ -53,7 +53,7 @@ struct PathNodeTests {
     }
 
     @Test func parentIdReturnsRootContainer() {
-        let item = PathNode(parentId: .rootContainer, name: "file.txt")
+        let item = ItemModel(parentId: .rootContainer, name: "file.txt")
         #expect(item.parentId == .rootContainer)
     }
 }

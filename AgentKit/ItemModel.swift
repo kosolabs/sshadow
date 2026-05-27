@@ -3,7 +3,7 @@ import Foundation
 import SwiftData
 
 @Model
-public class PathNode {
+public class ItemModel {
     @Attribute(.unique) var rawId: String
     var rawParentId: String
     public var name: String
