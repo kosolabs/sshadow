@@ -21,7 +21,7 @@ public actor DomainDB {
     public static func open(
         config: ModelConfiguration
     ) async throws -> DomainDB {
-        let schema = Schema([PathNode.self])
+        let schema = Schema([ItemModel.self])
         if !config.isStoredInMemoryOnly {
             logger.info("Open DomainDB: \(config.url.path)")
         }
@@ -38,28 +38,28 @@ public actor DomainDB {
 
     private func configure() throws {
         try upsert(
-            PathNode(
+            ItemModel(
                 id: .rootContainer,
                 parentId: .rootContainer,
                 name: ""
             )
         )
         try upsert(
-            PathNode(
+            ItemModel(
                 id: .sshadowContainer,
                 parentId: .rootContainer,
                 name: ".sshadow"
             )
         )
         try upsert(
-            PathNode(
+            ItemModel(
                 id: .trashContainer,
                 parentId: .sshadowContainer,
                 name: "trash"
             )
         )
         try upsert(
-            PathNode(
+            ItemModel(
                 id: .workingSet,
                 parentId: .rootContainer,
                 name: ""
@@ -78,9 +78,9 @@ public actor DomainDB {
         }
     }
 
-    public func fetch(id: NSFileProviderItemIdentifier) -> PathNode? {
+    public func fetch(id: NSFileProviderItemIdentifier) -> ItemModel? {
         let rawId = id.rawValue
-        let descriptor = FetchDescriptor<PathNode>(
+        let descriptor = FetchDescriptor<ItemModel>(
             predicate: #Predicate { row in
                 row.rawId == rawId
             }
@@ -91,9 +91,9 @@ public actor DomainDB {
     public func fetch(
         parentId: NSFileProviderItemIdentifier,
         name: String
-    ) -> PathNode? {
+    ) -> ItemModel? {
         let rawParentId = parentId.rawValue
-        let descriptor = FetchDescriptor<PathNode>(
+        let descriptor = FetchDescriptor<ItemModel>(
             predicate: #Predicate { row in
                 row.rawParentId == rawParentId && row.name == name
             }
@@ -121,7 +121,7 @@ public actor DomainDB {
             throw AgentError.itemNotFound(parent.rawValue)
         }
 
-        let item = PathNode(parentId: parent, name: name)
+        let item = ItemModel(parentId: parent, name: name)
         try upsert(item)
         return item.id
     }
@@ -188,7 +188,7 @@ public actor DomainDB {
         try modelContext.save()
     }
 
-    public func upsert(_ item: PathNode) throws {
+    public func upsert(_ item: ItemModel) throws {
         modelContext.insert(item)
         try modelContext.save()
     }
