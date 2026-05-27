@@ -209,12 +209,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
         logger.debug("Create \(item.desc) for \(fields.desc)")
 
-        let itemIdentifier = try await agent.child(
-            of: item.parentItemIdentifier,
-            path: item.filename
-        )
+        let parentId = item.parentItemIdentifier
+        let filename = item.filename
         var remaining = fields.subtracting(.nameFields)
         let steps = progress.steps()
+        var createdItem: Item?
 
         if item.contentType == .symbolicLink,
             remaining.intersects(with: .writeFields),
@@ -223,16 +222,20 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             remaining.subtract([.contents])
 
             steps.add {
-                try await self.agent.createSymlink(
-                    at: itemIdentifier,
-                    to: target
+                createdItem = try await self.agent.createSymlink(
+                    parentId: parentId,
+                    name: filename,
+                    target: target
                 )
             }
         }
 
         if item.contentType == .folder {
             steps.add {
-                try await self.agent.createDirectory(for: itemIdentifier)
+                createdItem = try await self.agent.createDirectory(
+                    parentId: parentId,
+                    name: filename
+                )
             }
         }
 
@@ -249,8 +252,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             remaining.subtract([.fileSystemFlags, .contents])
 
             steps.add(weight: fileTransferUnits) { subprogress in
-                try await self.agent.upload(
-                    itemId: itemIdentifier,
+                createdItem = try await self.agent.upload(
+                    parentId: parentId,
+                    name: filename,
                     file: url,
                     mode: fileSystemFlags.permissions,
                     progress: subprogress
@@ -269,13 +273,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             logger.fault("Unhandled fields: \(remaining.desc)")
         }
 
-        var createdItem: NSFileProviderItem?
-        steps.add {
-            createdItem = try await self.item(for: itemIdentifier)
-        }
-
         try await steps.execute()
-        return (createdItem!, [], false)
+        return (FPItem(item: createdItem!), [], false)
     }
 
     public func modifyItem(
@@ -340,8 +339,17 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             remaining.subtract([.fileSystemFlags, .contents])
 
             steps.add(weight: fileTransferUnits) { subprogress in
-                try await self.agent.upload(
-                    itemId: item.itemIdentifier,
+                // Upload to the file's current parent/name; rename/move
+                // happens in a later step if .nameFields is present.
+                let currentParent = try await self.agent.parent(
+                    of: item.itemIdentifier
+                )
+                let currentName = try await self.agent.name(
+                    of: item.itemIdentifier
+                )
+                _ = try await self.agent.upload(
+                    parentId: currentParent,
+                    name: currentName,
                     file: newContents,
                     mode: fileSystemFlags.permissions,
                     progress: subprogress

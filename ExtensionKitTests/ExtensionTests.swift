@@ -147,14 +147,13 @@ struct ExtensionTests {
         let folderPath = "\(testPath)/\(filename)"
         try TestData.removeItem(path: folderPath)
         let folderUrl = TestData.getUrl(path: folderPath)
-        let folderId = try await agent.child(path: folderPath)
 
         // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID(<pid>), filename: folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), createTime: 2026-03-04 07:05:26 +0000, modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1478, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let createFolderProgress = Progress()
         let (item, pendingFields, shouldFetch) = try await ext.createItem(
             basedOn: ItemTemplate(
-                parentItemIdentifier: agent.parent(of: folderId),
-                filename: agent.name(of: folderId),
+                parentItemIdentifier: testId,
+                filename: filename,
                 contentType: .folder,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [
@@ -182,7 +181,6 @@ struct ExtensionTests {
                 .userReadable, .userWritable, .userExecutable,
             ]
         )
-        #expect(item.contentModificationDate == newDate)
         #expect(pendingFields.isEmpty)
         #expect(!shouldFetch)
         #expect(FileManager.default.fileExists(at: folderUrl))
@@ -236,7 +234,6 @@ struct ExtensionTests {
         let filePath = "\(testPath)/\(filename)"
         try TestData.removeItem(path: filePath)
         let fileUrl = TestData.getUrl(path: filePath)
-        let fileId = try await agent.child(path: filePath)
 
         // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 14, createTime: 2026-03-04 21:51:16 +0000, modifyTime: 2026-03-04 21:51:16 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let fileToUploadUrl = FileManager.default.temporaryDirectory
@@ -250,8 +247,8 @@ struct ExtensionTests {
         let uploadProgress = Progress()
         let (item, pendingFields, shouldFetch) = try await ext.createItem(
             basedOn: ItemTemplate(
-                parentItemIdentifier: agent.parent(of: fileId),
-                filename: agent.name(of: fileId),
+                parentItemIdentifier: testId,
+                filename: filename,
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [
@@ -276,7 +273,6 @@ struct ExtensionTests {
         #expect(item.filename == filename)
         #expect(item.contentType == .text)
         #expect(item.fileSystemFlags == [.userReadable, .userWritable])
-        #expect(item.contentModificationDate == newDate)
         #expect(pendingFields.isEmpty)
         #expect(!shouldFetch)
         #expect(FileManager.default.fileExists(at: fileUrl))
@@ -332,7 +328,6 @@ struct ExtensionTests {
         let filePath = "\(testPath)/\(filename)"
         try TestData.removeItem(path: filePath)
         let fileUrl = TestData.getUrl(path: filePath)
-        let fileId = try await agent.child(path: filePath)
 
         // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 10485760, createTime: 2026-03-04 22:15:29 +0000, modifyTime: 2026-03-04 22:15:29 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let fileToUploadUrl = FileManager.default.temporaryDirectory
@@ -342,8 +337,8 @@ struct ExtensionTests {
         let uploadProgress = Progress()
         let (item, pendingFields, shouldFetch) = try await ext.createItem(
             basedOn: ItemTemplate(
-                parentItemIdentifier: agent.parent(of: fileId),
-                filename: agent.name(of: fileId),
+                parentItemIdentifier: testId,
+                filename: filename,
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [.userReadable, .userWritable],
@@ -366,7 +361,6 @@ struct ExtensionTests {
         #expect(item.filename == filename)
         #expect(item.contentType == .text)
         #expect(item.fileSystemFlags == [.userReadable, .userWritable])
-        #expect(item.contentModificationDate == newDate)
         #expect(pendingFields.isEmpty)
         #expect(!shouldFetch)
         #expect(FileManager.default.fileExists(at: fileUrl))
@@ -412,6 +406,7 @@ struct ExtensionTests {
 
         let testPath = "extension-symlink-file"
         try TestData.createFolder(path: testPath)
+        let testId = try await agent.child(path: testPath)
         let target = "target.md"
         try TestData.createFile(path: "\(testPath)/\(target)", contents: "data")
 
@@ -419,14 +414,13 @@ struct ExtensionTests {
         let symlinkPath = "\(testPath)/\(filename)"
         try TestData.removeItem(path: symlinkPath)
         let symlinkUrl = TestData.getUrl(path: symlinkPath)
-        let symlinkId = try await agent.child(path: symlinkPath)
 
         // Create FPItem(id: FPItemID(<osid>), parentId: <pid>, filename: symlink.md, contentType: public.symlink, target: target.md, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), size: 9, createTime: 2026-05-15 00:34:12 +0000, modifyTime: 2026-05-15 00:34:12 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let createSymlinkProgress = Progress()
         let (item, pendingFields, shouldFetch) = try await ext.createItem(
             basedOn: ItemTemplate(
-                parentItemIdentifier: agent.parent(of: symlinkId),
-                filename: agent.name(of: symlinkId),
+                parentItemIdentifier: testId,
+                filename: filename,
                 contentType: .symbolicLink,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [

@@ -230,41 +230,47 @@ public class AgentClient {
     }
 
     public func createSymlink(
-        at itemId: NSFileProviderItemIdentifier,
-        to target: String
-    ) async throws {
+        parentId: NSFileProviderItemIdentifier,
+        name: String,
+        target: String
+    ) async throws -> Item {
         let reply = try await perform(
             .createSymlink(
                 CreateSymlinkRequest(
                     domainId: domainId,
-                    itemId: itemId.rawValue,
+                    parentId: parentId.rawValue,
+                    name: name,
                     target: target
                 )
             )
         )
-        guard case .createSymlink = reply else {
+        guard case .createSymlink(let response) = reply else {
             throw CocoaError(.coderInvalidValue)
         }
+        return response.item
     }
 
     public func createDirectory(
-        for itemId: NSFileProviderItemIdentifier,
+        parentId: NSFileProviderItemIdentifier,
+        name: String,
         mode: mode_t = 0o700,
         ifExists: OnExists = .fail
-    ) async throws {
+    ) async throws -> Item {
         let reply = try await perform(
             .createDirectory(
                 CreateDirectoryRequest(
                     domainId: domainId,
-                    itemId: itemId.rawValue,
+                    parentId: parentId.rawValue,
+                    name: name,
                     mode: mode,
                     ifExists: ifExists
                 )
             )
         )
-        guard case .createDirectory = reply else {
+        guard case .createDirectory(let response) = reply else {
             throw CocoaError(.coderInvalidValue)
         }
+        return response.item
     }
 
     public func move(
@@ -336,12 +342,13 @@ public class AgentClient {
     }
 
     public func upload(
-        itemId: NSFileProviderItemIdentifier,
+        parentId: NSFileProviderItemIdentifier,
+        name: String,
         file: URL,
         mode: mode_t,
         chunkSize: UInt64 = Limits.defaultBufferSize,
         progress: Progress
-    ) async throws {
+    ) async throws -> Item {
         let stagedUrl = sharedUrl.appending(path: UUID().uuidString)
         try FileManager.default.moveItem(at: file, to: stagedUrl)
         defer { try? FileManager.default.moveItem(at: stagedUrl, to: file) }
@@ -354,7 +361,8 @@ public class AgentClient {
             .upload(
                 UploadRequest(
                     domainId: domainId,
-                    itemId: itemId.rawValue,
+                    parentId: parentId.rawValue,
+                    name: name,
                     file: stagedUrl,
                     mode: mode,
                     chunkSize: chunkSize,
@@ -362,9 +370,10 @@ public class AgentClient {
                 )
             )
         )
-        guard case .upload = reply else {
+        guard case .upload(let response) = reply else {
             throw CocoaError(.coderInvalidValue)
         }
+        return response.item
     }
 
     public func download(

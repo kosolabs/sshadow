@@ -457,11 +457,17 @@ struct SessionTests {
         @Test func createDirectorySucceeds() async throws {
             let session = try await getSession()
 
-            let path = "\(testFolderPath)/new-dir"
-            let itemId = try await session.child(path: path)
+            let parentId = try await session.child(path: testFolderPath)
 
-            try await session.createDirectory(for: itemId, mode: 0o755)
+            let item = try await session.createDirectory(
+                parentId: parentId,
+                name: "new-dir",
+                mode: 0o755
+            )
 
+            #expect(item.name == "new-dir")
+            #expect(item.kind == .folder)
+            let itemId = NSFileProviderItemIdentifier(item.id)
             let attrs = try await session.attributes(for: itemId)
             #expect(attrs.type == .directory)
             let permissions = try #require(attrs.permissions)
@@ -474,12 +480,16 @@ struct SessionTests {
 
             let path = "\(testFolderPath)/existing-dir"
             try TestData.createFolder(path: path)
-            let itemId = try await session.child(path: path)
+            let parentId = try await session.child(path: testFolderPath)
 
-            try await session.createDirectory(
-                for: itemId,
+            let item = try await session.createDirectory(
+                parentId: parentId,
+                name: "existing-dir",
                 ifExists: .succeed
             )
+
+            #expect(item.name == "existing-dir")
+            #expect(item.kind == .folder)
         }
 
         @Test func createDirectoryWhenExistsThrowsByDefault() async throws {
@@ -487,15 +497,141 @@ struct SessionTests {
 
             let path = "\(testFolderPath)/already-exists"
             try TestData.createFolder(path: path)
-            let itemId = try await session.child(path: path)
+            let parentId = try await session.child(path: testFolderPath)
 
             await #expect {
-                try await session.createDirectory(for: itemId)
+                try await session.createDirectory(
+                    parentId: parentId,
+                    name: "already-exists"
+                )
             } throws: { error in
                 guard case AgentError.filenameCollision = error else {
                     return false
                 }
                 return true
+            }
+        }
+
+        @Test func createDirectorySuccessInsertsRowMatchingItemId() async throws
+        {
+            let session = try await getSession()
+
+            let parentId = try await session.child(path: testFolderPath)
+            let name = "row-match-dir"
+
+            let item = try await session.createDirectory(
+                parentId: parentId,
+                name: name
+            )
+
+            let lookedUpId = try await session.child(
+                of: parentId,
+                path: name,
+                ifNotExists: .fail
+            )
+            #expect(lookedUpId.rawValue == item.id)
+        }
+
+        @Test func createDirectoryFailureLeavesNoRow() async throws {
+            let session = try await getSession()
+
+            let parentId = try await session.child(path: testFolderPath)
+            let name = "collide-dir"
+
+            // Pre-create on disk so SFTP createDirectory throws collision.
+            try TestData.createFolder(path: "\(testFolderPath)/\(name)")
+
+            await #expect(throws: AgentError.filenameCollision) {
+                _ = try await session.createDirectory(
+                    parentId: parentId,
+                    name: name
+                )
+            }
+
+            // No DB row should exist for the failed create.
+            await #expect(
+                throws: AgentError.itemNotFound(parentId.rawValue)
+            ) {
+                _ = try await session.child(
+                    of: parentId,
+                    path: name,
+                    ifNotExists: .fail
+                )
+            }
+        }
+    }
+
+    struct CreateSymlinkTests {
+        let testFolderPath = "session-create-symlink"
+
+        init() throws {
+            try TestData.createFolder(path: testFolderPath)
+        }
+
+        @Test func createSymlinkSucceeds() async throws {
+            let session = try await getSession()
+
+            let parentId = try await session.child(path: testFolderPath)
+            let target = "/etc/hosts"
+
+            let item = try await session.createSymlink(
+                parentId: parentId,
+                name: "link",
+                target: target
+            )
+
+            #expect(item.name == "link")
+            #expect(item.kind == .symlink(target: target))
+        }
+
+        @Test func createSymlinkSuccessInsertsRowMatchingItemId() async throws {
+            let session = try await getSession()
+
+            let parentId = try await session.child(path: testFolderPath)
+            let name = "row-match-link"
+
+            let item = try await session.createSymlink(
+                parentId: parentId,
+                name: name,
+                target: "/dev/null"
+            )
+
+            let lookedUpId = try await session.child(
+                of: parentId,
+                path: name,
+                ifNotExists: .fail
+            )
+            #expect(lookedUpId.rawValue == item.id)
+        }
+
+        @Test func createSymlinkFailureLeavesNoRow() async throws {
+            let session = try await getSession()
+
+            let parentId = try await session.child(path: testFolderPath)
+            let name = "collide-link"
+
+            // Pre-create the symlink file so SFTP createSymlink fails.
+            try TestData.createFile(
+                path: "\(testFolderPath)/\(name)",
+                contents: "data"
+            )
+
+            await #expect(throws: (any Error).self) {
+                _ = try await session.createSymlink(
+                    parentId: parentId,
+                    name: name,
+                    target: "/dev/null"
+                )
+            }
+
+            await #expect(
+                throws: AgentError.itemNotFound(parentId.rawValue)
+            ) {
+                _ = try await session.child(
+                    of: parentId,
+                    path: name,
+                    ifNotExists: .fail
+                )
             }
         }
     }
@@ -690,19 +826,23 @@ struct SessionTests {
             let data = "Hello, World!\n"
             try data.write(to: uploadUrl, atomically: false, encoding: .utf8)
 
-            let filePath = "\(testFolderPath)/small-file.txt"
+            let filename = "small-file.txt"
+            let filePath = "\(testFolderPath)/\(filename)"
             try TestData.removeItem(path: filePath)
             let url = TestData.getUrl(path: filePath)
 
-            let itemId = try await session.child(path: filePath)
+            let parentId = try await session.child(path: testFolderPath)
             let progress = Progress()
-            try await session.upload(
-                itemId: itemId,
+            let item = try await session.upload(
+                parentId: parentId,
+                name: filename,
                 file: uploadUrl,
                 mode: 0o600,
                 progress: progress
             )
 
+            #expect(item.name == filename)
+            #expect(item.size == UInt64(data.utf8.count))
             #expect(FileManager.default.fileExists(at: url))
             #expect(try String(contentsOf: url, encoding: .utf8) == data)
             #expect(progress.isFinished)
@@ -717,23 +857,90 @@ struct SessionTests {
             let data = Data(count: 10_485_760)
             try data.write(to: uploadUrl)
 
-            let filePath = "\(testFolderPath)/large-file.txt"
+            let filename = "large-file.txt"
+            let filePath = "\(testFolderPath)/\(filename)"
             try TestData.removeItem(path: filePath)
             let url = TestData.getUrl(path: filePath)
 
-            let itemId = try await session.child(path: filePath)
+            let parentId = try await session.child(path: testFolderPath)
             let progress = Progress()
-            try await session.upload(
-                itemId: itemId,
+            let item = try await session.upload(
+                parentId: parentId,
+                name: filename,
                 file: uploadUrl,
                 mode: 0o600,
                 progress: progress
             )
 
+            #expect(item.name == filename)
+            #expect(item.size == UInt64(data.count))
             #expect(FileManager.default.fileExists(at: url))
             #expect(try Data(contentsOf: url) == data)
             #expect(progress.isFinished)
             #expect(try FileManager.default.permissions(of: url) == 0o600)
+        }
+
+        @Test func uploadSuccessInsertsRowMatchingItemId() async throws {
+            let session = try await getSession()
+
+            let parentId = try await session.child(path: testFolderPath)
+            let name = "row-match-upload.txt"
+
+            let uploadUrl = FileManager.default.temporaryDirectory
+                .appending(path: UUID().uuidString)
+            try Data("data".utf8).write(to: uploadUrl)
+
+            try TestData.removeItem(path: "\(testFolderPath)/\(name)")
+
+            let item = try await session.upload(
+                parentId: parentId,
+                name: name,
+                file: uploadUrl,
+                mode: 0o600,
+                progress: Progress()
+            )
+
+            let lookedUpId = try await session.child(
+                of: parentId,
+                path: name,
+                ifNotExists: .fail
+            )
+            #expect(lookedUpId.rawValue == item.id)
+        }
+
+        @Test func uploadFailureLeavesNoRow() async throws {
+            let session = try await getSession()
+
+            let parentId = try await session.child(path: testFolderPath)
+            let name = "collide-upload"
+
+            // Pre-create a directory at the upload target so opening it as a
+            // file for writing fails.
+            try TestData.createFolder(path: "\(testFolderPath)/\(name)")
+
+            let uploadUrl = FileManager.default.temporaryDirectory
+                .appending(path: UUID().uuidString)
+            try Data("data".utf8).write(to: uploadUrl)
+
+            await #expect(throws: (any Error).self) {
+                _ = try await session.upload(
+                    parentId: parentId,
+                    name: name,
+                    file: uploadUrl,
+                    mode: 0o600,
+                    progress: Progress()
+                )
+            }
+
+            await #expect(
+                throws: AgentError.itemNotFound(parentId.rawValue)
+            ) {
+                _ = try await session.child(
+                    of: parentId,
+                    path: name,
+                    ifNotExists: .fail
+                )
+            }
         }
 
         @Test func uploadEmptyFileSucceeds() async throws {
@@ -743,19 +950,23 @@ struct SessionTests {
                 .appending(path: UUID().uuidString)
             try Data().write(to: uploadUrl)
 
-            let filePath = "\(testFolderPath)/empty-file.txt"
+            let filename = "empty-file.txt"
+            let filePath = "\(testFolderPath)/\(filename)"
             try TestData.removeItem(path: filePath)
             let url = TestData.getUrl(path: filePath)
 
-            let itemId = try await session.child(path: filePath)
+            let parentId = try await session.child(path: testFolderPath)
             let progress = Progress()
-            try await session.upload(
-                itemId: itemId,
+            let item = try await session.upload(
+                parentId: parentId,
+                name: filename,
                 file: uploadUrl,
                 mode: 0o600,
                 progress: progress
             )
 
+            #expect(item.name == filename)
+            #expect(item.size == 0)
             #expect(FileManager.default.fileExists(at: url))
             #expect(try Data(contentsOf: url).isEmpty)
             #expect(progress.isFinished)

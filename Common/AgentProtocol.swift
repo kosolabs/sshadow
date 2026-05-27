@@ -373,45 +373,59 @@ public struct SetAttributesResponse: Codable, PrettyDescribable {
 
 public struct CreateSymlinkRequest: Codable, PrettyDescribable {
     public let domainId: UUID
-    public let itemId: String
+    public let parentId: String
+    public let name: String
     public let target: String
 
     public init(
         domainId: UUID,
-        itemId: String,
+        parentId: String,
+        name: String,
         target: String
     ) {
         self.domainId = domainId
-        self.itemId = itemId
+        self.parentId = parentId
+        self.name = name
         self.target = target
     }
 }
 
 public struct CreateSymlinkResponse: Codable, PrettyDescribable {
-    public init() {}
+    let item: Item
+
+    public init(item: Item) {
+        self.item = item
+    }
 }
 
 public struct CreateDirectoryRequest: Codable, PrettyDescribable {
     public let domainId: UUID
-    public let itemId: String
+    public let parentId: String
+    public let name: String
     public let mode: mode_t
     public let ifExists: OnExists
 
     public init(
         domainId: UUID,
-        itemId: String,
+        parentId: String,
+        name: String,
         mode: mode_t,
         ifExists: OnExists
     ) {
         self.domainId = domainId
-        self.itemId = itemId
+        self.parentId = parentId
+        self.name = name
         self.mode = mode
         self.ifExists = ifExists
     }
 }
 
 public struct CreateDirectoryResponse: Codable, PrettyDescribable {
-    public init() {}
+    let item: Item
+
+    public init(item: Item) {
+        self.item = item
+    }
 }
 
 public struct MoveRequest: Codable, PrettyDescribable {
@@ -497,7 +511,8 @@ public struct LimitsResponse: Codable, PrettyDescribable {
 
 public struct UploadRequest: Codable, PrettyDescribable {
     public let domainId: UUID
-    public let itemId: String
+    public let parentId: String
+    public let name: String
     public let file: URL
     public let mode: mode_t
     public let chunkSize: UInt64
@@ -505,14 +520,16 @@ public struct UploadRequest: Codable, PrettyDescribable {
 
     public init(
         domainId: UUID,
-        itemId: String,
+        parentId: String,
+        name: String,
         file: URL,
         mode: mode_t,
         chunkSize: UInt64,
         progressEndpoint: XPCEndpoint
     ) {
         self.domainId = domainId
-        self.itemId = itemId
+        self.parentId = parentId
+        self.name = name
         self.file = file
         self.mode = mode
         self.chunkSize = chunkSize
@@ -521,7 +538,11 @@ public struct UploadRequest: Codable, PrettyDescribable {
 }
 
 public struct UploadResponse: Codable, PrettyDescribable {
-    public init() {}
+    let item: Item
+
+    public init(item: Item) {
+        self.item = item
+    }
 }
 
 public struct DownloadRequest: Codable, PrettyDescribable {

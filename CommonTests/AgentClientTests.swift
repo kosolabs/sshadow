@@ -145,24 +145,30 @@ struct AgentClientTests {
         let target = "\(testFolderPath)/symlink-target.txt"
         try TestData.createFile(path: target, contents: "hello")
 
-        let symlinkPath = "\(testFolderPath)/symlink-link.txt"
-        let itemId = try await agent.child(path: symlinkPath)
+        let parentId = try await agent.child(path: testFolderPath)
 
-        try await agent.createSymlink(at: itemId, to: target)
-        let item = try await agent.item(for: itemId)
+        let item = try await agent.createSymlink(
+            parentId: parentId,
+            name: "symlink-link.txt",
+            target: target
+        )
 
+        #expect(item.name == "symlink-link.txt")
         #expect(item.kind == .symlink(target: target))
     }
 
     @Test func createDirectorySucceeds() async throws {
         let agent = try await getAgentClient()
 
-        let path = "\(testFolderPath)/new-dir"
-        let itemId = try await agent.child(path: path)
+        let parentId = try await agent.child(path: testFolderPath)
 
-        try await agent.createDirectory(for: itemId, mode: 0o755)
-        let item = try await agent.item(for: itemId)
+        let item = try await agent.createDirectory(
+            parentId: parentId,
+            name: "new-dir",
+            mode: 0o755
+        )
 
+        #expect(item.name == "new-dir")
         #expect(item.kind == .folder)
     }
 
@@ -222,21 +228,21 @@ struct AgentClientTests {
     @Test func uploadSucceeds() async throws {
         let agent = try await getAgentClient()
 
-        let path = "\(testFolderPath)/upload.txt"
-        let itemId = try await agent.child(path: path)
+        let parentId = try await agent.child(path: testFolderPath)
         let contents = "uploaded content"
         let localFile = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString)
         try contents.write(to: localFile, atomically: true, encoding: .utf8)
 
-        try await agent.upload(
-            itemId: itemId,
+        let item = try await agent.upload(
+            parentId: parentId,
+            name: "upload.txt",
             file: localFile,
             mode: 0o644,
             progress: Progress()
         )
 
-        let item = try await agent.item(for: itemId)
+        #expect(item.name == "upload.txt")
         #expect(item.size == UInt64(contents.utf8.count))
     }
 
