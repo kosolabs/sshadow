@@ -107,8 +107,6 @@ public class Agent {
                     try await .item(item(request))
                 case .list(let request):
                     try await .list(list(request))
-                case .exists(let request):
-                    try await .exists(exists(request))
                 case .setAttributes(let request):
                     try await .setAttributes(setAttributes(request))
                 case .createSymlink(let request):
@@ -173,8 +171,7 @@ public class Agent {
         let session = try await sessions.connect(id: request.domainId)
         let childId = try await session.child(
             of: NSFileProviderItemIdentifier(request.parentId),
-            path: request.path,
-            ifNotExists: request.ifNotExists
+            path: request.path
         )
         return ChildResponse(itemId: childId.rawValue)
     }
@@ -230,16 +227,6 @@ public class Agent {
         return ListResponse(fileInfos: entries)
     }
 
-    func exists(
-        _ request: ExistsRequest
-    ) async throws -> ExistsResponse {
-        let session = try await sessions.connect(id: request.domainId)
-        let exists = await session.exists(
-            for: NSFileProviderItemIdentifier(request.itemId)
-        )
-        return ExistsResponse(exists: exists)
-    }
-
     func setAttributes(
         _ request: SetAttributesRequest
     ) async throws -> SetAttributesResponse {
@@ -285,8 +272,7 @@ public class Agent {
         try await session.move(
             NSFileProviderItemIdentifier(request.itemId),
             toParent: NSFileProviderItemIdentifier(request.newParentId),
-            name: request.newName,
-            ifParentNotExists: request.ifParentNotExists
+            name: request.newName
         )
         return MoveResponse()
     }

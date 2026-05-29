@@ -62,10 +62,9 @@ class Session {
 
     func child(
         of parentId: NSFileProviderItemIdentifier = .rootContainer,
-        path: String,
-        ifNotExists: OnNotExists = .create
+        path: String
     ) async throws -> NSFileProviderItemIdentifier {
-        try await db.child(of: parentId, path: path, ifNotExists: ifNotExists)
+        try await db.child(of: parentId, path: path, ifNotExists: .fail)
     }
 
     func parent(
@@ -118,47 +117,40 @@ class Session {
     }
 
     func list(
-        for parentId: NSFileProviderItemIdentifier
-    ) async throws -> [Item] {
-        try await withDirectory(for: parentId) { dir in
-            var entries: [Item] = []
-            for try await attrs in dir {
-                guard let name = attrs.name else { continue }
-                let itemId = try await child(of: parentId, path: name)
-                let type: Item.Kind =
-                    switch attrs.type {
-                    case .directory:
-                        .folder
-                    case .symlink:
-                        .symlink(target: nil)
-                    default:
-                        .file
-                    }
-                let item = Item(
-                    id: itemId.rawValue,
-                    parentId: parentId.rawValue,
-                    name: name,
-                    kind: type,
-                    size: attrs.size,
-                    permissions: attrs.permissions,
-                    accessTime: attrs.accessTime,
-                    modifyTime: attrs.modifyTime,
-                    createTime: attrs.createTime
-                )
-                entries.append(item)
-            }
-            return entries
-        }
-    }
-
-    func exists(
         for itemId: NSFileProviderItemIdentifier
-    ) async -> Bool {
+    ) async throws -> [Item] {
         do {
-            _ = try await attributes(for: itemId)
-            return true
-        } catch {
-            return false
+            return try await withDirectory(for: itemId) { dir in
+                var entries: [Item] = []
+                for try await attrs in dir {
+                    guard let name = attrs.name else { continue }
+                    let childId = try await db.child(of: itemId, path: name)
+                    let type: Item.Kind =
+                        switch attrs.type {
+                        case .directory:
+                            .folder
+                        case .symlink:
+                            .symlink(target: nil)
+                        default:
+                            .file
+                        }
+                    let child = Item(
+                        id: childId.rawValue,
+                        parentId: itemId.rawValue,
+                        name: name,
+                        kind: type,
+                        size: attrs.size,
+                        permissions: attrs.permissions,
+                        accessTime: attrs.accessTime,
+                        modifyTime: attrs.modifyTime,
+                        createTime: attrs.createTime
+                    )
+                    entries.append(child)
+                }
+                return entries
+            }
+        } catch AgentError.itemNotFound where itemId == .trashContainer {
+            return []
         }
     }
 
@@ -280,8 +272,7 @@ class Session {
     func move(
         _ itemId: NSFileProviderItemIdentifier,
         toParent newParentId: NSFileProviderItemIdentifier,
-        name newName: String,
-        ifParentNotExists: OnParentNotExists = .fail
+        name newName: String
     ) async throws {
         let oldPath = await path(for: itemId)
         let newPath = await path(for: newName, parentId: newParentId)
@@ -291,9 +282,9 @@ class Session {
             do {
                 try await sftp.move(from: oldPath, to: newPath)
             } catch SSHError.sftpError(.noSuchFile, _)
-                where ifParentNotExists == .create
+                where newParentId == .trashContainer
             {
-                logger.info("Parent doesn't exist, creating")
+                logger.info("Trash doesn't exist, creating")
                 try await sftp.createDirectoryRecursively(
                     at: path(for: newParentId),
                     mode: 0o700
@@ -358,7 +349,8 @@ class Session {
                             throw AgentError.userCancelled
                         }
                         try await writer.write(data: data)
-                        if let progress = speedometer.update(delta: data.count) {
+                        if let progress = speedometer.update(delta: data.count)
+                        {
                             logger.debug("Uploading \(path): \(progress)")
                         }
                     }

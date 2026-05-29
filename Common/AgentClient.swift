@@ -93,16 +93,14 @@ public class AgentClient {
 
     public func child(
         of parentId: NSFileProviderItemIdentifier = .rootContainer,
-        path: String,
-        ifNotExists: OnNotExists = .create
+        path: String
     ) async throws -> NSFileProviderItemIdentifier {
         let reply = try await perform(
             .child(
                 ChildRequest(
                     domainId: domainId,
                     parentId: parentId.rawValue,
-                    path: path,
-                    ifNotExists: ifNotExists
+                    path: path
                 )
             )
         )
@@ -193,20 +191,6 @@ public class AgentClient {
         return response.fileInfos
     }
 
-    public func exists(
-        for itemId: NSFileProviderItemIdentifier
-    ) async throws -> Bool {
-        let reply = try await perform(
-            .exists(
-                ExistsRequest(domainId: domainId, itemId: itemId.rawValue)
-            )
-        )
-        guard case .exists(let response) = reply else {
-            throw CocoaError(.coderInvalidValue)
-        }
-        return response.exists
-    }
-
     public func setAttributes(
         for itemId: NSFileProviderItemIdentifier,
         permissions: mode_t? = nil,
@@ -276,8 +260,7 @@ public class AgentClient {
     public func move(
         _ itemId: NSFileProviderItemIdentifier,
         toParent newParentId: NSFileProviderItemIdentifier,
-        name newName: String,
-        ifParentNotExists: OnParentNotExists = .fail
+        name newName: String
     ) async throws {
         let reply = try await perform(
             .move(
@@ -285,8 +268,7 @@ public class AgentClient {
                     domainId: domainId,
                     itemId: itemId.rawValue,
                     newParentId: newParentId.rawValue,
-                    newName: newName,
-                    ifParentNotExists: ifParentNotExists
+                    newName: newName
                 )
             )
         )
