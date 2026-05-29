@@ -117,7 +117,7 @@ FileProvider identifies files by opaque `NSFileProviderItemIdentifier` strings. 
 ### Testing
 
 - All tests use in-memory SwiftData: `ModelConfiguration(isStoredInMemoryOnly: true)`.
-- `TestData.swift` provides helpers to stand up a `Session` connected to the local test sshd (port 2248) and to create test files/directories.
+- `TestSandbox.swift` provides helpers to stand up a `Session` connected to the local test sshd (port 2248) and to create test files/directories.
 - `Agent.createAnonymous()` is used in tests to get an agent without a named XPC service.
 - The UI tests pass `-uiTesting` as a launch argument, which causes `SSHadowApp` to use an in-memory model container.
 

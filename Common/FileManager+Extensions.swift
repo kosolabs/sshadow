@@ -5,6 +5,10 @@ extension FileManager {
         fileExists(atPath: url.path)
     }
 
+    public func destinationOfSymbolicLink(at url: URL) throws -> String {
+        try destinationOfSymbolicLink(atPath: url.path)
+    }
+    
     public func attributes(of url: URL) throws -> NSDictionary {
         try self.attributesOfItem(atPath: url.path) as NSDictionary
     }
