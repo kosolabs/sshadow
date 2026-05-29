@@ -5,145 +5,129 @@ import Testing
 
 @testable import Common
 
-private func getAgentClient() async throws -> AgentClient {
-    try await TestData.getAgentClient()
-}
-
 @Suite(.serialized)
 struct AgentClientTests {
-    let testFolderPath: String = "agent-client"
-
-    init() throws {
-        try TestData.createFolder(path: testFolderPath)
-        try TestData.createFile(
-            path: "agent-client/folder/file.txt",
+    @Test func nameAndChildAndParentSucceed() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFile(
+            path: "folder/file.txt",
             contents: "Hello, World!"
         )
-    }
+        let agent = try await sandbox.getAgentClient()
 
-    @Test func nameAndChildAndParentSucceed() async throws {
-        let agent = try await getAgentClient()
-
-        let nestedFile = try await agent.child(
-            path: "agent-client/folder/file.txt"
-        )
+        let nestedFile = try await agent.child(path: "folder/file.txt")
         let nestedFileName = try await agent.name(of: nestedFile)
         #expect(nestedFileName == "file.txt")
 
         let parentOfFileId = try await agent.parent(of: nestedFile)
-        let childOfRootId = try await agent.child(path: "agent-client/folder")
+        let childOfRootId = try await agent.child(path: "folder")
         #expect(parentOfFileId == childOfRootId)
     }
 
     @Test func pathForItemSucceeds() async throws {
-        let agent = try await getAgentClient()
-        let itemId = try await agent.child(path: "agent-client/folder/file.txt")
+        let sandbox = TestSandbox()
+        try sandbox.createFile(
+            path: "folder/file.txt",
+            contents: "Hello, World!"
+        )
+        let agent = try await sandbox.getAgentClient()
 
+        let itemId = try await agent.child(path: "folder/file.txt")
         let path = try await agent.path(for: itemId)
 
-        #expect(path.hasSuffix("agent-client/folder/file.txt"))
+        #expect(path.hasSuffix("folder/file.txt"))
     }
 
     @Test func pathForChildSucceeds() async throws {
-        let agent = try await getAgentClient()
-        let parentId = try await agent.child(path: "agent-client/folder")
+        let sandbox = TestSandbox()
+        try sandbox.createFile(
+            path: "folder/file.txt",
+            contents: "Hello, World!"
+        )
+        let agent = try await sandbox.getAgentClient()
 
+        let parentId = try await agent.child(path: "folder")
         let path = try await agent.path(for: "file.txt", parentId: parentId)
 
-        #expect(path.hasSuffix("agent-client/folder/file.txt"))
+        #expect(path.hasSuffix("folder/file.txt"))
     }
 
     @Test func itemForFileSucceeds() async throws {
-        let path = "\(testFolderPath)/item-file.txt"
+        let sandbox = TestSandbox()
         let contents = "Hello, World!"
-        try TestData.createFile(path: path, contents: contents)
+        try sandbox.createFile(path: "file.txt", contents: contents)
+        let agent = try await sandbox.getAgentClient()
 
-        let agent = try await getAgentClient()
-        let itemId = try await agent.child(path: path)
-
+        let itemId = try await agent.child(path: "file.txt")
         let item = try await agent.item(for: itemId)
 
-        #expect(item.name == "item-file.txt")
+        #expect(item.name == "file.txt")
         #expect(item.kind == .file)
         #expect(item.size == UInt64(contents.utf8.count))
     }
 
     @Test func itemForFolderSucceeds() async throws {
-        let path = "\(testFolderPath)/item-dir"
-        try TestData.createFolder(path: path)
+        let sandbox = TestSandbox()
+        try sandbox.createFolder(path: "folder")
+        let agent = try await sandbox.getAgentClient()
 
-        let agent = try await getAgentClient()
-        let itemId = try await agent.child(path: path)
-
+        let itemId = try await agent.child(path: "folder")
         let item = try await agent.item(for: itemId)
 
-        #expect(item.name == "item-dir")
+        #expect(item.name == "folder")
         #expect(item.kind == .folder)
     }
 
     @Test func itemForSymlinkSucceeds() async throws {
-        let target = "\(testFolderPath)/item-symlink-target.txt"
-        let contents = "Hello, World!"
-        try TestData.createFile(path: target, contents: contents)
-        let symlink = "\(testFolderPath)/item-symlink-link.txt"
-        try TestData.createSymlink(path: symlink, target: target)
+        let sandbox = TestSandbox()
+        try sandbox.createFile(path: "target.txt", contents: "Hello, World!")
+        try sandbox.createSymlink(path: "symlink.txt", target: "target.txt")
+        let agent = try await sandbox.getAgentClient()
 
-        let agent = try await getAgentClient()
-        let itemId = try await agent.child(path: symlink)
-
+        let itemId = try await agent.child(path: "symlink.txt")
         let item = try await agent.item(for: itemId)
 
-        #expect(item.name == "item-symlink-link.txt")
-        #expect(item.kind == .symlink(target: target))
+        #expect(item.name == "symlink.txt")
+        #expect(item.kind == .symlink(target: "target.txt"))
     }
 
     @Test func listSucceeds() async throws {
-        let dirPath = "\(testFolderPath)/enum-dir"
-        try TestData.createFile(
-            path: "\(dirPath)/file.txt",
-            contents: "hello"
-        )
-        try TestData.createFolder(path: "\(dirPath)/subfolder")
+        let sandbox = TestSandbox()
+        try sandbox.createFile(path: "file.txt")
+        try sandbox.createFolder(path: "folder")
+        try sandbox.createSymlink(path: "symlink.txt", target: "file.txt")
+        let agent = try await sandbox.getAgentClient()
 
-        let agent = try await getAgentClient()
-        let dirId = try await agent.child(path: dirPath)
+        let entries = try await agent.list(for: .rootContainer)
 
-        let entries = try await agent.list(for: dirId)
+        let file = try #require(entries.first { $0.name == "file.txt" })
+        #expect(file.kind == .file)
 
-        let names = Set(entries.map(\.name))
-        #expect(names.contains("file.txt"))
-        #expect(names.contains("subfolder"))
+        let folder = try #require(entries.first { $0.name == "folder" })
+        #expect(folder.kind == .folder)
 
-        let fileEntry = try #require(entries.first { $0.name == "file.txt" })
-        #expect(fileEntry.kind == .file)
-
-        let folderEntry = try #require(
-            entries.first { $0.name == "subfolder" }
-        )
-        #expect(folderEntry.kind == .folder)
+        let symlink = try #require(entries.first { $0.name == "symlink.txt" })
+        #expect(symlink.kind == .symlink(target: nil))
     }
 
     @Test func listEmptyDirectorySucceeds() async throws {
-        let dirPath = "\(testFolderPath)/empty-dir"
-        try TestData.createFolder(path: dirPath)
+        let sandbox = TestSandbox()
+        try sandbox.createFolder(path: "empty-dir")
+        let agent = try await sandbox.getAgentClient()
 
-        let agent = try await getAgentClient()
-        let dirId = try await agent.child(path: dirPath)
-
+        let dirId = try await agent.child(path: "empty-dir")
         let entries = try await agent.list(for: dirId)
 
         #expect(entries.isEmpty)
     }
 
     @Test func setAttributesSucceeds() async throws {
-        let path = "\(testFolderPath)/set-attrs.txt"
-        try TestData.createFile(path: path, contents: "test")
+        let sandbox = TestSandbox()
+        try sandbox.createFile(path: "set-attrs.txt")
+        let agent = try await sandbox.getAgentClient()
 
-        let agent = try await getAgentClient()
-        let itemId = try await agent.child(path: path)
-
+        let itemId = try await agent.child(path: "set-attrs.txt")
         try await agent.setAttributes(for: itemId, permissions: 0o644)
-
         let item = try await agent.item(for: itemId)
 
         let permissions = try #require(item.permissions)
@@ -151,29 +135,26 @@ struct AgentClientTests {
     }
 
     @Test func createSymlinkSucceeds() async throws {
-        let target = "\(testFolderPath)/symlink-target.txt"
-        try TestData.createFile(path: target, contents: "hello")
-
-        let agent = try await getAgentClient()
-        let parentId = try await agent.child(path: testFolderPath)
+        let sandbox = TestSandbox()
+        try sandbox.createFile(path: "target.txt")
+        let agent = try await sandbox.getAgentClient()
 
         let item = try await agent.createSymlink(
-            parentId: parentId,
-            name: "symlink-link.txt",
-            target: target
+            parentId: .rootContainer,
+            name: "symlink.txt",
+            target: "target.txt"
         )
 
-        #expect(item.name == "symlink-link.txt")
-        #expect(item.kind == .symlink(target: target))
+        #expect(item.name == "symlink.txt")
+        #expect(item.kind == .symlink(target: "target.txt"))
     }
 
     @Test func createDirectorySucceeds() async throws {
-        let agent = try await getAgentClient()
-
-        let parentId = try await agent.child(path: testFolderPath)
+        let sandbox = TestSandbox()
+        let agent = try await sandbox.getAgentClient()
 
         let item = try await agent.createDirectory(
-            parentId: parentId,
+            parentId: .rootContainer,
             name: "new-dir",
             mode: 0o755
         )
@@ -183,49 +164,51 @@ struct AgentClientTests {
     }
 
     @Test func moveSucceeds() async throws {
-        let path = "\(testFolderPath)/move-me.txt"
-        try TestData.createFile(path: path, contents: "hello")
+        let sandbox = TestSandbox()
+        try sandbox.createFile(path: "src/old.txt")
+        try sandbox.createFolder(path: "dest")
+        let agent = try await sandbox.getAgentClient()
 
-        let agent = try await getAgentClient()
-        let itemId = try await agent.child(path: path)
-        let parentId = try await agent.child(path: testFolderPath)
+        let itemId = try await agent.child(path: "src/old.txt")
+        let destId = try await agent.child(path: "dest")
 
         try await agent.move(
             itemId,
-            toParent: parentId,
-            name: "moved.txt"
+            toParent: destId,
+            name: "new.txt"
         )
 
         let name = try await agent.name(of: itemId)
-        #expect(name == "moved.txt")
+        #expect(name == "new.txt")
+        let parentId = try await agent.parent(of: itemId)
+        #expect(parentId == destId)
     }
 
     @Test func removeFileSucceeds() async throws {
-        let path = "\(testFolderPath)/rm-file.txt"
-        let file = try TestData.createFile(path: path, contents: "bye")
+        let sandbox = TestSandbox()
+        try sandbox.createFile(path: "file.txt")
+        let agent = try await sandbox.getAgentClient()
 
-        let agent = try await getAgentClient()
-        let itemId = try await agent.child(path: path)
-
+        let itemId = try await agent.child(path: "file.txt")
         try await agent.removeFile(for: itemId)
 
-        #expect(!FileManager.default.fileExists(at: file))
+        #expect(!sandbox.exists(path: "file.txt"))
     }
 
     @Test func removeDirectorySucceeds() async throws {
-        let path = "\(testFolderPath)/rm-dir"
-        let folder = try TestData.createFolder(path: path)
+        let sandbox = TestSandbox()
+        try sandbox.createFolder(path: "folder")
+        let agent = try await sandbox.getAgentClient()
 
-        let agent = try await getAgentClient()
-        let itemId = try await agent.child(path: path)
-
+        let itemId = try await agent.child(path: "folder")
         try await agent.removeDirectory(for: itemId)
 
-        #expect(!FileManager.default.fileExists(at: folder))
+        #expect(!sandbox.exists(path: "folder"))
     }
 
     @Test func limitsSucceeds() async throws {
-        let agent = try await getAgentClient()
+        let sandbox = TestSandbox()
+        let agent = try await sandbox.getAgentClient()
 
         let limits = try await agent.limits()
 
@@ -234,16 +217,15 @@ struct AgentClientTests {
     }
 
     @Test func uploadSucceeds() async throws {
-        let agent = try await getAgentClient()
+        let sandbox = TestSandbox()
+        let agent = try await sandbox.getAgentClient()
 
-        let parentId = try await agent.child(path: testFolderPath)
         let contents = "uploaded content"
-        let localFile = FileManager.default.temporaryDirectory
-            .appending(path: UUID().uuidString)
+        let localFile = sandbox.shared.appending(path: UUID().uuidString)
         try contents.write(to: localFile, atomically: true, encoding: .utf8)
 
         let item = try await agent.upload(
-            parentId: parentId,
+            parentId: .rootContainer,
             name: "upload.txt",
             file: localFile,
             mode: 0o644,
@@ -255,22 +237,21 @@ struct AgentClientTests {
     }
 
     @Test func downloadSucceeds() async throws {
-        let path = "\(testFolderPath)/download.txt"
+        let sandbox = TestSandbox()
         let contents = "download me"
-        try TestData.createFile(path: path, contents: contents)
+        try sandbox.createFile(path: "download.txt", contents: contents)
+        let agent = try await sandbox.getAgentClient()
 
-        let agent = try await getAgentClient()
-        let itemId = try await agent.child(path: path)
-
-        let (url, fileInfo) = try await agent.download(
+        let itemId = try await agent.child(path: "download.txt")
+        let (url, item) = try await agent.download(
             itemId: itemId,
             progress: Progress()
         )
 
         let downloaded = try String(contentsOf: url, encoding: .utf8)
         #expect(downloaded == contents)
-        #expect(fileInfo.name == "download.txt")
-        #expect(fileInfo.size == UInt64(contents.utf8.count))
+        #expect(item.name == "download.txt")
+        #expect(item.size == UInt64(contents.utf8.count))
     }
 }
 
