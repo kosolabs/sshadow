@@ -670,8 +670,7 @@ struct SessionTests {
     struct UploadTests {
         @Test func uploadSmallFileSucceeds() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = FileManager.default.temporaryDirectory
-                .appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
             let data = "Hello, World!\n"
             try data.write(to: uploadUrl, atomically: false, encoding: .utf8)
 
@@ -703,8 +702,7 @@ struct SessionTests {
 
         @Test func uploadLargeFileSucceeds() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = FileManager.default.temporaryDirectory
-                .appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
             let data = Data(count: 10_485_760)
             try data.write(to: uploadUrl)
 
@@ -744,8 +742,7 @@ struct SessionTests {
             // file for writing fails.
             try sandbox.createFolder(path: name)
 
-            let uploadUrl = FileManager.default.temporaryDirectory
-                .appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
             try Data("data".utf8).write(to: uploadUrl)
 
             await #expect(throws: (any Error).self) {
@@ -769,8 +766,7 @@ struct SessionTests {
 
         @Test func uploadEmptyFileSucceeds() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = FileManager.default.temporaryDirectory
-                .appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
             try Data().write(to: uploadUrl)
 
             let filename = "empty-file.txt"
