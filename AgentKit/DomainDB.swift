@@ -5,20 +5,25 @@ import SwiftData
 
 private let logger = Logger(category: "DomainDB")
 
+enum OnNotExists: Codable, PrettyDescribable {
+    case fail
+    case create
+}
+
 @ModelActor
-public actor DomainDB {
+actor DomainDB {
     private static func url(for id: UUID) -> URL {
         SSHadow.groupUrl.appendingPathComponent(
             "DomainDB-\(id.uuidString).store"
         )
     }
 
-    public static func model(for id: UUID) -> ModelConfiguration {
+    static func model(for id: UUID) -> ModelConfiguration {
         ModelConfiguration(url: url(for: id))
     }
 
     @discardableResult
-    public static func open(
+    static func open(
         config: ModelConfiguration
     ) async throws -> DomainDB {
         let schema = Schema([ItemModel.self])
@@ -67,7 +72,7 @@ public actor DomainDB {
         )
     }
 
-    public static func delete(id: UUID) async throws {
+    static func delete(id: UUID) async throws {
         let basePath = url(for: id).path
 
         for suffix in ["", "-shm", "-wal"] {
@@ -78,7 +83,7 @@ public actor DomainDB {
         }
     }
 
-    public func fetch(id: NSFileProviderItemIdentifier) -> ItemModel? {
+    func fetch(id: NSFileProviderItemIdentifier) -> ItemModel? {
         let rawId = id.rawValue
         let descriptor = FetchDescriptor<ItemModel>(
             predicate: #Predicate { row in
@@ -88,7 +93,7 @@ public actor DomainDB {
         return try? modelContext.fetch(descriptor).first
     }
 
-    public func fetch(
+    func fetch(
         parentId: NSFileProviderItemIdentifier,
         name: String
     ) -> ItemModel? {
@@ -101,7 +106,7 @@ public actor DomainDB {
         return try? modelContext.fetch(descriptor).first
     }
 
-    public func name(of id: NSFileProviderItemIdentifier) throws -> String {
+    func name(of id: NSFileProviderItemIdentifier) throws -> String {
         guard let item = fetch(id: id) else {
             throw NSFileProviderError(.noSuchItem)
         }
@@ -126,7 +131,7 @@ public actor DomainDB {
         return item.id
     }
 
-    public func child(
+    func child(
         of parent: NSFileProviderItemIdentifier = .rootContainer,
         path: String,
         ifNotExists: OnNotExists = .create,
@@ -142,7 +147,7 @@ public actor DomainDB {
         return current
     }
 
-    public func parent(
+    func parent(
         of id: NSFileProviderItemIdentifier
     ) throws -> NSFileProviderItemIdentifier {
         guard let item = fetch(id: id) else {
@@ -152,7 +157,7 @@ public actor DomainDB {
         return item.parentId
     }
 
-    public func path(for id: NSFileProviderItemIdentifier) -> String {
+    func path(for id: NSFileProviderItemIdentifier) -> String {
         var current = id
         var segments: [String] = []
 
@@ -167,7 +172,7 @@ public actor DomainDB {
         return segments.reversed().joined(separator: "/")
     }
 
-    public func path(
+    func path(
         for name: String,
         in parentId: NSFileProviderItemIdentifier
     ) -> String {
@@ -175,7 +180,7 @@ public actor DomainDB {
         return parentPath.isEmpty ? name : parentPath + "/" + name
     }
 
-    public func move(
+    func move(
         _ id: NSFileProviderItemIdentifier,
         toParent newParentId: NSFileProviderItemIdentifier,
         name newName: String
@@ -188,7 +193,7 @@ public actor DomainDB {
         try modelContext.save()
     }
 
-    public func upsert(_ item: ItemModel) throws {
+    func upsert(_ item: ItemModel) throws {
         modelContext.insert(item)
         try modelContext.save()
     }

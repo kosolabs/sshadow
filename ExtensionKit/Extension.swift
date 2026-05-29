@@ -363,9 +363,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 try await self.agent.move(
                     item.itemIdentifier,
                     toParent: item.parentId,
-                    name: item.filename,
-                    ifParentNotExists:
-                        item.parentId == .trashContainer ? .create : .fail
+                    name: item.filename
                 )
             }
         }

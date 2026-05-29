@@ -65,12 +65,6 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
             return nil
         }
 
-        if itemIdentifier == .trashContainer {
-            if try await !agent.exists(for: .trashContainer) {
-                return nil
-            }
-        }
-
         let entries = try await agent.list(for: itemIdentifier)
         for entry in entries {
             let item = FPItem(item: entry)

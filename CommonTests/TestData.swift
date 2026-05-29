@@ -117,15 +117,32 @@ enum TestData {
         )
         testListener = listener
         let session = try! XPCSession(endpoint: listener.endpoint)
-        return AgentClient(
+        let agent = AgentClient(
             domainId: id,
             session: session,
             sharedUrl: sharedUrl
         )
+
+        var folders: [NSFileProviderItemIdentifier] = [.rootContainer]
+        while !folders.isEmpty {
+            let folder = folders.removeFirst()
+            let items = try await agent.list(for: folder)
+            for item in items {
+                if item.kind == .folder, (item.permissions ?? 0) & 0o400 != 0 {
+                    folders.append(NSFileProviderItemIdentifier(item.id))
+                }
+            }
+        }
+
+        return agent
     }
 
     static func getUrl(path: String) -> URL {
         mount.appending(path: path)
+    }
+    
+    static func exists(path: String) -> Bool {
+        FileManager.default.fileExists(at: getUrl(path: path))
     }
 
     @discardableResult

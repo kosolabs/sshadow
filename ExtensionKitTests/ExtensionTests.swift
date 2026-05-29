@@ -21,11 +21,10 @@ struct ExtensionTests {
 
     @Test func readSmallFileSucceeds() async throws {
         // cat extension-read-file/small-file.txt
-        let (ext, agent) = try await getExtensionAndAgent()
-
         let path = "extension-read-file/small-file.txt"
         let contents = "Hello, World!"
         try TestData.createFile(path: path, contents: contents)
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // Fetch FPItemID(<id>)
         let readProgress = Progress()
@@ -46,11 +45,10 @@ struct ExtensionTests {
 
     @Test func readLargeFileSucceeds() async throws {
         // cat extension-read-file/large-file.dat
-        let (ext, agent) = try await getExtensionAndAgent()
-
         let path = "extension-read-file/large-file.dat"
         let data = Data(count: 10_485_760)
         try TestData.createFile(path: path, data: data)
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // Fetch FPItemID(<id>)
         let readProgress = Progress()
@@ -69,13 +67,12 @@ struct ExtensionTests {
 
     @Test func readPartialFileSucceeds() async throws {
         // dd if=extension-read-file/partial-file.dat bs=1m skip=5 count=1
-        let (ext, agent) = try await getExtensionAndAgent()
-
         let path = "extension-read-file/partial-file.dat"
         let data = (0..<1024).reduce(into: Data()) { data, i in
             data.append(contentsOf: repeatElement(UInt8(i % 256), count: 1024))
         }
         try TestData.createFile(path: path, data: data)
+        let (ext, agent) = try await getExtensionAndAgent()
 
         // Read FPItemID(<id>) with range Optional({10240, 10240})
         let requestedRange = NSRange(location: 10 * 1024, length: 10 * 1024)
@@ -107,11 +104,10 @@ struct ExtensionTests {
     }
 
     @Test func readFileWithCancellation() async throws {
-        let (ext, agent) = try await getExtensionAndAgent()
-
         let path = "extension-read-file/cancellable-file.txt"
         let data = Data(count: 10_485_760)
         try TestData.createFile(path: path, data: data)
+        let (ext, agent) = try await getExtensionAndAgent()
 
         let progress = Progress()
         let fetchTask = Task {
@@ -130,8 +126,6 @@ struct ExtensionTests {
     }
 
     @Test func createFolderSucceeds() async throws {
-        let (ext, agent) = try await getExtensionAndAgent()
-
         // mkdir extension-create-folder/folder
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
         let newDate = Date(timeIntervalSince1970: 1_760_000_000)
@@ -141,6 +135,7 @@ struct ExtensionTests {
             path: testPath,
             modifyDate: oldDate
         )
+        let (ext, agent) = try await getExtensionAndAgent()
         let testId = try await agent.child(path: testPath)
 
         let filename = "folder"
@@ -217,8 +212,6 @@ struct ExtensionTests {
     }
 
     @Test func createFileSucceeds() async throws {
-        let (ext, agent) = try await getExtensionAndAgent()
-
         // echo "Hello, World!" > extension-create-file/file.txt
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
         let newDate = Date(timeIntervalSince1970: 1_760_000_000)
@@ -228,6 +221,7 @@ struct ExtensionTests {
             path: testPath,
             modifyDate: oldDate
         )
+        let (ext, agent) = try await getExtensionAndAgent()
         let testId = try await agent.child(path: testPath)
 
         let filename = "file.txt"
@@ -311,8 +305,6 @@ struct ExtensionTests {
     }
 
     @Test func createLargeFileSucceeds() async throws {
-        let (ext, agent) = try await getExtensionAndAgent()
-
         // dd if=/dev/zero of=extension-create-large-file/file.txt bs=1m count=10
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
         let newDate = Date(timeIntervalSince1970: 1_760_000_000)
@@ -322,6 +314,7 @@ struct ExtensionTests {
             path: testPath,
             modifyDate: oldDate
         )
+        let (ext, agent) = try await getExtensionAndAgent()
         let testId = try await agent.child(path: testPath)
 
         let filename = "file.txt"
@@ -399,14 +392,11 @@ struct ExtensionTests {
     }
 
     @Test func createSymlinkSucceeds() async throws {
-        let (ext, agent) = try await getExtensionAndAgent()
-
         // ln -s target.md extension-symlink-file/symlink.md
         let newDate = Date(timeIntervalSince1970: 1_760_000_000)
 
         let testPath = "extension-symlink-file"
         try TestData.createFolder(path: testPath)
-        let testId = try await agent.child(path: testPath)
         let target = "target.md"
         try TestData.createFile(path: "\(testPath)/\(target)", contents: "data")
 
@@ -414,6 +404,9 @@ struct ExtensionTests {
         let symlinkPath = "\(testPath)/\(filename)"
         try TestData.removeItem(path: symlinkPath)
         let symlinkUrl = TestData.getUrl(path: symlinkPath)
+
+        let (ext, agent) = try await getExtensionAndAgent()
+        let testId = try await agent.child(path: testPath)
 
         // Create FPItem(id: FPItemID(<osid>), parentId: <pid>, filename: symlink.md, contentType: public.symlink, target: target.md, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), size: 9, createTime: 2026-05-15 00:34:12 +0000, modifyTime: 2026-05-15 00:34:12 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let createSymlinkProgress = Progress()
@@ -460,8 +453,6 @@ struct ExtensionTests {
     }
 
     @Test func renameFileSucceeds() async throws {
-        let (ext, agent) = try await getExtensionAndAgent()
-
         // mv extension-rename-file/src.txt extension-rename-file/dest.txt
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
         let newDate = Date(timeIntervalSince1970: 1_760_000_000)
@@ -471,7 +462,6 @@ struct ExtensionTests {
             path: folderPath,
             modifyDate: oldDate
         )
-        let folderId = try await agent.child(path: folderPath)
 
         let srcPath = "\(folderPath)/src.txt"
         let srcUrl = try TestData.createFile(
@@ -479,11 +469,14 @@ struct ExtensionTests {
             contents: "data",
             modifyDate: oldDate
         )
-        let srcId = try await agent.child(path: srcPath)
 
         let destFilename = "dest.txt"
         let destPath = "\(folderPath)/\(destFilename)"
         let destUrl = try TestData.removeItem(path: destPath)
+
+        let (ext, agent) = try await getExtensionAndAgent()
+        let folderId = try await agent.child(path: folderPath)
+        let srcId = try await agent.child(path: srcPath)
 
         // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID(<pid>), filename: dest.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 2, filename)
         let renameProgress = Progress()
@@ -548,8 +541,6 @@ struct ExtensionTests {
     }
 
     @Test func moveFileSucceeds() async throws {
-        let (ext, agent) = try await getExtensionAndAgent()
-
         // mv extension-move-file/src/file.txt extension-move-file/dest/
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
         let newDate = Date(timeIntervalSince1970: 1_760_000_000)
@@ -559,7 +550,6 @@ struct ExtensionTests {
             path: srcFolderPath,
             modifyDate: oldDate
         )
-        let srcFolderId = try await agent.child(path: srcFolderPath)
 
         let filename = "file.txt"
 
@@ -569,17 +559,20 @@ struct ExtensionTests {
             contents: "data",
             modifyDate: oldDate
         )
-        let srcId = try await agent.child(path: srcPath)
 
         let destFolderPath = "extension-move-file/dest"
         let destFolderUrl = try TestData.createFolder(
             path: destFolderPath,
             modifyDate: oldDate
         )
-        let destFolderId = try await agent.child(path: destFolderPath)
 
         let destPath = "\(destFolderPath)/\(filename)"
         let destUrl = TestData.getUrl(path: destPath)
+
+        let (ext, agent) = try await getExtensionAndAgent()
+        let srcFolderId = try await agent.child(path: srcFolderPath)
+        let srcId = try await agent.child(path: srcPath)
+        let destFolderId = try await agent.child(path: destFolderPath)
 
         // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID(<npid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 4, parentItemIdentifier)
         let moveProgress = Progress()
@@ -676,23 +669,23 @@ struct ExtensionTests {
     }
 
     @Test func moveAndRenameFileSucceeds() async throws {
-        let (ext, agent) = try await getExtensionAndAgent()
-
         // mv extension-move-rename/src/old.txt extension-move-rename/dest/new.txt
         let srcFolderPath = "extension-move-rename/src"
         try TestData.createFolder(path: srcFolderPath)
 
         let srcPath = "\(srcFolderPath)/old.txt"
         try TestData.createFile(path: srcPath, contents: "data")
-        let srcId = try await agent.child(path: srcPath)
 
         let destFolderPath = "extension-move-rename/dest"
         try TestData.createFolder(path: destFolderPath)
-        let destFolderId = try await agent.child(path: destFolderPath)
 
         let newName = "new.txt"
         let destUrl = TestData.getUrl(path: "\(destFolderPath)/\(newName)")
         try TestData.removeItem(path: "\(destFolderPath)/\(newName)")
+
+        let (ext, agent) = try await getExtensionAndAgent()
+        let srcId = try await agent.child(path: srcPath)
+        let destFolderId = try await agent.child(path: destFolderPath)
 
         let progress = Progress()
         let (maybeItem, pendingFields, shouldFetch) = try await ext.modifyItem(
@@ -731,19 +724,19 @@ struct ExtensionTests {
     }
 
     @Test func moveFilePreservesIdentifier() async throws {
-        let (ext, agent) = try await getExtensionAndAgent()
-
         // mv extension-move-preserve-id/file.txt extension-move-preserve-id/dest/
         let filename = "file.txt"
         let srcPath = "extension-move-preserve-id/\(filename)"
         try TestData.createFile(path: srcPath, contents: "data")
-        let srcId = try await agent.child(path: srcPath)
 
         let destFolderPath = "extension-move-preserve-id/dest"
         try TestData.createFolder(path: destFolderPath)
-        let destFolderId = try await agent.child(path: destFolderPath)
 
         try TestData.removeItem(path: "\(destFolderPath)/\(filename)")
+
+        let (ext, agent) = try await getExtensionAndAgent()
+        let srcId = try await agent.child(path: srcPath)
+        let destFolderId = try await agent.child(path: destFolderPath)
 
         let (maybeItem, pendingFields, shouldFetch) = try await ext.modifyItem(
             ItemTemplate(
@@ -776,8 +769,6 @@ struct ExtensionTests {
     }
 
     @Test func trashFileSucceeds() async throws {
-        let (ext, agent) = try await getExtensionAndAgent()
-
         // mv extension-trash-file/file.txt .sshadow/trash/file.txt
         let filename = "file.txt"
         let filePath = "extension-trash-file/\(filename)"
@@ -785,10 +776,12 @@ struct ExtensionTests {
             path: filePath,
             contents: "data"
         )
-        let fileId = try await agent.child(path: filePath)
 
         try TestData.removeItem(path: ".sshadow")
         let trashedUrl = TestData.getUrl(path: ".sshadow/trash/\(filename)")
+
+        let (ext, agent) = try await getExtensionAndAgent()
+        let fileId = try await agent.child(path: filePath)
 
         // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID.trashContainer, filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 4, parentItemIdentifier)
         let trashProgress = Progress()
@@ -826,8 +819,6 @@ struct ExtensionTests {
     }
 
     @Test func editFileSucceeds() async throws {
-        let (ext, agent) = try await getExtensionAndAgent()
-
         // echo "World!" >> extension-edit-file/file.txt
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
         let newDate = Date(timeIntervalSince1970: 1_760_000_000)
@@ -837,7 +828,6 @@ struct ExtensionTests {
             path: folderPath,
             modifyDate: oldDate
         )
-        let folderId = try await agent.child(path: folderPath)
 
         let oldContent = "Hello, "
         let filePath = "\(folderPath)/file.txt"
@@ -846,6 +836,9 @@ struct ExtensionTests {
             contents: oldContent,
             modifyDate: oldDate
         )
+
+        let (ext, agent) = try await getExtensionAndAgent()
+        let folderId = try await agent.child(path: folderPath)
         let fileId = try await agent.child(path: filePath)
 
         // Fetch FPItemID(<id>)
@@ -915,8 +908,6 @@ struct ExtensionTests {
     }
 
     @Test func setFileReadWriteSucceeds() async throws {
-        let (ext, agent) = try await getExtensionAndAgent()
-
         // chmod 600 extension-permissions/file.txt
         let testPath = "extension-permissions"
 
@@ -926,6 +917,8 @@ struct ExtensionTests {
             contents: "data",
             permissions: 0o000
         )
+
+        let (ext, agent) = try await getExtensionAndAgent()
         let fileId = try await agent.child(path: filePath)
 
         // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 256, fileSystemFlags)
@@ -956,8 +949,6 @@ struct ExtensionTests {
     }
 
     @Test func setFolderReadWriteExecuteSucceeds() async throws {
-        let (ext, agent) = try await getExtensionAndAgent()
-
         // chmod 700 extension-permissions/folder
         let testPath = "extension-permissions"
 
@@ -966,6 +957,8 @@ struct ExtensionTests {
             path: folderPath,
             permissions: 0o000
         )
+
+        let (ext, agent) = try await getExtensionAndAgent()
         let folderId = try await agent.child(path: folderPath)
 
         // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID(<pid>), filename: folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 256, fileSystemFlags)
@@ -1000,13 +993,13 @@ struct ExtensionTests {
     }
 
     @Test func deleteFolderSucceeds() async throws {
-        let (ext, agent) = try await getExtensionAndAgent()
-
         // rmdir extension-delete-item/folder
         let testPath = "extension-delete-item"
 
         let folderPath = "\(testPath)/folder"
         let folderUrl = try TestData.createFolder(path: folderPath)
+
+        let (ext, agent) = try await getExtensionAndAgent()
         let folderId = try await agent.child(path: folderPath)
 
         // Delete FPItemID(<id>)
@@ -1023,8 +1016,6 @@ struct ExtensionTests {
     }
 
     @Test func deleteFileSucceeds() async throws {
-        let (ext, agent) = try await getExtensionAndAgent()
-
         // rm extension-delete-item/file.txt
         let testPath = "extension-delete-item"
 
@@ -1034,6 +1025,8 @@ struct ExtensionTests {
             path: filePath,
             contents: contents
         )
+
+        let (ext, agent) = try await getExtensionAndAgent()
         let fileId = try await agent.child(path: filePath)
 
         // Delete FPItemID(<id>)

@@ -8,16 +8,6 @@ public enum OnExists: Codable, PrettyDescribable {
     case succeed
 }
 
-public enum OnNotExists: Codable, PrettyDescribable {
-    case fail
-    case create
-}
-
-public enum OnParentNotExists: Codable, PrettyDescribable {
-    case fail
-    case create
-}
-
 public enum AgentRequest: Codable, PrettyDescribable {
     public var domainId: UUID {
         switch self {
@@ -38,8 +28,6 @@ public enum AgentRequest: Codable, PrettyDescribable {
         case .item(let request):
             request.domainId
         case .list(let request):
-            request.domainId
-        case .exists(let request):
             request.domainId
         case .setAttributes(let request):
             request.domainId
@@ -73,7 +61,6 @@ public enum AgentRequest: Codable, PrettyDescribable {
     case pathForChild(PathForChildRequest)
     case item(ItemRequest)
     case list(ListRequest)
-    case exists(ExistsRequest)
     case setAttributes(SetAttributesRequest)
     case createSymlink(CreateSymlinkRequest)
     case createDirectory(CreateDirectoryRequest)
@@ -107,7 +94,6 @@ public enum AgentResponse: Codable, PrettyDescribable {
     case path(PathResponse)
     case item(ItemResponse)
     case list(ListResponse)
-    case exists(ExistsResponse)
     case setAttributes(SetAttributesResponse)
     case createSymlink(CreateSymlinkResponse)
     case createDirectory(CreateDirectoryResponse)
@@ -220,18 +206,15 @@ public struct ChildRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let parentId: String
     public let path: String
-    public let ifNotExists: OnNotExists
 
     public init(
         domainId: UUID,
         parentId: String,
         path: String,
-        ifNotExists: OnNotExists
     ) {
         self.domainId = domainId
         self.parentId = parentId
         self.path = path
-        self.ifNotExists = ifNotExists
     }
 }
 
@@ -327,24 +310,6 @@ public struct ListResponse: Codable, PrettyDescribable {
     }
 }
 
-public struct ExistsRequest: Codable, PrettyDescribable {
-    public let domainId: UUID
-    public let itemId: String
-
-    public init(domainId: UUID, itemId: String) {
-        self.domainId = domainId
-        self.itemId = itemId
-    }
-}
-
-public struct ExistsResponse: Codable, PrettyDescribable {
-    let exists: Bool
-
-    public init(exists: Bool) {
-        self.exists = exists
-    }
-}
-
 public struct SetAttributesRequest: Codable, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
@@ -433,20 +398,17 @@ public struct MoveRequest: Codable, PrettyDescribable {
     public let itemId: String
     public let newParentId: String
     public let newName: String
-    public let ifParentNotExists: OnParentNotExists
 
     public init(
         domainId: UUID,
         itemId: String,
         newParentId: String,
-        newName: String,
-        ifParentNotExists: OnParentNotExists
+        newName: String
     ) {
         self.domainId = domainId
         self.itemId = itemId
         self.newParentId = newParentId
         self.newName = newName
-        self.ifParentNotExists = ifParentNotExists
     }
 }
 
