@@ -283,7 +283,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				id_ed25519,
-				TestData.swift,
+				TestSandbox.swift,
 			);
 			target = 738D63AB2F3FD1F100FED311 /* ExtensionKitTests */;
 		};
@@ -291,7 +291,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				id_ed25519,
-				TestData.swift,
+				TestSandbox.swift,
 			);
 			target = 73799A472F9811DD00A15109 /* AgentKitTests */;
 		};

@@ -1,3 +1,4 @@
+import FileProvider
 import Foundation
 
 public struct Item: Message, CustomStringConvertible {
@@ -21,8 +22,8 @@ public struct Item: Message, CustomStringConvertible {
         case symlink(target: String?)
     }
 
-    public let id: String
-    public let parentId: String
+    public let rawId: String
+    public let rawParentId: String
     public let name: String
     public let kind: Kind
     public let size: UInt64?
@@ -30,6 +31,14 @@ public struct Item: Message, CustomStringConvertible {
     public let accessTime: Date?
     public let modifyTime: Date?
     public let createTime: Date?
+
+    public var id: NSFileProviderItemIdentifier {
+        NSFileProviderItemIdentifier(rawId)
+    }
+
+    public var parentId: NSFileProviderItemIdentifier {
+        NSFileProviderItemIdentifier(rawParentId)
+    }
 
     public init(
         id: String,
@@ -42,8 +51,8 @@ public struct Item: Message, CustomStringConvertible {
         modifyTime: Date?,
         createTime: Date?
     ) {
-        self.id = id
-        self.parentId = parentId
+        self.rawId = id
+        self.rawParentId = parentId
         self.name = name
         self.kind = kind
         self.size = size

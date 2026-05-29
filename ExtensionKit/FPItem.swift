@@ -9,15 +9,15 @@ public class FPItem: NSObject, NSFileProviderItem {
 
     public init(item: Item) {
         self.item = item
-        logger.debug("Init FPItemID(\(item.id), \(item.name))")
+        logger.debug("Init FPItemID(\(item.rawId), \(item.name))")
     }
 
     public var itemIdentifier: NSFileProviderItemIdentifier {
-        NSFileProviderItemIdentifier(item.id)
+        item.id
     }
 
     public var parentItemIdentifier: NSFileProviderItemIdentifier {
-        NSFileProviderItemIdentifier(item.parentId)
+        item.parentId
     }
 
     public var filename: String { item.name }

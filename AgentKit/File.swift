@@ -14,7 +14,7 @@ struct File: Sendable, CustomStringConvertible {
         item: Item,
         chunkSize: UInt64 = defaultChunkSize
     ) {
-        self.id = NSFileProviderItemIdentifier(item.id)
+        self.id = item.id
         self.name = item.name
         self.size = item.size ?? 0
         self.chunkSize = chunkSize
