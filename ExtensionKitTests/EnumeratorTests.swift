@@ -5,57 +5,50 @@ import Testing
 
 @testable import ExtensionKit
 
-private func enumerate(
-    _ enumerator: Enumerator
-) async throws -> (
-    items: [any NSFileProviderItemProtocol], nextPage: NSFileProviderPage?
-) {
-    let items = Mutex<[any NSFileProviderItemProtocol]>([])
-    let next = try await enumerator.enumerateItems(
-        startingAt: NSFileProviderPage.initialPageSortedByName
-            as NSFileProviderPage
-    ) { batch in
-        items.withLock { items in items.append(contentsOf: batch) }
+extension TestSandbox {
+    fileprivate func getEnumerator(
+        for path: String
+    ) async throws -> Enumerator {
+        let agent = try await getAgentClient()
+        let itemId = try await agent.child(path: path)
+        return Enumerator(agent: agent, itemIdentifier: itemId)
     }
-    return (items.withLock { items in items }, next)
+
+    fileprivate func getEnumerator(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> Enumerator {
+        let agent = try await getAgentClient()
+        return Enumerator(agent: agent, itemIdentifier: itemId)
+    }
 }
 
-private func enumerate(
-    for itemIdentifier: NSFileProviderItemIdentifier
-) async throws -> (
-    items: [any NSFileProviderItemProtocol], nextPage: NSFileProviderPage?
-) {
-    let agent = try await TestData.getAgentClient()
-    return try await enumerate(
-        Enumerator(agent: agent, itemIdentifier: itemIdentifier)
-    )
-}
-
-private func enumerate(
-    for path: String
-) async throws -> (
-    items: [any NSFileProviderItemProtocol], nextPage: NSFileProviderPage?
-) {
-    let agent = try await TestData.getAgentClient()
-    let itemIdentifier = try await agent.child(path: path)
-    return try await enumerate(
-        Enumerator(agent: agent, itemIdentifier: itemIdentifier)
-    )
+extension Enumerator {
+    fileprivate func enumerateItems() async throws -> (
+        items: [any NSFileProviderItemProtocol], nextPage: NSFileProviderPage?
+    ) {
+        let items = Mutex<[any NSFileProviderItemProtocol]>([])
+        let next = try await enumerateItems(
+            startingAt: NSFileProviderPage.initialPageSortedByName
+                as NSFileProviderPage
+        ) { batch in
+            items.withLock { items in items.append(contentsOf: batch) }
+        }
+        return (items.withLock { items in items }, next)
+    }
 }
 
 @Suite(.serialized)
 struct EnumeratorTests {
     @Test func enumerateFolderReturnsChildren() async throws {
         // ls enumerator-list
-        let folderPath = "enumerator-list"
-        try TestData.removeItem(path: folderPath)
-        try TestData.createFolder(path: folderPath)
-        try TestData.createFile(path: "\(folderPath)/a.txt", contents: "a")
-        try TestData.createFile(path: "\(folderPath)/b.txt", contents: "b")
-        try TestData.createFolder(path: "\(folderPath)/sub")
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "enumerator-list/a.txt")
+        try sandbox.createFile(at: "enumerator-list/b.txt")
+        try sandbox.createFolder(at: "enumerator-list/sub")
+        let enumerator = try await sandbox.getEnumerator(for: "enumerator-list")
 
         // Enumerate <id>
-        let (items, nextPage) = try await enumerate(for: folderPath)
+        let (items, nextPage) = try await enumerator.enumerateItems()
         let names = Set(items.map(\.filename))
 
         #expect(names == ["a.txt", "b.txt", "sub"])
@@ -64,19 +57,25 @@ struct EnumeratorTests {
 
     @Test func enumerateEmptyFolderReturnsNothing() async throws {
         // ls enumerator-empty
-        let folderPath = "enumerator-empty"
-        try TestData.removeItem(path: folderPath)
-        try TestData.createFolder(path: folderPath)
+        let sandbox = TestSandbox()
+        try sandbox.createFolder(at: "enumerator-empty")
+        let enumerator = try await sandbox.getEnumerator(
+            for: "enumerator-empty"
+        )
 
         // Enumerate <id>
-        let (items, nextPage) = try await enumerate(for: folderPath)
+        let (items, nextPage) = try await enumerator.enumerateItems()
 
         #expect(items.isEmpty)
         #expect(nextPage == nil)
     }
 
     @Test func enumerateWorkingSetReturnsNothing() async throws {
-        let (items, nextPage) = try await enumerate(for: .workingSet)
+        let sandbox = TestSandbox()
+        let enumerator = try await sandbox.getEnumerator(for: .workingSet)
+
+        // Enumerate .workingSet
+        let (items, nextPage) = try await enumerator.enumerateItems()
 
         #expect(items.isEmpty)
         #expect(nextPage == nil)
@@ -84,26 +83,24 @@ struct EnumeratorTests {
 
     @Test func enumerateTrashContainerWhenAbsentReturnsNothing() async throws {
         // ls .Trash
-        try TestData.removeItem(path: ".sshadow")
+        let sandbox = TestSandbox()
+        let enumerator = try await sandbox.getEnumerator(for: .trashContainer)
 
         // Enumerate .trashContainer
-        let (items, nextPage) = try await enumerate(for: .trashContainer)
+        let (items, nextPage) = try await enumerator.enumerateItems()
 
         #expect(items.isEmpty)
         #expect(nextPage == nil)
     }
 
-    @Test func enumerateTrashContainerWhenPresentReturnsChildren() async throws
-    {
+    @Test func enumerateTrashContainerReturnsChildren() async throws {
         // ls .Trash
-        try TestData.removeItem(path: ".sshadow")
-        try TestData.createFile(
-            path: ".sshadow/trash/trashed.txt",
-            contents: "trashed"
-        )
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: ".sshadow/trash/trashed.txt")
+        let enumerator = try await sandbox.getEnumerator(for: .trashContainer)
 
         // Enumerate .trashContainer
-        let (items, nextPage) = try await enumerate(for: .trashContainer)
+        let (items, nextPage) = try await enumerator.enumerateItems()
         let names = items.map(\.filename)
 
         #expect(names == ["trashed.txt"])
@@ -112,20 +109,25 @@ struct EnumeratorTests {
 
     @Test func sshadowContainerIsHiddenFromRootEnumeration() async throws {
         // ls
-        try TestData.createFolder(path: ".sshadow")
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: ".sshadow/trash/trashed.txt")
+        let enumerator = try await sandbox.getEnumerator(for: .rootContainer)
 
         // Enumerate .rootContainer
-        let (items, _) = try await enumerate(for: .rootContainer)
+        let (items, _) = try await enumerator.enumerateItems()
 
-        #expect(!items.map(\.id).contains(.sshadowContainer))
-        #expect(!items.map(\.filename).contains(".sshadow"))
+        #expect(items.isEmpty)
     }
 
     @Test func enumerateNonexistentFolderThrows() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFolder(at: "folder")
+        let enumerator = try await sandbox.getEnumerator(for: "folder")
+
+        try sandbox.removeItem(at: "folder")
+
         await #expect(throws: (any Error).self) {
-            try await enumerate(
-                for: "enumerator-missing-\(UUID().uuidString)"
-            )
+            try await enumerator.enumerateItems()
         }
     }
 }

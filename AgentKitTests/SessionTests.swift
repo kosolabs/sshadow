@@ -43,7 +43,7 @@ struct SessionTests {
     struct NameChildParentPathTests {
         @Test func filePropertyReturnsFilenameForSimpleItem() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "file.txt")
+            try sandbox.createFile(at: "file.txt")
             let session = try await sandbox.getSession()
 
             let simpleFile = try await session.child(path: "file.txt")
@@ -53,7 +53,7 @@ struct SessionTests {
 
         @Test func filePropertyReturnsFilenameForNestedItem() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "folder/file.txt")
+            try sandbox.createFile(at: "folder/file.txt")
             let session = try await sandbox.getSession()
 
             let nestedFile = try await session.child(path: "folder/file.txt")
@@ -71,7 +71,7 @@ struct SessionTests {
 
         @Test func parentOfTopLevelItemIsRootContainer() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFolder(path: "folder")
+            try sandbox.createFolder(at: "folder")
             let session = try await sandbox.getSession()
 
             let topLevel = try await session.child(path: "folder")
@@ -89,7 +89,7 @@ struct SessionTests {
 
         @Test func parentOfItemInTrashIsTrashContainer() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: ".sshadow/trash/file.txt")
+            try sandbox.createFile(at: ".sshadow/trash/file.txt")
             let session = try await sandbox.getSession()
 
             let itemInTrashes = try await session.child(
@@ -101,7 +101,7 @@ struct SessionTests {
 
         @Test func parentOfNestedItemIsParentFolder() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "folder/file.txt")
+            try sandbox.createFile(at: "folder/file.txt")
             let session = try await sandbox.getSession()
 
             let nested = try await session.child(path: "folder/file.txt")
@@ -112,7 +112,7 @@ struct SessionTests {
 
         @Test func parentOfDeeplyNestedItemIsImmediateParent() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "folder/subfolder/file.txt")
+            try sandbox.createFile(at: "folder/subfolder/file.txt")
             let session = try await sandbox.getSession()
 
             let deeplyNested = try await session.child(
@@ -133,7 +133,7 @@ struct SessionTests {
 
         @Test func childOfTrashContainerReturnsItemInTrashes() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: ".sshadow/trash/file.txt")
+            try sandbox.createFile(at: ".sshadow/trash/file.txt")
             let session = try await sandbox.getSession()
 
             let actual = try await session.child(
@@ -148,7 +148,7 @@ struct SessionTests {
 
         @Test func childOfItemReturnsNestedItem() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "folder/file.txt")
+            try sandbox.createFile(at: "folder/file.txt")
             let session = try await sandbox.getSession()
 
             let parent = try await session.child(path: "folder")
@@ -167,7 +167,7 @@ struct SessionTests {
 
         @Test func pathForItemReturnsCombinedPath() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "folder/file.txt")
+            try sandbox.createFile(at: "folder/file.txt")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "folder/file.txt")
@@ -177,7 +177,7 @@ struct SessionTests {
 
         @Test func pathForNameInParentReturnsCombinedPath() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "folder/file.txt")
+            try sandbox.createFile(at: "folder/file.txt")
             let session = try await sandbox.getSession()
 
             let parentId = try await session.child(path: "folder")
@@ -187,7 +187,7 @@ struct SessionTests {
 
         @Test func pathForNameInRootReturnsCombinedPath() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "file.txt")
+            try sandbox.createFile(at: "file.txt")
             let session = try await sandbox.getSession()
 
             let path = await session.path(
@@ -202,7 +202,7 @@ struct SessionTests {
         @Test func itemForFileSucceeds() async throws {
             let sandbox = TestSandbox()
             let contents = "Hello, World!"
-            try sandbox.createFile(path: "file.txt", contents: contents)
+            try sandbox.createFile(at: "file.txt", contents: contents)
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "file.txt")
@@ -216,7 +216,7 @@ struct SessionTests {
 
         @Test func itemForFolderSucceeds() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFolder(path: "folder")
+            try sandbox.createFolder(at: "folder")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "folder")
@@ -228,8 +228,8 @@ struct SessionTests {
 
         @Test func itemForSymlinkSucceeds() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "target.txt")
-            try sandbox.createSymlink(path: "symlink.txt", target: "target.txt")
+            try sandbox.createFile(at: "target.txt")
+            try sandbox.createSymlink(at: "symlink.txt", target: "target.txt")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "symlink.txt")
@@ -241,7 +241,7 @@ struct SessionTests {
 
         @Test func itemHasCorrectParent() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "folder/file.txt", contents: "data")
+            try sandbox.createFile(at: "folder/file.txt", contents: "data")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "folder/file.txt")
@@ -255,9 +255,9 @@ struct SessionTests {
     struct ListTests {
         @Test func listReturnsFilesFoldersAndSymlinks() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "file.txt", contents: "hello")
-            try sandbox.createFolder(path: "folder")
-            try sandbox.createSymlink(path: "link.txt", target: "file.txt")
+            try sandbox.createFile(at: "file.txt", contents: "hello")
+            try sandbox.createFolder(at: "folder")
+            try sandbox.createSymlink(at: "link.txt", target: "file.txt")
             let session = try await sandbox.getSession()
 
             let entries = try await session.list(for: .rootContainer)
@@ -289,7 +289,7 @@ struct SessionTests {
 
         @Test func listEntriesHaveCorrectParent() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "folder/child.txt", contents: "data")
+            try sandbox.createFile(at: "folder/child.txt", contents: "data")
             let session = try await sandbox.getSession()
 
             let parentId = try await session.child(path: "folder")
@@ -306,7 +306,7 @@ struct SessionTests {
         @Test func attributesForFileSucceeds() async throws {
             let sandbox = TestSandbox()
             let contents = "Hello, World!"
-            try sandbox.createFile(path: "file.txt", contents: contents)
+            try sandbox.createFile(at: "file.txt", contents: contents)
             let session = try await sandbox.getSession()
 
             let attrs = try await session.attributes(
@@ -319,7 +319,7 @@ struct SessionTests {
 
         @Test func attributesForFolderSucceeds() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFolder(path: "folder")
+            try sandbox.createFolder(at: "folder")
             let session = try await sandbox.getSession()
 
             let attrs = try await session.attributes(
@@ -331,11 +331,11 @@ struct SessionTests {
 
         @Test func attributesForMissingFileThrowsNoSuchItem() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "missing.txt", contents: "Hello!")
+            try sandbox.createFile(at: "missing.txt", contents: "Hello!")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "missing.txt")
-            try sandbox.removeItem(path: "missing.txt")
+            try sandbox.removeItem(at: "missing.txt")
 
             await #expect(throws: AgentError.itemNotFound(itemId.rawValue)) {
                 try await session.attributes(for: itemId)
@@ -346,7 +346,7 @@ struct SessionTests {
     struct SetAttributesTests {
         @Test func setPermissionsSucceeds() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "perms.txt", contents: "test")
+            try sandbox.createFile(at: "perms.txt", contents: "test")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "perms.txt")
@@ -359,7 +359,7 @@ struct SessionTests {
 
         @Test func setModifyTimeSucceeds() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "modify-time.txt", contents: "test")
+            try sandbox.createFile(at: "modify-time.txt", contents: "test")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "modify-time.txt")
@@ -372,7 +372,7 @@ struct SessionTests {
 
         @Test func setAccessTimeSucceeds() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "access-time.txt", contents: "test")
+            try sandbox.createFile(at: "access-time.txt", contents: "test")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "access-time.txt")
@@ -385,11 +385,11 @@ struct SessionTests {
 
         @Test func setAttributesForMissingFileThrows() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "missing.txt", contents: "Hello!")
+            try sandbox.createFile(at: "missing.txt", contents: "Hello!")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "missing.txt")
-            try sandbox.removeItem(path: "missing.txt")
+            try sandbox.removeItem(at: "missing.txt")
 
             await #expect(throws: AgentError.itemNotFound(itemId.rawValue)) {
                 try await session.setAttributes(for: itemId, permissions: 0o644)
@@ -423,7 +423,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let name = "existing-dir"
-            try sandbox.createFolder(path: name)
+            try sandbox.createFolder(at: name)
 
             let item = try await session.createDirectory(
                 parentId: .rootContainer,
@@ -440,7 +440,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let name = "already-exists"
-            try sandbox.createFolder(path: name)
+            try sandbox.createFolder(at: name)
 
             await #expect {
                 try await session.createDirectory(
@@ -477,7 +477,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let name = "collide-dir"
-            try sandbox.createFolder(path: name)
+            try sandbox.createFolder(at: name)
 
             await #expect(throws: AgentError.filenameCollision) {
                 _ = try await session.createDirectory(
@@ -533,7 +533,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let name = "collide"
-            try sandbox.createFile(path: name, contents: "data")
+            try sandbox.createFile(at: name, contents: "data")
 
             await #expect(throws: (any Error).self) {
                 _ = try await session.createSymlink(
@@ -556,7 +556,7 @@ struct SessionTests {
     struct MoveTests {
         @Test func moveRenamesFile() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "original.txt", contents: "hello")
+            try sandbox.createFile(at: "original.txt", contents: "hello")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "original.txt")
@@ -575,8 +575,8 @@ struct SessionTests {
 
         @Test func moveToNewParent() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "file.txt", contents: "hello")
-            try sandbox.createFolder(path: "dest")
+            try sandbox.createFile(at: "file.txt", contents: "hello")
+            try sandbox.createFolder(at: "dest")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "file.txt")
@@ -596,8 +596,8 @@ struct SessionTests {
 
         @Test func moveToNewParentAndRename() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "old.txt", contents: "hello")
-            try sandbox.createFolder(path: "dest")
+            try sandbox.createFile(at: "old.txt", contents: "hello")
+            try sandbox.createFolder(at: "dest")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "old.txt")
@@ -620,18 +620,18 @@ struct SessionTests {
     struct RemoveFileTests {
         @Test func removeFileSucceeds() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "delete.txt")
+            try sandbox.createFile(at: "delete.txt")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "delete.txt")
             try await session.removeFile(for: itemId)
 
-            #expect(!sandbox.exists(path: "delete.txt"))
+            #expect(!sandbox.exists(at: "delete.txt"))
         }
 
         @Test func removeFileMissingThrows() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "missing.txt")
+            try sandbox.createFile(at: "missing.txt")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "missing.txt")
@@ -646,24 +646,24 @@ struct SessionTests {
     struct RemoveDirectoryTests {
         @Test func removeDirectorySucceeds() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFolder(path: "delete")
+            try sandbox.createFolder(at: "delete")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "delete")
             try await session.removeDirectory(for: itemId)
 
-            #expect(!sandbox.exists(path: "delete"))
+            #expect(!sandbox.exists(at: "delete"))
         }
 
         @Test func removeDirectoryWithContentsSucceeds() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "non-empty/child.txt")
+            try sandbox.createFile(at: "non-empty/child.txt")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "non-empty")
             try await session.removeDirectory(for: itemId)
 
-            #expect(!sandbox.exists(path: "non-empty"))
+            #expect(!sandbox.exists(at: "non-empty"))
         }
     }
 
@@ -675,7 +675,7 @@ struct SessionTests {
             try data.write(to: uploadUrl, atomically: false, encoding: .utf8)
 
             let filename = "small-file.txt"
-            let url = sandbox.getUrl(path: filename)
+            let url = sandbox.getUrl(for: filename)
             let session = try await sandbox.getSession()
 
             let progress = Progress()
@@ -707,7 +707,7 @@ struct SessionTests {
             try data.write(to: uploadUrl)
 
             let filename = "large-file.txt"
-            let url = sandbox.getUrl(path: filename)
+            let url = sandbox.getUrl(for: filename)
             let session = try await sandbox.getSession()
 
             let progress = Progress()
@@ -740,7 +740,7 @@ struct SessionTests {
 
             // Pre-create a directory at the upload target so opening it as a
             // file for writing fails.
-            try sandbox.createFolder(path: name)
+            try sandbox.createFolder(at: name)
 
             let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
             try Data("data".utf8).write(to: uploadUrl)
@@ -770,7 +770,7 @@ struct SessionTests {
             try Data().write(to: uploadUrl)
 
             let filename = "empty-file.txt"
-            let url = sandbox.getUrl(path: filename)
+            let url = sandbox.getUrl(for: filename)
             let session = try await sandbox.getSession()
 
             let progress = Progress()
@@ -800,7 +800,7 @@ struct SessionTests {
         @Test func downloadSmallFileSucceeds() async throws {
             let sandbox = TestSandbox()
             let data = "Hello, World!"
-            try sandbox.createFile(path: "small-file.txt", contents: data)
+            try sandbox.createFile(at: "small-file.txt", contents: data)
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "small-file.txt")
@@ -821,7 +821,7 @@ struct SessionTests {
         @Test func downloadLargeFileSucceeds() async throws {
             let sandbox = TestSandbox()
             let data = Data(count: 10_485_760)
-            try sandbox.createFile(path: "large-file.dat", data: data)
+            try sandbox.createFile(at: "large-file.dat", data: data)
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "large-file.dat")
@@ -840,7 +840,7 @@ struct SessionTests {
 
         @Test func downloadEmptyFileSucceeds() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "empty-file.txt", contents: "")
+            try sandbox.createFile(at: "empty-file.txt", contents: "")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "empty-file.txt")
@@ -863,7 +863,7 @@ struct SessionTests {
         @Test func streamSmallFileSucceeds() async throws {
             let sandbox = TestSandbox()
             let data = Data(repeating: 0xAB, count: Int(chunkSize))
-            try sandbox.createFile(path: "small.dat", data: data)
+            try sandbox.createFile(at: "small.dat", data: data)
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "small.dat")
@@ -881,7 +881,7 @@ struct SessionTests {
 
         @Test func streamEmptyFileSucceeds() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "empty.dat", data: Data())
+            try sandbox.createFile(at: "empty.dat", data: Data())
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "empty.dat")
@@ -900,7 +900,7 @@ struct SessionTests {
         @Test func streamExpandsRangeToChunkBoundary() async throws {
             let sandbox = TestSandbox()
             let data = Data(count: Int(chunkSize) * 2)
-            try sandbox.createFile(path: "two-chunk-range.dat", data: data)
+            try sandbox.createFile(at: "two-chunk-range.dat", data: data)
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "two-chunk-range.dat")
@@ -922,7 +922,7 @@ struct SessionTests {
             let data =
                 Data(repeating: 0xAA, count: Int(chunkSize))
                 + Data(repeating: 0xBB, count: Int(chunkSize))
-            try sandbox.createFile(path: "offset.dat", data: data)
+            try sandbox.createFile(at: "offset.dat", data: data)
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "offset.dat")
@@ -950,7 +950,7 @@ struct SessionTests {
         @Test func withFileReadSucceeds() async throws {
             let sandbox = TestSandbox()
             let contents = "Hello, World!"
-            try sandbox.createFile(path: "read-file.txt", contents: contents)
+            try sandbox.createFile(at: "read-file.txt", contents: contents)
             let session = try await sandbox.getSession()
 
             let data = try await session.withFile(
@@ -965,11 +965,11 @@ struct SessionTests {
 
         @Test func withFileMissingFileThrowsNoSuchItem() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "missing.txt", contents: "Hello!")
+            try sandbox.createFile(at: "missing.txt", contents: "Hello!")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "missing.txt")
-            try sandbox.removeItem(path: "missing.txt")
+            try sandbox.removeItem(at: "missing.txt")
 
             await #expect(throws: AgentError.itemNotFound(itemId.rawValue)) {
                 try await session.withFile(for: itemId, accessType: .readOnly) {
@@ -982,8 +982,8 @@ struct SessionTests {
     struct WithDirectoryTests {
         @Test func withDirectoryListsEntries() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(path: "folder/file.txt", contents: "hello")
-            try sandbox.createFolder(path: "folder/subfolder")
+            try sandbox.createFile(at: "folder/file.txt", contents: "hello")
+            try sandbox.createFolder(at: "folder/subfolder")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "folder")
@@ -1003,7 +1003,7 @@ struct SessionTests {
 
         @Test func withDirectoryEmptyDirYieldsNothing() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFolder(path: "empty")
+            try sandbox.createFolder(at: "empty")
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(path: "empty")

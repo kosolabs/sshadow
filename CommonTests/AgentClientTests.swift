@@ -10,7 +10,7 @@ struct AgentClientTests {
     @Test func nameAndChildAndParentSucceed() async throws {
         let sandbox = TestSandbox()
         try sandbox.createFile(
-            path: "folder/file.txt",
+            at: "folder/file.txt",
             contents: "Hello, World!"
         )
         let agent = try await sandbox.getAgentClient()
@@ -27,7 +27,7 @@ struct AgentClientTests {
     @Test func pathForItemSucceeds() async throws {
         let sandbox = TestSandbox()
         try sandbox.createFile(
-            path: "folder/file.txt",
+            at: "folder/file.txt",
             contents: "Hello, World!"
         )
         let agent = try await sandbox.getAgentClient()
@@ -41,7 +41,7 @@ struct AgentClientTests {
     @Test func pathForChildSucceeds() async throws {
         let sandbox = TestSandbox()
         try sandbox.createFile(
-            path: "folder/file.txt",
+            at: "folder/file.txt",
             contents: "Hello, World!"
         )
         let agent = try await sandbox.getAgentClient()
@@ -55,7 +55,7 @@ struct AgentClientTests {
     @Test func itemForFileSucceeds() async throws {
         let sandbox = TestSandbox()
         let contents = "Hello, World!"
-        try sandbox.createFile(path: "file.txt", contents: contents)
+        try sandbox.createFile(at: "file.txt", contents: contents)
         let agent = try await sandbox.getAgentClient()
 
         let itemId = try await agent.child(path: "file.txt")
@@ -68,7 +68,7 @@ struct AgentClientTests {
 
     @Test func itemForFolderSucceeds() async throws {
         let sandbox = TestSandbox()
-        try sandbox.createFolder(path: "folder")
+        try sandbox.createFolder(at: "folder")
         let agent = try await sandbox.getAgentClient()
 
         let itemId = try await agent.child(path: "folder")
@@ -80,8 +80,8 @@ struct AgentClientTests {
 
     @Test func itemForSymlinkSucceeds() async throws {
         let sandbox = TestSandbox()
-        try sandbox.createFile(path: "target.txt", contents: "Hello, World!")
-        try sandbox.createSymlink(path: "symlink.txt", target: "target.txt")
+        try sandbox.createFile(at: "target.txt", contents: "Hello, World!")
+        try sandbox.createSymlink(at: "symlink.txt", target: "target.txt")
         let agent = try await sandbox.getAgentClient()
 
         let itemId = try await agent.child(path: "symlink.txt")
@@ -93,9 +93,9 @@ struct AgentClientTests {
 
     @Test func listSucceeds() async throws {
         let sandbox = TestSandbox()
-        try sandbox.createFile(path: "file.txt")
-        try sandbox.createFolder(path: "folder")
-        try sandbox.createSymlink(path: "symlink.txt", target: "file.txt")
+        try sandbox.createFile(at: "file.txt")
+        try sandbox.createFolder(at: "folder")
+        try sandbox.createSymlink(at: "symlink.txt", target: "file.txt")
         let agent = try await sandbox.getAgentClient()
 
         let entries = try await agent.list(for: .rootContainer)
@@ -112,7 +112,7 @@ struct AgentClientTests {
 
     @Test func listEmptyDirectorySucceeds() async throws {
         let sandbox = TestSandbox()
-        try sandbox.createFolder(path: "empty-dir")
+        try sandbox.createFolder(at: "empty-dir")
         let agent = try await sandbox.getAgentClient()
 
         let dirId = try await agent.child(path: "empty-dir")
@@ -123,7 +123,7 @@ struct AgentClientTests {
 
     @Test func setAttributesSucceeds() async throws {
         let sandbox = TestSandbox()
-        try sandbox.createFile(path: "set-attrs.txt")
+        try sandbox.createFile(at: "set-attrs.txt")
         let agent = try await sandbox.getAgentClient()
 
         let itemId = try await agent.child(path: "set-attrs.txt")
@@ -136,7 +136,7 @@ struct AgentClientTests {
 
     @Test func createSymlinkSucceeds() async throws {
         let sandbox = TestSandbox()
-        try sandbox.createFile(path: "target.txt")
+        try sandbox.createFile(at: "target.txt")
         let agent = try await sandbox.getAgentClient()
 
         let item = try await agent.createSymlink(
@@ -165,8 +165,8 @@ struct AgentClientTests {
 
     @Test func moveSucceeds() async throws {
         let sandbox = TestSandbox()
-        try sandbox.createFile(path: "src/old.txt")
-        try sandbox.createFolder(path: "dest")
+        try sandbox.createFile(at: "src/old.txt")
+        try sandbox.createFolder(at: "dest")
         let agent = try await sandbox.getAgentClient()
 
         let itemId = try await agent.child(path: "src/old.txt")
@@ -186,24 +186,24 @@ struct AgentClientTests {
 
     @Test func removeFileSucceeds() async throws {
         let sandbox = TestSandbox()
-        try sandbox.createFile(path: "file.txt")
+        try sandbox.createFile(at: "file.txt")
         let agent = try await sandbox.getAgentClient()
 
         let itemId = try await agent.child(path: "file.txt")
         try await agent.removeFile(for: itemId)
 
-        #expect(!sandbox.exists(path: "file.txt"))
+        #expect(!sandbox.exists(at: "file.txt"))
     }
 
     @Test func removeDirectorySucceeds() async throws {
         let sandbox = TestSandbox()
-        try sandbox.createFolder(path: "folder")
+        try sandbox.createFolder(at: "folder")
         let agent = try await sandbox.getAgentClient()
 
         let itemId = try await agent.child(path: "folder")
         try await agent.removeDirectory(for: itemId)
 
-        #expect(!sandbox.exists(path: "folder"))
+        #expect(!sandbox.exists(at: "folder"))
     }
 
     @Test func limitsSucceeds() async throws {
@@ -239,7 +239,7 @@ struct AgentClientTests {
     @Test func downloadSucceeds() async throws {
         let sandbox = TestSandbox()
         let contents = "download me"
-        try sandbox.createFile(path: "download.txt", contents: contents)
+        try sandbox.createFile(at: "download.txt", contents: contents)
         let agent = try await sandbox.getAgentClient()
 
         let itemId = try await agent.child(path: "download.txt")
