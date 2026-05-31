@@ -12,9 +12,9 @@ about remote changes (new files, deletes, mtime bumps) without the user having t
 - **`ItemModel` becomes the persisted twin of `Item`.** Same fields (`kind`, `size`, `permissions`, `accessTime`, `modifyTime`, `createTime`) stored as SwiftData columns, not via a separate `ItemSnapshot` table. The 1:1 cardinality makes a side-table pure overhead. `Item` stays the XPC/boundary type — they can't be _one_ type because `Item` is a Codable struct shared with the extension while `@Model` requires a class in `AgentKit` with associated-value enum flattening. A bridge (`ItemModel.init(from: Item)` + `ItemModel.toItem()`) keeps the field shapes in sync. This migration lands first (steps 1 + 2) because every downstream piece reads or writes these fields.
 - **Create RPCs return `Item`, not take `itemId`.** `createDirectory(parentId:, name:, mode:)`, `createSymlink(parentId:, name:, target:)`, `upload(parentId:, name:, file:, mode:, progress:)` each do the SFTP op, stat the result, insert a fully-populated `ItemModel`, and return the `Item`. Atomic on the success path; nothing written on failure. This eliminates the "reservation `ItemModel`" lifecycle (allocated by the extension before the file exists, orphaned on create failure) and lets snapshot fields be non-optional.
 - **Virtual containers (`.rootContainer`, `.workingSet`, `.sshadowContainer`, `.trashContainer`)** keep a sentinel `kind = .folder` with other snapshot fields `nil`. Polling filters them by id.
-- **Pull-style change delivery.** Agent writes change records to `DomainDB` and pokes the extension via `NSFileProviderManager.signalEnumerator(for:)`. The extension calls `enumerateChanges` on its own schedule and reads the journal. No long-lived XPC stream. Open question: how fast does macOS actually spin the extension up after a signal? Measure during step 6.
+- **Pull-style change delivery.** Agent writes change records to `DomainDB` and pokes the extension via `NSFileProviderManager.signalEnumerator(for:)`. The extension calls `enumerateChanges` on its own schedule and reads the journal. No long-lived XPC stream. Open question: how fast does macOS actually spin the extension up after a signal? Measure during step 7.
 - **Anchors are per-domain monotonic `UInt64`**, persisted in `DomainDB`, serialized into `NSFileProviderSyncAnchor` as big-endian `Data`.
-- **Journal is append-only.** Add pruning in step 7; unbounded for v1.
+- **Journal is append-only.** Add pruning in step 8; unbounded for v1.
 - **Working-set membership is materialization-driven.** Any item the extension has handed to macOS via `list`/`fetchContents` is in the working set until evicted. Tracked via a `workingSet: Bool` column on `ItemModel`.
 
 ## Concrete pieces
@@ -78,7 +78,27 @@ populated. Snapshot fields land in step 2.
 **Acceptance:** every non-virtual `ItemModel` carries the same
 `size`/`modifyTime` as the corresponding `Item`.
 
-### Step 3 — Real sync anchors + change journal in `DomainDB`
+### Step 3 — Serve `list` and `item` from DB cache
+
+Prerequisite: step 2 (snapshot fields populated). After this step, SFTP is
+only contacted on a cold cache; correctness relies on the polling loop (step 7)
+to keep stale data from accumulating indefinitely.
+
+- [ ] `Session.list(for:)` — check `DomainDB` for existing children of the
+      parent. On cache hit (children present), return `ItemModel.toItem()` for
+      each child without an SFTP round-trip. On cache miss, fetch from SFTP
+      and populate as today.
+- [ ] `Session.item(for:)` — check `DomainDB` for the item's snapshot. On
+      cache hit (snapshot fields non-nil), return from DB. On cache miss, stat
+      over SFTP and refresh the snapshot.
+- [ ] Tests: assert no SFTP calls occur when the cache is warm; assert SFTP is
+      called and DB is populated when the cache is cold.
+
+**Acceptance:** a directory listed once is served from DB on subsequent `list`
+calls with no SFTP round-trip; `item(for:)` likewise for items already
+snapshotted.
+
+### Step 4 — Real sync anchors + change journal in `DomainDB`
 
 - [ ] Persist a `currentAnchor: UInt64` per domain in `DomainDB`.
 - [ ] Add a `ChangeRecord` `@Model` with `anchor: UInt64`, `itemId: String`,
@@ -97,7 +117,7 @@ populated. Snapshot fields land in step 2.
 **Acceptance:** unit tests pass; logs show the anchor advancing in
 `currentSyncAnchor` after wiring a bump into one write op as a smoke test.
 
-### Step 4 — `enumerateChanges` reads the journal
+### Step 5 — `enumerateChanges` reads the journal
 
 - [ ] Add `ChangesRequest(domainId, since: Data) → ChangesResponse(items: [Item], deletedIds: [String], upTo: Data, moreComing: Bool)` to `Common/AgentProtocol.swift`.
 - [ ] Agent side: query `DomainDB.changes(since:)`, hydrate `.updated` via `ItemModel` (snapshot is authoritative after step 2), pass raw ids for `.deleted`.
@@ -108,7 +128,7 @@ populated. Snapshot fields land in step 2.
 **Acceptance:** local mutations produce `enumerateChanges` events without
 needing a directory re-list.
 
-### Step 5 — Working-set membership tracking
+### Step 6 — Working-set membership tracking
 
 - [ ] Add `workingSet: Bool` to `ItemModel`.
 - [ ] Set the flag when the agent returns an item from `list` or `download`/`stream`. Revisit `fetchContents`-only later.
@@ -118,7 +138,7 @@ needing a directory re-list.
 **Acceptance:** Finder's working-set view shows the items that have been
 materialized.
 
-### Step 6 — Polling loop in `Session`
+### Step 7 — Polling loop in `Session`
 
 - [ ] Opt-in polling task that on each interval:
 
@@ -136,13 +156,13 @@ materialized.
 **Acceptance:** create a file via plain `ssh` on the test server; within
 one poll interval Finder reflects it.
 
-### Step 7 — Tighten and observe
+### Step 8 — Tighten and observe
 
 - [ ] Confirm per-directory `enumerateChanges` can stay a thin no-op (macOS only polls the working-set enumerator in practice).
 - [ ] Journal pruning: drop records below the minimum anchor seen in the last hour.
 - [ ] Document the anchor + polling story in `CLAUDE.md` under "Key Patterns."
 
-## Open questions (revisit during/after step 6)
+## Open questions (revisit during/after step 7)
 
 - How fast does macOS invoke `enumerateChanges` after `signalEnumerator`?
 - Coalesce/debounce signals if many changes land in one poll?
