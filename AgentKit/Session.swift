@@ -87,11 +87,22 @@ class Session {
     }
 
     func item(
-        for itemId: NSFileProviderItemIdentifier
+        for itemId: NSFileProviderItemIdentifier,
+        parentId: NSFileProviderItemIdentifier? = nil,
+        attrs: SFTPAttributes? = nil
     ) async throws -> Item {
-        let parentId = try await parent(of: itemId)
-        let attrs = try await attributes(for: itemId)
-        let name = try await name(of: itemId)
+        let parentId =
+            if let parentId { parentId } else {
+                try await parent(of: itemId)
+            }
+        let attrs =
+            if let attrs { attrs } else {
+                try await attributes(for: itemId)
+            }
+        let name =
+            if let name = attrs.name { name } else {
+                try await name(of: itemId)
+            }
 
         let type: Item.Kind =
             switch attrs.type {
@@ -127,27 +138,11 @@ class Session {
                 for try await attrs in dir {
                     guard let name = attrs.name else { continue }
                     let childId = try await db.child(of: itemId, path: name)
-                    let type: Item.Kind =
-                        switch attrs.type {
-                        case .directory:
-                            .folder
-                        case .symlink:
-                            .symlink(target: nil)
-                        default:
-                            .file
-                        }
-                    let child = Item(
-                        id: childId.rawValue,
-                        parentId: itemId.rawValue,
-                        name: name,
-                        kind: type,
-                        size: attrs.size,
-                        permissions: attrs.permissions,
-                        accessTime: attrs.accessTime,
-                        modifyTime: attrs.modifyTime,
-                        createTime: attrs.createTime
+                    let child = try await item(
+                        for: childId,
+                        parentId: itemId,
+                        attrs: attrs
                     )
-                    try await db.upsert(ItemModel(from: child))
                     entries.append(child)
                 }
                 return entries

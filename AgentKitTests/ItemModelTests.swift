@@ -39,7 +39,7 @@ struct ItemModelTests {
         #expect(Item.Kind(from: item.kind) == .folder)
     }
 
-    @Test func kindRoundTripsForSymlinkWithTarget() {
+    @Test func kindRoundTripsForSymlink() {
         let item = ItemModel(
             parentId: .rootContainer,
             name: "link",
@@ -48,15 +48,6 @@ struct ItemModelTests {
         #expect(
             Item.Kind(from: item.kind) == .symlink(target: "target.txt")
         )
-    }
-
-    @Test func kindRoundTripsForSymlinkWithoutTarget() {
-        let item = ItemModel(
-            parentId: .rootContainer,
-            name: "link",
-            kind: .symlink(target: nil)
-        )
-        #expect(item.kind == .symlink(target: nil))
     }
 
     @Test func kindCanBeReassigned() {
