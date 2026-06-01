@@ -31,10 +31,10 @@ extension Item.Kind {
 
 @Model
 class ItemModel {
-    enum Kind: Equatable {
+    enum Kind: Codable, Equatable {
         case file
         case folder
-        case symlink(target: String?)
+        case symlink(target: String)
 
         init(from kind: Item.Kind) {
             switch kind {
@@ -48,8 +48,7 @@ class ItemModel {
     @Attribute(.unique) var rawId: String
     var rawParentId: String
     var name: String
-    var rawKind: String = "folder"
-    var symlinkTarget: String?
+    var kind: Kind
     var size: UInt64?
     var permissions: UInt32?
     var accessTime: Date?
@@ -101,28 +100,5 @@ class ItemModel {
     var parentId: NSFileProviderItemIdentifier {
         get { NSFileProviderItemIdentifier(rawParentId) }
         set { rawParentId = newValue.rawValue }
-    }
-
-    var kind: Kind {
-        get {
-            switch rawKind {
-            case "file": .file
-            case "symlink": .symlink(target: symlinkTarget)
-            default: .folder
-            }
-        }
-        set {
-            switch newValue {
-            case .file:
-                rawKind = "file"
-                symlinkTarget = nil
-            case .folder:
-                rawKind = "folder"
-                symlinkTarget = nil
-            case .symlink(let target):
-                rawKind = "symlink"
-                symlinkTarget = target
-            }
-        }
     }
 }

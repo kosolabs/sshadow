@@ -107,7 +107,7 @@ struct AgentClientTests {
         #expect(folder.kind == .folder)
 
         let symlink = try #require(entries.first { $0.name == "symlink.txt" })
-        #expect(symlink.kind == .symlink(target: nil))
+        #expect(symlink.kind == .symlink(target: "file.txt"))
     }
 
     @Test func listEmptyDirectorySucceeds() async throws {

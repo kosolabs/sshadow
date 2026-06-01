@@ -137,7 +137,6 @@ struct DomainDBTests {
                 #expect(container.accessTime == nil)
                 #expect(container.modifyTime == nil)
                 #expect(container.createTime == nil)
-                #expect(container.symlinkTarget == nil)
             }
         }
     }

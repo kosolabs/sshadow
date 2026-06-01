@@ -19,7 +19,7 @@ public struct Item: Message, CustomStringConvertible {
     public enum Kind: Message {
         case file
         case folder
-        case symlink(target: String?)
+        case symlink(target: String)
     }
 
     public let rawId: String
