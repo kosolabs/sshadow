@@ -1,30 +1,128 @@
+import Common
 import FileProvider
 import Foundation
 import SwiftData
 
+extension Item {
+    init(from item: ItemModel) {
+        self.init(
+            id: item.rawId,
+            parentId: item.rawParentId,
+            name: item.name,
+            kind: Item.Kind(from: item.kind),
+            size: item.size,
+            permissions: item.permissions,
+            accessTime: item.accessTime,
+            modifyTime: item.modifyTime,
+            createTime: item.createTime
+        )
+    }
+}
+
+extension Item.Kind {
+    init(from kind: ItemModel.Kind) {
+        switch kind {
+        case .file: self = .file
+        case .folder: self = .folder
+        case .symlink(let target): self = .symlink(target: target)
+        }
+    }
+}
+
 @Model
-public class ItemModel {
+class ItemModel {
+    enum Kind: Equatable {
+        case file
+        case folder
+        case symlink(target: String?)
+
+        init(from kind: Item.Kind) {
+            switch kind {
+            case .file: self = .file
+            case .folder: self = .folder
+            case .symlink(let target): self = .symlink(target: target)
+            }
+        }
+    }
+
     @Attribute(.unique) var rawId: String
     var rawParentId: String
-    public var name: String
+    var name: String
+    var rawKind: String = "folder"
+    var symlinkTarget: String?
+    var size: UInt64?
+    var permissions: UInt32?
+    var accessTime: Date?
+    var modifyTime: Date?
+    var createTime: Date?
 
-    public init(
-        id: NSFileProviderItemIdentifier = NSFileProviderItemIdentifier(UUID().uuidString),
+    init(
+        id: NSFileProviderItemIdentifier =
+            NSFileProviderItemIdentifier(UUID().uuidString),
         parentId: NSFileProviderItemIdentifier,
-        name: String
+        name: String,
+        kind: Kind = .folder,
+        size: UInt64? = nil,
+        permissions: UInt32? = nil,
+        accessTime: Date? = nil,
+        modifyTime: Date? = nil,
+        createTime: Date? = nil
     ) {
         self.rawId = id.rawValue
         self.rawParentId = parentId.rawValue
         self.name = name
+        self.kind = kind
+        self.size = size
+        self.permissions = permissions
+        self.accessTime = accessTime
+        self.modifyTime = modifyTime
+        self.createTime = createTime
     }
 
-    public var id: NSFileProviderItemIdentifier {
+    convenience init(from item: Item) {
+        self.init(
+            id: item.id,
+            parentId: item.parentId,
+            name: item.name,
+            kind: Kind(from: item.kind),
+            size: item.size,
+            permissions: item.permissions,
+            accessTime: item.accessTime,
+            modifyTime: item.modifyTime,
+            createTime: item.createTime
+        )
+    }
+
+    var id: NSFileProviderItemIdentifier {
         get { NSFileProviderItemIdentifier(rawId) }
         set { rawId = newValue.rawValue }
     }
 
-    public var parentId: NSFileProviderItemIdentifier {
+    var parentId: NSFileProviderItemIdentifier {
         get { NSFileProviderItemIdentifier(rawParentId) }
         set { rawParentId = newValue.rawValue }
+    }
+
+    var kind: Kind {
+        get {
+            switch rawKind {
+            case "file": .file
+            case "symlink": .symlink(target: symlinkTarget)
+            default: .folder
+            }
+        }
+        set {
+            switch newValue {
+            case .file:
+                rawKind = "file"
+                symlinkTarget = nil
+            case .folder:
+                rawKind = "folder"
+                symlinkTarget = nil
+            case .symlink(let target):
+                rawKind = "symlink"
+                symlinkTarget = target
+            }
+        }
     }
 }
