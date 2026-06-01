@@ -9,7 +9,7 @@ class Session {
     private let config: ConnectionConfig
     private let ssh: SSHClient
     private let sftp: SFTPClient
-    private let db: DomainDB
+    let db: DomainDB
     private let sharedUrl: URL
 
     private let cache: FileCache
@@ -103,7 +103,7 @@ class Session {
                 .file
             }
 
-        return Item(
+        let item = Item(
             id: itemId.rawValue,
             parentId: parentId.rawValue,
             name: name,
@@ -114,6 +114,8 @@ class Session {
             modifyTime: attrs.modifyTime,
             createTime: attrs.createTime
         )
+        try await db.upsert(ItemModel(from: item))
+        return item
     }
 
     func list(
@@ -145,6 +147,7 @@ class Session {
                         modifyTime: attrs.modifyTime,
                         createTime: attrs.createTime
                     )
+                    try await db.upsert(ItemModel(from: child))
                     entries.append(child)
                 }
                 return entries
@@ -256,7 +259,7 @@ class Session {
             path: name,
             ifNotExists: .create
         )
-        return Item(
+        let item = Item(
             id: itemId.rawValue,
             parentId: parentId.rawValue,
             name: name,
@@ -267,6 +270,8 @@ class Session {
             modifyTime: attrs.modifyTime,
             createTime: attrs.createTime
         )
+        try await db.upsert(ItemModel(from: item))
+        return item
     }
 
     func move(

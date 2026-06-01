@@ -250,6 +250,25 @@ struct SessionTests {
 
             #expect(item.parentId == parentId)
         }
+
+        @Test func itemRefreshesSnapshotInDb() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "refresh.txt", contents: "first")
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.child(path: "refresh.txt")
+
+            let updated = "second batch of bytes"
+            try sandbox.createFile(at: "refresh.txt", contents: updated)
+
+            let item = try await session.item(for: itemId)
+            #expect(item.size == UInt64(updated.utf8.count))
+
+            let row = try #require(await session.db.fetch(id: itemId))
+            #expect(row.kind == .file)
+            #expect(row.size == UInt64(updated.utf8.count))
+            #expect(row.modifyTime == item.modifyTime)
+        }
     }
 
     struct ListTests {
@@ -260,31 +279,31 @@ struct SessionTests {
             try sandbox.createSymlink(at: "link.txt", target: "file.txt")
             let session = try await sandbox.getSession()
 
-            let entries = try await session.list(for: .rootContainer)
+            let items = try await session.list(for: .rootContainer)
 
-            let fileEntry = try #require(
-                entries.first { $0.name == "file.txt" }
+            let file = try #require(
+                items.first { $0.name == "file.txt" }
             )
-            #expect(fileEntry.kind == .file)
+            #expect(file.kind == .file)
 
-            let folderEntry = try #require(
-                entries.first { $0.name == "folder" }
+            let folder = try #require(
+                items.first { $0.name == "folder" }
             )
-            #expect(folderEntry.kind == .folder)
+            #expect(folder.kind == .folder)
 
-            let symlinkEntry = try #require(
-                entries.first { $0.name == "link.txt" }
+            let symlink = try #require(
+                items.first { $0.name == "link.txt" }
             )
-            #expect(symlinkEntry.kind == .symlink(target: nil))
+            #expect(symlink.kind == .symlink(target: nil))
         }
 
         @Test func listEmptyDirectoryReturnsEmpty() async throws {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
 
-            let entries = try await session.list(for: .rootContainer)
+            let items = try await session.list(for: .rootContainer)
 
-            #expect(entries.isEmpty)
+            #expect(items.isEmpty)
         }
 
         @Test func listEntriesHaveCorrectParent() async throws {
@@ -293,12 +312,57 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let parentId = try await session.child(path: "folder")
-            let entries = try await session.list(for: parentId)
+            let items = try await session.list(for: parentId)
 
             let child = try #require(
-                entries.first { $0.name == "child.txt" }
+                items.first { $0.name == "child.txt" }
             )
             #expect(child.parentId == parentId)
+        }
+
+        @Test func listPopulatesSnapshotInDb() async throws {
+            let sandbox = TestSandbox()
+            let contents = "snapshot me"
+            try sandbox.createFile(at: "snap.txt", contents: contents)
+            let session = try await sandbox.getSession()
+
+            let items = try await session.list(for: .rootContainer)
+            let listed = try #require(items.first { $0.name == "snap.txt" })
+
+            let row = try #require(
+                await session.db.fetch(
+                    parentId: .rootContainer,
+                    name: "snap.txt"
+                )
+            )
+            #expect(row.kind == .file)
+            #expect(row.size == UInt64(contents.utf8.count))
+            #expect(row.size == listed.size)
+            #expect(row.permissions == listed.permissions)
+            #expect(row.modifyTime == listed.modifyTime)
+        }
+
+        @Test func listPopulatesSnapshotForFolderAndSymlink() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir")
+            try sandbox.createFile(at: "target.txt", contents: "hi")
+            try sandbox.createSymlink(at: "link.txt", target: "target.txt")
+            let session = try await sandbox.getSession()
+
+            _ = try await session.list(for: .rootContainer)
+
+            let folder = try #require(
+                await session.db.fetch(parentId: .rootContainer, name: "dir")
+            )
+            #expect(folder.kind == .folder)
+
+            let symlink = try #require(
+                await session.db.fetch(
+                    parentId: .rootContainer,
+                    name: "link.txt"
+                )
+            )
+            #expect(symlink.kind == .symlink(target: nil))
         }
     }
 
@@ -470,6 +534,22 @@ struct SessionTests {
                 path: name
             )
             #expect(lookedUpId == item.id)
+        }
+
+        @Test func createDirectoryPopulatesSnapshot() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            let item = try await session.createDirectory(
+                parentId: .rootContainer,
+                name: "snap-dir",
+                mode: 0o755
+            )
+
+            let row = try #require(await session.db.fetch(id: item.id))
+            #expect(row.kind == .folder)
+            #expect(row.permissions == item.permissions)
+            #expect(row.modifyTime == item.modifyTime)
         }
 
         @Test func createDirectoryFailureLeavesNoRow() async throws {

@@ -65,54 +65,40 @@ populated. Snapshot fields land in step 2.
 
 ### Step 2 — Snapshot file metadata on `ItemModel`
 
-- [ ] Add fields to `ItemModel`: `kind` (non-optional), `size`, `permissions`, `accessTime`, `modifyTime`, `createTime` (optionality matching `Item`).
-- [ ] In `DomainDB.configure()` (DomainDB.swift:39-68), give the four virtual containers `kind = .folder` and leave the rest `nil`.
-- [ ] Wire snapshot writes:
-  - [ ] `Session.list()` (Session.swift:127) — upsert each child's snapshot after building the `Item`. (Currently this metadata is thrown away.)
-  - [ ] `Session.item(for:)` (Session.swift:90) — refresh the snapshot.
-  - [ ] The step-1 commit path already populates on insert.
-  - [ ] `Session.move()` (Session.swift:238) — no snapshot work; next `list`/poll catches any mtime bump.
-- [ ] SwiftData lightweight migration with defaults for existing rows.
-- [ ] Tests: snapshot populated after `list`; virtual containers carry their sentinel.
+- [x] Add fields to `ItemModel`: `kind` (non-optional), `size`, `permissions`, `accessTime`, `modifyTime`, `createTime` (optionality matching `Item`).
+- [x] In `DomainDB.configure()` (DomainDB.swift:39-68), give the four virtual containers `kind = .folder` and leave the rest `nil`.
+- [x] Wire snapshot writes:
+  - [x] `Session.list()` (Session.swift:127) — upsert each child's snapshot after building the `Item`. (Currently this metadata is thrown away.)
+  - [x] `Session.item(for:)` (Session.swift:90) — refresh the snapshot.
+  - [x] The step-1 commit path already populates on insert.
+  - [x] `Session.move()` (Session.swift:238) — no snapshot work; next `list`/poll catches any mtime bump.
+- [x] SwiftData lightweight migration with defaults for existing rows.
+- [x] Tests: snapshot populated after `list`; virtual containers carry their sentinel.
 
 **Acceptance:** every non-virtual `ItemModel` carries the same
 `size`/`modifyTime` as the corresponding `Item`.
 
 ### Step 3 — Serve `list` and `item` from DB cache
 
-Prerequisite: step 2 (snapshot fields populated). After this step, SFTP is
-only contacted on a cold cache; correctness relies on the polling loop (step 7)
-to keep stale data from accumulating indefinitely.
+Prerequisite: step 2 (snapshot fields populated). After this step, SFTP is only contacted on a cold cache; correctness relies on the polling loop (step 7) to keep stale data from accumulating indefinitely.
 
-- [ ] `Session.list(for:)` — check `DomainDB` for existing children of the
-      parent. On cache hit (children present), return `ItemModel.toItem()` for
-      each child without an SFTP round-trip. On cache miss, fetch from SFTP
-      and populate as today.
-- [ ] `Session.item(for:)` — check `DomainDB` for the item's snapshot. On
-      cache hit (snapshot fields non-nil), return from DB. On cache miss, stat
-      over SFTP and refresh the snapshot.
-- [ ] Tests: assert no SFTP calls occur when the cache is warm; assert SFTP is
-      called and DB is populated when the cache is cold.
+- [ ] `Session.list(for:)` — check `DomainDB` for existing children of the parent. On cache hit (children present), return `ItemModel.toItem()` for each child without an SFTP round-trip. On cache miss, fetch from SFTP and populate as today.
+- [ ] `Session.item(for:)` — check `DomainDB` for the item's snapshot. On cache hit (snapshot fields non-nil), return from DB. On cache miss, stat over SFTP and refresh the snapshot.
+- [ ] Tests: assert no SFTP calls occur when the cache is warm; assert SFTP is called and DB is populated when the cache is cold.
 
-**Acceptance:** a directory listed once is served from DB on subsequent `list`
-calls with no SFTP round-trip; `item(for:)` likewise for items already
-snapshotted.
+**Acceptance:** a directory listed once is served from DB on subsequent `list` calls with no SFTP round-trip; `item(for:)` likewise for items already snapshotted.
 
 ### Step 4 — Real sync anchors + change journal in `DomainDB`
 
 - [ ] Persist a `currentAnchor: UInt64` per domain in `DomainDB`.
-- [ ] Add a `ChangeRecord` `@Model` with `anchor: UInt64`, `itemId: String`,
-      `kind: ChangeKind` (`.updated` / `.deleted`), indexed on `anchor`.
+- [ ] Add a `ChangeRecord` `@Model` with `anchor: UInt64`, `itemId: String`, `kind: ChangeKind` (`.updated` / `.deleted`), indexed on `anchor`.
 - [ ] `DomainDB` helpers:
   - [ ] `bumpAnchor() -> UInt64`
   - [ ] `appendChanges(_ records: [(itemId, kind)])` — batches; bumps the anchor atomically.
   - [ ] `changes(since: UInt64) -> (records: [ChangeRecord], upTo: UInt64)`
 - [ ] `NSFileProviderSyncAnchor` ↔ `UInt64` encoding helpers.
-- [ ] Replace the hardcoded `"an anchor"` in
-      `SSHadow/ExtensionKit/Enumerator.swift` with the real anchor (new
-      `agent.currentSyncAnchor(domainId:)` or piggyback on `list`).
-- [ ] Tests cover bump, append, `changes(since:)` including
-      "no changes" and "anchor from the future."
+- [ ] Replace the hardcoded `"an anchor"` in `SSHadow/ExtensionKit/Enumerator.swift` with the real anchor (new `agent.currentSyncAnchor(domainId:)` or piggyback on `list`).
+- [ ] Tests cover bump, append, `changes(since:)` including "no changes" and "anchor from the future."
 
 **Acceptance:** unit tests pass; logs show the anchor advancing in
 `currentSyncAnchor` after wiring a bump into one write op as a smoke test.

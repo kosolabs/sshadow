@@ -120,6 +120,26 @@ struct DomainDBTests {
             #expect(workingSet.parentId == .rootContainer)
             #expect(workingSet.name == "")
         }
+
+        @Test func virtualContainersCarryFolderSentinel() async throws {
+            let db = try await openInMemoryDb()
+
+            for id in [
+                NSFileProviderItemIdentifier.rootContainer,
+                .sshadowContainer,
+                .trashContainer,
+                .workingSet,
+            ] {
+                let container = try #require(await db.fetch(id: id))
+                #expect(container.kind == .folder)
+                #expect(container.size == nil)
+                #expect(container.permissions == nil)
+                #expect(container.accessTime == nil)
+                #expect(container.modifyTime == nil)
+                #expect(container.createTime == nil)
+                #expect(container.symlinkTarget == nil)
+            }
+        }
     }
 
     struct NameTests {
