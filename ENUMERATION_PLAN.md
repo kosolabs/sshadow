@@ -41,12 +41,7 @@ invariant "every `ItemModel` row is server-confirmed," which step 2 relies on.
 - [x] Tests: failed create leaves zero new rows; successful create leaves exactly one row matching the returned `Item.id`.
 - [x] Migrate existing tests that use `child(...,.create)` to fabricate ids for files they then create — they should use the new RPCs.
 
-**Follow-up (separate PR):** With the create RPCs owning row insertion,
-`AgentClient.child`'s `ifNotExists: .create` mode is no longer needed by
-production callers. The only remaining caller is `Extension.setAttributes`
-(Extension.swift:450), and by the time it runs the row always exists.
-`Session.list` still upserts by name internally via `db.child`, which is
-unaffected. Plan:
+**Follow-up (separate PR):** With the create RPCs owning row insertion, `AgentClient.child`'s `ifNotExists: .create` mode is no longer needed by production callers. The only remaining caller is `Extension.setAttributes` (Extension.swift:450), and by the time it runs the row always exists. `Session.list` still upserts by name internally via `db.child`, which is unaffected. Plan:
 
 - [x] Drop `ifNotExists` from `AgentClient.child` / `ChildRequest` (always `.fail`); rename to something like `lookup` if a clearer name helps.
   - [x] Drop ifNotExists from ChildRequest in AgentProtocol.swift
@@ -59,9 +54,7 @@ unaffected. Plan:
   - [x] Migrate ExtensionTests scaffolding
   - [x] Migrate EnumeratorTests scaffolding
 
-**Acceptance:** failing a create leaves no row in `ItemModel`; a
-successful create leaves exactly one row with `(id, parentId, name)`
-populated. Snapshot fields land in step 2.
+**Acceptance:** failing a create leaves no row in `ItemModel`; a successful create leaves exactly one row with `(id, parentId, name)` populated. Snapshot fields land in step 2.
 
 ### Step 2 — Snapshot file metadata on `ItemModel`
 
@@ -75,16 +68,17 @@ populated. Snapshot fields land in step 2.
 - [x] SwiftData lightweight migration with defaults for existing rows.
 - [x] Tests: snapshot populated after `list`; virtual containers carry their sentinel.
 
-**Acceptance:** every non-virtual `ItemModel` carries the same
-`size`/`modifyTime` as the corresponding `Item`.
+**Acceptance:** every non-virtual `ItemModel` carries the same `size`/`modifyTime` as the corresponding `Item`.
 
 ### Step 3 — Serve `list` and `item` from DB cache
 
 Prerequisite: step 2 (snapshot fields populated). After this step, SFTP is only contacted on a cold cache; correctness relies on the polling loop (step 7) to keep stale data from accumulating indefinitely.
 
-- [ ] `Session.list(for:)` — check `DomainDB` for existing children of the parent. On cache hit (children present), return `ItemModel.toItem()` for each child without an SFTP round-trip. On cache miss, fetch from SFTP and populate as today.
-- [ ] `Session.item(for:)` — check `DomainDB` for the item's snapshot. On cache hit (snapshot fields non-nil), return from DB. On cache miss, stat over SFTP and refresh the snapshot.
-- [ ] Tests: assert no SFTP calls occur when the cache is warm; assert SFTP is called and DB is populated when the cache is cold.
+- [ ] Add `enumeratedAt: Date?` to `ItemModel` so an empty-but-enumerated directory is distinguishable from a never-enumerated one (without this, a folder with zero children would always look like a cache miss). The timestamp also gives step 7's polling loop a natural "last refreshed" signal. Folder-only in intent; stays `nil` on file/symlink rows.
+- [ ] Make symlink targets non-nullable: change `Item.Kind.symlink(target: String?)` → `symlink(target: String)` and the matching `ItemModel.Kind` case. Today, every symlink returned from `list` triggers a follow-up `stat` to resolve the target — by resolving proactively during the SFTP round-trip and caching the result on `ItemModel.symlinkTarget`, we eliminate that second hop. The invariant "if `kind == .symlink`, target is populated" lets callers stop branching on nil.
+- [ ] `Session.list(for:)` — check `DomainDB` for children of the item. On cache hit (item's `enumeratedAt` is non-nil), return `ItemModel.toItem()` for each child without an SFTP round-trip. On cache miss, fetch from SFTP, resolve any symlink children's targets in the same pass, populate children, and stamp `enumeratedAt` on the item in the same transaction.
+- [ ] `Session.item(for:)` — check `DomainDB` for the item's snapshot. On cache hit (row exists), return from DB. On cache miss, stat over SFTP (resolving the symlink target if applicable) and refresh the snapshot.
+- [ ] Tests: assert no SFTP calls occur when the cache is warm (including the empty-directory case and symlink reads); assert SFTP is called and DB is populated — with the symlink target resolved — when the cache is cold.
 
 **Acceptance:** a directory listed once is served from DB on subsequent `list` calls with no SFTP round-trip; `item(for:)` likewise for items already snapshotted.
 
@@ -100,8 +94,7 @@ Prerequisite: step 2 (snapshot fields populated). After this step, SFTP is only 
 - [ ] Replace the hardcoded `"an anchor"` in `SSHadow/ExtensionKit/Enumerator.swift` with the real anchor (new `agent.currentSyncAnchor(domainId:)` or piggyback on `list`).
 - [ ] Tests cover bump, append, `changes(since:)` including "no changes" and "anchor from the future."
 
-**Acceptance:** unit tests pass; logs show the anchor advancing in
-`currentSyncAnchor` after wiring a bump into one write op as a smoke test.
+**Acceptance:** unit tests pass; logs show the anchor advancing in `currentSyncAnchor` after wiring a bump into one write op as a smoke test.
 
 ### Step 5 — `enumerateChanges` reads the journal
 
@@ -111,8 +104,7 @@ Prerequisite: step 2 (snapshot fields populated). After this step, SFTP is only 
 - [ ] Every mutating agent op appends to the journal so we can validate end-to-end before any polling exists.
 - [ ] Integration check in the running app: write a file via Finder, confirm the change reaches the extension and re-renders.
 
-**Acceptance:** local mutations produce `enumerateChanges` events without
-needing a directory re-list.
+**Acceptance:** local mutations produce `enumerateChanges` events without needing a directory re-list.
 
 ### Step 6 — Working-set membership tracking
 
@@ -121,8 +113,7 @@ needing a directory re-list.
 - [ ] Add `agent.listWorkingSet(domainId:) -> [Item]` and implement `enumerateItems(.workingSet)` in `Enumerator.swift`.
 - [ ] Tests for both the flag and the new enumeration path.
 
-**Acceptance:** Finder's working-set view shows the items that have been
-materialized.
+**Acceptance:** Finder's working-set view shows the items that have been materialized.
 
 ### Step 7 — Polling loop in `Session`
 
@@ -139,8 +130,7 @@ materialized.
 - [ ] Integration test against the local sshd: create a file out-of-band, run a poll cycle, assert the journal grew.
 - [ ] **Instrument latency** between `signalEnumerator` and the resulting `enumerateChanges` — log both with timestamps to answer the spin-up question.
 
-**Acceptance:** create a file via plain `ssh` on the test server; within
-one poll interval Finder reflects it.
+**Acceptance:** create a file via plain `ssh` on the test server; within one poll interval Finder reflects it.
 
 ### Step 8 — Tighten and observe
 
