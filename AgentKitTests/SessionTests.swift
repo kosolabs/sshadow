@@ -250,6 +250,33 @@ struct SessionTests {
 
             #expect(item.parentId == parentId)
         }
+
+        @Test func itemReturnsCachedSnapshotWhenWarm() async throws {
+            let sandbox = TestSandbox()
+            let original = "1"
+            try sandbox.createFile(at: "refresh.txt", contents: original)
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.child(path: "refresh.txt")
+            let updated = "22"
+            try sandbox.createFile(at: "refresh.txt", contents: updated)
+            
+            let item = try await session.item(for: itemId)
+            #expect(item.size == UInt64(original.utf8.count))
+        }
+        
+        @Test func itemServedFromCacheAfterFileDeleted() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "ghost.txt", contents: "boo")
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.child(path: "ghost.txt")
+            try sandbox.removeItem(at: "ghost.txt")
+
+            let item = try await session.item(for: itemId)
+            #expect(item.name == "ghost.txt")
+            #expect(item.kind == .file)
+        }
     }
 
     struct ListTests {
@@ -345,7 +372,7 @@ struct SessionTests {
             )
             #expect(symlink.kind == .symlink(target: "target.txt"))
         }
-        
+
         @Test func listTrashWithOneFileMarksTrashEnumerated() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: ".sshadow/trash/file.txt")
@@ -356,7 +383,7 @@ struct SessionTests {
             #expect(items.map(\.name) == ["file.txt"])
             #expect(await session.db.isEnumerated(.trashContainer))
         }
-        
+
         @Test func listEmptyTrashMarksTrashEnumerated() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFolder(at: ".sshadow/trash")
@@ -376,6 +403,53 @@ struct SessionTests {
 
             #expect(items.isEmpty)
             #expect(await session.db.isEnumerated(.trashContainer))
+        }
+        
+        @Test func listStampsEnumeratedAt() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "leaf.txt")
+            let session = try await sandbox.getSession()
+
+            let row = try #require(await session.db.fetch(id: .rootContainer))
+            #expect(row.enumeratedAt != nil)
+        }
+
+        @Test func listServesEmptyDirectoryFromCache() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "empty")
+            let session = try await sandbox.getSession()
+
+            let folderId = try await session.child(path: "empty")
+            try sandbox.removeItem(at: "empty")
+
+            let items = try await session.list(for: folderId)
+            #expect(items.isEmpty)
+        }
+
+        @Test func listServesPopulatedDirectoryFromCache() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "folder/file.txt", contents: "hello")
+            let session = try await sandbox.getSession()
+
+            let folderId = try await session.child(path: "folder")
+            try sandbox.removeItem(at: "folder/file.txt")
+
+            let items = try await session.list(for: folderId)
+            let file = try #require(items.first { $0.name == "file.txt" })
+            #expect(file.kind == .file)
+        }
+
+        @Test func listServesSymlinkFromCacheWithTarget() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "target.txt", contents: "hi")
+            try sandbox.createSymlink(at: "link.txt", target: "target.txt")
+            let session = try await sandbox.getSession()
+
+            try sandbox.removeItem(at: "link.txt")
+
+            let items = try await session.list(for: .rootContainer)
+            let symlink = try #require(items.first { $0.name == "link.txt" })
+            #expect(symlink.kind == .symlink(target: "target.txt"))
         }
     }
 
