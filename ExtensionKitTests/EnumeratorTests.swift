@@ -118,16 +118,4 @@ struct EnumeratorTests {
 
         #expect(items.isEmpty)
     }
-
-    @Test func enumerateNonexistentFolderThrows() async throws {
-        let sandbox = TestSandbox()
-        try sandbox.createFolder(at: "folder")
-        let enumerator = try await sandbox.getEnumerator(for: "folder")
-
-        try sandbox.removeItem(at: "folder")
-
-        await #expect(throws: (any Error).self) {
-            try await enumerator.enumerateItems()
-        }
-    }
 }

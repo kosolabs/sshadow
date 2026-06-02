@@ -147,6 +147,18 @@ actor DomainDB {
         return current
     }
 
+    func children(of parentId: NSFileProviderItemIdentifier) -> [ItemModel] {
+        let rawParentId = parentId.rawValue
+        let descriptor = FetchDescriptor<ItemModel>(
+            predicate: #Predicate { row in
+                row.rawParentId == rawParentId
+                    && row.rawId != rawParentId
+                    && row.modifyTime != nil
+            }
+        )
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
+
     func parent(
         of id: NSFileProviderItemIdentifier
     ) throws -> NSFileProviderItemIdentifier {
@@ -193,9 +205,69 @@ actor DomainDB {
         try modelContext.save()
     }
 
+    func setAttributes(
+        for id: NSFileProviderItemIdentifier,
+        permissions: mode_t? = nil,
+        accessTime: Date? = nil,
+        modifyTime: Date? = nil
+    ) throws {
+        guard let item = fetch(id: id) else {
+            throw NSFileProviderError(.noSuchItem)
+        }
+        if let permissions = permissions {
+            item.permissions = UInt32(permissions)
+        }
+        if let accessTime = accessTime {
+            item.accessTime = accessTime
+        }
+        if let modifyTime = modifyTime {
+            item.modifyTime = modifyTime
+        }
+        try modelContext.save()
+    }
+
+    func isEnumerated(_ id: NSFileProviderItemIdentifier) -> Bool {
+        fetch(id: id)?.enumeratedAt != nil
+    }
+
+    func markEnumerated(
+        _ id: NSFileProviderItemIdentifier,
+        at date: Date = Date()
+    ) throws {
+        guard let item = fetch(id: id) else {
+            throw AgentError.itemNotFound(id.rawValue)
+        }
+        item.enumeratedAt = date
+        try modelContext.save()
+    }
+
     func upsert(_ item: ItemModel) throws {
         modelContext.insert(item)
         try modelContext.save()
     }
 
+    @discardableResult
+    func upsert(
+        parentId: NSFileProviderItemIdentifier,
+        name: String,
+        kind: ItemModel.Kind,
+        size: UInt64?,
+        permissions: UInt32?,
+        accessTime: Date?,
+        modifyTime: Date?,
+        createTime: Date?
+    ) throws -> ItemModel {
+        let item =
+            fetch(parentId: parentId, name: name)
+            ?? ItemModel(parentId: parentId, name: name)
+        item.kind = kind
+        item.size = size
+        item.permissions = permissions
+        item.accessTime = accessTime
+        item.modifyTime = modifyTime
+        item.createTime = createTime
+        modelContext.insert(item)
+        try modelContext.save()
+        return item
+    }
 }

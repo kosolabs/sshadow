@@ -185,6 +185,22 @@ class TestSandbox {
         }
         return date
     }
+    
+    func accessDate(of path: String) throws -> Date {
+        let url = getUrl(for: path)
+        let values = try url.resourceValues(forKeys: [.contentAccessDateKey])
+        guard let date = values.contentAccessDate else {
+            throw NSError(
+                domain: "FileManagerExtensions",
+                code: 1,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Failed to get access date for \(path)"
+                ]
+            )
+        }
+        return date
+    }
 
     func target(of path: String) throws -> String {
         try FileManager.default

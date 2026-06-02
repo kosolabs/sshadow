@@ -54,6 +54,7 @@ class ItemModel {
     var accessTime: Date?
     var modifyTime: Date?
     var createTime: Date?
+    var enumeratedAt: Date?
 
     init(
         id: NSFileProviderItemIdentifier =
@@ -65,7 +66,8 @@ class ItemModel {
         permissions: UInt32? = nil,
         accessTime: Date? = nil,
         modifyTime: Date? = nil,
-        createTime: Date? = nil
+        createTime: Date? = nil,
+        enumeratedAt: Date? = nil
     ) {
         self.rawId = id.rawValue
         self.rawParentId = parentId.rawValue
@@ -76,6 +78,7 @@ class ItemModel {
         self.accessTime = accessTime
         self.modifyTime = modifyTime
         self.createTime = createTime
+        self.enumeratedAt = enumeratedAt
     }
 
     convenience init(from item: Item) {

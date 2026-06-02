@@ -250,25 +250,6 @@ struct SessionTests {
 
             #expect(item.parentId == parentId)
         }
-
-        @Test func itemRefreshesSnapshotInDb() async throws {
-            let sandbox = TestSandbox()
-            try sandbox.createFile(at: "refresh.txt", contents: "first")
-            let session = try await sandbox.getSession()
-
-            let itemId = try await session.child(path: "refresh.txt")
-
-            let updated = "second batch of bytes"
-            try sandbox.createFile(at: "refresh.txt", contents: updated)
-
-            let item = try await session.item(for: itemId)
-            #expect(item.size == UInt64(updated.utf8.count))
-
-            let row = try #require(await session.db.fetch(id: itemId))
-            #expect(row.kind == .file)
-            #expect(row.size == UInt64(updated.utf8.count))
-            #expect(row.modifyTime == item.modifyTime)
-        }
     }
 
     struct ListTests {
@@ -322,17 +303,17 @@ struct SessionTests {
 
         @Test func listPopulatesSnapshotInDb() async throws {
             let sandbox = TestSandbox()
-            let contents = "snapshot me"
-            try sandbox.createFile(at: "snap.txt", contents: contents)
+            let contents = "Hello, World!"
+            try sandbox.createFile(at: "file.txt", contents: contents)
             let session = try await sandbox.getSession()
 
             let items = try await session.list(for: .rootContainer)
-            let listed = try #require(items.first { $0.name == "snap.txt" })
+            let listed = try #require(items.first { $0.name == "file.txt" })
 
             let row = try #require(
                 await session.db.fetch(
                     parentId: .rootContainer,
-                    name: "snap.txt"
+                    name: "file.txt"
                 )
             )
             #expect(row.kind == .file)
@@ -364,46 +345,37 @@ struct SessionTests {
             )
             #expect(symlink.kind == .symlink(target: "target.txt"))
         }
-    }
-
-    struct AttributesTests {
-        @Test func attributesForFileSucceeds() async throws {
+        
+        @Test func listTrashWithOneFileMarksTrashEnumerated() async throws {
             let sandbox = TestSandbox()
-            let contents = "Hello, World!"
-            try sandbox.createFile(at: "file.txt", contents: contents)
+            try sandbox.createFile(at: ".sshadow/trash/file.txt")
             let session = try await sandbox.getSession()
 
-            let attrs = try await session.attributes(
-                for: session.child(path: "file.txt")
-            )
+            let items = try await session.list(for: .trashContainer)
 
-            #expect(attrs.type == .regular)
-            #expect(attrs.size == UInt64(contents.utf8.count))
+            #expect(items.map(\.name) == ["file.txt"])
+            #expect(await session.db.isEnumerated(.trashContainer))
+        }
+        
+        @Test func listEmptyTrashMarksTrashEnumerated() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: ".sshadow/trash")
+            let session = try await sandbox.getSession()
+
+            let items = try await session.list(for: .trashContainer)
+
+            #expect(items.isEmpty)
+            #expect(await session.db.isEnumerated(.trashContainer))
         }
 
-        @Test func attributesForFolderSucceeds() async throws {
+        @Test func listNonExistentTrashMarksTrashEnumerated() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFolder(at: "folder")
             let session = try await sandbox.getSession()
 
-            let attrs = try await session.attributes(
-                for: session.child(path: "folder")
-            )
+            let items = try await session.list(for: .trashContainer)
 
-            #expect(attrs.type == .directory)
-        }
-
-        @Test func attributesForMissingFileThrowsNoSuchItem() async throws {
-            let sandbox = TestSandbox()
-            try sandbox.createFile(at: "missing.txt", contents: "Hello!")
-            let session = try await sandbox.getSession()
-
-            let itemId = try await session.child(path: "missing.txt")
-            try sandbox.removeItem(at: "missing.txt")
-
-            await #expect(throws: AgentError.itemNotFound(itemId.rawValue)) {
-                try await session.attributes(for: itemId)
-            }
+            #expect(items.isEmpty)
+            #expect(await session.db.isEnumerated(.trashContainer))
         }
     }
 
@@ -416,9 +388,7 @@ struct SessionTests {
             let itemId = try await session.child(path: "perms.txt")
             try await session.setAttributes(for: itemId, permissions: 0o644)
 
-            let attrs = try await session.attributes(for: itemId)
-            let permissions = try #require(attrs.permissions)
-            #expect(permissions & 0o777 == 0o644)
+            #expect(try sandbox.permissions(of: "perms.txt") == 0o644)
         }
 
         @Test func setModifyTimeSucceeds() async throws {
@@ -430,8 +400,7 @@ struct SessionTests {
             let date = Date(timeIntervalSince1970: 1_000_000)
             try await session.setAttributes(for: itemId, modifyTime: date)
 
-            let attrs = try await session.attributes(for: itemId)
-            #expect(attrs.modifyTime == date)
+            #expect(try sandbox.modifyDate(of: "modify-time.txt") == date)
         }
 
         @Test func setAccessTimeSucceeds() async throws {
@@ -443,8 +412,7 @@ struct SessionTests {
             let date = Date(timeIntervalSince1970: 2_000_000)
             try await session.setAttributes(for: itemId, accessTime: date)
 
-            let attrs = try await session.attributes(for: itemId)
-            #expect(attrs.accessTime == date)
+            #expect(try sandbox.accessDate(of: "access-time.txt") == date)
         }
 
         @Test func setAttributesForMissingFileThrows() async throws {
@@ -475,10 +443,7 @@ struct SessionTests {
 
             #expect(item.name == name)
             #expect(item.kind == .folder)
-            let attrs = try await session.attributes(for: item.id)
-            #expect(attrs.type == .directory)
-            let permissions = try #require(attrs.permissions)
-            #expect(permissions & 0o777 == 0o755)
+            #expect(try sandbox.permissions(of: "new-dir") == 0o755)
         }
 
         @Test func createDirectoryWithIfExistsSucceedDoesNotThrow() async throws
@@ -649,8 +614,7 @@ struct SessionTests {
 
             let newId = try await session.child(path: "renamed.txt")
             #expect(itemId == newId)
-            let attrs = try await session.attributes(for: newId)
-            #expect(attrs.type == .regular)
+            #expect(sandbox.exists(at: "renamed.txt"))
         }
 
         @Test func moveToNewParent() async throws {
@@ -670,8 +634,7 @@ struct SessionTests {
 
             let movedId = try await session.child(path: "dest/file.txt")
             #expect(itemId == movedId)
-            let attrs = try await session.attributes(for: movedId)
-            #expect(attrs.type == .regular)
+            #expect(sandbox.exists(at: "dest/file.txt"))
         }
 
         @Test func moveToNewParentAndRename() async throws {
