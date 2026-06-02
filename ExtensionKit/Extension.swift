@@ -8,7 +8,12 @@ private let logger = Logger(category: "Extension")
 private func disconnect(domain: NSFileProviderDomain) {
     Task {
         do {
-            try await domain.disconnect()
+            try await domain.manager.disconnect(
+                reason:
+                    "SSHadow needs to be running in order to sync this volume.",
+                options: .temporary
+            )
+            logger.info("Disconnected \(domain)")
         } catch {
             logger.error("Failed to disconnect \(domain): \(error)")
         }

@@ -18,7 +18,8 @@ private func reconnectAllDomains() {
         }
         for domain in domains {
             do {
-                try await domain.reconnect()
+                try await domain.manager.reconnect()
+                logger.info("Reconnected \(domain)")
             } catch {
                 logger.error("Failed to reconnect \(domain): \(error)")
             }
