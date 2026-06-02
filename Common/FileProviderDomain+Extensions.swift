@@ -3,6 +3,15 @@ import FileProvider
 private let logger = Logger(category: "Domain")
 
 extension NSFileProviderDomain {
+    public var manager: NSFileProviderManager {
+        get throws {
+            if let manager = NSFileProviderManager(for: self) {
+                return manager
+            }
+            throw NSFileProviderError(.providerNotFound)
+        }
+    }
+
     public func add() async throws {
         try await NSFileProviderManager.add(self)
         logger.info("Added \(self)")
@@ -11,27 +20,6 @@ extension NSFileProviderDomain {
     public func remove() async throws {
         try await NSFileProviderManager.remove(self)
         logger.info("Removed \(self)")
-    }
-
-    public func disconnect() async throws {
-        guard let manager = NSFileProviderManager(for: self) else {
-            logger.error("No manager for \(self)")
-            return
-        }
-        try await manager.disconnect(
-            reason: "SSHadow needs to be running in order to sync this volume.",
-            options: .temporary
-        )
-        logger.info("Disconnected \(self)")
-    }
-
-    public func reconnect() async throws {
-        guard let manager = NSFileProviderManager(for: self) else {
-            logger.error("No manager for \(self)")
-            return
-        }
-        try await manager.reconnect()
-        logger.info("Reconnected \(self)")
     }
 
     public override var description: String {
