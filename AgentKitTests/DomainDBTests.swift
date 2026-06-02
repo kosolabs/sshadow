@@ -236,6 +236,90 @@ struct DomainDBTests {
         }
     }
 
+    struct ChildrenTests {
+        private func upsertChild(
+            in db: DomainDB,
+            parent: NSFileProviderItemIdentifier,
+            name: String
+        ) async throws -> ItemModel {
+            let child = ItemModel(
+                parentId: parent,
+                name: name,
+                modifyTime: Date()
+            )
+            try await db.upsert(child)
+            return child
+        }
+
+        @Test func childrenReturnsDirectChildren() async throws {
+            let db = try await openInMemoryDb()
+
+            let folder = try await upsertChild(
+                in: db,
+                parent: .rootContainer,
+                name: "folder"
+            )
+            _ = try await upsertChild(
+                in: db,
+                parent: folder.id,
+                name: "a.txt"
+            )
+            _ = try await upsertChild(
+                in: db,
+                parent: folder.id,
+                name: "b.txt"
+            )
+            _ = try await upsertChild(
+                in: db,
+                parent: .rootContainer,
+                name: "other.txt"
+            )
+
+            let names = await db.children(of: folder.id).map(\.name).sorted()
+            #expect(names == ["a.txt", "b.txt"])
+        }
+        
+        @Test func childrenOfNonExistentTrashIsEmpty() async throws {
+            let db = try await openInMemoryDb()
+
+            let children = await db.children(of: .trashContainer)
+
+            #expect(children.isEmpty)
+        }
+
+        @Test func childrenExcludesUnobservedVirtualContainers() async throws {
+            let db = try await openInMemoryDb()
+
+            _ = try await upsertChild(
+                in: db,
+                parent: .rootContainer,
+                name: "a.txt"
+            )
+
+            let children = await db.children(of: .rootContainer)
+            #expect(!children.contains { $0.id == .sshadowContainer })
+
+            #expect(!children.contains { $0.id == .workingSet })
+        }
+
+        @Test func childrenIncludesVirtualContainerOnceObserved() async throws {
+            let db = try await openInMemoryDb()
+
+            try await db.upsert(
+                ItemModel(
+                    id: .sshadowContainer,
+                    parentId: .rootContainer,
+                    name: ".sshadow",
+                    modifyTime: Date()
+                )
+            )
+
+            let children = await db.children(of: .rootContainer)
+
+            #expect(children.contains { $0.id == .sshadowContainer })
+        }
+    }
+
     struct PathTests {
         @Test func pathBuildsFromNestedItems() async throws {
             let db = try await openInMemoryDb()
@@ -358,6 +442,28 @@ struct DomainDBTests {
 
             let path = await db.path(for: fileId)
             #expect(path == "dst/file.txt")
+        }
+    }
+    
+    struct MarkEnumeratedTests {
+        @Test func markEnumeratedSetsTimestamp() async throws {
+            let db = try await openInMemoryDb()
+
+            let folderId = try await db.child(path: "folder")
+            try await db.markEnumerated(folderId)
+
+            let row = try #require(await db.fetch(id: folderId))
+            #expect(row.enumeratedAt != nil)
+        }
+
+        @Test func markEnumeratedThrowsForUnknownId() async throws {
+            let db = try await openInMemoryDb()
+
+            let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
+
+            await #expect(throws: AgentError.itemNotFound(unknownId.rawValue)) {
+                try await db.markEnumerated(unknownId)
+            }
         }
     }
 

@@ -87,78 +87,69 @@ class Session {
     }
 
     func item(
-        for itemId: NSFileProviderItemIdentifier,
-        parentId: NSFileProviderItemIdentifier? = nil,
-        attrs: SFTPAttributes? = nil
+        for itemId: NSFileProviderItemIdentifier
     ) async throws -> Item {
-        let parentId =
-            if let parentId { parentId } else {
-                try await parent(of: itemId)
-            }
-        let attrs =
-            if let attrs { attrs } else {
-                try await attributes(for: itemId)
-            }
-        let name =
-            if let name = attrs.name { name } else {
-                try await name(of: itemId)
-            }
-
-        let type: Item.Kind =
-            switch attrs.type {
-            case .directory:
-                .folder
-            case .symlink:
-                .symlink(target: try await symlinkTarget(for: itemId))
-            default:
-                .file
-            }
-
-        let item = Item(
-            id: itemId.rawValue,
-            parentId: parentId.rawValue,
-            name: name,
-            kind: type,
-            size: attrs.size,
-            permissions: attrs.permissions,
-            accessTime: attrs.accessTime,
-            modifyTime: attrs.modifyTime,
-            createTime: attrs.createTime
-        )
-        try await db.upsert(ItemModel(from: item))
-        return item
+        guard let model = await db.fetch(id: itemId) else {
+            throw AgentError.itemNotFound(itemId.rawValue)
+        }
+        return Item(from: model)
     }
 
     func list(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> [Item] {
-        do {
-            return try await withDirectory(for: itemId) { dir in
-                var entries: [Item] = []
-                for try await attrs in dir {
-                    guard let name = attrs.name else { continue }
-                    let childId = try await db.child(of: itemId, path: name)
-                    let child = try await item(
-                        for: childId,
-                        parentId: itemId,
-                        attrs: attrs
-                    )
-                    entries.append(child)
-                }
-                return entries
-            }
-        } catch AgentError.itemNotFound where itemId == .trashContainer {
-            return []
+        if await !db.isEnumerated(itemId) {
+            try await enumerate(itemId: itemId)
         }
+        let models = await db.children(of: itemId)
+        return models.map { model in Item(from: model) }
     }
 
-    func attributes(
-        for itemId: NSFileProviderItemIdentifier
-    ) async throws -> SFTPAttributes {
-        try await mapError(with: itemId) {
-            try await sftp.attributes(
-                at: path(for: itemId),
-                followSymlinks: false
+    func enumerate(itemId: NSFileProviderItemIdentifier) async throws {
+        do {
+            try await withDirectory(for: itemId) { dir in
+                for try await attrs in dir {
+                    guard let name = attrs.name else { continue }
+
+                    let kind: ItemModel.Kind =
+                        switch attrs.type {
+                        case .directory:
+                            .folder
+                        case .symlink:
+                            .symlink(
+                                target: try await symlinkTarget(
+                                    for: name,
+                                    parentId: itemId
+                                )
+                            )
+                        default:
+                            .file
+                        }
+
+                    try await db.upsert(
+                        parentId: itemId,
+                        name: name,
+                        kind: kind,
+                        size: attrs.size,
+                        permissions: attrs.permissions,
+                        accessTime: attrs.accessTime,
+                        modifyTime: attrs.modifyTime,
+                        createTime: attrs.createTime
+                    )
+                }
+            }
+        } catch AgentError.itemNotFound where itemId == .trashContainer {
+            try await db.markEnumerated(itemId)
+        }
+        try await db.markEnumerated(itemId)
+    }
+
+    func symlinkTarget(for name: String, parentId: NSFileProviderItemIdentifier)
+        async throws -> String
+    {
+        try await mapError(with: parentId) {
+            try await sftp.symlinkTarget(
+                at: path(for: name, parentId: parentId)
             )
         }
     }
@@ -181,6 +172,12 @@ class Session {
         try await mapError(with: itemId) {
             try await sftp.setAttributes(
                 at: path(for: itemId),
+                permissions: permissions,
+                accessTime: accessTime,
+                modifyTime: modifyTime
+            )
+            try await db.setAttributes(
+                for: itemId,
                 permissions: permissions,
                 accessTime: accessTime,
                 modifyTime: modifyTime
