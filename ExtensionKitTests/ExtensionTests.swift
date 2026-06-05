@@ -31,7 +31,7 @@ struct ExtensionTests {
         // Fetch FPItemID(<id>)
         let readProgress = Progress()
         let (url, item) = try await ext.fetchContents(
-            for: agent.child(path: "small-file.txt"),
+            for: agent.child(name: "small-file.txt"),
             version: nil,
             request: NSFileProviderRequest(),
             progress: readProgress
@@ -55,7 +55,7 @@ struct ExtensionTests {
         // Fetch FPItemID(<id>)
         let readProgress = Progress()
         let (url, item) = try await ext.fetchContents(
-            for: agent.child(path: "large-file.dat"),
+            for: agent.child(name: "large-file.dat"),
             version: nil,
             request: NSFileProviderRequest(),
             progress: readProgress
@@ -80,7 +80,7 @@ struct ExtensionTests {
         let requestedRange = NSRange(location: 10 * 1024, length: 10 * 1024)
         let readProgress = Progress()
         let (url, item, returnedRange) = try await ext.fetchPartialContents(
-            for: agent.child(path: "partial-file.dat"),
+            for: agent.child(name: "partial-file.dat"),
             version: NSFileProviderItemVersion(),
             request: NSFileProviderRequest(),
             minimalRange: requestedRange,
@@ -114,7 +114,7 @@ struct ExtensionTests {
         let progress = Progress()
         let fetchTask = Task {
             try await ext.fetchContents(
-                for: agent.child(path: "cancellable.dat"),
+                for: agent.child(name: "cancellable.dat"),
                 version: nil,
                 request: NSFileProviderRequest(),
                 progress: progress
@@ -136,7 +136,7 @@ struct ExtensionTests {
         try sandbox.createFolder(at: "parent", modifyDate: oldDate)
         let (ext, agent) = try await sandbox.getExtensionAndAgent()
 
-        let parentId = try await agent.child(path: "parent")
+        let parentId = try await agent.child(name: "parent")
 
         // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID(<pid>), filename: folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), createTime: 2026-03-04 07:05:26 +0000, modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1478, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let createFolderProgress = Progress()
@@ -213,7 +213,7 @@ struct ExtensionTests {
         try sandbox.createFolder(at: "parent", modifyDate: oldDate)
         let (ext, agent) = try await sandbox.getExtensionAndAgent()
 
-        let parentId = try await agent.child(path: "parent")
+        let parentId = try await agent.child(name: "parent")
         let contents = "Hello, World!"
         let fileToUploadUrl = try sandbox.createFile(
             at: UUID().uuidString,
@@ -295,7 +295,7 @@ struct ExtensionTests {
         try sandbox.createFolder(at: "parent", modifyDate: oldDate)
         let (ext, agent) = try await sandbox.getExtensionAndAgent()
 
-        let parentId = try await agent.child(path: "parent")
+        let parentId = try await agent.child(name: "parent")
         let data = Data(count: 10_485_760)
         let fileToUploadUrl = try sandbox.createFile(
             at: UUID().uuidString,
@@ -376,7 +376,7 @@ struct ExtensionTests {
         let contents = "Hello, World!"
         try sandbox.createFile(at: "parent/target.txt", contents: contents)
         let (ext, agent) = try await sandbox.getExtensionAndAgent()
-        let parentId = try await agent.child(path: "parent")
+        let parentId = try await agent.child(name: "parent")
 
         // Create FPItem(id: FPItemID(<osid>), parentId: <pid>, filename: symlink.md, contentType: public.symlink, target: target.md, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), size: 9, createTime: 2026-05-15 00:34:12 +0000, modifyTime: 2026-05-15 00:34:12 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let createSymlinkProgress = Progress()
@@ -432,8 +432,8 @@ struct ExtensionTests {
             modifyDate: oldDate
         )
         let (ext, agent) = try await sandbox.getExtensionAndAgent()
-        let parentId = try await agent.child(path: "parent")
-        let srcId = try await agent.child(path: "parent/src.txt")
+        let parentId = try await agent.child(name: "parent")
+        let srcId = try await agent.child(of: parentId, name: "src.txt")
 
         // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID(<pid>), filename: dest.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 2, filename)
         let renameProgress = Progress()
@@ -509,16 +509,16 @@ struct ExtensionTests {
         )
         try sandbox.createFolder(at: "dest", modifyDate: oldDate)
         let (ext, agent) = try await sandbox.getExtensionAndAgent()
-        let srcFolderId = try await agent.child(path: "src")
-        let srcId = try await agent.child(path: "src/file.txt")
-        let destFolderId = try await agent.child(path: "dest")
+        let srcId = try await agent.child(name: "src")
+        let fileId = try await agent.child(of: srcId, name: "file.txt")
+        let destId = try await agent.child(name: "dest")
 
         // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID(<npid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 4, parentItemIdentifier)
         let moveProgress = Progress()
         let (maybeItem, pendingFields, shouldFetch) = try await ext.modifyItem(
             ItemTemplate(
-                itemIdentifier: srcId,
-                parentItemIdentifier: destFolderId,
+                itemIdentifier: fileId,
+                parentItemIdentifier: destId,
                 filename: "file.txt",
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
@@ -550,7 +550,7 @@ struct ExtensionTests {
         let updateDestFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
-                itemIdentifier: destFolderId,
+                itemIdentifier: destId,
                 filename: "dest",
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
@@ -576,7 +576,7 @@ struct ExtensionTests {
         let updateSrcFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
-                itemIdentifier: srcFolderId,
+                itemIdentifier: srcId,
                 filename: "src",
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
@@ -605,14 +605,15 @@ struct ExtensionTests {
         try sandbox.createFile(at: "src/old.txt", contents: "data")
         try sandbox.createFolder(at: "dest")
         let (ext, agent) = try await sandbox.getExtensionAndAgent()
-        let srcId = try await agent.child(path: "src/old.txt")
-        let destFolderId = try await agent.child(path: "dest")
+        let srcId = try await agent.child(name: "src")
+        let fileId = try await agent.child(of: srcId, name: "old.txt")
+        let destId = try await agent.child(name: "dest")
 
         let progress = Progress()
         let (maybeItem, pendingFields, shouldFetch) = try await ext.modifyItem(
             ItemTemplate(
-                itemIdentifier: srcId,
-                parentItemIdentifier: destFolderId,
+                itemIdentifier: fileId,
+                parentItemIdentifier: destId,
                 filename: "new.txt",
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
@@ -646,8 +647,8 @@ struct ExtensionTests {
         try sandbox.createFile(at: "file.txt", contents: "data")
         try sandbox.createFolder(at: "dest")
         let (ext, agent) = try await sandbox.getExtensionAndAgent()
-        let srcId = try await agent.child(path: "file.txt")
-        let destFolderId = try await agent.child(path: "dest")
+        let srcId = try await agent.child(name: "file.txt")
+        let destFolderId = try await agent.child(name: "dest")
 
         let (maybeItem, pendingFields, shouldFetch) = try await ext.modifyItem(
             ItemTemplate(
@@ -684,7 +685,7 @@ struct ExtensionTests {
         let sandbox = TestSandbox()
         try sandbox.createFile(at: "file.txt", contents: "data")
         let (ext, agent) = try await sandbox.getExtensionAndAgent()
-        let fileId = try await agent.child(path: "file.txt")
+        let fileId = try await agent.child(name: "file.txt")
 
         // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID.trashContainer, filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 4, parentItemIdentifier)
         let trashProgress = Progress()
@@ -735,8 +736,8 @@ struct ExtensionTests {
             modifyDate: oldDate
         )
         let (ext, agent) = try await sandbox.getExtensionAndAgent()
-        let parentId = try await agent.child(path: "parent")
-        let fileId = try await agent.child(path: "parent/file.txt")
+        let parentId = try await agent.child(name: "parent")
+        let fileId = try await agent.child(of: parentId, name: "file.txt")
 
         // Fetch FPItemID(<id>)
         let fetchOldProgress = Progress()
@@ -810,7 +811,7 @@ struct ExtensionTests {
             permissions: 0o000
         )
         let (ext, agent) = try await sandbox.getExtensionAndAgent()
-        let fileId = try await agent.child(path: "file.txt")
+        let fileId = try await agent.child(name: "file.txt")
 
         // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 256, fileSystemFlags)
         let modifyProgress = Progress()
@@ -843,7 +844,7 @@ struct ExtensionTests {
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: "folder", permissions: 0o000)
         let (ext, agent) = try await sandbox.getExtensionAndAgent()
-        let folderId = try await agent.child(path: "folder")
+        let folderId = try await agent.child(name: "folder")
 
         // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID(<pid>), filename: folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 256, fileSystemFlags)
         let modifyProgress = Progress()
@@ -880,7 +881,7 @@ struct ExtensionTests {
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: "folder")
         let (ext, agent) = try await sandbox.getExtensionAndAgent()
-        let folderId = try await agent.child(path: "folder")
+        let folderId = try await agent.child(name: "folder")
 
         // Delete FPItemID(<id>)
         let progress = Progress()
@@ -900,7 +901,7 @@ struct ExtensionTests {
         let sandbox = TestSandbox()
         try sandbox.createFile(at: "file.txt", contents: "Hello, World!")
         let (ext, agent) = try await sandbox.getExtensionAndAgent()
-        let fileId = try await agent.child(path: "file.txt")
+        let fileId = try await agent.child(name: "file.txt")
 
         // Delete FPItemID(<id>)
         let progress = Progress()

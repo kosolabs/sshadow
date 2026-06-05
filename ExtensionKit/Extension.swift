@@ -450,7 +450,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         fields: NSFileProviderItemFields
     ) async throws {
         try await agent.setAttributes(
-            for: agent.child(of: item.parentId, path: item.filename),
+            for: agent.child(of: item.parentId, name: item.filename),
             permissions: fields.contains(.fileSystemFlags)
                 ? item.fileSystemFlags?.permissions : nil,
             accessTime: fields.contains(.lastUsedDate)

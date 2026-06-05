@@ -54,8 +54,7 @@ The full end-to-end loop, with all state held on the `Session`. No new schema. T
   - `anchor: Int` — starts at 0 on session create; bumped per poll cycle that produced any change.
   - `pendingUpdates: [String: Item]` — keyed by item id; later changes overwrite earlier ones for the same id.
   - `pendingDeletes: Set<String>` — item ids deleted.
-  - `workingSet: OrderedSet<String>` — item ids the agent has handed to macOS via `list` (and later `download`/`stream`).
-- [ ] `Session.list(for:)` adds the listed items' ids to `workingSet`.
+- [ ] **Working set == every non-virtual `ItemModel` in the DB for v1.** No separate set on `Session`. Since `ItemModel` rows only exist because macOS resolved an id through `list` / `child(of:)`, "everything in the DB" is already a close approximation of "everything macOS knows about." Slight over-reporting through `.workingSet` is harmless; Step 6 introduces an explicit membership column.
 - [ ] Polling task on `Session` (start at 30s interval, behind a constant):
   1. Pick the set of directories to re-list: every `ItemModel` with `enumeratedAt != nil`, minus virtual containers.
   2. Re-list each over SFTP.
@@ -71,7 +70,7 @@ The full end-to-end loop, with all state held on the `Session`. No new schema. T
 - [ ] `Enumerator.swift`:
   - `currentSyncAnchor` calls `agent.currentSyncAnchor(domainId:)` (returns the encoded `Int`).
   - `enumerateChanges(for: anchor, observer:)` calls `agent.changes(domainId:, since:)`, feeds `observer.didUpdate`/`observer.didDeleteItem`, and either calls `finishEnumeratingChanges(upTo:moreComing:)` or — when `expired = true` — `finishEnumeratingWithError(NSFileProviderError(.syncAnchorExpired))`.
-  - `enumerateItems(.workingSet, …)` calls a new `agent.listWorkingSet(domainId:) -> [Item]` that returns the items pointed to by `workingSet`.
+  - `enumerateItems(.workingSet, …)` calls a new `agent.listWorkingSet(domainId:) -> [Item]` that returns every non-virtual `ItemModel` in the DB.
 - [ ] Add `currentSyncAnchor` and `listWorkingSet` RPCs to `AgentProtocol`/`AgentClient`.
 - [ ] Log timestamps at the `signalEnumerator` call site and at `enumerateChanges` entry so we have rough visibility into wake-up lag while tuning the poll interval.
 - [ ] Integration test against the local sshd: create a file out-of-band, run one poll cycle, assert `pendingUpdates` grew and the anchor bumped.
@@ -94,7 +93,7 @@ Now that polling/signaling is proven, move the in-memory state into `DomainDB` s
 
 ### Step 6 — Working-set membership column + multi-observer support
 
-- [ ] Add `workingSet: Bool` to `ItemModel`, replacing the in-memory `OrderedSet`.
+- [ ] Add `workingSet: Bool` to `ItemModel`, replacing the v1 "everything in the DB" approximation.
 - [ ] Set the flag in `Session.list`, `Session.download`, `Session.stream`.
 - [ ] `agent.listWorkingSet` queries by column.
 - [ ] Drop the "clear pending on read" hack from step 4: per-observer progress is now tracked purely by anchor — observers ask for "everything `> their last anchor`" and the journal serves them independently.
