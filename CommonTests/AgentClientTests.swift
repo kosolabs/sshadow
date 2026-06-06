@@ -15,13 +15,13 @@ struct AgentClientTests {
         )
         let agent = try await sandbox.getAgentClient()
 
-        let nestedFile = try await agent.child(path: "folder/file.txt")
+        let folderId = try await agent.child(name: "folder")
+        let nestedFile = try await agent.child(of: folderId, name: "file.txt")
         let nestedFileName = try await agent.name(of: nestedFile)
         #expect(nestedFileName == "file.txt")
 
         let parentOfFileId = try await agent.parent(of: nestedFile)
-        let childOfRootId = try await agent.child(path: "folder")
-        #expect(parentOfFileId == childOfRootId)
+        #expect(parentOfFileId == folderId)
     }
 
     @Test func pathForItemSucceeds() async throws {
@@ -32,7 +32,8 @@ struct AgentClientTests {
         )
         let agent = try await sandbox.getAgentClient()
 
-        let itemId = try await agent.child(path: "folder/file.txt")
+        let folderId = try await agent.child(name: "folder")
+        let itemId = try await agent.child(of: folderId, name: "file.txt")
         let path = try await agent.path(for: itemId)
 
         #expect(path.hasSuffix("folder/file.txt"))
@@ -46,7 +47,7 @@ struct AgentClientTests {
         )
         let agent = try await sandbox.getAgentClient()
 
-        let parentId = try await agent.child(path: "folder")
+        let parentId = try await agent.child(name: "folder")
         let path = try await agent.path(for: "file.txt", parentId: parentId)
 
         #expect(path.hasSuffix("folder/file.txt"))
@@ -58,7 +59,7 @@ struct AgentClientTests {
         try sandbox.createFile(at: "file.txt", contents: contents)
         let agent = try await sandbox.getAgentClient()
 
-        let itemId = try await agent.child(path: "file.txt")
+        let itemId = try await agent.child(name: "file.txt")
         let item = try await agent.item(for: itemId)
 
         #expect(item.name == "file.txt")
@@ -71,7 +72,7 @@ struct AgentClientTests {
         try sandbox.createFolder(at: "folder")
         let agent = try await sandbox.getAgentClient()
 
-        let itemId = try await agent.child(path: "folder")
+        let itemId = try await agent.child(name: "folder")
         let item = try await agent.item(for: itemId)
 
         #expect(item.name == "folder")
@@ -84,7 +85,7 @@ struct AgentClientTests {
         try sandbox.createSymlink(at: "symlink.txt", target: "target.txt")
         let agent = try await sandbox.getAgentClient()
 
-        let itemId = try await agent.child(path: "symlink.txt")
+        let itemId = try await agent.child(name: "symlink.txt")
         let item = try await agent.item(for: itemId)
 
         #expect(item.name == "symlink.txt")
@@ -115,7 +116,7 @@ struct AgentClientTests {
         try sandbox.createFolder(at: "empty-dir")
         let agent = try await sandbox.getAgentClient()
 
-        let dirId = try await agent.child(path: "empty-dir")
+        let dirId = try await agent.child(name: "empty-dir")
         let entries = try await agent.list(for: dirId)
 
         #expect(entries.isEmpty)
@@ -126,7 +127,7 @@ struct AgentClientTests {
         try sandbox.createFile(at: "set-attrs.txt")
         let agent = try await sandbox.getAgentClient()
 
-        let itemId = try await agent.child(path: "set-attrs.txt")
+        let itemId = try await agent.child(name: "set-attrs.txt")
         try await agent.setAttributes(for: itemId, permissions: 0o644)
         let item = try await agent.item(for: itemId)
 
@@ -169,14 +170,11 @@ struct AgentClientTests {
         try sandbox.createFolder(at: "dest")
         let agent = try await sandbox.getAgentClient()
 
-        let itemId = try await agent.child(path: "src/old.txt")
-        let destId = try await agent.child(path: "dest")
+        let srcId = try await agent.child(name: "src")
+        let itemId = try await agent.child(of: srcId, name: "old.txt")
+        let destId = try await agent.child(name: "dest")
 
-        try await agent.move(
-            itemId,
-            toParent: destId,
-            name: "new.txt"
-        )
+        try await agent.move(itemId, toParent: destId, name: "new.txt")
 
         let name = try await agent.name(of: itemId)
         #expect(name == "new.txt")
@@ -189,7 +187,7 @@ struct AgentClientTests {
         try sandbox.createFile(at: "file.txt")
         let agent = try await sandbox.getAgentClient()
 
-        let itemId = try await agent.child(path: "file.txt")
+        let itemId = try await agent.child(name: "file.txt")
         try await agent.removeFile(for: itemId)
 
         #expect(!sandbox.exists(at: "file.txt"))
@@ -200,7 +198,7 @@ struct AgentClientTests {
         try sandbox.createFolder(at: "folder")
         let agent = try await sandbox.getAgentClient()
 
-        let itemId = try await agent.child(path: "folder")
+        let itemId = try await agent.child(name: "folder")
         try await agent.removeDirectory(for: itemId)
 
         #expect(!sandbox.exists(at: "folder"))
@@ -242,7 +240,7 @@ struct AgentClientTests {
         try sandbox.createFile(at: "download.txt", contents: contents)
         let agent = try await sandbox.getAgentClient()
 
-        let itemId = try await agent.child(path: "download.txt")
+        let itemId = try await agent.child(name: "download.txt")
         let (url, item) = try await agent.download(
             itemId: itemId,
             progress: Progress()

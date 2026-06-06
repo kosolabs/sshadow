@@ -7,10 +7,10 @@ import Testing
 
 extension TestSandbox {
     fileprivate func getEnumerator(
-        for path: String
+        for name: String
     ) async throws -> Enumerator {
         let agent = try await getAgentClient()
-        let itemId = try await agent.child(path: path)
+        let itemId = try await agent.child(name: name)
         return Enumerator(agent: agent, itemIdentifier: itemId)
     }
 

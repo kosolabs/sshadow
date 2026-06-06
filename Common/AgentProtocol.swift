@@ -3,12 +3,12 @@ import Foundation
 
 private let logger = Logger(category: "AgentProtocol")
 
-public enum OnExists: Codable, PrettyDescribable {
+public enum OnExists: Message, PrettyDescribable {
     case fail
     case succeed
 }
 
-public enum AgentRequest: Codable, PrettyDescribable {
+public enum AgentRequest: Message, PrettyDescribable {
     public var domainId: UUID {
         switch self {
         case .initDomain(let request):
@@ -73,7 +73,7 @@ public enum AgentRequest: Codable, PrettyDescribable {
     case stream(StreamRequest)
 }
 
-public enum AgentResult: Codable, PrettyDescribable {
+public enum AgentResult: Message, PrettyDescribable {
     case success(AgentResponse)
     case failure(AgentError)
 
@@ -85,7 +85,7 @@ public enum AgentResult: Codable, PrettyDescribable {
     }
 }
 
-public enum AgentResponse: Codable, PrettyDescribable {
+public enum AgentResponse: Message, PrettyDescribable {
     case initDomain(InitDomainResponse)
     case deinitDomain(DeinitDomainResponse)
     case name(NameResponse)
@@ -106,14 +106,24 @@ public enum AgentResponse: Codable, PrettyDescribable {
     case stream(StreamResponse)
 }
 
-public enum AgentError: Codable, PrettyDescribable, Equatable, Error {
+public enum AgentError: Message, PrettyDescribable, Error {
     case notAuthenticated
     case serverUnreachable
     case userCancelled
     case permissionDenied
-    case itemNotFound(String)
+    case itemNotFound(String?)
     case filenameCollision
     case unknown(domain: String, code: Int, message: String)
+    
+    public static var itemNotFound: AgentError {
+        .itemNotFound(nil)
+    }
+
+    public static func itemNotFound(
+        _ id: NSFileProviderItemIdentifier
+    ) -> AgentError {
+        .itemNotFound(id.rawValue)
+    }
 
     public init(from error: any Error) {
         if let agentError = error as? AgentError {
@@ -139,10 +149,12 @@ public enum AgentError: Codable, PrettyDescribable, Equatable, Error {
             CocoaError(.userCancelled)
         case .permissionDenied:
             CocoaError(.fileWriteNoPermission)
-        case .itemNotFound(let itemId):
+        case .itemNotFound(let itemId?):
             NSError.fileProviderErrorForNonExistentItem(
                 withIdentifier: NSFileProviderItemIdentifier(itemId)
             )
+        case .itemNotFound(nil):
+            NSFileProviderError(.noSuchItem)
         case .filenameCollision:
             NSFileProviderError(.filenameCollision)
         case .unknown(let domain, let code, let message):
@@ -160,7 +172,7 @@ public enum AgentError: Codable, PrettyDescribable, Equatable, Error {
     }
 }
 
-public struct InitDomainRequest: Codable, PrettyDescribable {
+public struct InitDomainRequest: Message, PrettyDescribable {
     public let domainId: UUID
 
     public init(domainId: UUID) {
@@ -168,11 +180,11 @@ public struct InitDomainRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct InitDomainResponse: Codable, PrettyDescribable {
+public struct InitDomainResponse: Message, PrettyDescribable {
     public init() {}
 }
 
-public struct DeinitDomainRequest: Codable, PrettyDescribable {
+public struct DeinitDomainRequest: Message, PrettyDescribable {
     public let domainId: UUID
 
     public init(domainId: UUID) {
@@ -180,11 +192,11 @@ public struct DeinitDomainRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct DeinitDomainResponse: Codable, PrettyDescribable {
+public struct DeinitDomainResponse: Message, PrettyDescribable {
     public init() {}
 }
 
-public struct NameRequest: Codable, PrettyDescribable {
+public struct NameRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -194,7 +206,7 @@ public struct NameRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct NameResponse: Codable, PrettyDescribable {
+public struct NameResponse: Message, PrettyDescribable {
     let name: String
 
     public init(name: String) {
@@ -202,23 +214,23 @@ public struct NameResponse: Codable, PrettyDescribable {
     }
 }
 
-public struct ChildRequest: Codable, PrettyDescribable {
+public struct ChildRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let parentId: String
-    public let path: String
+    public let name: String
 
     public init(
         domainId: UUID,
         parentId: String,
-        path: String,
+        name: String,
     ) {
         self.domainId = domainId
         self.parentId = parentId
-        self.path = path
+        self.name = name
     }
 }
 
-public struct ChildResponse: Codable, PrettyDescribable {
+public struct ChildResponse: Message, PrettyDescribable {
     let itemId: String
 
     public init(itemId: String) {
@@ -226,7 +238,7 @@ public struct ChildResponse: Codable, PrettyDescribable {
     }
 }
 
-public struct ParentRequest: Codable, PrettyDescribable {
+public struct ParentRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -236,7 +248,7 @@ public struct ParentRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct ParentResponse: Codable, PrettyDescribable {
+public struct ParentResponse: Message, PrettyDescribable {
     let itemId: String
 
     public init(itemId: String) {
@@ -244,7 +256,7 @@ public struct ParentResponse: Codable, PrettyDescribable {
     }
 }
 
-public struct PathForItemRequest: Codable, PrettyDescribable {
+public struct PathForItemRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -254,7 +266,7 @@ public struct PathForItemRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct PathForChildRequest: Codable, PrettyDescribable {
+public struct PathForChildRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let name: String
     public let parentId: String
@@ -266,7 +278,7 @@ public struct PathForChildRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct PathResponse: Codable, PrettyDescribable {
+public struct PathResponse: Message, PrettyDescribable {
     let path: String
 
     public init(path: String) {
@@ -274,7 +286,7 @@ public struct PathResponse: Codable, PrettyDescribable {
     }
 }
 
-public struct ItemRequest: Codable, PrettyDescribable {
+public struct ItemRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -284,7 +296,7 @@ public struct ItemRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct ItemResponse: Codable, PrettyDescribable {
+public struct ItemResponse: Message, PrettyDescribable {
     let item: Item
 
     public init(item: Item) {
@@ -292,7 +304,7 @@ public struct ItemResponse: Codable, PrettyDescribable {
     }
 }
 
-public struct ListRequest: Codable, PrettyDescribable {
+public struct ListRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -302,7 +314,7 @@ public struct ListRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct ListResponse: Codable, PrettyDescribable {
+public struct ListResponse: Message, PrettyDescribable {
     let fileInfos: [Item]
 
     public init(fileInfos: [Item]) {
@@ -310,7 +322,28 @@ public struct ListResponse: Codable, PrettyDescribable {
     }
 }
 
-public struct SetAttributesRequest: Codable, PrettyDescribable {
+public enum Change: Message, PrettyDescribable {
+    case delete(itemId: String)
+    case update(item: Item)
+}
+
+public struct ChangesRequest: Message, PrettyDescribable {
+    public let domainId: UUID
+
+    public init(domainId: UUID) {
+        self.domainId = domainId
+    }
+}
+
+public struct ChangesResponse: Message, PrettyDescribable {
+    let changes: [Change]
+
+    public init(changes: [Change]) {
+        self.changes = changes
+    }
+}
+
+public struct SetAttributesRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
     public let permissions: mode_t?
@@ -332,11 +365,11 @@ public struct SetAttributesRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct SetAttributesResponse: Codable, PrettyDescribable {
+public struct SetAttributesResponse: Message, PrettyDescribable {
     public init() {}
 }
 
-public struct CreateSymlinkRequest: Codable, PrettyDescribable {
+public struct CreateSymlinkRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let parentId: String
     public let name: String
@@ -355,7 +388,7 @@ public struct CreateSymlinkRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct CreateSymlinkResponse: Codable, PrettyDescribable {
+public struct CreateSymlinkResponse: Message, PrettyDescribable {
     let item: Item
 
     public init(item: Item) {
@@ -363,7 +396,7 @@ public struct CreateSymlinkResponse: Codable, PrettyDescribable {
     }
 }
 
-public struct CreateDirectoryRequest: Codable, PrettyDescribable {
+public struct CreateDirectoryRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let parentId: String
     public let name: String
@@ -385,7 +418,7 @@ public struct CreateDirectoryRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct CreateDirectoryResponse: Codable, PrettyDescribable {
+public struct CreateDirectoryResponse: Message, PrettyDescribable {
     let item: Item
 
     public init(item: Item) {
@@ -393,7 +426,7 @@ public struct CreateDirectoryResponse: Codable, PrettyDescribable {
     }
 }
 
-public struct MoveRequest: Codable, PrettyDescribable {
+public struct MoveRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
     public let newParentId: String
@@ -412,11 +445,11 @@ public struct MoveRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct MoveResponse: Codable, PrettyDescribable {
+public struct MoveResponse: Message, PrettyDescribable {
     public init() {}
 }
 
-public struct RemoveFileRequest: Codable, PrettyDescribable {
+public struct RemoveFileRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -426,11 +459,11 @@ public struct RemoveFileRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct RemoveFileResponse: Codable, PrettyDescribable {
+public struct RemoveFileResponse: Message, PrettyDescribable {
     public init() {}
 }
 
-public struct RemoveDirectoryRequest: Codable, PrettyDescribable {
+public struct RemoveDirectoryRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
 
@@ -440,11 +473,11 @@ public struct RemoveDirectoryRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct RemoveDirectoryResponse: Codable, PrettyDescribable {
+public struct RemoveDirectoryResponse: Message, PrettyDescribable {
     public init() {}
 }
 
-public struct LimitsRequest: Codable, PrettyDescribable {
+public struct LimitsRequest: Message, PrettyDescribable {
     public let domainId: UUID
 
     public init(domainId: UUID) {
@@ -452,7 +485,7 @@ public struct LimitsRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct LimitsResponse: Codable, PrettyDescribable {
+public struct LimitsResponse: Message, PrettyDescribable {
     public let maxOpenHandles: UInt64
     public let maxPacketLength: UInt64
     public let maxReadLength: UInt64
@@ -471,7 +504,7 @@ public struct LimitsResponse: Codable, PrettyDescribable {
     }
 }
 
-public struct UploadRequest: Codable, PrettyDescribable {
+public struct UploadRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let parentId: String
     public let name: String
@@ -499,7 +532,7 @@ public struct UploadRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct UploadResponse: Codable, PrettyDescribable {
+public struct UploadResponse: Message, PrettyDescribable {
     let item: Item
 
     public init(item: Item) {
@@ -507,7 +540,7 @@ public struct UploadResponse: Codable, PrettyDescribable {
     }
 }
 
-public struct DownloadRequest: Codable, PrettyDescribable {
+public struct DownloadRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
     public let chunkSize: UInt64
@@ -526,7 +559,7 @@ public struct DownloadRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct DownloadResponse: Codable, PrettyDescribable {
+public struct DownloadResponse: Message, PrettyDescribable {
     let url: URL
     let item: Item
 
@@ -536,7 +569,7 @@ public struct DownloadResponse: Codable, PrettyDescribable {
     }
 }
 
-public struct StreamRequest: Codable, PrettyDescribable {
+public struct StreamRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
     public let range: Range<UInt64>
@@ -555,7 +588,7 @@ public struct StreamRequest: Codable, PrettyDescribable {
     }
 }
 
-public struct StreamResponse: Codable, PrettyDescribable {
+public struct StreamResponse: Message, PrettyDescribable {
     let url: URL
     let range: Range<UInt64>
 

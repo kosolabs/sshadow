@@ -93,14 +93,14 @@ public class AgentClient {
 
     public func child(
         of parentId: NSFileProviderItemIdentifier = .rootContainer,
-        path: String
+        name: String
     ) async throws -> NSFileProviderItemIdentifier {
         let reply = try await perform(
             .child(
                 ChildRequest(
                     domainId: domainId,
                     parentId: parentId.rawValue,
-                    path: path
+                    name: name
                 )
             )
         )

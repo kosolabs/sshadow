@@ -171,7 +171,7 @@ public class Agent {
         let session = try await sessions.connect(id: request.domainId)
         let childId = try await session.child(
             of: NSFileProviderItemIdentifier(request.parentId),
-            path: request.path
+            name: request.name
         )
         return ChildResponse(itemId: childId.rawValue)
     }
@@ -190,7 +190,7 @@ public class Agent {
         _ request: PathForItemRequest
     ) async throws -> PathResponse {
         let session = try await sessions.connect(id: request.domainId)
-        let path = await session.path(
+        let path = try await session.path(
             for: NSFileProviderItemIdentifier(request.itemId)
         )
         return PathResponse(path: path)
@@ -200,7 +200,7 @@ public class Agent {
         _ request: PathForChildRequest
     ) async throws -> PathResponse {
         let session = try await sessions.connect(id: request.domainId)
-        let path = await session.path(
+        let path = try await session.path(
             for: request.name,
             parentId: NSFileProviderItemIdentifier(request.parentId)
         )

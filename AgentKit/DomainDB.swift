@@ -5,11 +5,6 @@ import SwiftData
 
 private let logger = Logger(category: "DomainDB")
 
-enum OnNotExists: Codable, PrettyDescribable {
-    case fail
-    case create
-}
-
 @ModelActor
 actor DomainDB {
     private static func url(for id: UUID) -> URL {
@@ -108,43 +103,19 @@ actor DomainDB {
 
     func name(of id: NSFileProviderItemIdentifier) throws -> String {
         guard let item = fetch(id: id) else {
-            throw NSFileProviderError(.noSuchItem)
+            throw AgentError.itemNotFound(id)
         }
         return item.name
     }
 
-    private func child(
-        of parent: NSFileProviderItemIdentifier,
-        name: String,
-        ifNotExists: OnNotExists,
-    ) throws -> NSFileProviderItemIdentifier {
-        if let item = fetch(parentId: parent, name: name) {
-            return item.id
-        }
-
-        if ifNotExists == .fail {
-            throw AgentError.itemNotFound(parent.rawValue)
-        }
-
-        let item = ItemModel(parentId: parent, name: name)
-        try upsert(item)
-        return item.id
-    }
-
     func child(
         of parent: NSFileProviderItemIdentifier = .rootContainer,
-        path: String,
-        ifNotExists: OnNotExists = .create,
+        name: String
     ) throws -> NSFileProviderItemIdentifier {
-        var current = parent
-        for segment in path.split(separator: "/").map(String.init) {
-            current = try child(
-                of: current,
-                name: segment,
-                ifNotExists: ifNotExists
-            )
+        guard let item = fetch(parentId: parent, name: name) else {
+            throw AgentError.itemNotFound
         }
-        return current
+        return item.id
     }
 
     func children(of parentId: NSFileProviderItemIdentifier) -> [ItemModel] {
@@ -164,19 +135,19 @@ actor DomainDB {
     ) throws -> NSFileProviderItemIdentifier {
         guard let item = fetch(id: id) else {
             logger.error("Parent not found for item: \(id.rawValue)")
-            throw AgentError.itemNotFound(id.rawValue)
+            throw AgentError.itemNotFound(id)
         }
         return item.parentId
     }
 
-    func path(for id: NSFileProviderItemIdentifier) -> String {
+    func path(for id: NSFileProviderItemIdentifier) throws -> String {
         var current = id
         var segments: [String] = []
 
-        while let item = fetch(id: current),
-            current != .rootContainer,
-            current != .workingSet
-        {
+        while current != .rootContainer, current != .workingSet {
+            guard let item = fetch(id: current) else {
+                throw AgentError.itemNotFound(current)
+            }
             segments.append(item.name)
             current = item.parentId
         }
@@ -187,8 +158,8 @@ actor DomainDB {
     func path(
         for name: String,
         in parentId: NSFileProviderItemIdentifier
-    ) -> String {
-        let parentPath = path(for: parentId)
+    ) throws -> String {
+        let parentPath = try path(for: parentId)
         return parentPath.isEmpty ? name : parentPath + "/" + name
     }
 
@@ -198,11 +169,25 @@ actor DomainDB {
         name newName: String
     ) throws {
         guard let item = fetch(id: id) else {
-            throw NSFileProviderError(.noSuchItem)
+            throw AgentError.itemNotFound(id)
         }
         item.parentId = newParentId
         item.name = newName
         try modelContext.save()
+    }
+
+    func remove(_ id: NSFileProviderItemIdentifier) throws {
+        guard let item = fetch(id: id) else {
+            throw AgentError.itemNotFound(id)
+        }
+        
+        if item.kind == .folder {
+            for child in children(of: id) {
+                try remove(child.id)
+            }
+        }
+
+        modelContext.delete(item)
     }
 
     func setAttributes(
@@ -212,7 +197,7 @@ actor DomainDB {
         modifyTime: Date? = nil
     ) throws {
         guard let item = fetch(id: id) else {
-            throw NSFileProviderError(.noSuchItem)
+            throw AgentError.itemNotFound
         }
         if let permissions = permissions {
             item.permissions = UInt32(permissions)
@@ -248,14 +233,14 @@ actor DomainDB {
 
     @discardableResult
     func upsert(
-        parentId: NSFileProviderItemIdentifier,
+        parentId: NSFileProviderItemIdentifier = .rootContainer,
         name: String,
         kind: ItemModel.Kind,
-        size: UInt64?,
-        permissions: UInt32?,
-        accessTime: Date?,
-        modifyTime: Date?,
-        createTime: Date?
+        size: UInt64? = nil,
+        permissions: UInt32? = nil,
+        accessTime: Date? = nil,
+        modifyTime: Date? = nil,
+        createTime: Date? = nil
     ) throws -> ItemModel {
         let item =
             fetch(parentId: parentId, name: name)
