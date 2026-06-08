@@ -40,29 +40,13 @@ actor DomainDB {
         try upsert(
             ItemModel(
                 id: .rootContainer,
-                parentId: .rootContainer,
                 name: ""
-            )
-        )
-        try upsert(
-            ItemModel(
-                id: .sshadowContainer,
-                parentId: .rootContainer,
-                name: ".sshadow"
             )
         )
         try upsert(
             ItemModel(
                 id: .trashContainer,
-                parentId: .sshadowContainer,
-                name: "trash"
-            )
-        )
-        try upsert(
-            ItemModel(
-                id: .workingSet,
-                parentId: .rootContainer,
-                name: ""
+                name: ".sshadow/trash"
             )
         )
     }
@@ -88,71 +72,39 @@ actor DomainDB {
         return try? modelContext.fetch(descriptor).first
     }
 
-    func fetch(
-        parentId: NSFileProviderItemIdentifier,
-        name: String
-    ) -> ItemModel? {
-        let rawParentId = parentId.rawValue
-        let descriptor = FetchDescriptor<ItemModel>(
-            predicate: #Predicate { row in
-                row.rawParentId == rawParentId && row.name == name
-            }
-        )
-        return try? modelContext.fetch(descriptor).first
+    func item(for id: NSFileProviderItemIdentifier) throws -> ItemModel {
+        if let item = fetch(id: id) { return item }
+        throw AgentError.itemNotFound(id)
     }
 
     func name(of id: NSFileProviderItemIdentifier) throws -> String {
-        guard let item = fetch(id: id) else {
-            throw AgentError.itemNotFound(id)
-        }
-        return item.name
+        try item(for: id).name
     }
 
     func child(
-        of parent: NSFileProviderItemIdentifier = .rootContainer,
+        of parentId: NSFileProviderItemIdentifier = .rootContainer,
         name: String
-    ) throws -> NSFileProviderItemIdentifier {
-        guard let item = fetch(parentId: parent, name: name) else {
-            throw AgentError.itemNotFound
+    ) throws -> ItemModel {
+        let parent = try item(for: parentId)
+        if let child = parent.child(named: name) {
+            return child
         }
-        return item.id
+        throw AgentError.itemNotFound
     }
 
-    func children(of parentId: NSFileProviderItemIdentifier) -> [ItemModel] {
-        let rawParentId = parentId.rawValue
-        let descriptor = FetchDescriptor<ItemModel>(
-            predicate: #Predicate { row in
-                row.rawParentId == rawParentId
-                    && row.rawId != rawParentId
-                    && row.modifyTime != nil
-            }
-        )
-        return (try? modelContext.fetch(descriptor)) ?? []
-    }
-
-    func parent(
-        of id: NSFileProviderItemIdentifier
-    ) throws -> NSFileProviderItemIdentifier {
-        guard let item = fetch(id: id) else {
-            logger.error("Parent not found for item: \(id.rawValue)")
-            throw AgentError.itemNotFound(id)
+    func parent(of id: NSFileProviderItemIdentifier) throws -> ItemModel {
+        if let parent = try item(for: id).parent {
+            return parent
         }
-        return item.parentId
+        throw AgentError.itemNotFound
     }
 
     func path(for id: NSFileProviderItemIdentifier) throws -> String {
-        var current = id
-        var segments: [String] = []
-
-        while current != .rootContainer, current != .workingSet {
-            guard let item = fetch(id: current) else {
-                throw AgentError.itemNotFound(current)
-            }
-            segments.append(item.name)
-            current = item.parentId
-        }
-
-        return segments.reversed().joined(separator: "/")
+        try sequence(first: item(for: id), next: \.parent)
+            .prefix(while: { $0.id != .rootContainer })
+            .map(\.name)
+            .reversed()
+            .joined(separator: "/")
     }
 
     func path(
@@ -160,34 +112,23 @@ actor DomainDB {
         in parentId: NSFileProviderItemIdentifier
     ) throws -> String {
         let parentPath = try path(for: parentId)
-        return parentPath.isEmpty ? name : parentPath + "/" + name
+        return [parentPath, name].filter { !$0.isEmpty }.joined(separator: "/")
     }
 
     func move(
         _ id: NSFileProviderItemIdentifier,
-        toParent newParentId: NSFileProviderItemIdentifier,
+        toParent parentId: NSFileProviderItemIdentifier,
         name newName: String
     ) throws {
-        guard let item = fetch(id: id) else {
-            throw AgentError.itemNotFound(id)
-        }
-        item.parentId = newParentId
-        item.name = newName
+        let model = try item(for: id)
+        model.parent = try item(for: parentId)
+        model.name = newName
         try modelContext.save()
     }
 
     func remove(_ id: NSFileProviderItemIdentifier) throws {
-        guard let item = fetch(id: id) else {
-            throw AgentError.itemNotFound(id)
-        }
-        
-        if item.kind == .folder {
-            for child in children(of: id) {
-                try remove(child.id)
-            }
-        }
-
-        modelContext.delete(item)
+        try modelContext.delete(item(for: id))
+        try modelContext.save()
     }
 
     func setAttributes(
@@ -196,17 +137,15 @@ actor DomainDB {
         accessTime: Date? = nil,
         modifyTime: Date? = nil
     ) throws {
-        guard let item = fetch(id: id) else {
-            throw AgentError.itemNotFound
-        }
+        let model = try item(for: id)
         if let permissions = permissions {
-            item.permissions = UInt32(permissions)
+            model.permissions = UInt32(permissions)
         }
         if let accessTime = accessTime {
-            item.accessTime = accessTime
+            model.accessTime = accessTime
         }
         if let modifyTime = modifyTime {
-            item.modifyTime = modifyTime
+            model.modifyTime = modifyTime
         }
         try modelContext.save()
     }
@@ -219,15 +158,25 @@ actor DomainDB {
         _ id: NSFileProviderItemIdentifier,
         at date: Date = Date()
     ) throws {
-        guard let item = fetch(id: id) else {
-            throw AgentError.itemNotFound(id.rawValue)
-        }
-        item.enumeratedAt = date
+        let model = try item(for: id)
+        model.enumeratedAt = date
         try modelContext.save()
     }
 
-    func upsert(_ item: ItemModel) throws {
-        modelContext.insert(item)
+    func refresh(
+        _ id: NSFileProviderItemIdentifier,
+        size: UInt64?,
+        permissions: UInt32?,
+        accessTime: Date?,
+        modifyTime: Date?,
+        createTime: Date?
+    ) throws {
+        let model = try item(for: id)
+        model.size = size
+        model.permissions = permissions
+        model.accessTime = accessTime
+        model.modifyTime = modifyTime
+        model.createTime = createTime
         try modelContext.save()
     }
 
@@ -242,15 +191,48 @@ actor DomainDB {
         modifyTime: Date? = nil,
         createTime: Date? = nil
     ) throws -> ItemModel {
-        let item =
-            fetch(parentId: parentId, name: name)
-            ?? ItemModel(parentId: parentId, name: name)
+        try upsert(
+            parent: item(for: parentId),
+            name: name,
+            kind: kind,
+            size: size,
+            permissions: permissions,
+            accessTime: accessTime,
+            modifyTime: modifyTime,
+            createTime: createTime
+        )
+    }
+
+    @discardableResult
+    private func upsert(
+        parent: ItemModel,
+        name: String,
+        kind: ItemModel.Kind,
+        size: UInt64? = nil,
+        permissions: UInt32? = nil,
+        accessTime: Date? = nil,
+        modifyTime: Date? = nil,
+        createTime: Date? = nil
+    ) throws -> ItemModel {
+        let item: ItemModel
+        if let child = parent.child(named: name) {
+            item = child
+        } else {
+            item = ItemModel(parent: parent, name: name)
+            modelContext.insert(item)
+        }
         item.kind = kind
         item.size = size
         item.permissions = permissions
         item.accessTime = accessTime
         item.modifyTime = modifyTime
         item.createTime = createTime
+        try modelContext.save()
+        return item
+    }
+
+    @discardableResult
+    private func upsert(_ item: ItemModel) throws -> ItemModel {
         modelContext.insert(item)
         try modelContext.save()
         return item

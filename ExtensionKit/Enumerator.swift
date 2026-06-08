@@ -68,9 +68,6 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         let entries = try await agent.list(for: itemIdentifier)
         for entry in entries {
             let item = FPItem(item: entry)
-            if item.id == .sshadowContainer {
-                continue
-            }
             yield([item])
         }
 

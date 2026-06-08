@@ -8,94 +8,38 @@ import Testing
 struct ItemModelTests {
     @Test func initSetsProperties() {
         let id = NSFileProviderItemIdentifier(UUID().uuidString)
-        let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
-        let item = ItemModel(id: id, parentId: parentId, name: "file.txt")
+        let parent = ItemModel(name: "parent")
+        let item = ItemModel(id: id, parent: parent, name: "file.txt")
 
         #expect(item.id == id)
-        #expect(item.parentId == parentId)
+        #expect(item.parent == parent)
         #expect(item.name == "file.txt")
     }
 
     @Test func defaultKindIsFolder() {
-        let item = ItemModel(parentId: .rootContainer, name: "anything")
-        #expect(Item.Kind(from: item.kind) == .folder)
+        let item = ItemModel(name: "anything")
+        #expect(item.kind == .folder)
     }
 
     @Test func kindRoundTripsForFile() {
-        let item = ItemModel(
-            parentId: .rootContainer,
-            name: "file.txt",
-            kind: .file
-        )
+        let item = ItemModel(name: "file.txt", kind: .file)
         #expect(Item.Kind(from: item.kind) == .file)
     }
 
     @Test func kindRoundTripsForFolder() {
-        let item = ItemModel(
-            parentId: .rootContainer,
-            name: "folder",
-            kind: .folder
-        )
+        let item = ItemModel(name: "folder", kind: .folder)
         #expect(Item.Kind(from: item.kind) == .folder)
     }
 
     @Test func kindRoundTripsForSymlink() {
-        let item = ItemModel(
-            parentId: .rootContainer,
-            name: "link",
-            kind: .symlink(target: "target.txt")
-        )
-        #expect(
-            Item.Kind(from: item.kind) == .symlink(target: "target.txt")
-        )
-    }
-
-    @Test func kindCanBeReassigned() {
-        let item = ItemModel(parentId: .rootContainer, name: "x")
-        item.kind = .file
-        #expect(Item.Kind(from: item.kind) == .file)
-        item.kind = .symlink(target: "elsewhere")
-        #expect(
-            Item.Kind(from: item.kind) == .symlink(target: "elsewhere")
-        )
-        item.kind = .folder
-        #expect(Item.Kind(from: item.kind) == .folder)
-    }
-
-    @Test func initFromItemCopiesEveryField() {
-        let id = UUID().uuidString
-        let parentId = UUID().uuidString
-        let modify = Date(timeIntervalSince1970: 555)
-        let source = Item(
-            id: id,
-            parentId: parentId,
-            name: "from-item.txt",
-            kind: .symlink(target: "dest"),
-            size: 17,
-            permissions: 0o755,
-            accessTime: nil,
-            modifyTime: modify,
-            createTime: nil
-        )
-
-        let model = ItemModel(from: source)
-
-        #expect(model.id.rawValue == id)
-        #expect(model.parentId.rawValue == parentId)
-        #expect(model.name == "from-item.txt")
-        #expect(model.kind == .symlink(target: "dest"))
-        #expect(model.size == 17)
-        #expect(model.permissions == 0o755)
-        #expect(model.accessTime == nil)
-        #expect(model.modifyTime == modify)
-        #expect(model.createTime == nil)
+        let item = ItemModel(name: "link", kind: .symlink(target: "target.txt"))
+        #expect(Item.Kind(from: item.kind) == .symlink(target: "target.txt"))
     }
 
     @Test func itemInitFromModelReturnsEquivalent() {
         let modify = Date(timeIntervalSince1970: 999)
         let model = ItemModel(
             id: NSFileProviderItemIdentifier("abc"),
-            parentId: NSFileProviderItemIdentifier("def"),
             name: "round.txt",
             kind: .file,
             size: 8,
@@ -108,7 +52,7 @@ struct ItemModelTests {
         let result = Item(from: model)
 
         #expect(result.rawId == "abc")
-        #expect(result.rawParentId == "def")
+        #expect(result.parentId == nil)
         #expect(result.name == "round.txt")
         #expect(result.kind == .file)
         #expect(result.size == 8)

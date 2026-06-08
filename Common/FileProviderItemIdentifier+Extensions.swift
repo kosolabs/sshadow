@@ -1,10 +1,6 @@
 import FileProvider
 
 extension NSFileProviderItemIdentifier {
-    public static let sshadowContainer = NSFileProviderItemIdentifier(
-        "NSFileProviderSSHadowContainerItemIdentifier"
-    )
-
     public var desc: String {
         switch self {
         case .rootContainer:
@@ -13,8 +9,6 @@ extension NSFileProviderItemIdentifier {
             return ".workingSet"
         case .trashContainer:
             return ".trashContainer"
-        case .sshadowContainer:
-            return ".sshadowContainer"
         default:
             return rawValue
         }
