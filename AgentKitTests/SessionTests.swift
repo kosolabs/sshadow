@@ -24,7 +24,9 @@ extension TestSandbox {
             sharedUrl: shared
         )
 
-        var folders: [NSFileProviderItemIdentifier] = [.rootContainer]
+        var folders: [NSFileProviderItemIdentifier] = [
+            .rootContainer, .trashContainer,
+        ]
         while !folders.isEmpty {
             let folder = folders.removeFirst()
             let items = try await session.list(for: folder)
@@ -62,14 +64,6 @@ struct SessionTests {
             #expect(name == "file.txt")
         }
 
-        @Test func parentOfRootContainerIsRootContainer() async throws {
-            let sandbox = TestSandbox()
-            let session = try await sandbox.getSession()
-
-            let parent = try await session.parent(of: .rootContainer)
-            #expect(parent == .rootContainer)
-        }
-
         @Test func parentOfTopLevelItemIsRootContainer() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFolder(at: "folder")
@@ -78,14 +72,6 @@ struct SessionTests {
             let topLevel = try await session.child(name: "folder")
             let parent = try await session.parent(of: topLevel)
             #expect(parent == .rootContainer)
-        }
-
-        @Test func parentOfTrashContainerIsSSHadowFolder() async throws {
-            let sandbox = TestSandbox()
-            let session = try await sandbox.getSession()
-
-            let parent = try await session.parent(of: .trashContainer)
-            #expect(parent == .sshadowContainer)
         }
 
         @Test func parentOfItemInTrashIsTrashContainer() async throws {
@@ -122,17 +108,6 @@ struct SessionTests {
             let fileId = try await session.child(of: subdirId, name: "file.txt")
             let parentId = try await session.parent(of: fileId)
             #expect(parentId == subdirId)
-        }
-
-        @Test func trashFolderIsTrashContainer() async throws {
-            let sandbox = TestSandbox()
-            let session = try await sandbox.getSession()
-
-            let childOfRoot = try await session.child(
-                of: .sshadowContainer,
-                name: "trash"
-            )
-            #expect(childOfRoot == .trashContainer)
         }
 
         @Test func pathForRootContainerReturnsConfigPath() async throws {
@@ -319,12 +294,7 @@ struct SessionTests {
             let items = try await session.list(for: .rootContainer)
             let listed = try #require(items.first { $0.name == "file.txt" })
 
-            let row = try #require(
-                await session.db.fetch(
-                    parentId: .rootContainer,
-                    name: "file.txt"
-                )
-            )
+            let row = try await session.db.item(for: listed.id)
             #expect(row.kind == .file)
             #expect(row.size == UInt64(contents.utf8.count))
             #expect(row.size == listed.size)
@@ -341,17 +311,10 @@ struct SessionTests {
 
             _ = try await session.list(for: .rootContainer)
 
-            let folder = try #require(
-                await session.db.fetch(parentId: .rootContainer, name: "dir")
-            )
+            let folder = try await session.db.child(name: "dir")
             #expect(folder.kind == .folder)
 
-            let symlink = try #require(
-                await session.db.fetch(
-                    parentId: .rootContainer,
-                    name: "link.txt"
-                )
-            )
+            let symlink = try await session.db.child(name: "link.txt")
             #expect(symlink.kind == .symlink(target: "target.txt"))
         }
 
@@ -377,6 +340,16 @@ struct SessionTests {
             #expect(await session.db.isEnumerated(.trashContainer))
         }
 
+        @Test func listRootDoesNotIncludeSSHadowFolder() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: ".sshadow/trash")
+            let session = try await sandbox.getSession()
+
+            let items = try await session.list(for: .rootContainer)
+
+            #expect(items.isEmpty)
+        }
+
         @Test func listNonExistentTrashMarksTrashEnumerated() async throws {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
@@ -392,7 +365,7 @@ struct SessionTests {
             try sandbox.createFile(at: "leaf.txt")
             let session = try await sandbox.getSession()
 
-            let row = try #require(await session.db.fetch(id: .rootContainer))
+            let row = try await session.db.item(for: .rootContainer)
             #expect(row.enumeratedAt != nil)
         }
 
@@ -564,14 +537,13 @@ struct SessionTests {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
 
-            let name = "new-dir"
             let item = try await session.createDirectory(
                 parentId: .rootContainer,
-                name: name,
+                name: "new-dir",
                 mode: 0o755
             )
 
-            #expect(item.name == name)
+            #expect(item.name == "new-dir")
             #expect(item.kind == .folder)
             #expect(try sandbox.permissions(of: "new-dir") == 0o755)
             let changes = try await session.reconcile()

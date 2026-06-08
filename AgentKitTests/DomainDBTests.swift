@@ -6,503 +6,302 @@ import Testing
 
 @testable import AgentKit
 
-private func openInMemoryDb() async throws -> DomainDB {
-    try await DomainDB.open(
-        config: ModelConfiguration(isStoredInMemoryOnly: true)
-    )
-}
-
 struct DomainDBTests {
-    struct FetchTests {
-        @Test func fetchReturnsNilForUnknownId() async throws {
-            let db = try await openInMemoryDb()
+    let db: DomainDB
 
-            let result = await db.fetch(
-                id: NSFileProviderItemIdentifier(UUID().uuidString)
-            )
-            #expect(result == nil)
-        }
+    init() async throws {
+        db = try await DomainDB.open(
+            config: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+    }
 
-        @Test func fetchByParentIdAndName() async throws {
-            let db = try await openInMemoryDb()
+    @Test func initialDbHasRootContainer() async throws {
+        let root = try await db.item(for: .rootContainer)
 
-            let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
-            let id = NSFileProviderItemIdentifier(UUID().uuidString)
+        #expect(root.parent == nil)
+        #expect(root.name == "")
+    }
 
-            try await db.upsert(
-                ItemModel(id: id, parentId: parentId, name: "hello.txt")
-            )
+    @Test func initialDbHasTrashContainer() async throws {
+        let trash = try await db.item(for: .trashContainer)
 
-            let actual = try #require(
-                await db.fetch(parentId: parentId, name: "hello.txt")
-            )
+        #expect(trash.parent == nil)
+        #expect(trash.name == ".sshadow/trash")
+    }
 
-            #expect(actual.id == id)
-            #expect(actual.parentId == parentId)
-            #expect(actual.name == "hello.txt")
-        }
+    @Test func nameReturnsNameForKnownId() async throws {
+        let item = try await db.upsert(name: "file.txt", kind: .file)
 
-        @Test func fetchByParentIdAndNameReturnsNilWhenNotFound() async throws {
-            let db = try await openInMemoryDb()
+        let name = try await db.name(of: item.id)
 
-            let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
+        #expect(name == "file.txt")
+    }
 
-            try await db.upsert(
-                ItemModel(parentId: parentId, name: "exists.txt")
-            )
+    @Test func nameThrowsForUnknownId() async throws {
+        let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-            let wrongName = await db.fetch(
-                parentId: parentId,
-                name: "missing.txt"
-            )
-            let wrongParent = await db.fetch(
-                parentId: NSFileProviderItemIdentifier(UUID().uuidString),
-                name: "exists.txt"
-            )
-
-            #expect(wrongName == nil)
-            #expect(wrongParent == nil)
-        }
-
-        @Test func fetchByParentIdAndNameDistinguishesSiblings() async throws {
-            let db = try await openInMemoryDb()
-
-            let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
-
-            try await db.upsert(
-                ItemModel(parentId: parentId, name: "a.txt")
-            )
-            try await db.upsert(
-                ItemModel(parentId: parentId, name: "b.txt")
-            )
-
-            let actual = try #require(
-                await db.fetch(parentId: parentId, name: "b.txt")
-            )
-
-            #expect(actual.name == "b.txt")
+        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+            try await db.name(of: unknownId)
         }
     }
 
-    struct InitTests {
-        @Test func initialDbHasRootContainer() async throws {
-            let db = try await openInMemoryDb()
+    @Test func parentReturnsParentForKnownId() async throws {
+        let expected = try await db.upsert(name: "parent", kind: .folder)
+        let item = try await db.upsert(
+            parentId: expected.id,
+            name: "file.txt",
+            kind: .file
+        )
 
-            let root = try #require(await db.fetch(id: .rootContainer))
+        let actual = try await db.parent(of: item.id)
 
-            #expect(root.parentId == .rootContainer)
-            #expect(root.name == "")
-        }
+        #expect(actual.id == expected.id)
+    }
 
-        @Test func initialDbHasSSHadowFolder() async throws {
-            let db = try await openInMemoryDb()
+    @Test func parentThrowsForUnknownId() async throws {
+        let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-            let folder = try #require(await db.fetch(id: .sshadowContainer))
-
-            #expect(folder.parentId == .rootContainer)
-            #expect(folder.name == ".sshadow")
-        }
-
-        @Test func initialDbHasTrashContainer() async throws {
-            let db = try await openInMemoryDb()
-
-            let trash = try #require(await db.fetch(id: .trashContainer))
-
-            #expect(trash.parentId == .sshadowContainer)
-            #expect(trash.name == "trash")
-        }
-
-        @Test func initialDbHasWorkingSet() async throws {
-            let db = try await openInMemoryDb()
-
-            let workingSet = try #require(await db.fetch(id: .workingSet))
-
-            #expect(workingSet.parentId == .rootContainer)
-            #expect(workingSet.name == "")
-        }
-
-        @Test func virtualContainersCarryFolderSentinel() async throws {
-            let db = try await openInMemoryDb()
-
-            for id in [
-                NSFileProviderItemIdentifier.rootContainer,
-                .sshadowContainer,
-                .trashContainer,
-                .workingSet,
-            ] {
-                let container = try #require(await db.fetch(id: id))
-                #expect(container.kind == .folder)
-                #expect(container.size == nil)
-                #expect(container.permissions == nil)
-                #expect(container.accessTime == nil)
-                #expect(container.modifyTime == nil)
-                #expect(container.createTime == nil)
-            }
+        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+            try await db.parent(of: unknownId)
         }
     }
 
-    struct NameTests {
-        @Test func nameReturnsNameForKnownId() async throws {
-            let db = try await openInMemoryDb()
+    @Test func childSucceedsForExistingItem() async throws {
+        let expected = try await db.upsert(name: "file.txt", kind: .file)
 
-            let id = NSFileProviderItemIdentifier(UUID().uuidString)
-            try await db.upsert(
-                ItemModel(id: id, parentId: .rootContainer, name: "file.txt")
-            )
+        let actual = try await db.child(name: "file.txt")
 
-            let name = try await db.name(of: id)
-            #expect(name == "file.txt")
-        }
+        #expect(actual.id == expected.id)
+    }
 
-        @Test func nameThrowsForUnknownId() async throws {
-            let db = try await openInMemoryDb()
-
-            let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
-
-            await #expect(throws: AgentError.itemNotFound(unknownId)) {
-                try await db.name(of: unknownId)
-            }
+    @Test func childWithFailThrowsForMissingItem() async throws {
+        await #expect(throws: AgentError.itemNotFound) {
+            try await db.child(name: "missing.txt")
         }
     }
 
-    struct ParentTests {
-        @Test func parentReturnsParentForKnownId() async throws {
-            let db = try await openInMemoryDb()
+    @Test func pathBuildsFromNestedItems() async throws {
+        let docs = try await db.upsert(name: "docs", kind: .folder)
+        let file = try await db.upsert(
+            parentId: docs.id,
+            name: "notes.txt",
+            kind: .file
+        )
 
-            let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
-            let id = NSFileProviderItemIdentifier(UUID().uuidString)
-            try await db.upsert(
-                ItemModel(id: id, parentId: parentId, name: "file.txt")
-            )
+        let path = try await db.path(for: file.id)
 
-            let actual = try await db.parent(of: id)
-            #expect(actual == parentId)
-        }
+        #expect(path == "docs/notes.txt")
+    }
 
-        @Test func parentThrowsForUnknownId() async throws {
-            let db = try await openInMemoryDb()
+    @Test func pathReturnsNameForDirectChildOfRoot() async throws {
+        let file = try await db.upsert(name: "file.txt", kind: .file)
 
-            let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
+        let path = try await db.path(for: file.id)
 
-            await #expect(throws: AgentError.itemNotFound(unknownId)) {
-                try await db.parent(of: unknownId)
-            }
+        #expect(path == "file.txt")
+    }
+
+    @Test func pathReturnsEmptyForRootContainer() async throws {
+        let path = try await db.path(for: .rootContainer)
+
+        #expect(path == "")
+    }
+
+    @Test func pathReturnsTrashesFolderForTrashContainer() async throws {
+        let path = try await db.path(for: .trashContainer)
+
+        #expect(path == ".sshadow/trash")
+    }
+
+    @Test func pathSucceedsForFileInTrashContainer() async throws {
+        let file = try await db.upsert(
+            parentId: .trashContainer,
+            name: "file.txt",
+            kind: .file
+        )
+
+        let path = try await db.path(for: file.id)
+
+        #expect(path == ".sshadow/trash/file.txt")
+    }
+
+    @Test func pathThrowsForUnknownId() async throws {
+        let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
+
+        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+            try await db.path(for: unknownId)
         }
     }
 
-    struct ChildTests {
-        @Test func childSucceedsForExistingItem() async throws {
-            let db = try await openInMemoryDb()
+    @Test func pathForNameInRootContainer() async throws {
+        let path = try await db.path(
+            for: "file.txt",
+            in: .rootContainer
+        )
 
-            let item = try await db.upsert(name: "file.txt", kind: .file)
-            let itemId = try await db.child(name: "file.txt")
+        #expect(path == "file.txt")
+    }
 
-            #expect(itemId == item.id)
-        }
+    @Test func pathForNameInNestedParent() async throws {
+        let docs = try await db.upsert(name: "docs", kind: .folder)
+        let notes = try await db.upsert(
+            parentId: docs.id,
+            name: "notes",
+            kind: .folder
+        )
 
-        @Test func childWithFailThrowsForMissingItem() async throws {
-            let db = try await openInMemoryDb()
+        let path = try await db.path(for: "todo.txt", in: notes.id)
 
-            await #expect(throws: AgentError.itemNotFound) {
-                try await db.child(name: "missing.txt")
-            }
+        #expect(path == "docs/notes/todo.txt")
+    }
+
+    @Test func pathForNameInTrashContainer() async throws {
+        let path = try await db.path(
+            for: "deleted.txt",
+            in: .trashContainer
+        )
+
+        #expect(path == ".sshadow/trash/deleted.txt")
+    }
+
+    @Test func moveUpdatesParentAndName() async throws {
+        let oldParent = try await db.upsert(name: "old", kind: .folder)
+        let newParent = try await db.upsert(name: "new", kind: .folder)
+        let item = try await db.upsert(
+            parentId: oldParent.id,
+            name: "old.txt",
+            kind: .file
+        )
+
+        try await db.move(item.id, toParent: newParent.id, name: "new.txt")
+
+        let actual = try await db.item(for: item.id)
+        #expect(actual.parent?.id == newParent.id)
+        #expect(actual.name == "new.txt")
+    }
+
+    @Test func moveThrowsForUnknownId() async throws {
+        let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
+
+        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+            try await db.move(
+                unknownId,
+                toParent: .rootContainer,
+                name: "file.txt"
+            )
         }
     }
 
-    struct ChildrenTests {
-        @Test func childrenReturnsDirectChildren() async throws {
-            let db = try await openInMemoryDb()
+    @Test func moveUpdatesPath() async throws {
+        let src = try await db.upsert(name: "src", kind: .folder)
+        let file = try await db.upsert(
+            parentId: src.id,
+            name: "src",
+            kind: .file
+        )
+        let dest = try await db.upsert(name: "dest", kind: .folder)
 
-            let folder = try await db.upsert(
-                parentId: .rootContainer,
-                name: "folder",
-                kind: .folder,
-                modifyTime: Date()
-            )
-            try await db.upsert(
-                parentId: folder.id,
-                name: "a.txt",
-                kind: .file,
-                modifyTime: Date()
-            )
-            try await db.upsert(
-                parentId: folder.id,
-                name: "b.txt",
-                kind: .file,
-                modifyTime: Date()
-            )
-            try await db.upsert(
-                parentId: .rootContainer,
-                name: "other.txt",
-                kind: .file,
-                modifyTime: Date()
-            )
+        try await db.move(file.id, toParent: dest.id, name: "file.txt")
 
-            let names = await db.children(of: folder.id).map(\.name).sorted()
-            #expect(names == ["a.txt", "b.txt"])
-        }
+        let path = try await db.path(for: file.id)
+        #expect(path == "dest/file.txt")
+    }
 
-        @Test func childrenOfNonExistentTrashIsEmpty() async throws {
-            let db = try await openInMemoryDb()
+    @Test func removeDeletesItem() async throws {
+        let item = try await db.upsert(name: "file.txt", kind: .file)
 
-            let children = await db.children(of: .trashContainer)
+        try await db.remove(item.id)
 
-            #expect(children.isEmpty)
-        }
+        #expect(await db.fetch(id: item.id) == nil)
+    }
 
-        @Test func childrenExcludesUnobservedVirtualContainers() async throws {
-            let db = try await openInMemoryDb()
+    @Test func removeCascadesToChildren() async throws {
+        let folder = try await db.upsert(name: "folder", kind: .folder)
+        let child = try await db.upsert(
+            parentId: folder.id,
+            name: "child.txt",
+            kind: .file
+        )
+        let grandchild = try await db.upsert(
+            parentId: child.id,
+            name: "deeper.txt",
+            kind: .file
+        )
 
-            try await db.upsert(
-                parentId: .rootContainer,
-                name: "a.txt",
-                kind: .file
-            )
+        try await db.remove(folder.id)
 
-            let children = await db.children(of: .rootContainer)
-            #expect(!children.contains { $0.id == .sshadowContainer })
-            #expect(!children.contains { $0.id == .workingSet })
-        }
+        #expect(await db.fetch(id: folder.id) == nil)
+        #expect(await db.fetch(id: child.id) == nil)
+        #expect(await db.fetch(id: grandchild.id) == nil)
+    }
 
-        @Test func childrenIncludesVirtualContainerOnceObserved() async throws {
-            let db = try await openInMemoryDb()
+    @Test func removeThrowsForUnknownId() async throws {
+        let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-            try await db.upsert(
-                ItemModel(
-                    id: .sshadowContainer,
-                    parentId: .rootContainer,
-                    name: ".sshadow",
-                    modifyTime: Date()
-                )
-            )
-
-            let children = await db.children(of: .rootContainer)
-
-            #expect(children.contains { $0.id == .sshadowContainer })
+        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+            try await db.remove(unknownId)
         }
     }
 
-    struct PathTests {
-        @Test func pathBuildsFromNestedItems() async throws {
-            let db = try await openInMemoryDb()
+    @Test func markEnumeratedSetsTimestamp() async throws {
+        let folder = try await db.upsert(name: "folder", kind: .folder)
 
-            let docs = try await db.upsert(name: "docs", kind: .folder)
-            let file = try await db.upsert(
-                parentId: docs.id,
-                name: "notes.txt",
-                kind: .file
-            )
+        try await db.markEnumerated(folder.id)
 
-            let path = try await db.path(for: file.id)
-            #expect(path == "docs/notes.txt")
-        }
+        let row = try await db.item(for: folder.id)
+        #expect(row.enumeratedAt != nil)
+    }
 
-        @Test func pathReturnsNameForDirectChildOfRoot() async throws {
-            let db = try await openInMemoryDb()
+    @Test func markEnumeratedThrowsForUnknownId() async throws {
+        let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-            let file = try await db.upsert(name: "file.txt", kind: .file)
-
-            let path = try await db.path(for: file.id)
-            #expect(path == "file.txt")
-        }
-
-        @Test func pathReturnsEmptyForRootContainer() async throws {
-            let db = try await openInMemoryDb()
-
-            let path = try await db.path(for: .rootContainer)
-            #expect(path == "")
-        }
-
-        @Test func pathReturnsTrashesFolderForTrashContainer() async throws {
-            let db = try await openInMemoryDb()
-
-            let path = try await db.path(for: .trashContainer)
-            #expect(path == ".sshadow/trash")
-        }
-
-        @Test func pathSucceedsForFileInTrashContainer() async throws {
-            let db = try await openInMemoryDb()
-
-            let file = try await db.upsert(
-                parentId: .trashContainer,
-                name: "file.txt",
-                kind: .file
-            )
-
-            let path = try await db.path(for: file.id)
-            #expect(path == ".sshadow/trash/file.txt")
-        }
-
-        @Test func pathThrowsForUnknownId() async throws {
-            let db = try await openInMemoryDb()
-
-            let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
-
-            await #expect(throws: AgentError.itemNotFound(unknownId)) {
-                try await db.path(for: unknownId)
-            }
-        }
-
-        @Test func pathForNameInRootContainer() async throws {
-            let db = try await openInMemoryDb()
-
-            let path = try await db.path(
-                for: "file.txt",
-                in: .rootContainer
-            )
-            #expect(path == "file.txt")
-        }
-
-        @Test func pathForNameInNestedParent() async throws {
-            let db = try await openInMemoryDb()
-
-            let docs = try await db.upsert(name: "docs", kind: .folder)
-            let notes = try await db.upsert(
-                parentId: docs.id,
-                name: "notes",
-                kind: .folder
-            )
-
-            let path = try await db.path(for: "todo.txt", in: notes.id)
-            #expect(path == "docs/notes/todo.txt")
-        }
-
-        @Test func pathForNameInTrashContainer() async throws {
-            let db = try await openInMemoryDb()
-
-            let path = try await db.path(
-                for: "deleted.txt",
-                in: .trashContainer
-            )
-            #expect(path == ".sshadow/trash/deleted.txt")
+        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+            try await db.markEnumerated(unknownId)
         }
     }
 
-    struct MoveTests {
-        @Test func moveUpdatesParentAndName() async throws {
-            let db = try await openInMemoryDb()
+    @Test func upsertAndFetchById() async throws {
+        let item = try await db.upsert(name: "hello.txt", kind: .file)
 
-            let oldParent = NSFileProviderItemIdentifier(UUID().uuidString)
-            let newParent = NSFileProviderItemIdentifier(UUID().uuidString)
-            let id = NSFileProviderItemIdentifier(UUID().uuidString)
-
-            try await db.upsert(
-                ItemModel(id: id, parentId: oldParent, name: "old.txt")
-            )
-            try await db.move(id, toParent: newParent, name: "new.txt")
-
-            let actual = try #require(await db.fetch(id: id))
-            #expect(actual.parentId == newParent)
-            #expect(actual.name == "new.txt")
-        }
-
-        @Test func moveThrowsForUnknownId() async throws {
-            let db = try await openInMemoryDb()
-
-            let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
-            let newParent = NSFileProviderItemIdentifier(UUID().uuidString)
-
-            await #expect(throws: AgentError.itemNotFound(unknownId)) {
-                try await db.move(
-                    unknownId,
-                    toParent: newParent,
-                    name: "file.txt"
-                )
-            }
-        }
-
-        @Test func moveUpdatesPath() async throws {
-            let db = try await openInMemoryDb()
-
-            let src = try await db.upsert(name: "src", kind: .folder)
-            let file = try await db.upsert(
-                parentId: src.id,
-                name: "src",
-                kind: .file
-            )
-            let dest = try await db.upsert(name: "dest", kind: .folder)
-
-            try await db.move(file.id, toParent: dest.id, name: "file.txt")
-
-            let path = try await db.path(for: file.id)
-            #expect(path == "dest/file.txt")
-        }
+        let actual = try await db.item(for: item.id)
+        #expect(actual.id == item.id)
+        #expect(actual.parent?.id == .rootContainer)
+        #expect(actual.name == "hello.txt")
     }
 
-    struct MarkEnumeratedTests {
-        @Test func markEnumeratedSetsTimestamp() async throws {
-            let db = try await openInMemoryDb()
+    @Test func upsertSamePathUpdatesExistingItem() async throws {
+        let first = try await db.upsert(
+            name: "file.txt",
+            kind: .file,
+            size: 1
+        )
+        let second = try await db.upsert(
+            name: "file.txt",
+            kind: .file,
+            size: 2
+        )
 
-            let folder = try await db.upsert(name: "folder", kind: .folder)
-            try await db.markEnumerated(folder.id)
-
-            let row = try #require(await db.fetch(id: folder.id))
-            #expect(row.enumeratedAt != nil)
-        }
-
-        @Test func markEnumeratedThrowsForUnknownId() async throws {
-            let db = try await openInMemoryDb()
-
-            let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
-
-            await #expect(throws: AgentError.itemNotFound(unknownId)) {
-                try await db.markEnumerated(unknownId)
-            }
-        }
+        #expect(first.id == second.id)
+        #expect(second.size == 2)
     }
 
-    struct UpsertTests {
-        @Test func upsertAndFetchById() async throws {
-            let db = try await openInMemoryDb()
+    @Test func upsertMultipleItems() async throws {
+        let parent = try await db.upsert(name: "parent", kind: .folder)
 
-            let id = NSFileProviderItemIdentifier(UUID().uuidString)
-            let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
-            let item = ItemModel(id: id, parentId: parentId, name: "hello.txt")
+        let first = try await db.upsert(
+            parentId: parent.id,
+            name: "a.txt",
+            kind: .file
+        )
+        let second = try await db.upsert(
+            parentId: parent.id,
+            name: "b.txt",
+            kind: .file
+        )
 
-            try await db.upsert(item)
-            let actual = try #require(await db.fetch(id: id))
-
-            #expect(actual.id == id)
-            #expect(actual.parentId == parentId)
-            #expect(actual.name == "hello.txt")
-        }
-
-        @Test func upsertDuplicateIdUpdatesExistingItem() async throws {
-            let db = try await openInMemoryDb()
-
-            let id = NSFileProviderItemIdentifier(UUID().uuidString)
-            let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
-
-            try await db.upsert(
-                ItemModel(id: id, parentId: parentId, name: "first.txt")
-            )
-            try await db.upsert(
-                ItemModel(id: id, parentId: parentId, name: "second.txt")
-            )
-
-            let actual = try #require(await db.fetch(id: id))
-            #expect(actual.name == "second.txt")
-        }
-
-        @Test func upsertMultipleItems() async throws {
-            let db = try await openInMemoryDb()
-
-            let parentId = NSFileProviderItemIdentifier(UUID().uuidString)
-            let id1 = NSFileProviderItemIdentifier(UUID().uuidString)
-            let id2 = NSFileProviderItemIdentifier(UUID().uuidString)
-
-            try await db.upsert(
-                ItemModel(id: id1, parentId: parentId, name: "a.txt")
-            )
-            try await db.upsert(
-                ItemModel(id: id2, parentId: parentId, name: "b.txt")
-            )
-
-            let first = try #require(await db.fetch(id: id1))
-            let second = try #require(await db.fetch(id: id2))
-
-            #expect(first.name == "a.txt")
-            #expect(second.name == "b.txt")
-        }
+        let firstRow = try await db.item(for: first.id)
+        let secondRow = try await db.item(for: second.id)
+        #expect(firstRow.name == "a.txt")
+        #expect(secondRow.name == "b.txt")
     }
 }

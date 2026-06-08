@@ -17,7 +17,7 @@ public class FPItem: NSObject, NSFileProviderItem {
     }
 
     public var parentItemIdentifier: NSFileProviderItemIdentifier {
-        item.parentId
+        item.parentId ?? .rootContainer
     }
 
     public var filename: String { item.name }

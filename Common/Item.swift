@@ -23,7 +23,7 @@ public struct Item: Message, CustomStringConvertible {
     }
 
     public let rawId: String
-    public let rawParentId: String
+    public let rawParentId: String?
     public let name: String
     public let kind: Kind
     public let size: UInt64?
@@ -36,13 +36,16 @@ public struct Item: Message, CustomStringConvertible {
         NSFileProviderItemIdentifier(rawId)
     }
 
-    public var parentId: NSFileProviderItemIdentifier {
-        NSFileProviderItemIdentifier(rawParentId)
+    public var parentId: NSFileProviderItemIdentifier? {
+        if let rawParentId = rawParentId {
+            return NSFileProviderItemIdentifier(rawParentId)
+        }
+        return nil
     }
 
     public init(
         id: String,
-        parentId: String,
+        parentId: String?,
         name: String,
         kind: Kind,
         size: UInt64?,

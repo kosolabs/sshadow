@@ -5,6 +5,18 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Session")
 
+extension AsyncSequence where Element == SFTPAttributes {
+    fileprivate func visibleEntries(
+        under parentId: NSFileProviderItemIdentifier
+    ) -> AsyncCompactMapSequence<Self, (name: String, attrs: SFTPAttributes)> {
+        compactMap { attrs in
+            guard let name = attrs.name else { return nil }
+            if parentId == .rootContainer, name == ".sshadow" { return nil }
+            return (name, attrs)
+        }
+    }
+}
+
 class Session {
     private let config: ConnectionConfig
     private let ssh: SSHClient
@@ -64,13 +76,13 @@ class Session {
         of parentId: NSFileProviderItemIdentifier = .rootContainer,
         name: String
     ) async throws -> NSFileProviderItemIdentifier {
-        try await db.child(of: parentId, name: name)
+        try await db.child(of: parentId, name: name).id
     }
 
     func parent(
         of itemId: NSFileProviderItemIdentifier
     ) async throws -> NSFileProviderItemIdentifier {
-        try await db.parent(of: itemId)
+        try await db.parent(of: itemId).id
     }
 
     func path(
@@ -89,10 +101,7 @@ class Session {
     func item(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> Item {
-        guard let model = await db.fetch(id: itemId) else {
-            throw AgentError.itemNotFound(itemId.rawValue)
-        }
-        return Item(from: model)
+        return try await Item(from: db.item(for: itemId))
     }
 
     func list(
@@ -101,38 +110,33 @@ class Session {
         if await !db.isEnumerated(itemId) {
             try await enumerate(itemId: itemId)
         }
-        let models = await db.children(of: itemId)
-        return models.map { model in Item(from: model) }
+        let item = try await db.item(for: itemId)
+        return item.children.map({ model in Item(from: model) })
     }
 
-    func reconcile(
-        directory: NSFileProviderItemIdentifier
-    ) async throws -> ([Change], [NSFileProviderItemIdentifier]) {
+    func reconcile(item: ItemModel) async throws -> ([Change], [ItemModel]) {
         var changes: [Change] = []
-        var remainder: [NSFileProviderItemIdentifier] = []
 
-        let currModels = await Dictionary(
-            uniqueKeysWithValues: db.children(of: directory).map {
-                ($0.name, $0)
-            }
+        let currModels = Dictionary(
+            uniqueKeysWithValues: item.children.map { ($0.name, $0) }
         )
 
-        let currAttrs = try await withDirectory(for: directory) { dir in
+        let itemId = item.id
+        let currAttrs = try await withDirectory(for: item.id) { dir in
             var currAttrs: [String: SFTPAttributes] = [:]
-            for try await attrs in dir {
-                guard let name = attrs.name else { continue }
+            for try await (name, attrs) in dir.visibleEntries(under: itemId) {
                 currAttrs[name] = attrs
             }
             return currAttrs
         }
 
         for (name, attrs) in currAttrs {
-            if let model = currModels[name] {
+            if let model = currModels[name], let parent = model.parent {
                 if model.size != attrs.size
                     || model.modifyTime != attrs.modifyTime
                 {
                     let newItem = try await db.upsert(
-                        parentId: model.parentId,
+                        parentId: parent.id,
                         name: name,
                         kind: model.kind,
                         size: attrs.size,
@@ -149,23 +153,23 @@ class Session {
 
         for (name, model) in currModels {
             if currAttrs[name] == nil {
-                // TODO: Actually remove the item from the DB
-
+                try await db.remove(model.id)
                 changes.append(.delete(itemId: model.rawId))
             }
         }
 
-        return (changes, remainder)
+        // TODO: Gather the remainder and return it
+        return (changes, [])
     }
 
     func reconcile() async throws -> [Change] {
         var allChanges: [Change] = []
-        var folders: [NSFileProviderItemIdentifier] = [.rootContainer]
+        var folders: [ItemModel] = try await [db.item(for: .rootContainer)]
 
         while !folders.isEmpty {
             let nextFolder = folders.removeFirst()
             let (changes, remainder) = try await reconcile(
-                directory: nextFolder
+                item: nextFolder
             )
             allChanges.append(contentsOf: changes)
             folders.append(contentsOf: remainder)
@@ -177,9 +181,8 @@ class Session {
     func enumerate(itemId: NSFileProviderItemIdentifier) async throws {
         do {
             try await withDirectory(for: itemId) { dir in
-                for try await attrs in dir {
-                    guard let name = attrs.name else { continue }
-
+                for try await (name, attrs) in dir.visibleEntries(under: itemId)
+                {
                     let kind: ItemModel.Kind =
                         switch attrs.type {
                         case .directory:
@@ -207,9 +210,7 @@ class Session {
                     )
                 }
             }
-        } catch AgentError.itemNotFound where itemId == .trashContainer {
-            try await db.markEnumerated(itemId)
-        }
+        } catch AgentError.itemNotFound where itemId == .trashContainer {}
         try await db.markEnumerated(itemId)
     }
 
@@ -306,19 +307,21 @@ class Session {
         )
     }
 
-    private func refresh(
-        id: NSFileProviderItemIdentifier,
-    ) async throws {
-        guard var model = await db.fetch(id: id) else { return }
+    private func refresh(id: NSFileProviderItemIdentifier) async throws {
         let attrs = try await mapError(with: id) {
-            try await sftp.attributes(at: path(for: id), followSymlinks: false)
+            try await sftp.attributes(
+                at: path(for: id),
+                followSymlinks: false
+            )
         }
-        model.size = attrs.size
-        model.permissions = attrs.permissions
-        model.accessTime = attrs.accessTime
-        model.modifyTime = attrs.modifyTime
-        model.createTime = attrs.createTime
-        try await db.upsert(model)
+        try await db.refresh(
+            id,
+            size: attrs.size,
+            permissions: attrs.permissions,
+            accessTime: attrs.accessTime,
+            modifyTime: attrs.modifyTime,
+            createTime: attrs.createTime
+        )
     }
 
     private func record(
@@ -377,7 +380,7 @@ class Session {
         try await logger.info("Remove \(id(of: itemId))")
         try await mapError(with: itemId) {
             try await sftp.removeFile(at: path(for: itemId))
-            try await refresh(id: db.parent(of: itemId))
+            try await refresh(id: db.parent(of: itemId).id)
             try await db.remove(itemId)
         }
     }
@@ -388,7 +391,7 @@ class Session {
         try await logger.info("Remove directory \(id(of: itemId))")
         try await mapError(with: itemId) {
             try await sftp.removeDirectoryRecursively(at: path(for: itemId))
-            try await refresh(id: db.parent(of: itemId))
+            try await refresh(id: db.parent(of: itemId).id)
             try await db.remove(itemId)
         }
     }

@@ -9,7 +9,6 @@ Today `SSHadow/ExtensionKit/Enumerator.swift` only implements `enumerateItems` f
 ## Architectural decisions
 
 - **`ItemModel` is the persisted twin of `Item`.** Same fields (`kind`, `size`, `permissions`, `accessTime`, `modifyTime`, `createTime`) stored as SwiftData columns. `Item` is the XPC/boundary Codable struct; `ItemModel` is the `@Model` class. A bridge (`ItemModel.init(from: Item)` + `ItemModel.toItem()`) keeps them in sync.
-- **Virtual containers** (`.rootContainer`, `.workingSet`, `.sshadowContainer`, `.trashContainer`) carry a sentinel `kind = .folder` with other snapshot fields `nil`. Polling skips them by id.
 - **Pull-style change delivery.** Agent identifies changes, signals the extension via `NSFileProviderManager.signalEnumerator(for: .workingSet)`, and the extension calls `enumerateChanges` on its own schedule.
 - **Anchors are per-domain monotonic `Int`s**, encoded into `NSFileProviderSyncAnchor`. The agent owns the anchor; the extension treats it as opaque.
 - **In-memory first.** The first end-to-end implementation keeps the anchor and the pending change list in memory on the `Session`. When the agent restarts, the anchor resets and `enumerateChanges` reports the anchor as expired so macOS re-enumerates from scratch. Persistence lands once the polling/signaling loop is proven.

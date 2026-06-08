@@ -7,7 +7,7 @@ extension Item {
     init(from item: ItemModel) {
         self.init(
             id: item.rawId,
-            parentId: item.rawParentId,
+            parentId: item.parent?.rawId,
             name: item.name,
             kind: Item.Kind(from: item.kind),
             size: item.size,
@@ -46,7 +46,6 @@ class ItemModel {
     }
 
     @Attribute(.unique) var rawId: String
-    var rawParentId: String
     var name: String
     var kind: Kind
     var size: UInt64?
@@ -55,11 +54,17 @@ class ItemModel {
     var modifyTime: Date?
     var createTime: Date?
     var enumeratedAt: Date?
+    
+    @Relationship(deleteRule: .cascade, inverse: \ItemModel.parent)
+    var children: [ItemModel] = []
+    
+    @Relationship
+    var parent: ItemModel?
 
     init(
         id: NSFileProviderItemIdentifier =
             NSFileProviderItemIdentifier(UUID().uuidString),
-        parentId: NSFileProviderItemIdentifier,
+        parent: ItemModel? = nil,
         name: String,
         kind: Kind = .folder,
         size: UInt64? = nil,
@@ -70,7 +75,7 @@ class ItemModel {
         enumeratedAt: Date? = nil
     ) {
         self.rawId = id.rawValue
-        self.rawParentId = parentId.rawValue
+        self.parent = parent
         self.name = name
         self.kind = kind
         self.size = size
@@ -81,27 +86,11 @@ class ItemModel {
         self.enumeratedAt = enumeratedAt
     }
 
-    convenience init(from item: Item) {
-        self.init(
-            id: item.id,
-            parentId: item.parentId,
-            name: item.name,
-            kind: Kind(from: item.kind),
-            size: item.size,
-            permissions: item.permissions,
-            accessTime: item.accessTime,
-            modifyTime: item.modifyTime,
-            createTime: item.createTime
-        )
-    }
-
     var id: NSFileProviderItemIdentifier {
-        get { NSFileProviderItemIdentifier(rawId) }
-        set { rawId = newValue.rawValue }
+        NSFileProviderItemIdentifier(rawId)
     }
-
-    var parentId: NSFileProviderItemIdentifier {
-        get { NSFileProviderItemIdentifier(rawParentId) }
-        set { rawParentId = newValue.rawValue }
+    
+    func child(named: String) -> ItemModel? {
+        children.first(where: { $0.name == named })
     }
 }
