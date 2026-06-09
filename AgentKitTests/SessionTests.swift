@@ -405,6 +405,33 @@ struct SessionTests {
             let symlink = try #require(items.first { $0.name == "link.txt" })
             #expect(symlink.kind == .symlink(target: "target.txt"))
         }
+
+        @Test func listDoesNotReEnumerateAlreadyEnumeratedFolder() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "folder")
+            let session = try await sandbox.getSession()
+
+            let folderId = try await session.child(name: "folder")
+            try sandbox.createFile(at: "folder/sneaky.txt", contents: "boo")
+
+            let items = try await session.list(for: folderId)
+
+            #expect(items.isEmpty)
+        }
+
+        @Test func listThrowsForMissingNonTrashFolder() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            let ghost = try await session.db.upsert(
+                name: "ghost",
+                kind: .folder
+            )
+
+            await #expect(throws: AgentError.itemNotFound(ghost.id.rawValue)) {
+                try await session.list(for: ghost.id)
+            }
+        }
     }
 
     struct ReconcileTests {
@@ -734,6 +761,28 @@ struct SessionTests {
             let changes = try await session.reconcile()
             #expect(changes == [])
         }
+
+        @Test func moveToMissingTrashCreatesTrashFolder() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "file.txt", contents: "hello")
+            let session = try await sandbox.getSession()
+            #expect(!sandbox.exists(at: ".sshadow/trash"))
+
+            let itemId = try await session.child(name: "file.txt")
+            try await session.move(
+                itemId,
+                toParent: .trashContainer,
+                name: "file.txt"
+            )
+
+            #expect(!sandbox.exists(at: "file.txt"))
+            #expect(sandbox.exists(at: ".sshadow/trash/file.txt"))
+            let trashed = try await session.child(
+                of: .trashContainer,
+                name: "file.txt"
+            )
+            #expect(trashed == itemId)
+        }
     }
 
     struct RemoveFileTests {
@@ -900,6 +949,28 @@ struct SessionTests {
             #expect(changes == [])
         }
 
+        @Test func uploadCancelledThrowsUserCancelled() async throws {
+            let sandbox = TestSandbox()
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let data = Data(count: 10_485_760)
+            try data.write(to: uploadUrl)
+
+            let session = try await sandbox.getSession()
+
+            let progress = Progress()
+            progress.cancel()
+
+            await #expect(throws: AgentError.userCancelled) {
+                _ = try await session.upload(
+                    parentId: .rootContainer,
+                    name: "cancelled.dat",
+                    file: uploadUrl,
+                    mode: 0o600,
+                    progress: progress
+                )
+            }
+        }
+
         @Test func uploadEmptyFileToFolderSucceeds() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFolder(at: "folder")
@@ -972,6 +1043,24 @@ struct SessionTests {
             #expect(size == data.count)
             #expect(try Data(contentsOf: url) == data)
             #expect(progress.isFinished)
+        }
+
+        @Test func downloadCancelledThrowsUserCancelled() async throws {
+            let sandbox = TestSandbox()
+            let data = Data(count: 10_485_760)
+            try sandbox.createFile(at: "cancel.dat", data: data)
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.child(name: "cancel.dat")
+            let progress = Progress()
+            progress.cancel()
+
+            await #expect(throws: AgentError.userCancelled) {
+                _ = try await session.download(
+                    itemId: itemId,
+                    progress: progress
+                )
+            }
         }
 
         @Test func downloadEmptyFileSucceeds() async throws {

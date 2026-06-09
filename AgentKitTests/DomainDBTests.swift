@@ -248,6 +248,61 @@ struct DomainDBTests {
             try await db.remove(unknownId)
         }
     }
+    
+    @Test func setAttributesUpdatesPermissions() async throws {
+        let item = try await db.upsert(name: "file.txt", kind: .file)
+
+        try await db.setAttributes(for: item.id, permissions: 0o644)
+
+        let updated = try await db.item(for: item.id)
+        #expect(updated.permissions == 0o644)
+    }
+
+    @Test func setAttributesUpdatesAccessTime() async throws {
+        let item = try await db.upsert(name: "file.txt", kind: .file)
+        let date = Date(timeIntervalSince1970: 1_000_000)
+
+        try await db.setAttributes(for: item.id, accessTime: date)
+
+        let updated = try await db.item(for: item.id)
+        #expect(updated.accessTime == date)
+    }
+
+    @Test func setAttributesUpdatesModifyTime() async throws {
+        let item = try await db.upsert(name: "file.txt", kind: .file)
+        let date = Date(timeIntervalSince1970: 2_000_000)
+
+        try await db.setAttributes(for: item.id, modifyTime: date)
+
+        let updated = try await db.item(for: item.id)
+        #expect(updated.modifyTime == date)
+    }
+
+    @Test func setAttributesNilLeavesExistingFieldsUntouched() async throws {
+        let original = Date(timeIntervalSince1970: 1_000_000)
+        let item = try await db.upsert(
+            name: "file.txt",
+            kind: .file,
+            permissions: 0o600,
+            accessTime: original,
+            modifyTime: original
+        )
+
+        try await db.setAttributes(for: item.id, permissions: 0o644)
+
+        let updated = try await db.item(for: item.id)
+        #expect(updated.permissions == 0o644)
+        #expect(updated.accessTime == original)
+        #expect(updated.modifyTime == original)
+    }
+
+    @Test func setAttributesThrowsForUnknownId() async throws {
+        let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
+
+        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+            try await db.setAttributes(for: unknownId, permissions: 0o600)
+        }
+    }
 
     @Test func markEnumeratedSucceeds() async throws {
         let folder = try await db.upsert(name: "folder", kind: .folder)
@@ -262,6 +317,73 @@ struct DomainDBTests {
 
         await #expect(throws: AgentError.itemNotFound(unknownId)) {
             try await db.markEnumerated(unknownId)
+        }
+    }
+
+    @Test func refreshUpdatesAllFields() async throws {
+        let item = try await db.upsert(name: "file.txt", kind: .file)
+        let access = Date(timeIntervalSince1970: 1_000_000)
+        let modify = Date(timeIntervalSince1970: 2_000_000)
+        let create = Date(timeIntervalSince1970: 500_000)
+
+        try await db.refresh(
+            item.id,
+            size: 1024,
+            permissions: 0o644,
+            accessTime: access,
+            modifyTime: modify,
+            createTime: create
+        )
+
+        let updated = try await db.item(for: item.id)
+        #expect(updated.size == 1024)
+        #expect(updated.permissions == 0o644)
+        #expect(updated.accessTime == access)
+        #expect(updated.modifyTime == modify)
+        #expect(updated.createTime == create)
+    }
+
+    @Test func refreshNilOverwritesExistingValues() async throws {
+        let date = Date(timeIntervalSince1970: 1_000_000)
+        let item = try await db.upsert(
+            name: "file.txt",
+            kind: .file,
+            size: 100,
+            permissions: 0o644,
+            accessTime: date,
+            modifyTime: date,
+            createTime: date
+        )
+
+        try await db.refresh(
+            item.id,
+            size: nil,
+            permissions: nil,
+            accessTime: nil,
+            modifyTime: nil,
+            createTime: nil
+        )
+
+        let updated = try await db.item(for: item.id)
+        #expect(updated.size == nil)
+        #expect(updated.permissions == nil)
+        #expect(updated.accessTime == nil)
+        #expect(updated.modifyTime == nil)
+        #expect(updated.createTime == nil)
+    }
+
+    @Test func refreshThrowsForUnknownId() async throws {
+        let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
+
+        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+            try await db.refresh(
+                unknownId,
+                size: 1,
+                permissions: nil,
+                accessTime: nil,
+                modifyTime: nil,
+                createTime: nil
+            )
         }
     }
 

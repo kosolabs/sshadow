@@ -99,10 +99,6 @@ public class Agent {
                     try await .child(child(request))
                 case .parent(let request):
                     try await .parent(parent(request))
-                case .pathForItem(let request):
-                    try await .path(pathForItem(request))
-                case .pathForChild(let request):
-                    try await .path(pathForChild(request))
                 case .item(let request):
                     try await .item(item(request))
                 case .list(let request):
@@ -184,27 +180,6 @@ public class Agent {
             of: NSFileProviderItemIdentifier(request.itemId)
         )
         return ParentResponse(itemId: parentId.rawValue)
-    }
-
-    func pathForItem(
-        _ request: PathForItemRequest
-    ) async throws -> PathResponse {
-        let session = try await sessions.connect(id: request.domainId)
-        let path = try await session.path(
-            for: NSFileProviderItemIdentifier(request.itemId)
-        )
-        return PathResponse(path: path)
-    }
-
-    func pathForChild(
-        _ request: PathForChildRequest
-    ) async throws -> PathResponse {
-        let session = try await sessions.connect(id: request.domainId)
-        let path = try await session.path(
-            for: request.name,
-            parentId: NSFileProviderItemIdentifier(request.parentId)
-        )
-        return PathResponse(path: path)
     }
 
     func item(

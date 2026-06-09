@@ -127,42 +127,6 @@ public class AgentClient {
         return NSFileProviderItemIdentifier(response.itemId)
     }
 
-    public func path(
-        for itemId: NSFileProviderItemIdentifier
-    ) async throws -> String {
-        let reply = try await perform(
-            .pathForItem(
-                PathForItemRequest(
-                    domainId: domainId,
-                    itemId: itemId.rawValue
-                )
-            )
-        )
-        guard case .path(let response) = reply else {
-            throw CocoaError(.coderInvalidValue)
-        }
-        return response.path
-    }
-
-    public func path(
-        for name: String,
-        parentId: NSFileProviderItemIdentifier
-    ) async throws -> String {
-        let reply = try await perform(
-            .pathForChild(
-                PathForChildRequest(
-                    domainId: domainId,
-                    name: name,
-                    parentId: parentId.rawValue
-                )
-            )
-        )
-        guard case .path(let response) = reply else {
-            throw CocoaError(.coderInvalidValue)
-        }
-        return response.path
-    }
-
     public func item(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> Item {
