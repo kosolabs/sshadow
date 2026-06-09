@@ -62,45 +62,38 @@ actor DomainDB {
         }
     }
 
-    func fetch(id: NSFileProviderItemIdentifier) -> ItemModel? {
-        let rawId = id.rawValue
-        let descriptor = FetchDescriptor<ItemModel>(
-            predicate: #Predicate { row in
-                row.rawId == rawId
-            }
-        )
-        return try? modelContext.fetch(descriptor).first
-    }
-
-    func item(for id: NSFileProviderItemIdentifier) throws -> ItemModel {
-        if let item = fetch(id: id) { return item }
-        throw AgentError.itemNotFound(id)
+    func item(for id: NSFileProviderItemIdentifier) throws -> Item {
+        return try Item(from: model(for: id))
     }
 
     func name(of id: NSFileProviderItemIdentifier) throws -> String {
-        try item(for: id).name
+        try model(for: id).name
+    }
+
+    func children(of id: NSFileProviderItemIdentifier) throws -> [Item] {
+        try model(for: id).children.map { Item(from: $0) }
     }
 
     func child(
         of parentId: NSFileProviderItemIdentifier = .rootContainer,
         name: String
-    ) throws -> ItemModel {
-        let parent = try item(for: parentId)
+    ) throws -> Item {
+        let parent = try model(for: parentId)
         if let child = parent.child(named: name) {
-            return child
+            return Item(from: child)
         }
         throw AgentError.itemNotFound
     }
 
-    func parent(of id: NSFileProviderItemIdentifier) throws -> ItemModel {
-        if let parent = try item(for: id).parent {
-            return parent
+    func parent(of id: NSFileProviderItemIdentifier) throws -> Item {
+        if let parent = try model(for: id).parent {
+            return Item(from: parent)
         }
         throw AgentError.itemNotFound
     }
 
     func path(for id: NSFileProviderItemIdentifier) throws -> String {
-        try sequence(first: item(for: id), next: \.parent)
+        try sequence(first: model(for: id), next: \.parent)
             .prefix(while: { $0.id != .rootContainer })
             .map(\.name)
             .reversed()
@@ -120,14 +113,14 @@ actor DomainDB {
         toParent parentId: NSFileProviderItemIdentifier,
         name newName: String
     ) throws {
-        let model = try item(for: id)
-        model.parent = try item(for: parentId)
-        model.name = newName
+        let item = try model(for: id)
+        item.parent = try model(for: parentId)
+        item.name = newName
         try modelContext.save()
     }
 
     func remove(_ id: NSFileProviderItemIdentifier) throws {
-        try modelContext.delete(item(for: id))
+        try modelContext.delete(model(for: id))
         try modelContext.save()
     }
 
@@ -137,29 +130,29 @@ actor DomainDB {
         accessTime: Date? = nil,
         modifyTime: Date? = nil
     ) throws {
-        let model = try item(for: id)
+        let item = try model(for: id)
         if let permissions = permissions {
-            model.permissions = UInt32(permissions)
+            item.permissions = UInt32(permissions)
         }
         if let accessTime = accessTime {
-            model.accessTime = accessTime
+            item.accessTime = accessTime
         }
         if let modifyTime = modifyTime {
-            model.modifyTime = modifyTime
+            item.modifyTime = modifyTime
         }
         try modelContext.save()
     }
 
-    func isEnumerated(_ id: NSFileProviderItemIdentifier) -> Bool {
-        fetch(id: id)?.enumeratedAt != nil
+    func isEnumerated(_ id: NSFileProviderItemIdentifier) throws -> Bool {
+        try model(for: id).enumeratedAt != nil
     }
 
     func markEnumerated(
         _ id: NSFileProviderItemIdentifier,
         at date: Date = Date()
     ) throws {
-        let model = try item(for: id)
-        model.enumeratedAt = date
+        let item = try model(for: id)
+        item.enumeratedAt = date
         try modelContext.save()
     }
 
@@ -171,12 +164,12 @@ actor DomainDB {
         modifyTime: Date?,
         createTime: Date?
     ) throws {
-        let model = try item(for: id)
-        model.size = size
-        model.permissions = permissions
-        model.accessTime = accessTime
-        model.modifyTime = modifyTime
-        model.createTime = createTime
+        let item = try model(for: id)
+        item.size = size
+        item.permissions = permissions
+        item.accessTime = accessTime
+        item.modifyTime = modifyTime
+        item.createTime = createTime
         try modelContext.save()
     }
 
@@ -190,17 +183,34 @@ actor DomainDB {
         accessTime: Date? = nil,
         modifyTime: Date? = nil,
         createTime: Date? = nil
-    ) throws -> ItemModel {
-        try upsert(
-            parent: item(for: parentId),
-            name: name,
-            kind: kind,
-            size: size,
-            permissions: permissions,
-            accessTime: accessTime,
-            modifyTime: modifyTime,
-            createTime: createTime
+    ) throws -> Item {
+        try Item(
+            from: upsert(
+                parent: model(for: parentId),
+                name: name,
+                kind: kind,
+                size: size,
+                permissions: permissions,
+                accessTime: accessTime,
+                modifyTime: modifyTime,
+                createTime: createTime
+            )
         )
+    }
+
+    private func model(
+        for id: NSFileProviderItemIdentifier
+    ) throws -> ItemModel {
+        let rawId = id.rawValue
+        let descriptor = FetchDescriptor<ItemModel>(
+            predicate: #Predicate { row in
+                row.rawId == rawId
+            }
+        )
+        if let model = try modelContext.fetch(descriptor).first {
+            return model
+        }
+        throw AgentError.itemNotFound(id)
     }
 
     @discardableResult
