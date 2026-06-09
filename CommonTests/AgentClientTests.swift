@@ -24,35 +24,6 @@ struct AgentClientTests {
         #expect(parentOfFileId == folderId)
     }
 
-    @Test func pathForItemSucceeds() async throws {
-        let sandbox = TestSandbox()
-        try sandbox.createFile(
-            at: "folder/file.txt",
-            contents: "Hello, World!"
-        )
-        let agent = try await sandbox.getAgentClient()
-
-        let folderId = try await agent.child(name: "folder")
-        let itemId = try await agent.child(of: folderId, name: "file.txt")
-        let path = try await agent.path(for: itemId)
-
-        #expect(path.hasSuffix("folder/file.txt"))
-    }
-
-    @Test func pathForChildSucceeds() async throws {
-        let sandbox = TestSandbox()
-        try sandbox.createFile(
-            at: "folder/file.txt",
-            contents: "Hello, World!"
-        )
-        let agent = try await sandbox.getAgentClient()
-
-        let parentId = try await agent.child(name: "folder")
-        let path = try await agent.path(for: "file.txt", parentId: parentId)
-
-        #expect(path.hasSuffix("folder/file.txt"))
-    }
-
     @Test func itemForFileSucceeds() async throws {
         let sandbox = TestSandbox()
         let contents = "Hello, World!"

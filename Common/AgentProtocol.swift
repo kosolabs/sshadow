@@ -21,10 +21,6 @@ public enum AgentRequest: Message, PrettyDescribable {
             request.domainId
         case .parent(let request):
             request.domainId
-        case .pathForItem(let request):
-            request.domainId
-        case .pathForChild(let request):
-            request.domainId
         case .item(let request):
             request.domainId
         case .list(let request):
@@ -57,8 +53,6 @@ public enum AgentRequest: Message, PrettyDescribable {
     case name(NameRequest)
     case child(ChildRequest)
     case parent(ParentRequest)
-    case pathForItem(PathForItemRequest)
-    case pathForChild(PathForChildRequest)
     case item(ItemRequest)
     case list(ListRequest)
     case setAttributes(SetAttributesRequest)
@@ -91,7 +85,6 @@ public enum AgentResponse: Message, PrettyDescribable {
     case name(NameResponse)
     case child(ChildResponse)
     case parent(ParentResponse)
-    case path(PathResponse)
     case item(ItemResponse)
     case list(ListResponse)
     case setAttributes(SetAttributesResponse)
@@ -253,36 +246,6 @@ public struct ParentResponse: Message, PrettyDescribable {
 
     public init(itemId: String) {
         self.itemId = itemId
-    }
-}
-
-public struct PathForItemRequest: Message, PrettyDescribable {
-    public let domainId: UUID
-    public let itemId: String
-
-    public init(domainId: UUID, itemId: String) {
-        self.domainId = domainId
-        self.itemId = itemId
-    }
-}
-
-public struct PathForChildRequest: Message, PrettyDescribable {
-    public let domainId: UUID
-    public let name: String
-    public let parentId: String
-
-    public init(domainId: UUID, name: String, parentId: String) {
-        self.domainId = domainId
-        self.name = name
-        self.parentId = parentId
-    }
-}
-
-public struct PathResponse: Message, PrettyDescribable {
-    let path: String
-
-    public init(path: String) {
-        self.path = path
     }
 }
 
