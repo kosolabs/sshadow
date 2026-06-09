@@ -101,60 +101,58 @@ class Session {
     func item(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> Item {
-        return try await Item(from: db.item(for: itemId))
+        return try await db.item(for: itemId)
     }
 
     func list(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> [Item] {
-        if await !db.isEnumerated(itemId) {
+        if try await !db.isEnumerated(itemId) {
             try await enumerate(itemId: itemId)
         }
-        let item = try await db.item(for: itemId)
-        return item.children.map({ model in Item(from: model) })
+        return try await db.children(of: itemId)
     }
 
-    func reconcile(item: ItemModel) async throws -> ([Change], [ItemModel]) {
+    func reconcile(folder: Item) async throws -> ([Change], [Item]) {
         var changes: [Change] = []
 
-        let currModels = Dictionary(
-            uniqueKeysWithValues: item.children.map { ($0.name, $0) }
+        let items = try await Dictionary(
+            uniqueKeysWithValues: db.children(of: folder.id).map { ($0.name, $0) }
         )
 
-        let itemId = item.id
-        let currAttrs = try await withDirectory(for: item.id) { dir in
-            var currAttrs: [String: SFTPAttributes] = [:]
-            for try await (name, attrs) in dir.visibleEntries(under: itemId) {
-                currAttrs[name] = attrs
+        let attrs = try await withDirectory(for: folder.id) { dir in
+            var attrs: [String: SFTPAttributes] = [:]
+            for try await (name, attr) in dir.visibleEntries(under: folder.id) {
+                attrs[name] = attr
             }
-            return currAttrs
+            return attrs
         }
 
-        for (name, attrs) in currAttrs {
-            if let model = currModels[name], let parent = model.parent {
-                if model.size != attrs.size
-                    || model.modifyTime != attrs.modifyTime
+        for (name, attr) in attrs {
+            if let item = items[name] {
+                if item.size != attr.size
+                    || item.modifyTime != attr.modifyTime
                 {
                     let newItem = try await db.upsert(
-                        parentId: parent.id,
+                        parentId: folder.id,
                         name: name,
-                        kind: model.kind,
-                        size: attrs.size,
-                        permissions: attrs.permissions,
-                        accessTime: attrs.accessTime,
-                        modifyTime: attrs.modifyTime,
-                        createTime: attrs.createTime
+                        kind: ItemModel.Kind(from: item.kind),
+                        size: attr.size,
+                        permissions: attr.permissions,
+                        accessTime: attr.accessTime,
+                        modifyTime: attr.modifyTime,
+                        createTime: attr.createTime
                     )
 
-                    changes.append(.update(item: Item(from: newItem)))
+                    changes.append(.update(item: newItem))
                 }
             }
         }
 
-        for (name, model) in currModels {
-            if currAttrs[name] == nil {
-                try await db.remove(model.id)
-                changes.append(.delete(itemId: model.rawId))
+        for (name, item) in items {
+            if attrs[name] == nil {
+                try await db.remove(item.id)
+                changes.append(.delete(itemId: item.rawId))
             }
         }
 
@@ -164,12 +162,12 @@ class Session {
 
     func reconcile() async throws -> [Change] {
         var allChanges: [Change] = []
-        var folders: [ItemModel] = try await [db.item(for: .rootContainer)]
+        var folders: [Item] = try await [db.item(for: .rootContainer)]
 
         while !folders.isEmpty {
             let nextFolder = folders.removeFirst()
             let (changes, remainder) = try await reconcile(
-                item: nextFolder
+                folder: nextFolder
             )
             allChanges.append(contentsOf: changes)
             folders.append(contentsOf: remainder)
@@ -334,7 +332,7 @@ class Session {
             try await sftp.attributes(at: path, followSymlinks: false)
         }
         try await refresh(id: parentId)
-        let model = try await db.upsert(
+        return try await db.upsert(
             parentId: parentId,
             name: name,
             kind: ItemModel.Kind(from: kind),
@@ -344,7 +342,6 @@ class Session {
             modifyTime: attrs.modifyTime,
             createTime: attrs.createTime
         )
-        return Item(from: model)
     }
 
     func move(

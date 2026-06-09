@@ -6,6 +6,12 @@ import Testing
 
 @testable import AgentKit
 
+extension DomainDB {
+    fileprivate func exists(id: NSFileProviderItemIdentifier) throws -> Bool {
+        (try? item(for: id)) != nil
+    }
+}
+
 struct DomainDBTests {
     let db: DomainDB
 
@@ -18,14 +24,14 @@ struct DomainDBTests {
     @Test func initialDbHasRootContainer() async throws {
         let root = try await db.item(for: .rootContainer)
 
-        #expect(root.parent == nil)
+        #expect(root.parentId == nil)
         #expect(root.name == "")
     }
 
     @Test func initialDbHasTrashContainer() async throws {
         let trash = try await db.item(for: .trashContainer)
 
-        #expect(trash.parent == nil)
+        #expect(trash.parentId == nil)
         #expect(trash.name == ".sshadow/trash")
     }
 
@@ -176,7 +182,7 @@ struct DomainDBTests {
         try await db.move(item.id, toParent: newParent.id, name: "new.txt")
 
         let actual = try await db.item(for: item.id)
-        #expect(actual.parent?.id == newParent.id)
+        #expect(actual.parentId == newParent.id)
         #expect(actual.name == "new.txt")
     }
 
@@ -212,7 +218,7 @@ struct DomainDBTests {
 
         try await db.remove(item.id)
 
-        #expect(await db.fetch(id: item.id) == nil)
+        #expect(try await !db.exists(id: item.id))
     }
 
     @Test func removeCascadesToChildren() async throws {
@@ -230,9 +236,9 @@ struct DomainDBTests {
 
         try await db.remove(folder.id)
 
-        #expect(await db.fetch(id: folder.id) == nil)
-        #expect(await db.fetch(id: child.id) == nil)
-        #expect(await db.fetch(id: grandchild.id) == nil)
+        #expect(try await !db.exists(id: folder.id))
+        #expect(try await !db.exists(id: child.id))
+        #expect(try await !db.exists(id: grandchild.id))
     }
 
     @Test func removeThrowsForUnknownId() async throws {
@@ -243,13 +249,12 @@ struct DomainDBTests {
         }
     }
 
-    @Test func markEnumeratedSetsTimestamp() async throws {
+    @Test func markEnumeratedSucceeds() async throws {
         let folder = try await db.upsert(name: "folder", kind: .folder)
 
         try await db.markEnumerated(folder.id)
 
-        let row = try await db.item(for: folder.id)
-        #expect(row.enumeratedAt != nil)
+        #expect(try await db.isEnumerated(folder.id))
     }
 
     @Test func markEnumeratedThrowsForUnknownId() async throws {
@@ -265,7 +270,7 @@ struct DomainDBTests {
 
         let actual = try await db.item(for: item.id)
         #expect(actual.id == item.id)
-        #expect(actual.parent?.id == .rootContainer)
+        #expect(actual.parentId == .rootContainer)
         #expect(actual.name == "hello.txt")
     }
 

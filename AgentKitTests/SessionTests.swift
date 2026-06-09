@@ -326,7 +326,7 @@ struct SessionTests {
             let items = try await session.list(for: .trashContainer)
 
             #expect(items.map(\.name) == ["file.txt"])
-            #expect(await session.db.isEnumerated(.trashContainer))
+            #expect(try await session.db.isEnumerated(.trashContainer))
         }
 
         @Test func listEmptyTrashMarksTrashEnumerated() async throws {
@@ -337,7 +337,7 @@ struct SessionTests {
             let items = try await session.list(for: .trashContainer)
 
             #expect(items.isEmpty)
-            #expect(await session.db.isEnumerated(.trashContainer))
+            #expect(try await session.db.isEnumerated(.trashContainer))
         }
 
         @Test func listRootDoesNotIncludeSSHadowFolder() async throws {
@@ -357,7 +357,7 @@ struct SessionTests {
             let items = try await session.list(for: .trashContainer)
 
             #expect(items.isEmpty)
-            #expect(await session.db.isEnumerated(.trashContainer))
+            #expect(try await session.db.isEnumerated(.trashContainer))
         }
 
         @Test func listStampsEnumeratedAt() async throws {
@@ -365,8 +365,7 @@ struct SessionTests {
             try sandbox.createFile(at: "leaf.txt")
             let session = try await sandbox.getSession()
 
-            let row = try await session.db.item(for: .rootContainer)
-            #expect(row.enumeratedAt != nil)
+            #expect(try await session.db.isEnumerated(.rootContainer))
         }
 
         @Test func listServesEmptyDirectoryFromCache() async throws {
