@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		73011DE62F32A99100443E45 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 73011DE52F32A99100443E45 /* SwiftLibSSH */; };
-		73011DE82F32A9F300443E45 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 73011DE72F32A9F300443E45 /* SwiftLibSSH */; };
 		7309810A2F318825009F7AA2 /* Common.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; };
 		730981142F318825009F7AA2 /* Common.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; };
 		730981152F318825009F7AA2 /* Common.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -17,27 +15,23 @@
 		7322A9222F2857C700D8117D /* SSHadow.icon in Resources */ = {isa = PBXBuildFile; fileRef = 7322A9212F2857C700D8117D /* SSHadow.icon */; };
 		7322A9282F294D5400D8117D /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 7322A9272F294D5400D8117D /* SwiftLibSSH */; };
 		7369DF3F2F45513300F709F8 /* UnitTests.xctestplan in Resources */ = {isa = PBXBuildFile; fileRef = 7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */; };
-		736F08DA2F3D7B7C009669F4 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 736F08D92F3D7B7C009669F4 /* SwiftLibSSH */; };
 		737720C92FBD039600FC5390 /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 737720C82FBD039600FC5390 /* OrderedCollections */; };
 		73799A492F9811DD00A15109 /* AgentKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* AgentKit.framework */; };
 		73799A532F9811DD00A15109 /* AgentKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* AgentKit.framework */; };
 		73799A542F9811DD00A15109 /* AgentKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* AgentKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		73799A5F2F98122A00A15109 /* AgentKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* AgentKit.framework */; };
 		73799A642F98129E00A15109 /* Common.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; };
 		73799A652F98129E00A15109 /* Common.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		73799A6A2F9812A200A15109 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 73799A692F9812A200A15109 /* SwiftLibSSH */; };
 		73799A6C2F9812D100A15109 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 73799A6B2F9812D100A15109 /* SwiftLibSSH */; };
-		73799A722F98163400A15109 /* AgentKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* AgentKit.framework */; };
-		73799A732F98163400A15109 /* AgentKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* AgentKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		7386D8862F3FDB59004DF22F /* ExtensionKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 738D63A22F3FD1F100FED311 /* ExtensionKit.framework */; };
 		7386D8872F3FDB59004DF22F /* ExtensionKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 738D63A22F3FD1F100FED311 /* ExtensionKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		738C97B92FDA03CC007EC380 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 738C97B82FDA03CC007EC380 /* SwiftLibSSH */; };
+		738C97BB2FDA03D2007EC380 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 738C97BA2FDA03D2007EC380 /* SwiftLibSSH */; };
 		738D63AD2F3FD1F100FED311 /* ExtensionKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 738D63A22F3FD1F100FED311 /* ExtensionKit.framework */; };
 		738D63B72F3FD1F100FED311 /* ExtensionKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 738D63A22F3FD1F100FED311 /* ExtensionKit.framework */; };
 		738D63B82F3FD1F100FED311 /* ExtensionKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 738D63A22F3FD1F100FED311 /* ExtensionKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		738D63F02F3FD43300FED311 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 738D63EF2F3FD43300FED311 /* SwiftLibSSH */; };
 		738D63F12F3FD43300FED311 /* Common.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; };
 		738D63F22F3FD43300FED311 /* Common.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		738D63F72F3FD4A700FED311 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 738D63F62F3FD4A700FED311 /* SwiftLibSSH */; };
 		7393A9CD2F3134FB00213730 /* Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7393A9C02F3134FB00213730 /* Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -98,26 +92,12 @@
 			remoteGlobalIDString = 73799A3D2F9811DD00A15109;
 			remoteInfo = AgentKit;
 		};
-		73799A612F98122A00A15109 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 733470812F22037100B8181D /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 73799A3D2F9811DD00A15109;
-			remoteInfo = AgentKit;
-		};
 		73799A662F98129E00A15109 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 733470812F22037100B8181D /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 730980FE2F318825009F7AA2;
 			remoteInfo = Common;
-		};
-		73799A742F98163500A15109 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 733470812F22037100B8181D /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 73799A3D2F9811DD00A15109;
-			remoteInfo = AgentKit;
 		};
 		7386D8882F3FDB59004DF22F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -217,17 +197,6 @@
 			dstSubfolderSpec = 10;
 			files = (
 				73799A652F98129E00A15109 /* Common.framework in Embed Frameworks */,
-			);
-			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		73799A762F98163500A15109 /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-				73799A732F98163400A15109 /* AgentKit.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -360,7 +329,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				73011DE82F32A9F300443E45 /* SwiftLibSSH in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -369,8 +337,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7309810A2F318825009F7AA2 /* Common.framework in Frameworks */,
-				736F08DA2F3D7B7C009669F4 /* SwiftLibSSH in Frameworks */,
-				73799A722F98163400A15109 /* AgentKit.framework in Frameworks */,
+				738C97B92FDA03CC007EC380 /* SwiftLibSSH in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -415,7 +382,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				738D63F02F3FD43300FED311 /* SwiftLibSSH in Frameworks */,
 				738D63F12F3FD43300FED311 /* Common.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -425,8 +391,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				738D63AD2F3FD1F100FED311 /* ExtensionKit.framework in Frameworks */,
-				738D63F72F3FD4A700FED311 /* SwiftLibSSH in Frameworks */,
-				73799A5F2F98122A00A15109 /* AgentKit.framework in Frameworks */,
+				738C97BB2FDA03D2007EC380 /* SwiftLibSSH in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -435,7 +400,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				7386D8862F3FDB59004DF22F /* ExtensionKit.framework in Frameworks */,
-				73011DE62F32A99100443E45 /* SwiftLibSSH in Frameworks */,
 				7309811F2F3188DA009F7AA2 /* Common.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -535,7 +499,6 @@
 			);
 			name = Common;
 			packageProductDependencies = (
-				73011DE72F32A9F300443E45 /* SwiftLibSSH */,
 			);
 			productName = SSHadowShared;
 			productReference = 730980FF2F318825009F7AA2 /* Common.framework */;
@@ -548,21 +511,19 @@
 				730981052F318825009F7AA2 /* Sources */,
 				730981062F318825009F7AA2 /* Frameworks */,
 				730981072F318825009F7AA2 /* Resources */,
-				73799A762F98163500A15109 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				7309810C2F318825009F7AA2 /* PBXTargetDependency */,
 				7309810E2F318825009F7AA2 /* PBXTargetDependency */,
-				73799A752F98163500A15109 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				7309810F2F318825009F7AA2 /* CommonTests */,
 			);
 			name = CommonTests;
 			packageProductDependencies = (
-				736F08D92F3D7B7C009669F4 /* SwiftLibSSH */,
+				738C97B82FDA03CC007EC380 /* SwiftLibSSH */,
 			);
 			productName = SSHadowSharedTests;
 			productReference = 730981092F318825009F7AA2 /* CommonTests.xctest */;
@@ -693,7 +654,6 @@
 			);
 			name = ExtensionKit;
 			packageProductDependencies = (
-				738D63EF2F3FD43300FED311 /* SwiftLibSSH */,
 			);
 			productName = SSHadowExtension;
 			productReference = 738D63A22F3FD1F100FED311 /* ExtensionKit.framework */;
@@ -712,14 +672,13 @@
 			dependencies = (
 				738D63AF2F3FD1F100FED311 /* PBXTargetDependency */,
 				738D63B12F3FD1F100FED311 /* PBXTargetDependency */,
-				73799A622F98122A00A15109 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				738D63B22F3FD1F100FED311 /* ExtensionKitTests */,
 			);
 			name = ExtensionKitTests;
 			packageProductDependencies = (
-				738D63F62F3FD4A700FED311 /* SwiftLibSSH */,
+				738C97BA2FDA03D2007EC380 /* SwiftLibSSH */,
 			);
 			productName = SSHadowExtensionTests;
 			productReference = 738D63AC2F3FD1F100FED311 /* ExtensionKitTests.xctest */;
@@ -745,7 +704,6 @@
 			);
 			name = Extension;
 			packageProductDependencies = (
-				73011DE52F32A99100443E45 /* SwiftLibSSH */,
 			);
 			productName = SSHadowProvider;
 			productReference = 7393A9C02F3134FB00213730 /* Extension.appex */;
@@ -997,20 +955,10 @@
 			target = 73799A3D2F9811DD00A15109 /* AgentKit */;
 			targetProxy = 73799A512F9811DD00A15109 /* PBXContainerItemProxy */;
 		};
-		73799A622F98122A00A15109 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 73799A3D2F9811DD00A15109 /* AgentKit */;
-			targetProxy = 73799A612F98122A00A15109 /* PBXContainerItemProxy */;
-		};
 		73799A672F98129E00A15109 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 730980FE2F318825009F7AA2 /* Common */;
 			targetProxy = 73799A662F98129E00A15109 /* PBXContainerItemProxy */;
-		};
-		73799A752F98163500A15109 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 73799A3D2F9811DD00A15109 /* AgentKit */;
-			targetProxy = 73799A742F98163500A15109 /* PBXContainerItemProxy */;
 		};
 		7386D8892F3FDB59004DF22F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1854,7 +1802,7 @@
 			repositoryURL = "https://github.com/kosolabs/swift-lib-ssh.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.18.0;
+				minimumVersion = 1.19.0;
 			};
 		};
 		737720C72FBD039600FC5390 /* XCRemoteSwiftPackageReference "swift-collections" */ = {
@@ -1868,22 +1816,7 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		73011DE52F32A99100443E45 /* SwiftLibSSH */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
-			productName = SwiftLibSSH;
-		};
-		73011DE72F32A9F300443E45 /* SwiftLibSSH */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
-			productName = SwiftLibSSH;
-		};
 		7322A9272F294D5400D8117D /* SwiftLibSSH */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
-			productName = SwiftLibSSH;
-		};
-		736F08D92F3D7B7C009669F4 /* SwiftLibSSH */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
 			productName = SwiftLibSSH;
@@ -1903,12 +1836,12 @@
 			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
 			productName = SwiftLibSSH;
 		};
-		738D63EF2F3FD43300FED311 /* SwiftLibSSH */ = {
+		738C97B82FDA03CC007EC380 /* SwiftLibSSH */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
 			productName = SwiftLibSSH;
 		};
-		738D63F62F3FD4A700FED311 /* SwiftLibSSH */ = {
+		738C97BA2FDA03D2007EC380 /* SwiftLibSSH */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
 			productName = SwiftLibSSH;

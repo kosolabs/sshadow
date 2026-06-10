@@ -180,7 +180,10 @@ class Session {
 
     func reconcile() async throws -> [Change] {
         var allChanges: [Change] = []
-        var folders: [Item] = try await [db.item(for: .rootContainer)]
+        var folders: [Item] = try await [
+            db.item(for: .rootContainer),
+            db.item(for: .trashContainer),
+        ]
 
         while !folders.isEmpty {
             let nextFolder = folders.removeFirst()
@@ -549,13 +552,19 @@ class Session {
     }
 
     typealias Entry = (name: String, attrs: SFTPAttributes)
+    typealias EntryAsyncSequence = AsyncSequence<Entry, SSHError>
+    
+    struct EmptyEntryAsyncSequence: EntryAsyncSequence {
+        struct AsyncIterator: AsyncIteratorProtocol {
+            mutating func next() async throws(SSHError) -> Entry? { nil }
+        }
+        
+        func makeAsyncIterator() -> AsyncIterator { AsyncIterator() }
+    }
 
     func withEntries<T: Sendable>(
         of itemId: NSFileProviderItemIdentifier,
-        perform:
-            @Sendable (
-                any AsyncSequence<Entry, any Error>
-            ) async throws -> T
+        perform: @Sendable (any EntryAsyncSequence) async throws -> T
     ) async throws -> T {
         do {
             return try await withDirectory(for: itemId) { dir in
@@ -569,8 +578,7 @@ class Session {
                 return try await perform(entries)
             }
         } catch AgentError.itemNotFound where itemId == .trashContainer {
-            let empty = AsyncThrowingStream<Entry, any Error> { $0.finish() }
-            return try await perform(empty)
+            return try await perform(EmptyEntryAsyncSequence())
         }
     }
 
