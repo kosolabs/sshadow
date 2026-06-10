@@ -5,18 +5,6 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Session")
 
-extension AsyncSequence where Element == SFTPAttributes {
-    fileprivate func visibleEntries(
-        under parentId: NSFileProviderItemIdentifier
-    ) -> AsyncCompactMapSequence<Self, (name: String, attrs: SFTPAttributes)> {
-        compactMap { attrs in
-            guard let name = attrs.name else { return nil }
-            if parentId == .rootContainer, name == ".sshadow" { return nil }
-            return (name, attrs)
-        }
-    }
-}
-
 class Session {
     private let config: ConnectionConfig
     private let ssh: SSHClient
@@ -113,46 +101,76 @@ class Session {
         return try await db.children(of: itemId)
     }
 
+    @discardableResult
+    func upsert(
+        parentId: NSFileProviderItemIdentifier,
+        name: String,
+        attrs: SFTPAttributes
+    ) async throws -> Item {
+        let kind: ItemModel.Kind =
+            switch attrs.type {
+            case .directory:
+                .folder
+            case .symlink:
+                .symlink(
+                    target: try await symlinkTarget(
+                        for: name,
+                        parentId: parentId
+                    )
+                )
+            default:
+                .file
+            }
+
+        return try await db.upsert(
+            parentId: parentId,
+            name: name,
+            kind: kind,
+            size: attrs.size,
+            permissions: attrs.permissions,
+            accessTime: attrs.accessTime,
+            modifyTime: attrs.modifyTime,
+            createTime: attrs.createTime
+        )
+    }
+
     func reconcile(folder: Item) async throws -> ([Change], [Item]) {
         var changes: [Change] = []
 
-        let items = try await Dictionary(
-            uniqueKeysWithValues: db.children(of: folder.id).map { ($0.name, $0) }
+        let dbItems = try await Dictionary(
+            uniqueKeysWithValues: db.children(of: folder.id).map {
+                ($0.name, $0)
+            }
         )
 
-        let attrs = try await withDirectory(for: folder.id) { dir in
-            var attrs: [String: SFTPAttributes] = [:]
-            for try await (name, attr) in dir.visibleEntries(under: folder.id) {
-                attrs[name] = attr
+        let sshItems = try await withEntries(of: folder.id) { entries in
+            var sshItems: [String: SFTPAttributes] = [:]
+            for try await (name, attrs) in entries {
+                sshItems[name] = attrs
             }
-            return attrs
+            return sshItems
         }
 
-        for (name, attr) in attrs {
-            if let item = items[name] {
-                if item.size != attr.size
-                    || item.modifyTime != attr.modifyTime
-                {
-                    let newItem = try await db.upsert(
-                        parentId: folder.id,
-                        name: name,
-                        kind: ItemModel.Kind(from: item.kind),
-                        size: attr.size,
-                        permissions: attr.permissions,
-                        accessTime: attr.accessTime,
-                        modifyTime: attr.modifyTime,
-                        createTime: attr.createTime
-                    )
+        for (name, sshItem) in sshItems {
+            let dbItem = dbItems[name]
+            if dbItem == nil
+                || dbItem?.size != sshItem.size
+                || dbItem?.modifyTime != sshItem.modifyTime
+            {
+                let newItem = try await upsert(
+                    parentId: folder.id,
+                    name: name,
+                    attrs: sshItem
+                )
 
-                    changes.append(.update(item: newItem))
-                }
+                changes.append(.update(item: newItem))
             }
         }
 
-        for (name, item) in items {
-            if attrs[name] == nil {
-                try await db.remove(item.id)
-                changes.append(.delete(itemId: item.rawId))
+        for (name, dbItem) in dbItems {
+            if sshItems[name] == nil {
+                try await db.remove(dbItem.id)
+                changes.append(.delete(itemId: dbItem.rawId))
             }
         }
 
@@ -177,38 +195,11 @@ class Session {
     }
 
     func enumerate(itemId: NSFileProviderItemIdentifier) async throws {
-        do {
-            try await withDirectory(for: itemId) { dir in
-                for try await (name, attrs) in dir.visibleEntries(under: itemId)
-                {
-                    let kind: ItemModel.Kind =
-                        switch attrs.type {
-                        case .directory:
-                            .folder
-                        case .symlink:
-                            .symlink(
-                                target: try await symlinkTarget(
-                                    for: name,
-                                    parentId: itemId
-                                )
-                            )
-                        default:
-                            .file
-                        }
-
-                    try await db.upsert(
-                        parentId: itemId,
-                        name: name,
-                        kind: kind,
-                        size: attrs.size,
-                        permissions: attrs.permissions,
-                        accessTime: attrs.accessTime,
-                        modifyTime: attrs.modifyTime,
-                        createTime: attrs.createTime
-                    )
-                }
+        try await withEntries(of: itemId) { entries in
+            for try await (name, attrs) in entries {
+                try await upsert(parentId: itemId, name: name, attrs: attrs)
             }
-        } catch AgentError.itemNotFound where itemId == .trashContainer {}
+        }
         try await db.markEnumerated(itemId)
     }
 
@@ -554,6 +545,32 @@ class Session {
                 at: path(for: itemId),
                 perform: perform
             )
+        }
+    }
+
+    typealias Entry = (name: String, attrs: SFTPAttributes)
+
+    func withEntries<T: Sendable>(
+        of itemId: NSFileProviderItemIdentifier,
+        perform:
+            @Sendable (
+                any AsyncSequence<Entry, any Error>
+            ) async throws -> T
+    ) async throws -> T {
+        do {
+            return try await withDirectory(for: itemId) { dir in
+                let entries = dir.compactMap { attrs -> Entry? in
+                    guard let name = attrs.name else { return nil }
+                    if itemId == .rootContainer, name == ".sshadow" {
+                        return nil
+                    }
+                    return (name, attrs)
+                }
+                return try await perform(entries)
+            }
+        } catch AgentError.itemNotFound where itemId == .trashContainer {
+            let empty = AsyncThrowingStream<Entry, any Error> { $0.finish() }
+            return try await perform(empty)
         }
     }
 
