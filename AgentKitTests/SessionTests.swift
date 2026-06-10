@@ -406,7 +406,7 @@ struct SessionTests {
             #expect(symlink.kind == .symlink(target: "target.txt"))
         }
 
-        @Test func listDoesNotReEnumerateAlreadyEnumeratedFolder() async throws {
+        @Test func listDoesNotReEnumerateEnumeratedFolder() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFolder(at: "folder")
             let session = try await sandbox.getSession()
@@ -435,6 +435,17 @@ struct SessionTests {
     }
 
     struct ReconcileTests {
+        @Test func reconcileFileCreated() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "reconcile")
+            let session = try await sandbox.getSession()
+
+            try sandbox.createFile(at: "reconcile/file.txt")
+            let changes = try await session.reconcile()
+
+            print(changes)
+        }
+
         @Test func reconcileFileSizeChanged() async throws {
             let date = Date(timeIntervalSince1970: 1_000_000)
 
@@ -578,18 +589,16 @@ struct SessionTests {
 
         @Test func createDirectoryWithIfExistsSucceedSucceeds() async throws {
             let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "existing-dir")
             let session = try await sandbox.getSession()
-
-            let name = "existing-dir"
-            try sandbox.createFolder(at: name)
 
             let item = try await session.createDirectory(
                 parentId: .rootContainer,
-                name: name,
+                name: "existing-dir",
                 ifExists: .succeed
             )
 
-            #expect(item.name == name)
+            #expect(item.name == "existing-dir")
             #expect(item.kind == .folder)
             let changes = try await session.reconcile()
             #expect(changes == [])
@@ -597,15 +606,13 @@ struct SessionTests {
 
         @Test func createDirectoryWhenExistsThrows() async throws {
             let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "already-exists")
             let session = try await sandbox.getSession()
-
-            let name = "already-exists"
-            try sandbox.createFolder(at: name)
 
             await #expect {
                 try await session.createDirectory(
                     parentId: .rootContainer,
-                    name: name
+                    name: "already-exists"
                 )
             } throws: { error in
                 guard case AgentError.filenameCollision = error else {
@@ -621,13 +628,12 @@ struct SessionTests {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
 
-            let name = "row-match-dir"
             let item = try await session.createDirectory(
                 parentId: .rootContainer,
-                name: name
+                name: "row-match-dir"
             )
 
-            let lookedUpId = try await session.child(name: name)
+            let lookedUpId = try await session.child(name: "row-match-dir")
             #expect(lookedUpId == item.id)
             let changes = try await session.reconcile()
             #expect(changes == [])
@@ -635,15 +641,13 @@ struct SessionTests {
 
         @Test func createDirectoryFailureLeavesNoRow() async throws {
             let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "collide-dir")
             let session = try await sandbox.getSession()
-
-            let name = "collide-dir"
-            try sandbox.createFolder(at: name)
 
             await #expect(throws: AgentError.filenameCollision) {
                 _ = try await session.createDirectory(
                     parentId: .rootContainer,
-                    name: name
+                    name: "collide-dir"
                 )
             }
             let changes = try await session.reconcile()
@@ -686,15 +690,13 @@ struct SessionTests {
 
         @Test func createSymlinkFailureLeavesNoRow() async throws {
             let sandbox = TestSandbox()
+            try sandbox.createFile(at: "collide")
             let session = try await sandbox.getSession()
-
-            let name = "collide"
-            try sandbox.createFile(at: name, contents: "data")
 
             await #expect(throws: (any Error).self) {
                 _ = try await session.createSymlink(
                     parentId: .rootContainer,
-                    name: name,
+                    name: "collide",
                     target: "/dev/null"
                 )
             }
@@ -925,13 +927,10 @@ struct SessionTests {
 
         @Test func uploadFailureLeavesNoRow() async throws {
             let sandbox = TestSandbox()
-            let session = try await sandbox.getSession()
-
-            let name = "collide-upload"
-
             // Pre-create a directory at the upload target so opening it as a
             // file for writing fails.
-            try sandbox.createFolder(at: name)
+            try sandbox.createFolder(at: "collide-upload")
+            let session = try await sandbox.getSession()
 
             let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
             try Data("data".utf8).write(to: uploadUrl)
@@ -939,7 +938,7 @@ struct SessionTests {
             await #expect(throws: (any Error).self) {
                 _ = try await session.upload(
                     parentId: .rootContainer,
-                    name: name,
+                    name: "collide-upload",
                     file: uploadUrl,
                     mode: 0o600,
                     progress: Progress()
