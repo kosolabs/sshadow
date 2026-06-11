@@ -136,6 +136,7 @@ class Session {
 
     func reconcile(folder: Item) async throws -> ([Change], [Item]) {
         var changes: [Change] = []
+        var remainder: [Item] = []
 
         let dbItems = try await Dictionary(
             uniqueKeysWithValues: db.children(of: folder.id).map {
@@ -165,6 +166,10 @@ class Session {
 
                 changes.append(.update(item: newItem))
             }
+            
+            if let dbItem = dbItem, dbItem.isEnumerated {
+                remainder.append(dbItem)
+            }
         }
 
         for (name, dbItem) in dbItems {
@@ -174,8 +179,7 @@ class Session {
             }
         }
 
-        // TODO: Gather the remainder and return it
-        return (changes, [])
+        return (changes, remainder)
     }
 
     func reconcile() async throws -> [Change] {

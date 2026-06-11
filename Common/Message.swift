@@ -1,1 +1,1 @@
-public typealias Message = Codable & Sendable & Equatable
+public typealias Message = Codable & Sendable & Equatable & Hashable

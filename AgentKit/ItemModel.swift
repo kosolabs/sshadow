@@ -14,7 +14,8 @@ extension Item {
             permissions: item.permissions,
             accessTime: item.accessTime,
             modifyTime: item.modifyTime,
-            createTime: item.createTime
+            createTime: item.createTime,
+            enumeratedAt: item.enumeratedAt
         )
     }
 }
