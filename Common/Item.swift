@@ -31,6 +31,7 @@ public struct Item: Message, CustomStringConvertible {
     public let accessTime: Date?
     public let modifyTime: Date?
     public let createTime: Date?
+    public let enumeratedAt: Date?
 
     public var id: NSFileProviderItemIdentifier {
         NSFileProviderItemIdentifier(rawId)
@@ -42,6 +43,10 @@ public struct Item: Message, CustomStringConvertible {
         }
         return nil
     }
+    
+    public var isEnumerated: Bool {
+        kind == .folder && enumeratedAt != nil
+    }
 
     public init(
         id: String,
@@ -52,7 +57,8 @@ public struct Item: Message, CustomStringConvertible {
         permissions: UInt32?,
         accessTime: Date?,
         modifyTime: Date?,
-        createTime: Date?
+        createTime: Date?,
+        enumeratedAt: Date?
     ) {
         self.rawId = id
         self.rawParentId = parentId
@@ -63,5 +69,6 @@ public struct Item: Message, CustomStringConvertible {
         self.accessTime = accessTime
         self.modifyTime = modifyTime
         self.createTime = createTime
+        self.enumeratedAt = enumeratedAt
     }
 }

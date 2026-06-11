@@ -185,7 +185,7 @@ class TestSandbox {
         }
         return date
     }
-    
+
     func accessDate(of path: String) throws -> Date {
         let url = getUrl(for: path)
         let values = try url.resourceValues(forKeys: [.contentAccessDateKey])
@@ -224,19 +224,24 @@ class TestSandbox {
         return url
     }
 
-    @discardableResult
-    func createFolder(
-        at path: String,
+    func touch(
+        _ path: String,
         relativeTo: RelativeTo = .mount,
         permissions: mode_t? = nil,
         modifyDate: Date? = nil
-    ) throws -> URL {
-        let folder = getUrl(for: path, relativeTo: relativeTo)
-        try FileManager.default.createDirectory(
-            at: folder,
-            withIntermediateDirectories: true
+    ) throws {
+        try touch(
+            getUrl(for: path, relativeTo: relativeTo),
+            permissions: permissions,
+            modifyDate: modifyDate
         )
+    }
 
+    private func touch(
+        _ url: URL,
+        permissions: mode_t? = nil,
+        modifyDate: Date? = nil
+    ) throws {
         var attributes: [FileAttributeKey: Any] = [:]
 
         if let permissions {
@@ -250,10 +255,48 @@ class TestSandbox {
         if !attributes.isEmpty {
             try FileManager.default.setAttributes(
                 attributes,
-                ofItemAtPath: folder.path()
+                ofItemAtPath: url.path()
             )
         }
+    }
 
+    private func createFolders(
+        for url: URL,
+        permissions: mode_t? = nil,
+        modifyDate: Date? = nil
+    ) throws {
+        var ancestors: [URL] = []
+        var current = url.deletingLastPathComponent()
+        while !FileManager.default.fileExists(atPath: current.path()) {
+            ancestors.append(current)
+            let parent = current.deletingLastPathComponent()
+            if parent.path() == current.path() {
+                break
+            }
+            current = parent
+        }
+        try FileManager.default.createDirectory(
+            at: url,
+            withIntermediateDirectories: true
+        )
+        for ancestor in ancestors.reversed() {
+            try touch(
+                ancestor,
+                permissions: permissions,
+                modifyDate: modifyDate
+            )
+        }
+    }
+
+    @discardableResult
+    func createFolder(
+        at path: String,
+        relativeTo: RelativeTo = .mount,
+        permissions: mode_t? = nil,
+        modifyDate: Date? = nil
+    ) throws -> URL {
+        let folder = getUrl(for: path, relativeTo: relativeTo)
+        try createFolders(for: folder)
         return folder
     }
 
@@ -265,11 +308,7 @@ class TestSandbox {
     ) throws -> URL {
         let link = getUrl(for: path, relativeTo: relativeTo)
         let folder = link.deletingLastPathComponent()
-
-        try FileManager.default.createDirectory(
-            at: folder,
-            withIntermediateDirectories: true
-        )
+        try createFolders(for: folder)
 
         try? FileManager.default.removeItem(at: link)
         try FileManager.default.createSymbolicLink(
@@ -317,30 +356,11 @@ class TestSandbox {
     ) throws -> URL {
         let file = getUrl(for: path, relativeTo: relativeTo)
         let folder = file.deletingLastPathComponent()
-
-        try FileManager.default.createDirectory(
-            at: folder,
-            withIntermediateDirectories: true
-        )
+        try createFolders(for: folder)
 
         FileManager.default.createFile(atPath: file.path(), contents: data)
 
-        var attributes: [FileAttributeKey: Any] = [:]
-
-        if let permissions {
-            attributes[FileAttributeKey.posixPermissions] = permissions
-        }
-
-        if let modifyDate {
-            attributes[FileAttributeKey.modificationDate] = modifyDate
-        }
-
-        if !attributes.isEmpty {
-            try FileManager.default.setAttributes(
-                attributes,
-                ofItemAtPath: file.path()
-            )
-        }
+        try touch(file, permissions: permissions, modifyDate: modifyDate)
 
         return file
     }

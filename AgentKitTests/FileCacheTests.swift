@@ -15,7 +15,8 @@ private func file(size: UInt64 = 10 * File.defaultChunkSize) -> File {
         permissions: 0o644,
         accessTime: nil,
         modifyTime: nil,
-        createTime: nil
+        createTime: nil,
+        enumeratedAt: nil
     ))
 }
 

@@ -41,6 +41,40 @@ extension TestSandbox {
     }
 }
 
+extension Collection {
+    fileprivate var only: Element? {
+        count == 1 ? first : nil
+    }
+}
+
+extension [Change] {
+    fileprivate func split() -> (Set<Item>, Set<NSFileProviderItemIdentifier>) {
+        var updates: Set<Item> = []
+        var deletedIds: Set<NSFileProviderItemIdentifier> = []
+        for change in self {
+            switch change {
+            case .update(let item):
+                updates.insert(item)
+            case .delete(let itemId):
+                deletedIds.insert(NSFileProviderItemIdentifier(itemId))
+            }
+        }
+        return (updates, deletedIds)
+    }
+}
+
+extension Session {
+    fileprivate func id(of path: String) async throws
+        -> NSFileProviderItemIdentifier
+    {
+        var curr: NSFileProviderItemIdentifier = .rootContainer
+        for name in path.split(separator: "/") {
+            curr = try await child(of: curr, name: String(name))
+        }
+        return curr
+    }
+}
+
 struct SessionTests {
     struct NameChildParentPathTests {
         @Test func nameReturnsFilenameForItem() async throws {
@@ -435,81 +469,81 @@ struct SessionTests {
     }
 
     struct ReconcileTests {
+        let start: Date = Date(timeIntervalSince1970: 1_750_000_000)
+        let end: Date = Date(timeIntervalSince1970: 1_760_000_000)
+
         @Test func reconcileFileCreated() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFolder(at: "reconcile")
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
             let session = try await sandbox.getSession()
 
-            try sandbox.createFile(at: "reconcile/file.txt")
+            try sandbox.createFile(at: "dir/item.txt", modifyDate: end)
             let changes = try await session.reconcile()
 
-            print(changes)
+            let (updates, deletedIds) = changes.split()
+            let names = Set(updates.map(\.name))
+            #expect(names == ["dir", "item.txt"])
+            #expect(deletedIds == [])
         }
 
         @Test func reconcileFileSizeChanged() async throws {
-            let date = Date(timeIntervalSince1970: 1_000_000)
-
             let sandbox = TestSandbox()
-            let prevValue = "previous"
-            try sandbox.createFile(
-                at: "file.txt",
-                contents: prevValue,
-                modifyDate: date
-            )
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
+            try sandbox.createFile(at: "dir/item.txt", modifyDate: start)
             let session = try await sandbox.getSession()
 
-            let nextValue = "next"
+            let currValue = "curr"
             try sandbox.createFile(
-                at: "file.txt",
-                contents: nextValue,
-                modifyDate: date
+                at: "dir/item.txt",
+                contents: currValue,
+                modifyDate: end
             )
+            try sandbox.touch("dir", modifyDate: end)
             let changes = try await session.reconcile()
 
-            let change = try #require(changes.first)
-            guard case .update(let item) = change else {
-                Issue.record("expected .update, got \(change)")
-                return
-            }
-            #expect(item.name == "file.txt")
-            #expect(item.size == UInt64(nextValue.count))
+            let (updates, deletedIds) = changes.split()
+            let dir = try #require(updates.filter { $0.kind == .folder }.only)
+            #expect(dir.name == "dir")
+            let item = try #require(updates.filter { $0.kind == .file }.only)
+            #expect(item.name == "item.txt")
+            #expect(item.size == UInt64(currValue.count))
+            #expect(deletedIds == [])
         }
 
         @Test func reconcileFileDateModifiedChanged() async throws {
-            let start = Date(timeIntervalSince1970: 1_000_000)
-            let end = Date(timeIntervalSince1970: 2_000_000)
-
             let sandbox = TestSandbox()
-            try sandbox.createFile(at: "file.txt", modifyDate: start)
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
+            try sandbox.createFile(at: "dir/item.txt", modifyDate: start)
             let session = try await sandbox.getSession()
 
-            try sandbox.createFile(at: "file.txt", modifyDate: end)
+            try sandbox.createFile(at: "dir/item.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: end)
             let changes = try await session.reconcile()
 
-            let change = try #require(changes.first)
-            guard case .update(let item) = change else {
-                Issue.record("expected .update, got \(change)")
-                return
-            }
-            #expect(item.name == "file.txt")
+            let (updates, deletedIds) = changes.split()
+            let dir = try #require(updates.filter { $0.kind == .folder }.only)
+            #expect(dir.name == "dir")
+            let item = try #require(updates.filter { $0.kind == .file }.only)
+            #expect(item.name == "item.txt")
             #expect(item.modifyTime == end)
+            #expect(deletedIds == [])
         }
 
         @Test func reconcileFileDeleted() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(at: "file.txt")
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
+            try sandbox.createFile(at: "dir/item.txt", modifyDate: start)
             let session = try await sandbox.getSession()
-            let expectedItemId = try await session.child(name: "file.txt")
 
-            try sandbox.removeItem(at: "file.txt")
+            let fileId = try await session.id(of: "dir/item.txt")
+            try sandbox.removeItem(at: "dir/item.txt")
             let changes = try await session.reconcile()
 
-            let change = try #require(changes.first)
-            guard case .delete(let actualItemId) = change else {
-                Issue.record("expected .delete, got \(change)")
-                return
-            }
-            #expect(expectedItemId.rawValue == actualItemId)
+            let (updates, deletedIds) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.name == "dir")
+            #expect(deletedIds == [fileId])
         }
     }
 
