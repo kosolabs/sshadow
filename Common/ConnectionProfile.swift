@@ -1,7 +1,5 @@
 import FileProvider
 import SwiftData
-import SwiftLibSSH
-import SwiftUI
 
 private let logger = Logger(category: "ConnectionProfile")
 
@@ -38,8 +36,6 @@ public class ConnectionProfile: CustomStringConvertible {
     public var authMethod: AuthMethod
     public var bookmark: Data?
 
-    @Transient private var tester: ConnectionTester = DefaultConnectionTester()
-
     public init(
         id: UUID = UUID(),
         name: String? = nil,
@@ -50,7 +46,6 @@ public class ConnectionProfile: CustomStringConvertible {
         path: String? = nil,
         authMethod: AuthMethod = .password,
         bookmark: Data? = nil,
-        tester: ConnectionTester = DefaultConnectionTester()
     ) {
         self.id = id
         self.name = name
@@ -61,8 +56,6 @@ public class ConnectionProfile: CustomStringConvertible {
         self.path = path
         self.authMethod = authMethod
         self.bookmark = bookmark
-
-        self.tester = tester
     }
 
     // MARK: - Effective Values
@@ -122,10 +115,8 @@ public class ConnectionProfile: CustomStringConvertible {
     }
 
     public func enable() async throws {
-        let agent = AgentClient(domainId: id)
         let config = try ConnectionConfig(from: self)
-        try await tester.test(config: config)
-        try await agent.initDomain()
+        try await AgentClient.initDomain(config: config)
         try await domain.add()
 
         self.enabled = true

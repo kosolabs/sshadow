@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/kosolabs/swift-lib-ssh.git",
       "state" : {
-        "revision" : "eb97e6553941dd7761ece46648e3f1fae4d3194b",
-        "version" : "1.18.0"
+        "revision" : "730bb0b49342d42cd35c42f2a8ccb4a4a4190b17",
+        "version" : "1.19.0"
       }
     }
   ],

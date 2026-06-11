@@ -61,9 +61,12 @@ public class AgentClient {
         }
     }
 
-    public func initDomain() async throws {
-        let reply = try await perform(
-            .initDomain(InitDomainRequest(domainId: domainId))
+    public static func initDomain(
+        config: ConnectionConfig
+    ) async throws {
+        let client = AgentClient(domainId: config.id)
+        let reply = try await client.perform(
+            .initDomain(InitDomainRequest(config: config))
         )
         guard case .initDomain = reply else {
             throw CocoaError(.coderInvalidValue)

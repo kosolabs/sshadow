@@ -12,7 +12,7 @@ public enum AgentRequest: Message, PrettyDescribable {
     public var domainId: UUID {
         switch self {
         case .initDomain(let request):
-            request.domainId
+            request.config.id
         case .deinitDomain(let request):
             request.domainId
         case .name(let request):
@@ -99,6 +99,16 @@ public enum AgentResponse: Message, PrettyDescribable {
     case stream(StreamResponse)
 }
 
+public enum InitDomainError: Message, PrettyDescribable, Error {
+    case unknownHost
+    case connectionRefused
+    case timeout
+    case userauthPasswordFailed
+    case invalidPrivateKey
+    case pathNotADirectory
+    case pathNotFound
+}
+
 public enum AgentError: Message, PrettyDescribable, Error {
     case notAuthenticated
     case serverUnreachable
@@ -106,8 +116,9 @@ public enum AgentError: Message, PrettyDescribable, Error {
     case permissionDenied
     case itemNotFound(String?)
     case filenameCollision
+    case initDomainError(InitDomainError)
     case unknown(domain: String, code: Int, message: String)
-    
+
     public static var itemNotFound: AgentError {
         .itemNotFound(nil)
     }
@@ -121,6 +132,10 @@ public enum AgentError: Message, PrettyDescribable, Error {
     public init(from error: any Error) {
         if let agentError = error as? AgentError {
             self = agentError
+            return
+        }
+        if let testError = error as? InitDomainError {
+            self = .initDomainError(testError)
             return
         }
         logger.error("Unhandled error type: \(error)")
@@ -150,6 +165,8 @@ public enum AgentError: Message, PrettyDescribable, Error {
             NSFileProviderError(.noSuchItem)
         case .filenameCollision:
             NSFileProviderError(.filenameCollision)
+        case .initDomainError(let testError):
+            testError
         case .unknown(let domain, let code, let message):
             NSError(
                 domain: domain,
@@ -166,10 +183,10 @@ public enum AgentError: Message, PrettyDescribable, Error {
 }
 
 public struct InitDomainRequest: Message, PrettyDescribable {
-    public let domainId: UUID
+    public let config: ConnectionConfig
 
-    public init(domainId: UUID) {
-        self.domainId = domainId
+    public init(config: ConnectionConfig) {
+        self.config = config
     }
 }
 

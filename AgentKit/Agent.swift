@@ -138,8 +138,9 @@ public class Agent {
     func initDomain(
         _ request: InitDomainRequest
     ) async throws -> InitDomainResponse {
+        try await SSHClient.test(config: request.config)
         let domainDbConfig =
-            self.domainDbConfig ?? DomainDB.model(for: request.domainId)
+            self.domainDbConfig ?? DomainDB.model(for: request.config.id)
         try await DomainDB.open(config: domainDbConfig)
         return InitDomainResponse()
     }

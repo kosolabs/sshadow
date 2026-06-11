@@ -35,7 +35,7 @@ struct ConnectionTestStatusView: View {
                 )
                 .foregroundStyle(.red)
             }
-        } else if let connectionTestError = error as? ConnectionTestError {
+        } else if let connectionTestError = error as? InitDomainError {
             switch connectionTestError {
             case .unknownHost:
                 Label(
@@ -98,11 +98,11 @@ struct ConnectionTestStatusView: View {
         ConnectionTestStatusView(testing: true, error: nil)
         ConnectionTestStatusView(
             testing: false,
-            error: ConnectionTestError.pathNotADirectory
+            error: InitDomainError.pathNotADirectory
         )
         ConnectionTestStatusView(
             testing: false,
-            error: ConnectionTestError.pathNotFound
+            error: InitDomainError.pathNotFound
         )
     }
     .padding()
