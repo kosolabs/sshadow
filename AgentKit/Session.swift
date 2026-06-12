@@ -9,7 +9,7 @@ final class Session: Sendable {
     private let config: ConnectionConfig
     private let ssh: SSHClient
     private let sftp: SFTPClient
-    let db: DomainDB
+    private let db: DomainDB
     private let sharedUrl: URL
 
     private let cache: FileCache

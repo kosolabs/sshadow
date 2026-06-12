@@ -73,6 +73,10 @@ extension Session {
         }
         return curr
     }
+
+    fileprivate func item(at path: String) async throws -> Item {
+        try await item(for: id(of: path))
+    }
 }
 
 struct SessionTests {
@@ -328,12 +332,12 @@ struct SessionTests {
             let items = try await session.list(for: .rootContainer)
             let listed = try #require(items.first { $0.name == "file.txt" })
 
-            let row = try await session.db.item(for: listed.id)
-            #expect(row.kind == .file)
-            #expect(row.size == UInt64(contents.utf8.count))
-            #expect(row.size == listed.size)
-            #expect(row.permissions == listed.permissions)
-            #expect(row.modifyTime == listed.modifyTime)
+            let item = try await session.item(for: listed.id)
+            #expect(item.kind == .file)
+            #expect(item.size == UInt64(contents.utf8.count))
+            #expect(item.size == listed.size)
+            #expect(item.permissions == listed.permissions)
+            #expect(item.modifyTime == listed.modifyTime)
         }
 
         @Test func listPopulatesSnapshotForFolderAndSymlink() async throws {
@@ -345,10 +349,10 @@ struct SessionTests {
 
             _ = try await session.list(for: .rootContainer)
 
-            let folder = try await session.db.child(name: "dir")
-            #expect(folder.kind == .folder)
+            let item = try await session.item(at: "dir")
+            #expect(item.kind == .folder)
 
-            let symlink = try await session.db.child(name: "link.txt")
+            let symlink = try await session.item(at: "link.txt")
             #expect(symlink.kind == .symlink(target: "target.txt"))
         }
 
@@ -360,7 +364,7 @@ struct SessionTests {
             let items = try await session.list(for: .trashContainer)
 
             #expect(items.map(\.name) == ["file.txt"])
-            #expect(try await session.db.isEnumerated(.trashContainer))
+            #expect(try await session.item(for: .trashContainer).isEnumerated)
         }
 
         @Test func listEmptyTrashMarksTrashEnumerated() async throws {
@@ -371,7 +375,7 @@ struct SessionTests {
             let items = try await session.list(for: .trashContainer)
 
             #expect(items.isEmpty)
-            #expect(try await session.db.isEnumerated(.trashContainer))
+            #expect(try await session.item(for: .trashContainer).isEnumerated)
         }
 
         @Test func listRootDoesNotIncludeSSHadowFolder() async throws {
@@ -391,15 +395,15 @@ struct SessionTests {
             let items = try await session.list(for: .trashContainer)
 
             #expect(items.isEmpty)
-            #expect(try await session.db.isEnumerated(.trashContainer))
+            #expect(try await session.item(for: .trashContainer).isEnumerated)
         }
 
         @Test func listStampsEnumeratedAt() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "leaf.txt")
             let session = try await sandbox.getSession()
-
-            #expect(try await session.db.isEnumerated(.rootContainer))
+            
+            #expect(try await session.item(for: .trashContainer).isEnumerated)
         }
 
         @Test func listServesEmptyDirectoryFromCache() async throws {
@@ -457,10 +461,11 @@ struct SessionTests {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
 
-            let ghost = try await session.db.upsert(
-                name: "ghost",
-                kind: .folder
+            let ghost = try await session.createDirectory(
+                parentId: .rootContainer,
+                name: "ghost"
             )
+            try sandbox.removeItem(at: "ghost")
 
             await #expect(throws: AgentError.itemNotFound(ghost.id.rawValue)) {
                 try await session.list(for: ghost.id)
