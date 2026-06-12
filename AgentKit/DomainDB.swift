@@ -177,7 +177,7 @@ actor DomainDB {
     func upsert(
         parentId: NSFileProviderItemIdentifier = .rootContainer,
         name: String,
-        kind: ItemModel.Kind,
+        kind: Item.Kind,
         size: UInt64? = nil,
         permissions: UInt32? = nil,
         accessTime: Date? = nil,
@@ -217,7 +217,7 @@ actor DomainDB {
     private func upsert(
         parent: ItemModel,
         name: String,
-        kind: ItemModel.Kind,
+        kind: Item.Kind,
         size: UInt64? = nil,
         permissions: UInt32? = nil,
         accessTime: Date? = nil,

@@ -5,7 +5,7 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Session")
 
-class Session {
+final class Session: Sendable {
     private let config: ConnectionConfig
     private let ssh: SSHClient
     private let sftp: SFTPClient
@@ -104,33 +104,17 @@ class Session {
     @discardableResult
     func upsert(
         parentId: NSFileProviderItemIdentifier,
-        name: String,
-        attrs: SFTPAttributes
+        sshItem: SSHItem
     ) async throws -> Item {
-        let kind: ItemModel.Kind =
-            switch attrs.type {
-            case .directory:
-                .folder
-            case .symlink:
-                .symlink(
-                    target: try await symlinkTarget(
-                        for: name,
-                        parentId: parentId
-                    )
-                )
-            default:
-                .file
-            }
-
         return try await db.upsert(
             parentId: parentId,
-            name: name,
-            kind: kind,
-            size: attrs.size,
-            permissions: attrs.permissions,
-            accessTime: attrs.accessTime,
-            modifyTime: attrs.modifyTime,
-            createTime: attrs.createTime
+            name: sshItem.name,
+            kind: sshItem.kind,
+            size: sshItem.size,
+            permissions: sshItem.permissions,
+            accessTime: sshItem.accessTime,
+            modifyTime: sshItem.modifyTime,
+            createTime: sshItem.createTime
         )
     }
 
@@ -145,9 +129,9 @@ class Session {
         )
 
         let sshItems = try await withEntries(of: folder.id) { entries in
-            var sshItems: [String: SFTPAttributes] = [:]
-            for try await (name, attrs) in entries {
-                sshItems[name] = attrs
+            var sshItems: [String: SSHItem] = [:]
+            for try await sshItem in entries {
+                sshItems[sshItem.name] = sshItem
             }
             return sshItems
         }
@@ -160,13 +144,12 @@ class Session {
             {
                 let newItem = try await upsert(
                     parentId: folder.id,
-                    name: name,
-                    attrs: sshItem
+                    sshItem: sshItem
                 )
 
                 changes.append(.update(item: newItem))
             }
-            
+
             if let dbItem = dbItem, dbItem.isEnumerated {
                 remainder.append(dbItem)
             }
@@ -203,8 +186,8 @@ class Session {
 
     func enumerate(itemId: NSFileProviderItemIdentifier) async throws {
         try await withEntries(of: itemId) { entries in
-            for try await (name, attrs) in entries {
-                try await upsert(parentId: itemId, name: name, attrs: attrs)
+            for try await sshItem in entries {
+                try await upsert(parentId: itemId, sshItem: sshItem)
             }
         }
         try await db.markEnumerated(itemId)
@@ -333,7 +316,7 @@ class Session {
         return try await db.upsert(
             parentId: parentId,
             name: name,
-            kind: ItemModel.Kind(from: kind),
+            kind: kind,
             size: attrs.size,
             permissions: attrs.permissions,
             accessTime: attrs.accessTime,
@@ -555,34 +538,45 @@ class Session {
         }
     }
 
-    typealias Entry = (name: String, attrs: SFTPAttributes)
-    typealias EntryAsyncSequence = AsyncSequence<Entry, SSHError>
-    
-    struct EmptyEntryAsyncSequence: EntryAsyncSequence {
-        struct AsyncIterator: AsyncIteratorProtocol {
-            mutating func next() async throws(SSHError) -> Entry? { nil }
-        }
-        
-        func makeAsyncIterator() -> AsyncIterator { AsyncIterator() }
-    }
-
     func withEntries<T: Sendable>(
         of itemId: NSFileProviderItemIdentifier,
-        perform: @Sendable (any EntryAsyncSequence) async throws -> T
+        perform: @Sendable (any SSHItem.Stream) async throws -> T
     ) async throws -> T {
         do {
             return try await withDirectory(for: itemId) { dir in
-                let entries = dir.compactMap { attrs -> Entry? in
+                let entries = dir.compactMap { attrs -> SSHItem? in
                     guard let name = attrs.name else { return nil }
                     if itemId == .rootContainer, name == ".sshadow" {
                         return nil
                     }
-                    return (name, attrs)
+                    let kind: Item.Kind =
+                        switch attrs.type {
+                        case .directory:
+                            .folder
+                        case .symlink:
+                            .symlink(
+                                target: try await self.symlinkTarget(
+                                    for: name,
+                                    parentId: itemId
+                                )
+                            )
+                        default:
+                            .file
+                        }
+                    return SSHItem(
+                        name: name,
+                        kind: kind,
+                        size: attrs.size,
+                        permissions: attrs.permissions,
+                        accessTime: attrs.accessTime,
+                        modifyTime: attrs.modifyTime,
+                        createTime: attrs.createTime
+                    )
                 }
                 return try await perform(entries)
             }
         } catch AgentError.itemNotFound where itemId == .trashContainer {
-            return try await perform(EmptyEntryAsyncSequence())
+            return try await perform(SSHItem.EmptyStream())
         }
     }
 
