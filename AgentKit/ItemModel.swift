@@ -9,7 +9,7 @@ extension Item {
             id: item.rawId,
             parentId: item.parent?.rawId,
             name: item.name,
-            kind: Item.Kind(from: item.kind),
+            kind: item.kind,
             size: item.size,
             permissions: item.permissions,
             accessTime: item.accessTime,
@@ -20,35 +20,11 @@ extension Item {
     }
 }
 
-extension Item.Kind {
-    init(from kind: ItemModel.Kind) {
-        switch kind {
-        case .file: self = .file
-        case .folder: self = .folder
-        case .symlink(let target): self = .symlink(target: target)
-        }
-    }
-}
-
 @Model
 class ItemModel {
-    enum Kind: Codable, Equatable {
-        case file
-        case folder
-        case symlink(target: String)
-
-        init(from kind: Item.Kind) {
-            switch kind {
-            case .file: self = .file
-            case .folder: self = .folder
-            case .symlink(let target): self = .symlink(target: target)
-            }
-        }
-    }
-
     @Attribute(.unique) var rawId: String
     var name: String
-    var kind: Kind
+    var kind: Item.Kind
     var size: UInt64?
     var permissions: UInt32?
     var accessTime: Date?
@@ -67,7 +43,7 @@ class ItemModel {
             NSFileProviderItemIdentifier(UUID().uuidString),
         parent: ItemModel? = nil,
         name: String,
-        kind: Kind = .folder,
+        kind: Item.Kind = .folder,
         size: UInt64? = nil,
         permissions: UInt32? = nil,
         accessTime: Date? = nil,
