@@ -76,18 +76,18 @@ For a file read (fetchContents):
 - **`ConnectionProfile.swift`** — SwiftData `@Model` persisting SSH connection settings. Credentials (password, private key passphrase) are stored in Keychain; private key files are referenced via security-scoped bookmarks.
 - **`ConnectionConfig.swift`** — Codable struct derived from `ConnectionProfile`, passed over XPC to the agent so the extension process never touches credentials directly.
 - **`AppDB.swift`** — `@ModelActor` wrapping the SwiftData container for `ConnectionProfile`.
-- **`FileInfo.swift`** — File metadata (id, parentId, name, size, permissions, timestamps) returned from agent to extension.
+- **`Item.swift`** — File metadata (id, parentId, name, kind, size, permissions, timestamps, enumeratedAt) returned from agent to extension.
 
 ### `AgentKit` (main app only)
 - **`Agent.swift`** — Decodes incoming `AgentRequest`, dispatches to the matching `func` on itself, and returns `AgentResult`. Manages one `Agent` instance per XPC session.
 - **`Session.swift`** — Per-domain object holding `SSHClient`, `SFTPClient`, and `DomainDB`. All SFTP operations live here. Translates `NSFileProviderItemIdentifier` → SFTP path via `DomainDB`, then calls SwiftLibSSH.
 - **`SessionManager.swift`** — Creates and caches `Session` instances keyed by domain UUID. Called by `Agent` for every request.
-- **`DomainDB.swift`** — `@ModelActor` per domain. Stores `ItemModel` (itemId ↔ parent + name tree) and `FileChunk` (chunk-level download cache). Lives in the app group container.
+- **`DomainDB.swift`** — `@ModelActor` per domain. Stores `ItemModel` (itemId ↔ parent + name tree, plus per-item attributes and an `enumeratedAt` marker). Lives in the app group container.
 
 ### `ExtensionKit` (extension process only)
 - **`Extension.swift`** — Implements `NSFileProviderReplicatedExtension` + `NSFileProviderPartialContentFetching`. Wraps every callback in `withProgress { }` and delegates to `AgentClient`.
 - **`Enumerator.swift`** — `NSFileProviderEnumerator` that calls `agent.list(for:)`.
-- **`Item.swift`** — `NSFileProviderItem` wrapping `FileInfo`.
+- **`FPItem.swift`** — `NSFileProviderItem` wrapping `Item`.
 
 ## Key Patterns
 
@@ -96,7 +96,6 @@ For a file read (fetchContents):
 FileProvider identifies files by opaque `NSFileProviderItemIdentifier` strings. SSHadow maps these to SFTP paths through `DomainDB`:
 - `DomainDB` stores a tree of `ItemModel(id, parentId, name)`.
 - `Session.path(for: itemId)` walks the tree to the root and joins segments, then prepends the connection's configured remote path.
-- When the extension encounters an identifier it hasn't seen before, `child(of:path:ifNotExists:.create)` registers it in the DB.
 
 ### Adding a new agent operation
 
@@ -108,11 +107,11 @@ FileProvider identifies files by opaque `NSFileProviderItemIdentifier` strings. 
 
 ### Streaming / chunk cache
 
-`Session.stream()` implements partial content fetching. It divides a file into fixed-size chunks, checks `DomainDB` for already-cached chunks, skips those, and fetches only the missing ones. `FileChunk.chunkRange(for:)` converts a byte range to chunk indices.
+`Session.stream()` implements partial content fetching. `File.slice(for: byteRange)` converts a byte range to a range of fixed-size chunks; each chunk is fetched (or served) via the in-memory `FileCache` actor, which dedupes concurrent reads and prefetches a window of upcoming chunks.
 
 ### Error mapping
 
-`Session.mapError(with:_:)` converts SwiftLibSSH errors to `NSFileProviderError` at the boundary (`.noSuchFile` → `errorForNonExistentItem`, `.fileAlreadyExists` → `.filenameCollision`). Wrap all SFTP calls in this helper when adding new operations.
+`Session.mapError(with:_:)` converts SwiftLibSSH `SSHError.sftpError` cases to `AgentError` at the boundary (`.noSuchFile` → `.itemNotFound`, `.permissionDenied` → `.permissionDenied`, `.fileAlreadyExists` → `.filenameCollision`). Wrap all SFTP calls in this helper when adding new operations.
 
 ### Testing
 
