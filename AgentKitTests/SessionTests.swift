@@ -402,7 +402,7 @@ struct SessionTests {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "leaf.txt")
             let session = try await sandbox.getSession()
-            
+
             #expect(try await session.item(for: .trashContainer).isEnumerated)
         }
 
@@ -477,6 +477,19 @@ struct SessionTests {
         let start: Date = Date(timeIntervalSince1970: 1_750_000_000)
         let end: Date = Date(timeIntervalSince1970: 1_760_000_000)
 
+        @Test func reconcileNoChanges() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
+            try sandbox.createSymlink(at: "other/link.txt", target: "file.txt")
+            let session = try await sandbox.getSession()
+
+            let changes = try await session.reconcile()
+
+            let (updates, deletedIds) = changes.split()
+            #expect(updates == [])
+            #expect(deletedIds == [])
+        }
+
         @Test func reconcileFileCreated() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFolder(at: "dir", modifyDate: start)
@@ -484,18 +497,20 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             try sandbox.createFile(at: "dir/item.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
             let changes = try await session.reconcile()
 
             let (updates, deletedIds) = changes.split()
-            let names = Set(updates.map(\.name))
-            #expect(names == ["dir", "item.txt"])
+            let item = try #require(updates.only)
+            #expect(item.name == "item.txt")
+            #expect(item.modifyTime == end)
             #expect(deletedIds == [])
         }
 
         @Test func reconcileFileSizeChanged() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
             try sandbox.createFile(at: "dir/item.txt", modifyDate: start)
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
             let session = try await sandbox.getSession()
 
             let currValue = "curr"
@@ -504,13 +519,11 @@ struct SessionTests {
                 contents: currValue,
                 modifyDate: end
             )
-            try sandbox.touch("dir", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
             let changes = try await session.reconcile()
 
             let (updates, deletedIds) = changes.split()
-            let dir = try #require(updates.filter { $0.kind == .folder }.only)
-            #expect(dir.name == "dir")
-            let item = try #require(updates.filter { $0.kind == .file }.only)
+            let item = try #require(updates.only)
             #expect(item.name == "item.txt")
             #expect(item.size == UInt64(currValue.count))
             #expect(deletedIds == [])
@@ -518,18 +531,32 @@ struct SessionTests {
 
         @Test func reconcileFileDateModifiedChanged() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
             try sandbox.createFile(at: "dir/item.txt", modifyDate: start)
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
             let session = try await sandbox.getSession()
 
-            try sandbox.createFile(at: "dir/item.txt", modifyDate: end)
-            try sandbox.touch("dir", modifyDate: end)
+            try sandbox.touch("dir/item.txt", permissions: 0o444)
             let changes = try await session.reconcile()
 
             let (updates, deletedIds) = changes.split()
-            let dir = try #require(updates.filter { $0.kind == .folder }.only)
-            #expect(dir.name == "dir")
-            let item = try #require(updates.filter { $0.kind == .file }.only)
+            let item = try #require(updates.only)
+            #expect(item.name == "item.txt")
+            #expect(item.permissions! & 0o7777 == 0o444)
+            #expect(deletedIds == [])
+        }
+
+        @Test func reconcileFilePermissionsChanged() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "dir/item.txt", modifyDate: start)
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try sandbox.createFile(at: "dir/item.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            let changes = try await session.reconcile()
+
+            let (updates, deletedIds) = changes.split()
+            let item = try #require(updates.only)
             #expect(item.name == "item.txt")
             #expect(item.modifyTime == end)
             #expect(deletedIds == [])
@@ -537,18 +564,140 @@ struct SessionTests {
 
         @Test func reconcileFileDeleted() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
             try sandbox.createFile(at: "dir/item.txt", modifyDate: start)
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
             let session = try await sandbox.getSession()
 
             let fileId = try await session.id(of: "dir/item.txt")
             try sandbox.removeItem(at: "dir/item.txt")
+            try sandbox.touch("dir", modifyDate: start)
+            let changes = try await session.reconcile()
+
+            let (updates, deletedIds) = changes.split()
+            #expect(updates == [])
+            #expect(deletedIds == [fileId])
+        }
+        
+        @Test func reconcileFileMoved() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "dir/old.txt", modifyDate: start)
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let oldId = try await session.id(of: "dir/old.txt")
+            try sandbox.move(from: "dir/old.txt", to: "dir/new.txt")
+            try sandbox.touch("dir", modifyDate: start)
             let changes = try await session.reconcile()
 
             let (updates, deletedIds) = changes.split()
             let item = try #require(updates.only)
-            #expect(item.name == "dir")
+            #expect(item.name == "new.txt")
+            #expect(deletedIds == [oldId])
+        }
+        
+        @Test func reconcileFolderCreated() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try sandbox.createFolder(at: "dir/subdir", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            let changes = try await session.reconcile()
+
+            let (updates, deletedIds) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.name == "subdir")
+            #expect(item.modifyTime == end)
+            #expect(deletedIds == [])
+        }
+        
+        @Test func reconcileFolderDeleted() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir/subdir", modifyDate: start)
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let fileId = try await session.id(of: "dir/subdir")
+            try sandbox.removeItem(at: "dir/subdir")
+            try sandbox.touch("dir", modifyDate: start)
+            let changes = try await session.reconcile()
+
+            let (updates, deletedIds) = changes.split()
+            #expect(updates == [])
             #expect(deletedIds == [fileId])
+        }
+        
+        @Test func reconcileFileReplacedWithFolder() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir/thing", modifyDate: start)
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let fileId = try await session.id(of: "dir/thing")
+            try sandbox.removeItem(at: "dir/thing")
+            try sandbox.createFile(at: "dir/thing", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            let changes = try await session.reconcile()
+
+            let (updates, deletedIds) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.name == "thing")
+            #expect(item.modifyTime == end)
+            #expect(deletedIds == [fileId])
+        }
+        
+        @Test func reconcileSymlinkCreated() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "dir/target.txt", modifyDate: start)
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try sandbox.createSymlink(at: "dir/link.txt", target: "target.txt")
+            try sandbox.touch("dir", modifyDate: start)
+            let changes = try await session.reconcile()
+
+            let (updates, deletedIds) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.name == "link.txt")
+            #expect(deletedIds == [])
+        }
+        
+        @Test func reconcileSymlinkDeleted() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "dir/target.txt", modifyDate: start)
+            try sandbox.createSymlink(at: "dir/link.txt", target: "target.txt")
+            try sandbox.touch("dir", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let linkId = try await session.id(of: "dir/target.txt")
+            try sandbox.removeItem(at: "dir/target.txt")
+            try sandbox.touch("dir", modifyDate: start)
+            let changes = try await session.reconcile()
+
+            let (updates, deletedIds) = changes.split()
+            #expect(updates == [])
+            #expect(deletedIds == [linkId])
+        }
+
+        @Test func reconcileSymlinkRecreated() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "dir/old.txt", modifyDate: start)
+            try sandbox.createFile(at: "dir/new.txt", modifyDate: start)
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
+            try sandbox.createSymlink(at: "dir/link.txt", target: "old.txt")
+            try sandbox.touch("dir", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let linkId = try await session.id(of: "dir/link.txt")
+            try sandbox.createSymlink(at: "dir/link.txt", target: "new.txt")
+            try sandbox.touch("dir", modifyDate: start)
+            let changes = try await session.reconcile()
+
+            let (updates, deletedIds) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.name == "link.txt")
+            #expect(deletedIds == [linkId])
         }
     }
 

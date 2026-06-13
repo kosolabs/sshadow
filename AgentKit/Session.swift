@@ -118,6 +118,13 @@ final class Session: Sendable {
         )
     }
 
+    private static func permissionsMatch(
+        _ a: UInt32?,
+        _ b: UInt32?
+    ) -> Bool {
+        a.map { $0 & 0o7777 } == b.map { $0 & 0o7777 }
+    }
+
     func reconcile(folder: Item) async throws -> ([Change], [Item]) {
         var changes: [Change] = []
         var remainder: [Item] = []
@@ -138,20 +145,77 @@ final class Session: Sendable {
 
         for (name, sshItem) in sshItems {
             let dbItem = dbItems[name]
-            if dbItem == nil
-                || dbItem?.size != sshItem.size
-                || dbItem?.modifyTime != sshItem.modifyTime
-            {
-                let newItem = try await upsert(
-                    parentId: folder.id,
-                    sshItem: sshItem
-                )
-
-                changes.append(.update(item: newItem))
+            
+            // If the kind changed (e.g. file → folder, or symlink retargeted), the
+            // identity of the item has effectively changed too. We delete the old row
+            // first so the upsert below can't find it by (parent, name) and is forced
+            // to insert a fresh row with a new id. We also emit a .delete so the
+            // FileProvider drops its cached entry for the old id.
+            if let dbItem, dbItem.kind != sshItem.kind {
+                try await db.remove(dbItem.id)
+                changes.append(.delete(itemId: dbItem.rawId))
             }
 
-            if let dbItem = dbItem, dbItem.isEnumerated {
-                remainder.append(dbItem)
+            // Either updates the existing row in place (kind unchanged) or inserts a
+            // brand new one (no previous item, or we just deleted it above).
+            let newItem = try await upsert(parentId: folder.id, sshItem: sshItem)
+
+            // Two cases short-circuit to a plain .update with no further diffing:
+            //   1. There was no prior row at all (brand new item on the server).
+            //   2. There was a prior, but we just deleted it above due to a kind swap,
+            //      so `newItem` is a freshly-minted row with no meaningful "previous
+            //      state" to compare against.
+            // In both, the new id is novel to the FileProvider, so we just announce it.
+            guard let dbItem, dbItem.kind == sshItem.kind else {
+                changes.append(.update(item: newItem))
+                continue
+            }
+            
+            // Past this point, `dbItem.kind == sshItem.kind` is guaranteed, so each
+            // arm only needs to look at metadata that distinguishes "same item,
+            // different attributes" — never kind itself.
+            switch dbItem.kind {
+            case .file:
+                // Files care about size + perms + timestamps. A size change is the
+                // clearest signal the bytes were rewritten.
+                if dbItem.size != sshItem.size
+                    || !Self.permissionsMatch(
+                        dbItem.permissions,
+                        sshItem.permissions
+                    )
+                    || dbItem.createTime != sshItem.createTime
+                    || dbItem.modifyTime != sshItem.modifyTime
+                {
+                    changes.append(.update(item: newItem))
+                }
+            case .folder:
+                // Folders have no size to compare, just perms + timestamps.
+                if !Self.permissionsMatch(
+                    dbItem.permissions,
+                    sshItem.permissions
+                )
+                    || dbItem.createTime != sshItem.createTime
+                    || dbItem.modifyTime != sshItem.modifyTime
+                {
+                    changes.append(.update(item: newItem))
+                }
+
+                // Only descend into folders we've previously enumerated. Unenumerated
+                // folders are lazy — we have no baseline to diff against, so there's
+                // nothing meaningful to reconcile inside them.
+                if dbItem.enumeratedAt != nil {
+                    remainder.append(dbItem)
+                }
+            case .symlink:
+                // Target changes are already handled by the kind-swap path above
+                // (since Kind.symlink carries the target as an associated value), so
+                // here we only need to notice timestamp drift on an otherwise-identical
+                // symlink.
+                if dbItem.createTime != sshItem.createTime
+                    || dbItem.modifyTime != sshItem.modifyTime
+                {
+                    changes.append(.update(item: newItem))
+                }
             }
         }
 
