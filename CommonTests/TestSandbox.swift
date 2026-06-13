@@ -215,6 +215,16 @@ class TestSandbox {
         try Data(contentsOf: getUrl(for: path))
     }
 
+    func move(
+        from src: String,
+        to dest: String,
+        relativeTo: RelativeTo = .mount
+    ) throws {
+        let srcUrl = getUrl(for: src, relativeTo: relativeTo)
+        let destUrl = getUrl(for: dest, relativeTo: relativeTo)
+        try FileManager.default.moveItem(at: srcUrl, to: destUrl)
+    }
+
     @discardableResult
     func removeItem(at path: String) throws -> URL {
         let url = getUrl(for: path)
@@ -260,31 +270,27 @@ class TestSandbox {
         }
     }
 
-    private func createFolders(
+    private func withAncestors(
         for url: URL,
-        permissions: mode_t? = nil,
-        modifyDate: Date? = nil
+        modifyDate: Date? = nil,
+        perform operation: () throws -> Void
     ) throws {
+        let parent = url.deletingLastPathComponent()
         var ancestors: [URL] = []
-        var current = url.deletingLastPathComponent()
-        while !FileManager.default.fileExists(atPath: current.path()) {
-            ancestors.append(current)
-            let parent = current.deletingLastPathComponent()
-            if parent.path() == current.path() {
-                break
-            }
-            current = parent
+        var curr = parent
+        while !FileManager.default.fileExists(atPath: curr.path()) {
+            ancestors.append(curr)
+            curr = curr.deletingLastPathComponent()
         }
         try FileManager.default.createDirectory(
-            at: url,
+            at: parent,
             withIntermediateDirectories: true
         )
+
+        try operation()
+
         for ancestor in ancestors.reversed() {
-            try touch(
-                ancestor,
-                permissions: permissions,
-                modifyDate: modifyDate
-            )
+            try touch(ancestor, modifyDate: modifyDate)
         }
     }
 
@@ -296,7 +302,13 @@ class TestSandbox {
         modifyDate: Date? = nil
     ) throws -> URL {
         let folder = getUrl(for: path, relativeTo: relativeTo)
-        try createFolders(for: folder)
+        try withAncestors(for: folder, modifyDate: modifyDate) {
+            try FileManager.default.createDirectory(
+                at: folder,
+                withIntermediateDirectories: false
+            )
+            try touch(folder, permissions: permissions, modifyDate: modifyDate)
+        }
         return folder
     }
 
@@ -304,18 +316,17 @@ class TestSandbox {
     func createSymlink(
         at path: String,
         relativeTo: RelativeTo = .mount,
-        target: String
+        target: String,
+        modifyDate: Date? = nil
     ) throws -> URL {
         let link = getUrl(for: path, relativeTo: relativeTo)
-        let folder = link.deletingLastPathComponent()
-        try createFolders(for: folder)
-
-        try? FileManager.default.removeItem(at: link)
-        try FileManager.default.createSymbolicLink(
-            atPath: link.path(),
-            withDestinationPath: target
-        )
-
+        try withAncestors(for: link, modifyDate: modifyDate) {
+            try? FileManager.default.removeItem(at: link)
+            try FileManager.default.createSymbolicLink(
+                atPath: link.path(),
+                withDestinationPath: target
+            )
+        }
         return link
     }
 
@@ -355,13 +366,10 @@ class TestSandbox {
         modifyDate: Date? = nil
     ) throws -> URL {
         let file = getUrl(for: path, relativeTo: relativeTo)
-        let folder = file.deletingLastPathComponent()
-        try createFolders(for: folder)
-
-        FileManager.default.createFile(atPath: file.path(), contents: data)
-
-        try touch(file, permissions: permissions, modifyDate: modifyDate)
-
+        try withAncestors(for: file, modifyDate: modifyDate) {
+            FileManager.default.createFile(atPath: file.path(), contents: data)
+            try touch(file, permissions: permissions, modifyDate: modifyDate)
+        }
         return file
     }
 }
