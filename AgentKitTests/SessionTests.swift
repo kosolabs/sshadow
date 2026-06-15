@@ -532,7 +532,7 @@ struct SessionTests {
             #expect(deletedIds == [])
         }
 
-        @Test func reconcileFileDateModifiedChanged() async throws {
+        @Test func reconcileFilePermissionsChanged() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "dir/item.txt", modifyDate: start)
             try sandbox.createFile(at: "other/file.txt", modifyDate: start)
@@ -548,7 +548,7 @@ struct SessionTests {
             #expect(deletedIds == [])
         }
 
-        @Test func reconcileFilePermissionsChanged() async throws {
+        @Test func reconcileFileDateModifiedChanged() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "dir/item.txt", modifyDate: start)
             try sandbox.createFile(at: "other/file.txt", modifyDate: start)
