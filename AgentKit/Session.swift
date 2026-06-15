@@ -118,13 +118,6 @@ final class Session: Sendable {
         )
     }
 
-    private static func permissionsMatch(
-        _ a: UInt32?,
-        _ b: UInt32?
-    ) -> Bool {
-        a.map { $0 & 0o7777 } == b.map { $0 & 0o7777 }
-    }
-
     func reconcile(folder: Item) async throws -> ([Change], [Item]) {
         var changes: [Change] = []
         var remainder: [Item] = []
