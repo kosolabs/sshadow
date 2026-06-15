@@ -261,7 +261,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     parentId: parentId,
                     name: filename,
                     file: url,
-                    mode: fileSystemFlags.permissions,
+                    flags: .init(from: fileSystemFlags),
                     progress: subprogress
                 )
             }
@@ -356,7 +356,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     parentId: currentParent,
                     name: currentName,
                     file: newContents,
-                    mode: fileSystemFlags.permissions,
+                    flags: .init(from: fileSystemFlags),
                     progress: subprogress
                 )
             }
@@ -451,8 +451,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     ) async throws {
         try await agent.setAttributes(
             for: agent.child(of: item.parentId, name: item.filename),
-            permissions: fields.contains(.fileSystemFlags)
-                ? item.fileSystemFlags?.permissions : nil,
+            flags: fields.contains(.fileSystemFlags)
+                ? .from(item.fileSystemFlags) : nil,
             accessTime: fields.contains(.lastUsedDate)
                 ? item.lastUsedDate ?? nil : nil,
             modifyTime: fields.contains(.contentModificationDate)

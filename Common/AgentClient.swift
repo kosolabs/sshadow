@@ -160,7 +160,7 @@ public class AgentClient {
 
     public func setAttributes(
         for itemId: NSFileProviderItemIdentifier,
-        permissions: mode_t? = nil,
+        flags: Item.Flags? = nil,
         accessTime: Date? = nil,
         modifyTime: Date? = nil
     ) async throws {
@@ -169,7 +169,7 @@ public class AgentClient {
                 SetAttributesRequest(
                     domainId: domainId,
                     itemId: itemId.rawValue,
-                    permissions: permissions,
+                    flags: flags,
                     accessTime: accessTime,
                     modifyTime: modifyTime
                 )
@@ -294,7 +294,7 @@ public class AgentClient {
         parentId: NSFileProviderItemIdentifier,
         name: String,
         file: URL,
-        mode: mode_t,
+        flags: Item.Flags,
         chunkSize: UInt64 = Limits.defaultBufferSize,
         progress: Progress
     ) async throws -> Item {
@@ -313,7 +313,7 @@ public class AgentClient {
                     parentId: parentId.rawValue,
                     name: name,
                     file: stagedUrl,
-                    mode: mode,
+                    flags: flags,
                     chunkSize: chunkSize,
                     progressEndpoint: sync.endpoint
                 )

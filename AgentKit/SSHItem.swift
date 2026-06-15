@@ -29,7 +29,7 @@ struct SSHItem: Message, CustomStringConvertible {
     let name: String
     let kind: Item.Kind
     let size: UInt64?
-    let permissions: UInt32?
+    let flags: Item.Flags?
     let accessTime: Date?
     let modifyTime: Date?
     let createTime: Date?
@@ -38,7 +38,7 @@ struct SSHItem: Message, CustomStringConvertible {
         name: String,
         kind: Item.Kind,
         size: UInt64?,
-        permissions: UInt32?,
+        flags: Item.Flags?,
         accessTime: Date?,
         modifyTime: Date?,
         createTime: Date?
@@ -46,7 +46,7 @@ struct SSHItem: Message, CustomStringConvertible {
         self.name = name
         self.kind = kind
         self.size = size
-        self.permissions = permissions
+        self.flags = flags
         self.accessTime = accessTime
         self.modifyTime = modifyTime
         self.createTime = createTime

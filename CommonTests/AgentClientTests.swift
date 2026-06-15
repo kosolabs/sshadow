@@ -98,11 +98,10 @@ struct AgentClientTests {
         let agent = try await sandbox.getAgentClient()
 
         let itemId = try await agent.child(name: "set-attrs.txt")
-        try await agent.setAttributes(for: itemId, permissions: 0o644)
+        try await agent.setAttributes(for: itemId, flags: .rw)
         let item = try await agent.item(for: itemId)
 
-        let permissions = try #require(item.permissions)
-        #expect(permissions & 0o777 == 0o644)
+        #expect(item.flags == .rw)
     }
 
     @Test func createSymlinkSucceeds() async throws {
@@ -196,7 +195,7 @@ struct AgentClientTests {
             parentId: .rootContainer,
             name: "upload.txt",
             file: localFile,
-            mode: 0o644,
+            flags: .rw,
             progress: Progress()
         )
 

@@ -249,13 +249,13 @@ struct DomainDBTests {
         }
     }
     
-    @Test func setAttributesUpdatesPermissions() async throws {
+    @Test func setAttributesUpdatesFlags() async throws {
         let item = try await db.upsert(name: "file.txt", kind: .file)
 
-        try await db.setAttributes(for: item.id, permissions: 0o644)
+        try await db.setAttributes(for: item.id, flags: .rw)
 
         let updated = try await db.item(for: item.id)
-        #expect(updated.permissions == 0o644)
+        #expect(updated.flags == .rw)
     }
 
     @Test func setAttributesUpdatesAccessTime() async throws {
@@ -283,15 +283,15 @@ struct DomainDBTests {
         let item = try await db.upsert(
             name: "file.txt",
             kind: .file,
-            permissions: 0o600,
+            flags: .rw,
             accessTime: original,
             modifyTime: original
         )
 
-        try await db.setAttributes(for: item.id, permissions: 0o644)
+        try await db.setAttributes(for: item.id, flags: [.readable, .writable])
 
         let updated = try await db.item(for: item.id)
-        #expect(updated.permissions == 0o644)
+        #expect(updated.flags == .rw)
         #expect(updated.accessTime == original)
         #expect(updated.modifyTime == original)
     }
@@ -300,7 +300,7 @@ struct DomainDBTests {
         let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
         await #expect(throws: AgentError.itemNotFound(unknownId)) {
-            try await db.setAttributes(for: unknownId, permissions: 0o600)
+            try await db.setAttributes(for: unknownId, flags: .rw)
         }
     }
 
@@ -329,7 +329,7 @@ struct DomainDBTests {
         try await db.refresh(
             item.id,
             size: 1024,
-            permissions: 0o644,
+            flags: .rw,
             accessTime: access,
             modifyTime: modify,
             createTime: create
@@ -337,7 +337,7 @@ struct DomainDBTests {
 
         let updated = try await db.item(for: item.id)
         #expect(updated.size == 1024)
-        #expect(updated.permissions == 0o644)
+        #expect(updated.flags == .rw)
         #expect(updated.accessTime == access)
         #expect(updated.modifyTime == modify)
         #expect(updated.createTime == create)
@@ -349,7 +349,7 @@ struct DomainDBTests {
             name: "file.txt",
             kind: .file,
             size: 100,
-            permissions: 0o644,
+            flags: .rw,
             accessTime: date,
             modifyTime: date,
             createTime: date
@@ -358,7 +358,7 @@ struct DomainDBTests {
         try await db.refresh(
             item.id,
             size: nil,
-            permissions: nil,
+            flags: nil,
             accessTime: nil,
             modifyTime: nil,
             createTime: nil
@@ -366,7 +366,7 @@ struct DomainDBTests {
 
         let updated = try await db.item(for: item.id)
         #expect(updated.size == nil)
-        #expect(updated.permissions == nil)
+        #expect(updated.flags == nil)
         #expect(updated.accessTime == nil)
         #expect(updated.modifyTime == nil)
         #expect(updated.createTime == nil)
@@ -379,7 +379,7 @@ struct DomainDBTests {
             try await db.refresh(
                 unknownId,
                 size: 1,
-                permissions: nil,
+                flags: nil,
                 accessTime: nil,
                 modifyTime: nil,
                 createTime: nil

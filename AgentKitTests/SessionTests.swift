@@ -31,7 +31,10 @@ extension TestSandbox {
             let folder = folders.removeFirst()
             let items = try await session.list(for: folder)
             for item in items {
-                if item.kind == .folder, (item.permissions ?? 0) & 0o400 != 0 {
+                if item.kind == .folder,
+                    let flags = item.flags,
+                    flags.contains(.executable)
+                {
                     folders.append(item.id)
                 }
             }
@@ -336,7 +339,7 @@ struct SessionTests {
             #expect(item.kind == .file)
             #expect(item.size == UInt64(contents.utf8.count))
             #expect(item.size == listed.size)
-            #expect(item.permissions == listed.permissions)
+            #expect(item.flags == listed.flags)
             #expect(item.modifyTime == listed.modifyTime)
         }
 
@@ -541,7 +544,7 @@ struct SessionTests {
             let (updates, deletedIds) = changes.split()
             let item = try #require(updates.only)
             #expect(item.name == "item.txt")
-            #expect(item.permissions! & 0o7777 == 0o444)
+            #expect(item.flags == [.readable])
             #expect(deletedIds == [])
         }
 
@@ -577,7 +580,7 @@ struct SessionTests {
             #expect(updates == [])
             #expect(deletedIds == [fileId])
         }
-        
+
         @Test func reconcileFileMoved() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "dir/old.txt", modifyDate: start)
@@ -594,7 +597,7 @@ struct SessionTests {
             #expect(item.name == "new.txt")
             #expect(deletedIds == [oldId])
         }
-        
+
         @Test func reconcileFolderCreated() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFolder(at: "dir", modifyDate: start)
@@ -611,7 +614,7 @@ struct SessionTests {
             #expect(item.modifyTime == end)
             #expect(deletedIds == [])
         }
-        
+
         @Test func reconcileFolderDeleted() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFolder(at: "dir/subdir", modifyDate: start)
@@ -627,7 +630,7 @@ struct SessionTests {
             #expect(updates == [])
             #expect(deletedIds == [fileId])
         }
-        
+
         @Test func reconcileFileReplacedWithFolder() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFolder(at: "dir/thing", modifyDate: start)
@@ -646,7 +649,7 @@ struct SessionTests {
             #expect(item.modifyTime == end)
             #expect(deletedIds == [fileId])
         }
-        
+
         @Test func reconcileSymlinkCreated() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "dir/target.txt", modifyDate: start)
@@ -662,7 +665,7 @@ struct SessionTests {
             #expect(item.name == "link.txt")
             #expect(deletedIds == [])
         }
-        
+
         @Test func reconcileSymlinkDeleted() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "dir/target.txt", modifyDate: start)
@@ -702,15 +705,15 @@ struct SessionTests {
     }
 
     struct SetAttributesTests {
-        @Test func setPermissionsSucceeds() async throws {
+        @Test func setFlagsSucceeds() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(at: "perms.txt", contents: "test")
+            try sandbox.createFile(at: "perms.txt", permissions: 0o400)
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(name: "perms.txt")
-            try await session.setAttributes(for: itemId, permissions: 0o644)
+            try await session.setAttributes(for: itemId, flags: .rw)
 
-            #expect(try sandbox.permissions(of: "perms.txt") == 0o644)
+            #expect(try sandbox.permissions(of: "perms.txt") == 0o600)
             let changes = try await session.reconcile()
             #expect(changes == [])
         }
@@ -752,7 +755,7 @@ struct SessionTests {
             try sandbox.removeItem(at: "missing.txt")
 
             await #expect(throws: AgentError.itemNotFound(itemId.rawValue)) {
-                try await session.setAttributes(for: itemId, permissions: 0o644)
+                try await session.setAttributes(for: itemId, flags: .rw)
             }
         }
     }
@@ -1066,7 +1069,7 @@ struct SessionTests {
                 parentId: .rootContainer,
                 name: filename,
                 file: uploadUrl,
-                mode: 0o600,
+                flags: .rw,
                 progress: progress
             )
             let currId = try await session.child(name: filename)
@@ -1097,7 +1100,7 @@ struct SessionTests {
                 parentId: .rootContainer,
                 name: filename,
                 file: uploadUrl,
-                mode: 0o600,
+                flags: .rw,
                 progress: progress
             )
             let currId = try await session.child(name: filename)
@@ -1128,7 +1131,7 @@ struct SessionTests {
                     parentId: .rootContainer,
                     name: "collide-upload",
                     file: uploadUrl,
-                    mode: 0o600,
+                    flags: .rw,
                     progress: Progress()
                 )
             }
@@ -1152,7 +1155,7 @@ struct SessionTests {
                     parentId: .rootContainer,
                     name: "cancelled.dat",
                     file: uploadUrl,
-                    mode: 0o600,
+                    flags: .rw,
                     progress: progress
                 )
             }
@@ -1173,7 +1176,7 @@ struct SessionTests {
                 parentId: folderId,
                 name: "file.txt",
                 file: uploadUrl,
-                mode: 0o600,
+                flags: .rw,
                 progress: progress
             )
             let currId = try await session.child(of: folderId, name: "file.txt")

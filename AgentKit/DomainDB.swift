@@ -126,13 +126,13 @@ actor DomainDB {
 
     func setAttributes(
         for id: NSFileProviderItemIdentifier,
-        permissions: mode_t? = nil,
+        flags: Item.Flags? = nil,
         accessTime: Date? = nil,
         modifyTime: Date? = nil
     ) throws {
         let item = try model(for: id)
-        if let permissions = permissions {
-            item.permissions = UInt32(permissions)
+        if let flags = flags {
+            item.flags = flags
         }
         if let accessTime = accessTime {
             item.accessTime = accessTime
@@ -159,14 +159,14 @@ actor DomainDB {
     func refresh(
         _ id: NSFileProviderItemIdentifier,
         size: UInt64?,
-        permissions: UInt32?,
+        flags: Item.Flags?,
         accessTime: Date?,
         modifyTime: Date?,
         createTime: Date?
     ) throws {
         let item = try model(for: id)
         item.size = size
-        item.permissions = permissions
+        item.flags = flags
         item.accessTime = accessTime
         item.modifyTime = modifyTime
         item.createTime = createTime
@@ -179,7 +179,7 @@ actor DomainDB {
         name: String,
         kind: Item.Kind,
         size: UInt64? = nil,
-        permissions: UInt32? = nil,
+        flags: Item.Flags? = nil,
         accessTime: Date? = nil,
         modifyTime: Date? = nil,
         createTime: Date? = nil
@@ -190,7 +190,7 @@ actor DomainDB {
                 name: name,
                 kind: kind,
                 size: size,
-                permissions: permissions,
+                flags: flags,
                 accessTime: accessTime,
                 modifyTime: modifyTime,
                 createTime: createTime
@@ -219,7 +219,7 @@ actor DomainDB {
         name: String,
         kind: Item.Kind,
         size: UInt64? = nil,
-        permissions: UInt32? = nil,
+        flags: Item.Flags? = nil,
         accessTime: Date? = nil,
         modifyTime: Date? = nil,
         createTime: Date? = nil
@@ -233,7 +233,7 @@ actor DomainDB {
         }
         item.kind = kind
         item.size = size
-        item.permissions = permissions
+        item.flags = flags
         item.accessTime = accessTime
         item.modifyTime = modifyTime
         item.createTime = createTime
