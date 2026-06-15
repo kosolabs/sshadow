@@ -167,32 +167,17 @@ extension NSFileProviderItemCapabilities {
 }
 
 extension NSFileProviderFileSystemFlags {
-    public init(mode: mode_t) {
-        var flags: NSFileProviderFileSystemFlags = []
-        if mode & S_IRUSR != 0 {
-            flags.insert(.userReadable)
+    public init(from flags: Item.Flags) {
+        self = []
+        if flags.contains(.executable) {
+            self.insert(.userExecutable)
         }
-        if mode & S_IWUSR != 0 {
-            flags.insert(.userWritable)
+        if flags.contains(.readable) {
+            self.insert(.userReadable)
         }
-        if mode & S_IXUSR != 0 {
-            flags.insert(.userExecutable)
+        if flags.contains(.writable) {
+            self.insert(.userWritable)
         }
-        self = flags
-    }
-
-    public var permissions: mode_t {
-        var mode: mode_t = 0
-        if contains(.userReadable) {
-            mode |= S_IRUSR
-        }
-        if contains(.userWritable) {
-            mode |= S_IWUSR
-        }
-        if contains(.userExecutable) {
-            mode |= S_IXUSR
-        }
-        return mode
     }
 
     public var desc: String {

@@ -41,9 +41,7 @@ public class FPItem: NSObject, NSFileProviderItem {
     }
 
     public var fileSystemFlags: NSFileProviderFileSystemFlags {
-        NSFileProviderFileSystemFlags(
-            mode: mode_t(truncatingIfNeeded: item.permissions ?? 0o700)
-        )
+        NSFileProviderFileSystemFlags(from: item.flags ?? [])
     }
 
     public var documentSize: NSNumber? {

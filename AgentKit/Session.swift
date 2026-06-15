@@ -111,7 +111,7 @@ final class Session: Sendable {
             name: sshItem.name,
             kind: sshItem.kind,
             size: sshItem.size,
-            permissions: sshItem.permissions,
+            flags: sshItem.flags,
             accessTime: sshItem.accessTime,
             modifyTime: sshItem.modifyTime,
             createTime: sshItem.createTime
@@ -145,7 +145,7 @@ final class Session: Sendable {
 
         for (name, sshItem) in sshItems {
             let dbItem = dbItems[name]
-            
+
             // If the kind changed (e.g. file → folder, or symlink retargeted), the
             // identity of the item has effectively changed too. We delete the old row
             // first so the upsert below can't find it by (parent, name) and is forced
@@ -158,7 +158,10 @@ final class Session: Sendable {
 
             // Either updates the existing row in place (kind unchanged) or inserts a
             // brand new one (no previous item, or we just deleted it above).
-            let newItem = try await upsert(parentId: folder.id, sshItem: sshItem)
+            let newItem = try await upsert(
+                parentId: folder.id,
+                sshItem: sshItem
+            )
 
             // Two cases short-circuit to a plain .update with no further diffing:
             //   1. There was no prior row at all (brand new item on the server).
@@ -170,7 +173,7 @@ final class Session: Sendable {
                 changes.append(.update(item: newItem))
                 continue
             }
-            
+
             // Past this point, `dbItem.kind == sshItem.kind` is guaranteed, so each
             // arm only needs to look at metadata that distinguishes "same item,
             // different attributes" — never kind itself.
@@ -179,10 +182,7 @@ final class Session: Sendable {
                 // Files care about size + perms + timestamps. A size change is the
                 // clearest signal the bytes were rewritten.
                 if dbItem.size != sshItem.size
-                    || !Self.permissionsMatch(
-                        dbItem.permissions,
-                        sshItem.permissions
-                    )
+                    || dbItem.flags != sshItem.flags
                     || dbItem.createTime != sshItem.createTime
                     || dbItem.modifyTime != sshItem.modifyTime
                 {
@@ -190,10 +190,7 @@ final class Session: Sendable {
                 }
             case .folder:
                 // Folders have no size to compare, just perms + timestamps.
-                if !Self.permissionsMatch(
-                    dbItem.permissions,
-                    sshItem.permissions
-                )
+                if dbItem.flags != sshItem.flags
                     || dbItem.createTime != sshItem.createTime
                     || dbItem.modifyTime != sshItem.modifyTime
                 {
@@ -269,29 +266,27 @@ final class Session: Sendable {
 
     func setAttributes(
         for itemId: NSFileProviderItemIdentifier,
-        permissions: mode_t? = nil,
+        flags: Item.Flags? = nil,
         accessTime: Date? = nil,
         modifyTime: Date? = nil
     ) async throws {
         var changes: [String] = []
         if let accessTime { changes.append("accessTime: \(accessTime)") }
         if let modifyTime { changes.append("modifyTime: \(modifyTime)") }
-        if let permissions {
-            changes.append("permissions: \(String(permissions, radix: 8))")
-        }
+        if let flags { changes.append("permissions: \(flags)") }
         try await logger.info(
             "Set attributes of \(id(of: itemId)): \(changes.joined(separator: ", "))"
         )
         try await mapError(with: itemId) {
             try await sftp.setAttributes(
                 at: path(for: itemId),
-                permissions: permissions,
+                permissions: flags?.mode,
                 accessTime: accessTime,
                 modifyTime: modifyTime
             )
             try await db.setAttributes(
                 for: itemId,
-                permissions: permissions,
+                flags: flags,
                 accessTime: accessTime,
                 modifyTime: modifyTime
             )
@@ -360,7 +355,7 @@ final class Session: Sendable {
         try await db.refresh(
             id,
             size: attrs.size,
-            permissions: attrs.permissions,
+            flags: .from(attrs.permissions),
             accessTime: attrs.accessTime,
             modifyTime: attrs.modifyTime,
             createTime: attrs.createTime
@@ -382,7 +377,7 @@ final class Session: Sendable {
             name: name,
             kind: kind,
             size: attrs.size,
-            permissions: attrs.permissions,
+            flags: .from(attrs.permissions),
             accessTime: attrs.accessTime,
             modifyTime: attrs.modifyTime,
             createTime: attrs.createTime
@@ -442,7 +437,7 @@ final class Session: Sendable {
         parentId: NSFileProviderItemIdentifier,
         name: String,
         file url: URL,
-        mode: mode_t,
+        flags: Item.Flags,
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
         progress: Progress,
     ) async throws -> Item {
@@ -465,7 +460,7 @@ final class Session: Sendable {
             try await sftp.withSftpFile(
                 at: path,
                 accessType: .writeOnly,
-                mode: mode
+                mode: flags.mode
             ) { file in
                 try await file.withAsyncWriter { writer in
                     while let data = try fp.read(upToCount: Int(bufferSize)) {
@@ -613,6 +608,7 @@ final class Session: Sendable {
                     if itemId == .rootContainer, name == ".sshadow" {
                         return nil
                     }
+
                     let kind: Item.Kind =
                         switch attrs.type {
                         case .directory:
@@ -627,11 +623,12 @@ final class Session: Sendable {
                         default:
                             .file
                         }
+
                     return SSHItem(
                         name: name,
                         kind: kind,
                         size: attrs.size,
-                        permissions: attrs.permissions,
+                        flags: .from(attrs.permissions),
                         accessTime: attrs.accessTime,
                         modifyTime: attrs.modifyTime,
                         createTime: attrs.createTime

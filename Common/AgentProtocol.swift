@@ -326,20 +326,20 @@ public struct ChangesResponse: Message, PrettyDescribable {
 public struct SetAttributesRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
-    public let permissions: mode_t?
+    public let flags: Item.Flags?
     public let accessTime: Date?
     public let modifyTime: Date?
 
     public init(
         domainId: UUID,
         itemId: String,
-        permissions: mode_t?,
+        flags: Item.Flags?,
         accessTime: Date?,
         modifyTime: Date?
     ) {
         self.domainId = domainId
         self.itemId = itemId
-        self.permissions = permissions
+        self.flags = flags
         self.accessTime = accessTime
         self.modifyTime = modifyTime
     }
@@ -489,7 +489,7 @@ public struct UploadRequest: Message, PrettyDescribable {
     public let parentId: String
     public let name: String
     public let file: URL
-    public let mode: mode_t
+    public let flags: Item.Flags
     public let chunkSize: UInt64
     public let progressEndpoint: XPCEndpoint
 
@@ -498,7 +498,7 @@ public struct UploadRequest: Message, PrettyDescribable {
         parentId: String,
         name: String,
         file: URL,
-        mode: mode_t,
+        flags: Item.Flags,
         chunkSize: UInt64,
         progressEndpoint: XPCEndpoint
     ) {
@@ -506,7 +506,7 @@ public struct UploadRequest: Message, PrettyDescribable {
         self.parentId = parentId
         self.name = name
         self.file = file
-        self.mode = mode
+        self.flags = flags
         self.chunkSize = chunkSize
         self.progressEndpoint = progressEndpoint
     }

@@ -12,7 +12,7 @@ private func item(size: UInt64) -> Item {
         name: "file",
         kind: .file,
         size: size,
-        permissions: 0o644,
+        flags: .rw,
         accessTime: nil,
         modifyTime: nil,
         createTime: nil,

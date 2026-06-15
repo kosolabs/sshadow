@@ -11,7 +11,7 @@ extension Item {
             name: item.name,
             kind: item.kind,
             size: item.size,
-            permissions: item.permissions,
+            flags: item.flags,
             accessTime: item.accessTime,
             modifyTime: item.modifyTime,
             createTime: item.createTime,
@@ -26,7 +26,7 @@ class ItemModel {
     var name: String
     var kind: Item.Kind
     var size: UInt64?
-    var permissions: UInt32?
+    var flags: Item.Flags?
     var accessTime: Date?
     var modifyTime: Date?
     var createTime: Date?
@@ -45,7 +45,7 @@ class ItemModel {
         name: String,
         kind: Item.Kind = .folder,
         size: UInt64? = nil,
-        permissions: UInt32? = nil,
+        flags: Item.Flags? = nil,
         accessTime: Date? = nil,
         modifyTime: Date? = nil,
         createTime: Date? = nil,
@@ -56,7 +56,7 @@ class ItemModel {
         self.name = name
         self.kind = kind
         self.size = size
-        self.permissions = permissions
+        self.flags = flags
         self.accessTime = accessTime
         self.modifyTime = modifyTime
         self.createTime = createTime

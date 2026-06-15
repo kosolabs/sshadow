@@ -209,7 +209,7 @@ public class Agent {
         let session = try await sessions.connect(id: request.domainId)
         try await session.setAttributes(
             for: NSFileProviderItemIdentifier(request.itemId),
-            permissions: request.permissions,
+            flags: request.flags,
             accessTime: request.accessTime,
             modifyTime: request.modifyTime
         )
@@ -298,7 +298,7 @@ public class Agent {
             parentId: NSFileProviderItemIdentifier(request.parentId),
             name: request.name,
             file: request.file,
-            mode: request.mode,
+            flags: request.flags,
             progress: sync.progress
         )
         return UploadResponse(item: item)

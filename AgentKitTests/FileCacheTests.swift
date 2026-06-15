@@ -12,7 +12,7 @@ private func file(size: UInt64 = 10 * File.defaultChunkSize) -> File {
         name: "file",
         kind: .file,
         size: size,
-        permissions: 0o644,
+        flags: .rw,
         accessTime: nil,
         modifyTime: nil,
         createTime: nil,

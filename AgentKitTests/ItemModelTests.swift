@@ -28,7 +28,7 @@ struct ItemModelTests {
             name: "round.txt",
             kind: .file,
             size: 8,
-            permissions: 0o600,
+            flags: .rw,
             accessTime: nil,
             modifyTime: modify,
             createTime: nil
@@ -41,7 +41,7 @@ struct ItemModelTests {
         #expect(result.name == "round.txt")
         #expect(result.kind == .file)
         #expect(result.size == 8)
-        #expect(result.permissions == 0o600)
+        #expect(result.flags == .rw)
         #expect(result.accessTime == nil)
         #expect(result.modifyTime == modify)
         #expect(result.createTime == nil)

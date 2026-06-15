@@ -137,7 +137,10 @@ class TestSandbox {
             let folder = folders.removeFirst()
             let items = try await agent.list(for: folder)
             for item in items {
-                if item.kind == .folder, (item.permissions ?? 0) & 0o400 != 0 {
+                if item.kind == .folder,
+                    let flags = item.flags,
+                    flags.contains(.executable)
+                {
                     folders.append(item.id)
                 }
             }
