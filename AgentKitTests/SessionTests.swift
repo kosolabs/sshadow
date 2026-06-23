@@ -704,6 +704,85 @@ struct SessionTests {
         }
     }
 
+    struct PollChangesTests {
+        let start: Date = Date(timeIntervalSince1970: 1_750_000_000)
+        let end: Date = Date(timeIntervalSince1970: 1_760_000_000)
+
+        @Test func pollWithNoChangesAccumulatesEmpty() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "file.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try await session.poll()
+
+            let (_, changes) = await session.changes(since: 0)
+            #expect(changes == [])
+        }
+
+        @Test func pollSurfacesCreatedFile() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try sandbox.createFile(at: "dir/new.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            try await session.poll()
+
+            let (_, changes) = await session.changes(since: 0)
+            let (updates, deletedIds) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.name == "new.txt")
+            #expect(deletedIds == [])
+        }
+
+        @Test func changesIsEmptyBeforeAnyPoll() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "file.txt")
+            let session = try await sandbox.getSession()
+
+            let (_, changes) = await session.changes(since: 0)
+            #expect(changes == [])
+        }
+
+        @Test func changesAccumulatesAcrossMultiplePolls() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try sandbox.createFile(at: "dir/first.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            try await session.poll()
+
+            try sandbox.createFile(at: "dir/second.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            try await session.poll()
+
+            let (_, changes) = await session.changes(since: 0)
+            let (updates, _) = changes.split()
+            let names = Set(updates.map { $0.name })
+            #expect(names == ["first.txt", "second.txt"])
+        }
+
+        @Test func changesFiltersByAnchor() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try sandbox.createFile(at: "dir/first.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            try await session.poll()
+
+            try sandbox.createFile(at: "dir/second.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            try await session.poll()
+
+            let (_, changes) = await session.changes(since: 1)
+            let (updates, _) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.name == "second.txt")
+        }
+    }
+
     struct SetAttributesTests {
         @Test func setFlagsSucceeds() async throws {
             let sandbox = TestSandbox()

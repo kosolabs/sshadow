@@ -5,7 +5,7 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Session")
 
-final class Session: Sendable {
+actor Session {
     private let config: ConnectionConfig
     private let ssh: SSHClient
     private let sftp: SFTPClient
@@ -13,6 +13,8 @@ final class Session: Sendable {
     private let sharedUrl: URL
 
     private let cache: FileCache
+    private var changes: [(UInt64, [Change])] = []
+    private var anchor: UInt64 = 0
 
     init(
         config: ConnectionConfig,
@@ -26,6 +28,7 @@ final class Session: Sendable {
         self.sftp = sftp
         self.db = db
         self.sharedUrl = sharedUrl
+
         self.cache = FileCache { itemId, range in
             let path = try await config.path(for: db.path(for: itemId))
             return try await sftp.withSftpFile(
@@ -139,71 +142,50 @@ final class Session: Sendable {
         for (name, sshItem) in sshItems {
             let dbItem = dbItems[name]
 
-            // If the kind changed (e.g. file → folder, or symlink retargeted), the
-            // identity of the item has effectively changed too. We delete the old row
-            // first so the upsert below can't find it by (parent, name) and is forced
-            // to insert a fresh row with a new id. We also emit a .delete so the
-            // FileProvider drops its cached entry for the old id.
             if let dbItem, dbItem.kind != sshItem.kind {
+                logger.info("Reconcile replaced: \(dbItem) -> \(sshItem)")
                 try await db.remove(dbItem.id)
                 changes.append(.delete(itemId: dbItem.rawId))
             }
 
-            // Either updates the existing row in place (kind unchanged) or inserts a
-            // brand new one (no previous item, or we just deleted it above).
             let newItem = try await upsert(
                 parentId: folder.id,
                 sshItem: sshItem
             )
 
-            // Two cases short-circuit to a plain .update with no further diffing:
-            //   1. There was no prior row at all (brand new item on the server).
-            //   2. There was a prior, but we just deleted it above due to a kind swap,
-            //      so `newItem` is a freshly-minted row with no meaningful "previous
-            //      state" to compare against.
-            // In both, the new id is novel to the FileProvider, so we just announce it.
             guard let dbItem, dbItem.kind == sshItem.kind else {
+                logger.info("Reconcile new: \(sshItem)")
                 changes.append(.update(item: newItem))
                 continue
             }
 
-            // Past this point, `dbItem.kind == sshItem.kind` is guaranteed, so each
-            // arm only needs to look at metadata that distinguishes "same item,
-            // different attributes" — never kind itself.
             switch dbItem.kind {
             case .file:
-                // Files care about size + perms + timestamps. A size change is the
-                // clearest signal the bytes were rewritten.
                 if dbItem.size != sshItem.size
                     || dbItem.flags != sshItem.flags
                     || dbItem.createTime != sshItem.createTime
                     || dbItem.modifyTime != sshItem.modifyTime
                 {
+                    logger.info("Reconcile file: \(dbItem) -> \(sshItem)")
                     changes.append(.update(item: newItem))
                 }
             case .folder:
-                // Folders have no size to compare, just perms + timestamps.
                 if dbItem.flags != sshItem.flags
                     || dbItem.createTime != sshItem.createTime
                     || dbItem.modifyTime != sshItem.modifyTime
                 {
+                    logger.info("Reconcile folder: \(dbItem) -> \(sshItem)")
                     changes.append(.update(item: newItem))
                 }
 
-                // Only descend into folders we've previously enumerated. Unenumerated
-                // folders are lazy — we have no baseline to diff against, so there's
-                // nothing meaningful to reconcile inside them.
                 if dbItem.enumeratedAt != nil {
                     remainder.append(dbItem)
                 }
             case .symlink:
-                // Target changes are already handled by the kind-swap path above
-                // (since Kind.symlink carries the target as an associated value), so
-                // here we only need to notice timestamp drift on an otherwise-identical
-                // symlink.
                 if dbItem.createTime != sshItem.createTime
                     || dbItem.modifyTime != sshItem.modifyTime
                 {
+                    logger.info("Reconcile symlink: \(dbItem) -> \(sshItem)")
                     changes.append(.update(item: newItem))
                 }
             }
@@ -211,6 +193,7 @@ final class Session: Sendable {
 
         for (name, dbItem) in dbItems {
             if sshItems[name] == nil {
+                logger.info("Reconcile deleted: \(dbItem)")
                 try await db.remove(dbItem.id)
                 changes.append(.delete(itemId: dbItem.rawId))
             }
@@ -238,6 +221,21 @@ final class Session: Sendable {
         return allChanges
     }
 
+    func poll() async throws {
+        changes.append((anchor, try await reconcile()))
+        anchor += 1
+    }
+
+    func changes(since anchor: UInt64) -> (UInt64, [Change]) {
+        var allChanges: [Change] = []
+        for (rowAnchor, rowChanges) in changes {
+            if rowAnchor >= anchor {
+                allChanges.append(contentsOf: rowChanges)
+            }
+        }
+        return (anchor, allChanges)
+    }
+
     func enumerate(itemId: NSFileProviderItemIdentifier) async throws {
         try await withEntries(of: itemId) { entries in
             for try await sshItem in entries {
@@ -247,9 +245,10 @@ final class Session: Sendable {
         try await db.markEnumerated(itemId)
     }
 
-    func symlinkTarget(for name: String, parentId: NSFileProviderItemIdentifier)
-        async throws -> String
-    {
+    func symlinkTarget(
+        for name: String,
+        parentId: NSFileProviderItemIdentifier
+    ) async throws -> String {
         try await mapError(with: parentId) {
             try await sftp.symlinkTarget(
                 at: path(for: name, parentId: parentId)
@@ -438,7 +437,7 @@ final class Session: Sendable {
         let fp = try FileHandle(forReadingFrom: url)
         defer { try? fp.close() }
 
-        logger.info("Upload \(path) from \(url.path())")
+        logger.info("Upload \(path) from \(url.path)")
         let size = try FileManager.default.size(of: url)
 
         progress.kind = .file
@@ -566,7 +565,7 @@ final class Session: Sendable {
         mode: mode_t = 0o600,
         perform: @Sendable (SFTPFile) async throws -> T
     ) async throws -> T {
-        try await logger.info("With \(accessType) file \(id(of: itemId))")
+        try await logger.debug("With \(accessType) file \(id(of: itemId))")
         return try await mapError(with: itemId) {
             try await sftp.withSftpFile(
                 at: path(for: itemId),
@@ -581,7 +580,7 @@ final class Session: Sendable {
         for itemId: NSFileProviderItemIdentifier,
         perform: @Sendable (SFTPDirectory) async throws -> T
     ) async throws -> T {
-        try await logger.info("With directory \(id(of: itemId))")
+        try await logger.debug("With directory \(id(of: itemId))")
         return try await mapError(with: itemId) {
             try await sftp.withDirectory(
                 at: path(for: itemId),

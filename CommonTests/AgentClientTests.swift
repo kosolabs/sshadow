@@ -92,6 +92,13 @@ struct AgentClientTests {
         #expect(entries.isEmpty)
     }
 
+    @Test func pollSucceeds() async throws {
+        let sandbox = TestSandbox()
+        let agent = try await sandbox.getAgentClient()
+
+        try await agent.poll()
+    }
+
     @Test func setAttributesSucceeds() async throws {
         let sandbox = TestSandbox()
         try sandbox.createFile(at: "set-attrs.txt")

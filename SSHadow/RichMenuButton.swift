@@ -7,6 +7,7 @@ struct RichMenuButton<Content: View>: View {
     let action: () -> Void
     @ViewBuilder let label: () -> Content
 
+    @Environment(\.isEnabled) private var isEnabled
     @State private var isHovered = false
 
     var body: some View {
@@ -23,12 +24,12 @@ struct RichMenuButton<Content: View>: View {
             .contentShape(Rectangle())
             .background(
                 RoundedRectangle(cornerRadius: 8).fill(
-                    isHovered ? Color.primary : Color.clear
+                    isHovered && isEnabled ? Color.primary : Color.clear
                 )
             )
+            .opacity(isEnabled ? 1.0 : 0.4)
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
     }
 }
-

@@ -9,8 +9,10 @@ actor SessionManager {
     private let db: AppDB
     private let domainDbConfig: ModelConfiguration?
     private let sharedUrl: URL
+
     private var sessions: [UUID: Session] = [:]
     private var connectTasks: [UUID: Task<Session, any Error>] = [:]
+    private var pollers: [UUID: Task<Void, any Error>] = [:]
 
     init(
         appDb: AppDB,
@@ -36,7 +38,6 @@ actor SessionManager {
         }
         let config = try ConnectionConfig(from: profile)
 
-        logger.info("Connecting: \(config.url)")
         let domainDbConfig = self.domainDbConfig ?? DomainDB.model(for: id)
         let sharedUrl = self.sharedUrl
         let task = Task {
@@ -57,7 +58,8 @@ actor SessionManager {
             let session = try await task.value
             sessions[id] = session
             connectTasks[id] = nil
-            logger.info("Connected: \(config.url)")
+            let dbPath = domainDbConfig.url.path
+            logger.info("Connected: \(config.url), DB path: \(dbPath)")
             return session
         } catch {
             connectTasks[id] = nil
@@ -70,7 +72,7 @@ actor SessionManager {
         connectTasks[id] = nil
         if let session = sessions.removeValue(forKey: id) {
             await session.close()
-            logger.info("Disconnected: \(session.url)")
+            logger.info("Disconnected: \(await session.url)")
         }
     }
 

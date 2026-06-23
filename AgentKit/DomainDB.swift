@@ -22,10 +22,6 @@ actor DomainDB {
         config: ModelConfiguration
     ) async throws -> DomainDB {
         let schema = Schema([ItemModel.self])
-        if !config.isStoredInMemoryOnly {
-            logger.info("Open DomainDB: \(config.url.path)")
-        }
-
         let db = try DomainDB(
             modelContainer: ModelContainer(
                 for: schema,

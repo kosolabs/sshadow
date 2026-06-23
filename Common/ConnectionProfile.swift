@@ -131,6 +131,11 @@ public class ConnectionProfile: CustomStringConvertible {
         self.enabled = false
         logger.info("Disabled: \(self)")
     }
+    
+    public func poll() async throws {
+        let agent = AgentClient(domainId: id)
+        try await agent.poll()
+    }
 
     // MARK: - Password Management
 

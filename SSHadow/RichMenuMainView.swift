@@ -10,6 +10,9 @@ struct RichMenuMainView: View {
     @Query(sort: \ConnectionProfile.host) private var configs:
         [ConnectionProfile]
 
+    @State private var isPolling = false
+    @State private var isDebug = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             if !configs.isEmpty {
@@ -26,17 +29,43 @@ struct RichMenuMainView: View {
                 openWindow(id: "settings")
                 NSApp.activate()
             } label: {
-                Label("Open SSHadow Settings...", systemImage: "gear")
+                RichMenuLabel("Open SSHadow Settings...", systemImage: "gear")
+            }
+
+            if isDebug {
+                RichMenuButton {
+                    Task {
+                        isPolling = true
+                        defer { isPolling = false }
+                        for config in configs {
+                            if config.isEnabled() {
+                                try await config.poll()
+                            }
+                        }
+                    }
+                } label: {
+                    RichMenuLabel(title: "Refresh") {
+                        if isPolling {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                }
+                .disabled(configs.filter({ c in c.enabled }).isEmpty)
             }
 
             RichMenuButton {
                 NSApplication.shared.terminate(nil)
             } label: {
-                Label("Quit SSHadow", systemImage: "power")
+                RichMenuLabel("Quit SSHadow", systemImage: "power")
             }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 8)
         .frame(width: 320)
+        .onAppear {
+            isDebug = NSEvent.modifierFlags.contains(.option)
+        }
     }
 }
