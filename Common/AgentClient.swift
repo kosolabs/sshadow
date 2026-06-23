@@ -157,6 +157,27 @@ public class AgentClient {
         }
         return response.fileInfos
     }
+    
+    public func poll() async throws {
+        let reply = try await perform(
+            .poll(PollRequest(domainId: domainId))
+        )
+        guard case .poll(_) = reply else {
+            throw CocoaError(.coderInvalidValue)
+        }
+    }
+
+    public func changes(
+        since anchor: UInt64
+    ) async throws -> (UInt64, [Change]) {
+        let reply = try await perform(
+            .changes(ChangesRequest(domainId: domainId, anchor: anchor))
+        )
+        guard case .changes(let response) = reply else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        return (response.anchor, response.changes)
+    }
 
     public func setAttributes(
         for itemId: NSFileProviderItemIdentifier,

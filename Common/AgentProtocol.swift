@@ -25,6 +25,10 @@ public enum AgentRequest: Message, PrettyDescribable {
             request.domainId
         case .list(let request):
             request.domainId
+        case .poll(let request):
+            request.domainId
+        case .changes(let request):
+            request.domainId
         case .setAttributes(let request):
             request.domainId
         case .createSymlink(let request):
@@ -55,6 +59,8 @@ public enum AgentRequest: Message, PrettyDescribable {
     case parent(ParentRequest)
     case item(ItemRequest)
     case list(ListRequest)
+    case poll(PollRequest)
+    case changes(ChangesRequest)
     case setAttributes(SetAttributesRequest)
     case createSymlink(CreateSymlinkRequest)
     case createDirectory(CreateDirectoryRequest)
@@ -87,6 +93,8 @@ public enum AgentResponse: Message, PrettyDescribable {
     case parent(ParentResponse)
     case item(ItemResponse)
     case list(ListResponse)
+    case poll(PollResponse)
+    case changes(ChangesResponse)
     case setAttributes(SetAttributesResponse)
     case createSymlink(CreateSymlinkResponse)
     case createDirectory(CreateDirectoryResponse)
@@ -302,12 +310,7 @@ public struct ListResponse: Message, PrettyDescribable {
     }
 }
 
-public enum Change: Message, PrettyDescribable {
-    case delete(itemId: String)
-    case update(item: Item)
-}
-
-public struct ChangesRequest: Message, PrettyDescribable {
+public struct PollRequest: Message, PrettyDescribable {
     public let domainId: UUID
 
     public init(domainId: UUID) {
@@ -315,10 +318,31 @@ public struct ChangesRequest: Message, PrettyDescribable {
     }
 }
 
-public struct ChangesResponse: Message, PrettyDescribable {
-    let changes: [Change]
+public struct PollResponse: Message, PrettyDescribable {
+    public init() {}
+}
 
-    public init(changes: [Change]) {
+public enum Change: Message, PrettyDescribable {
+    case delete(itemId: String)
+    case update(item: Item)
+}
+
+public struct ChangesRequest: Message, PrettyDescribable {
+    public let domainId: UUID
+    public let anchor: UInt64
+
+    public init(domainId: UUID, anchor: UInt64) {
+        self.domainId = domainId
+        self.anchor = anchor
+    }
+}
+
+public struct ChangesResponse: Message, PrettyDescribable {
+    public let anchor: UInt64
+    public let changes: [Change]
+
+    public init(anchor: UInt64, changes: [Change]) {
+        self.anchor = anchor
         self.changes = changes
     }
 }

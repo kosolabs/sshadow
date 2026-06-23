@@ -2,7 +2,7 @@ import Common
 import Foundation
 
 struct SSHItem: Message, CustomStringConvertible {
-    typealias Stream = AsyncSequence<SSHItem, any Error>
+    typealias Stream = AsyncSequence<SSHItem, any Error> & Sendable
     
     struct EmptyStream: Stream {
         struct AsyncIterator: AsyncIteratorProtocol {
