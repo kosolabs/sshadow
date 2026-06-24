@@ -49,31 +49,31 @@ Each step is intended to be one PR. Mark `[x]` and include the PR number once me
 
 The full end-to-end loop, with all state held on the `Session`. No new schema. The point of this step is to prove the FileProvider contract works end-to-end — `signalEnumerator` reaches the extension, `enumerateChanges` is invoked with the right anchor, `syncAnchorExpired` actually triggers a re-enumeration — before investing in persistence.
 
-- [ ] On `Session`, add in-memory state:
+- [x] On `Session`, add in-memory state:
   - `anchor: Int` — starts at 0 on session create; bumped per poll cycle that produced any change.
   - `pendingUpdates: [String: Item]` — keyed by item id; later changes overwrite earlier ones for the same id.
   - `pendingDeletes: Set<String>` — item ids deleted.
-- [ ] **Working set == every non-virtual `ItemModel` in the DB for v1.** No separate set on `Session`. Since `ItemModel` rows only exist because macOS resolved an id through `list` / `child(of:)`, "everything in the DB" is already a close approximation of "everything macOS knows about." Slight over-reporting through `.workingSet` is harmless; Step 6 introduces an explicit membership column.
-- [ ] Polling task on `Session` (start at 30s interval, behind a constant):
+- [x] **Working set == every non-virtual `ItemModel` in the DB for v1.** No separate set on `Session`. Since `ItemModel` rows only exist because macOS resolved an id through `list` / `child(of:)`, "everything in the DB" is already a close approximation of "everything macOS knows about." Slight over-reporting through `.workingSet` is harmless; Step 6 introduces an explicit membership column.
+- [x] Polling task on `Session` (start at 30s interval, behind a constant):
   1. Pick the set of directories to re-list: every `ItemModel` with `enumeratedAt != nil`, minus virtual containers.
   2. Re-list each over SFTP.
   3. Diff against current `ItemModel` snapshots: added, removed, or `(size, modifyTime)`-changed children.
   4. Apply: upsert/insert `ItemModel` rows, delete missing rows, update snapshots.
   5. Merge deltas into `pendingUpdates` / `pendingDeletes`.
   6. If anything changed, bump `anchor` by 1 and call `NSFileProviderManager.signalEnumerator(for: .workingSet)`.
-- [ ] Add `ChangesRequest(domainId, since: Data) → ChangesResponse(items: [Item], deletedIds: [String], anchor: Data, expired: Bool)` to `Common/AgentProtocol.swift` and `AgentClient`.
-- [ ] Agent handler:
+- [x] Add `ChangesRequest(domainId, since: Data) → ChangesResponse(items: [Item], deletedIds: [String], anchor: Data, expired: Bool)` to `Common/AgentProtocol.swift` and `AgentClient`.
+- [x] Agent handler:
   - Decode `since` as `Int`. If `since > anchor` (agent restarted, extension is ahead) or `since < earliestKnownAnchor` (we only keep "everything since session start"; any older anchor is expired), return `expired = true` with the current `anchor`. macOS treats this as a signal to re-enumerate.
   - Otherwise return the current `pendingUpdates.values` and `pendingDeletes`, plus the current `anchor`.
   - **Open: when to clear pending state.** Simplest v1: clear `pendingUpdates`/`pendingDeletes` on every successful `enumerateChanges` response. Risk: if there's ever more than one observer per session, the second observer misses events. We only have `.workingSet` as an observer today, so this is fine for now — revisit in step 6.
-- [ ] `Enumerator.swift`:
+- [x] `Enumerator.swift`:
   - `currentSyncAnchor` calls `agent.currentSyncAnchor(domainId:)` (returns the encoded `Int`).
   - `enumerateChanges(for: anchor, observer:)` calls `agent.changes(domainId:, since:)`, feeds `observer.didUpdate`/`observer.didDeleteItem`, and either calls `finishEnumeratingChanges(upTo:moreComing:)` or — when `expired = true` — `finishEnumeratingWithError(NSFileProviderError(.syncAnchorExpired))`.
   - `enumerateItems(.workingSet, …)` calls a new `agent.listWorkingSet(domainId:) -> [Item]` that returns every non-virtual `ItemModel` in the DB.
-- [ ] Add `currentSyncAnchor` and `listWorkingSet` RPCs to `AgentProtocol`/`AgentClient`.
-- [ ] Log timestamps at the `signalEnumerator` call site and at `enumerateChanges` entry so we have rough visibility into wake-up lag while tuning the poll interval.
+- [x] Add `currentSyncAnchor` and `listWorkingSet` RPCs to `AgentProtocol`/`AgentClient`.
+- [x] Log timestamps at the `signalEnumerator` call site and at `enumerateChanges` entry so we have rough visibility into wake-up lag while tuning the poll interval.
 - [ ] Integration test against the local sshd: create a file out-of-band, run one poll cycle, assert `pendingUpdates` grew and the anchor bumped.
-- [ ] Manual check in the running app: write a file via plain `ssh` on the test server; within one poll interval Finder reflects it.
+- [x] Manual check in the running app: write a file via plain `ssh` on the test server; within one poll interval Finder reflects it.
 
 **Acceptance:** out-of-band remote changes appear in Finder within one poll interval, without persisting anchors or a change journal.
 

@@ -13,13 +13,15 @@ public class Agent {
     public init(
         appDb: AppDB,
         domainDbConfig: ModelConfiguration? = nil,
-        sharedUrl: URL = SSHadow.groupUrl
+        sharedUrl: URL = SSHadow.groupUrl,
+        signal: @escaping SignalEnumerator
     ) {
         self.domainDbConfig = domainDbConfig
         self.sessions = SessionManager(
             appDb: appDb,
             domainDbConfig: domainDbConfig,
-            sharedUrl: sharedUrl
+            sharedUrl: sharedUrl,
+            signal: signal
         )
     }
 
@@ -30,13 +32,14 @@ public class Agent {
         sharedUrl: URL = SSHadow.groupUrl
     ) throws -> XPCListener {
         let db = try appDb ?? AppDB.open()
+        let agent = Agent(
+            appDb: db,
+            domainDbConfig: domainDbConfig,
+            sharedUrl: sharedUrl,
+            signal: defaultSignalEnumerator
+        )
         return try XPCListener(service: service) { request in
-            accept(
-                request: request,
-                appDb: db,
-                domainDbConfig: domainDbConfig,
-                sharedUrl: sharedUrl
-            )
+            accept(request: request, agent: agent)
         }
     }
 
@@ -44,29 +47,23 @@ public class Agent {
         appDb: AppDB? = nil,
         domainDbConfig: ModelConfiguration? = nil,
         sharedUrl: URL = SSHadow.groupUrl
-    ) -> XPCListener {
-        let db = try! appDb ?? AppDB.open()
+    ) throws -> XPCListener {
+        let db = try appDb ?? AppDB.open()
+        let agent = Agent(
+            appDb: db,
+            domainDbConfig: domainDbConfig,
+            sharedUrl: sharedUrl,
+            signal: { _ in }
+        )
         return XPCListener(targetQueue: nil) { request in
-            accept(
-                request: request,
-                appDb: db,
-                domainDbConfig: domainDbConfig,
-                sharedUrl: sharedUrl
-            )
+            accept(request: request, agent: agent)
         }
     }
 
     private static func accept(
         request: XPCListener.IncomingSessionRequest,
-        appDb: AppDB,
-        domainDbConfig: ModelConfiguration?,
-        sharedUrl: URL
+        agent: Agent
     ) -> XPCListener.IncomingSessionRequest.Decision {
-        let agent = Agent(
-            appDb: appDb,
-            domainDbConfig: domainDbConfig,
-            sharedUrl: sharedUrl
-        )
         return request.accept { message in
             let agentRequest: AgentRequest
             do {
@@ -105,6 +102,8 @@ public class Agent {
                     try await .list(list(request))
                 case .poll(let request):
                     try await .poll(poll(request))
+                case .currentAnchor(let request):
+                    try await .currentAnchor(currentAnchor(request))
                 case .changes(let request):
                     try await .changes(changes(request))
                 case .setAttributes(let request):
@@ -146,12 +145,14 @@ public class Agent {
         let domainDbConfig =
             self.domainDbConfig ?? DomainDB.model(for: request.config.id)
         try await DomainDB.open(config: domainDbConfig)
+        try await sessions.connect(id: request.config.id)
         return InitDomainResponse()
     }
 
     func deinitDomain(
         _ request: DeinitDomainRequest
     ) async throws -> DeinitDomainResponse {
+        await sessions.disconnect(id: request.domainId)
         try await DomainDB.delete(id: request.domainId)
         return DeinitDomainResponse()
     }
@@ -206,13 +207,21 @@ public class Agent {
         )
         return ListResponse(fileInfos: entries)
     }
-    
+
     func poll(
         _ request: PollRequest
     ) async throws -> PollResponse {
         let session = try await sessions.connect(id: request.domainId)
         try await session.poll()
         return PollResponse()
+    }
+
+    func currentAnchor(
+        _ request: CurrentAnchorRequest
+    ) async throws -> CurrentAnchorResponse {
+        let session = try await sessions.connect(id: request.domainId)
+        let anchor = await session.currentAnchor
+        return CurrentAnchorResponse(anchor: anchor)
     }
 
     func changes(

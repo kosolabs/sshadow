@@ -9,6 +9,6 @@ extension NSApplication {
             let button = item.button
         else { return }
         button.performClick(button)
-        button.isHighlighted = button.state != .off
+        button.isHighlighted = false
     }
 }

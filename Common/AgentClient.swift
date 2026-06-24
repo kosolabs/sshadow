@@ -25,14 +25,12 @@ public class AgentClient {
         session: XPCSession,
         sharedUrl: URL = SSHadow.groupUrl
     ) {
-        logger.debug("Opening agent: \(session)")
         self.domainId = domainId
         self.session = session
         self.sharedUrl = sharedUrl
     }
 
     deinit {
-        logger.debug("Closing agent: \(session)")
         session.cancel(reason: "AgentClient deallocated")
     }
 
@@ -165,6 +163,16 @@ public class AgentClient {
         guard case .poll(_) = reply else {
             throw CocoaError(.coderInvalidValue)
         }
+    }
+
+    public func currentAnchor() async throws -> UInt64 {
+        let reply = try await perform(
+            .currentAnchor(CurrentAnchorRequest(domainId: domainId))
+        )
+        guard case .currentAnchor(let response) = reply else {
+            throw CocoaError(.coderInvalidValue)
+        }
+        return response.anchor
     }
 
     public func changes(

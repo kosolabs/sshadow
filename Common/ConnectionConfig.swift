@@ -66,6 +66,13 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
     public var description: String {
         "ConnectionConfig(id: \(id), name: \(name), url: \(url), authMethod: \(authMethod))"
     }
+    
+    public var domain: NSFileProviderDomain {
+        NSFileProviderDomain(
+            identifier: NSFileProviderDomainIdentifier(id.uuidString),
+            displayName: name
+        )
+    }
 
     public func path(for subpath: String) -> String {
         [path, subpath].filter { !$0.isEmpty }.joined(separator: "/")

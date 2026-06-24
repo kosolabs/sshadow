@@ -99,6 +99,18 @@ struct AgentClientTests {
         try await agent.poll()
     }
 
+    @Test func currentAnchorAdvancesOnPoll() async throws {
+        let sandbox = TestSandbox()
+        let agent = try await sandbox.getAgentClient()
+
+        #expect(try await agent.currentAnchor() == 0)
+
+        try sandbox.createFolder(at: "new.txt")
+        try await agent.poll()
+
+        #expect(try await agent.currentAnchor() == 1)
+    }
+
     @Test func setAttributesSucceeds() async throws {
         let sandbox = TestSandbox()
         try sandbox.createFile(at: "set-attrs.txt")

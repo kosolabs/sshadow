@@ -201,3 +201,17 @@ extension NSFileProviderFileSystemFlags {
         return "FPFileSystemFlags(\(flags.joined(separator: ", ")))"
     }
 }
+
+extension NSFileProviderSyncAnchor: @retroactive CustomStringConvertible {
+    public var description: String {
+        "FPSyncAnchor(\(value))"
+    }
+
+    public init(_ value: UInt64) {
+        self.init(rawValue: withUnsafeBytes(of: value) { Data($0) })
+    }
+
+    public var value: UInt64 {
+        rawValue.withUnsafeBytes { $0.load(as: UInt64.self) }
+    }
+}

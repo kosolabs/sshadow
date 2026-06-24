@@ -1,9 +1,16 @@
 import Common
 import FileProvider
 import Foundation
+import SwiftData
 import SwiftLibSSH
 
 private let logger = Logger(category: "Session")
+
+public typealias SignalEnumerator = @Sendable (ConnectionConfig) async throws -> Void
+
+public let defaultSignalEnumerator: SignalEnumerator = { config in
+    try await config.domain.manager.signalEnumerator(for: .workingSet)
+}
 
 actor Session {
     private let config: ConnectionConfig
@@ -11,6 +18,7 @@ actor Session {
     private let sftp: SFTPClient
     private let db: DomainDB
     private let sharedUrl: URL
+    private let signal: SignalEnumerator
 
     private let cache: FileCache
     private var changes: [(UInt64, [Change])] = []
@@ -21,13 +29,15 @@ actor Session {
         ssh: SSHClient,
         sftp: SFTPClient,
         db: DomainDB,
-        sharedUrl: URL = SSHadow.groupUrl
+        sharedUrl: URL = SSHadow.groupUrl,
+        signal: @escaping SignalEnumerator
     ) {
         self.config = config
         self.ssh = ssh
         self.sftp = sftp
         self.db = db
         self.sharedUrl = sharedUrl
+        self.signal = signal
 
         self.cache = FileCache { itemId, range in
             let path = try await config.path(for: db.path(for: itemId))
@@ -38,11 +48,19 @@ actor Session {
                 try await file.read(range: range)
             }
         }
+
+        if let dbConfig = db.modelContainer.configurations.first {
+            logger.info("Connected: \(config.url), DB: \(dbConfig.url.path)")
+        } else {
+            logger.info("Connected: \(config.url)")
+        }
     }
 
     func close() async {
         await sftp.close()
         await ssh.close()
+
+        logger.info("Disconnected: \(config.url)")
     }
 
     var url: String {
@@ -222,14 +240,28 @@ actor Session {
     }
 
     func poll() async throws {
-        changes.append((anchor, try await reconcile()))
+        let newChanges = try await reconcile()
+        guard !newChanges.isEmpty else {
+            return
+        }
+
+        changes.append((anchor, newChanges))
         anchor += 1
+
+        logger.info(
+            "Poll anchor at \(anchor) with \(newChanges.count) change(s)"
+        )
+        try await signal(config)
     }
 
-    func changes(since anchor: UInt64) -> (UInt64, [Change]) {
+    var currentAnchor: UInt64 {
+        anchor
+    }
+
+    func changes(since prevAnchor: UInt64) -> (UInt64, [Change]) {
         var allChanges: [Change] = []
         for (rowAnchor, rowChanges) in changes {
-            if rowAnchor >= anchor {
+            if rowAnchor >= prevAnchor {
                 allChanges.append(contentsOf: rowChanges)
             }
         }
