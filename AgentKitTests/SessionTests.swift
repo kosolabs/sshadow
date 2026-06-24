@@ -21,7 +21,8 @@ extension TestSandbox {
             ssh: ssh,
             sftp: sftp,
             db: db,
-            sharedUrl: shared
+            sharedUrl: shared,
+            signal: { _ in }
         )
 
         var folders: [NSFileProviderItemIdentifier] = [
@@ -780,6 +781,58 @@ struct SessionTests {
             let (updates, _) = changes.split()
             let item = try #require(updates.only)
             #expect(item.name == "second.txt")
+        }
+
+        @Test func currentAnchorStartsAtZero() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            #expect(await session.currentAnchor == 0)
+        }
+
+        @Test func currentAnchorAdvancesOnPoll() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try sandbox.createFile(at: "dir/first.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            try await session.poll()
+            #expect(await session.currentAnchor == 1)
+
+            try sandbox.createFile(at: "dir/second.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            try await session.poll()
+            #expect(await session.currentAnchor == 2)
+        }
+
+        @Test func currentAnchorDoesNotAdvanceWithoutChanges() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "file.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try await session.poll()
+            #expect(await session.currentAnchor == 0)
+
+            try await session.poll()
+            #expect(await session.currentAnchor == 0)
+        }
+
+        @Test func changesReturnsCurrentAnchor() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try sandbox.createFile(at: "dir/first.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            try await session.poll()
+
+            try sandbox.createFile(at: "dir/second.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            try await session.poll()
+
+            let (anchor, _) = await session.changes(since: 0)
+            #expect(anchor == 2)
         }
     }
 

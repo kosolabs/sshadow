@@ -118,14 +118,14 @@ class TestSandbox {
 
         try await appDb.upsert(profile: profile)
 
-        let listener = Agent.createAnonymous(
+        let listener = try Agent.createAnonymous(
             appDb: appDb,
             domainDbConfig: ModelConfiguration(isStoredInMemoryOnly: true),
             sharedUrl: shared
         )
         self.listener = listener
 
-        let session = try! XPCSession(endpoint: listener.endpoint)
+        let session = try XPCSession(endpoint: listener.endpoint)
         let agent = AgentClient(
             domainId: id,
             session: session,

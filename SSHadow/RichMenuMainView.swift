@@ -44,7 +44,7 @@ struct RichMenuMainView: View {
                         }
                     }
                 } label: {
-                    RichMenuLabel(title: "Refresh") {
+                    RichMenuLabel(title: "Poll Remote Changes") {
                         if isPolling {
                             ProgressView().controlSize(.small)
                         } else {

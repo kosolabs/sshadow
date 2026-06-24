@@ -27,6 +27,8 @@ public enum AgentRequest: Message, PrettyDescribable {
             request.domainId
         case .poll(let request):
             request.domainId
+        case .currentAnchor(let request):
+            request.domainId
         case .changes(let request):
             request.domainId
         case .setAttributes(let request):
@@ -60,6 +62,7 @@ public enum AgentRequest: Message, PrettyDescribable {
     case item(ItemRequest)
     case list(ListRequest)
     case poll(PollRequest)
+    case currentAnchor(CurrentAnchorRequest)
     case changes(ChangesRequest)
     case setAttributes(SetAttributesRequest)
     case createSymlink(CreateSymlinkRequest)
@@ -94,6 +97,7 @@ public enum AgentResponse: Message, PrettyDescribable {
     case item(ItemResponse)
     case list(ListResponse)
     case poll(PollResponse)
+    case currentAnchor(CurrentAnchorResponse)
     case changes(ChangesResponse)
     case setAttributes(SetAttributesResponse)
     case createSymlink(CreateSymlinkResponse)
@@ -320,6 +324,22 @@ public struct PollRequest: Message, PrettyDescribable {
 
 public struct PollResponse: Message, PrettyDescribable {
     public init() {}
+}
+
+public struct CurrentAnchorRequest: Message, PrettyDescribable {
+    public let domainId: UUID
+
+    public init(domainId: UUID) {
+        self.domainId = domainId
+    }
+}
+
+public struct CurrentAnchorResponse: Message, PrettyDescribable {
+    public let anchor: UInt64
+
+    public init(anchor: UInt64) {
+        self.anchor = anchor
+    }
 }
 
 public enum Change: Message, PrettyDescribable {

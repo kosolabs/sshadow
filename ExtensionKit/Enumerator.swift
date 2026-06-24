@@ -6,9 +6,6 @@ private let logger = Logger(category: "Enumerator")
 public class Enumerator: NSObject, NSFileProviderEnumerator {
     private let agent: AgentClient
     private let itemIdentifier: NSFileProviderItemIdentifier
-    private let anchor = NSFileProviderSyncAnchor(
-        "an anchor".data(using: .utf8)!
-    )
 
     init(
         agent: AgentClient,
@@ -28,18 +25,6 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         for observer: NSFileProviderEnumerationObserver,
         startingAt page: NSFileProviderPage
     ) {
-        /* TODO:
-         - inspect the page to determine whether this is an initial or a follow-up request
-
-         If this is an enumerator for a directory, the root container or all directories:
-         - perform a server request to fetch directory contents
-         If this is an enumerator for the active set:
-         - perform a server request to update your local database
-         - fetch the active set from your local database
-
-         - inform the observer about the items returned by the server (possibly multiple times)
-         - inform the observer that you are finished with this page
-         */
         let trace = StackTrace.capture()
 
         Task {
@@ -78,23 +63,57 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         for observer: NSFileProviderChangeObserver,
         from anchor: NSFileProviderSyncAnchor
     ) {
-        /* TODO:
-         - query the server for updates since the passed-in sync anchor
-
-         If this is an enumerator for the active set:
-         - note the changes in your local database
-
-         - inform the observer about item deletions and updates (modifications + insertions)
-         - inform the observer when you have finished enumerating up to a subsequent sync anchor
-         */
         logger.debug("Enumerating changes for \(itemIdentifier.desc)")
-        observer.finishEnumeratingChanges(upTo: anchor, moreComing: false)
+        let trace = StackTrace.capture()
+
+        Task {
+            do {
+                let (nextAnchor, changes) = try await agent.changes(
+                    since: anchor.value
+                )
+
+                var updates: [FPItem] = []
+                var deletes: [NSFileProviderItemIdentifier] = []
+                for change in changes {
+                    switch change {
+                    case .delete(let itemId):
+                        deletes.append(NSFileProviderItemIdentifier(itemId))
+                    case .update(let item):
+                        updates.append(FPItem(item: item))
+                    }
+                }
+
+                if !updates.isEmpty {
+                    observer.didUpdate(updates)
+                }
+                if !deletes.isEmpty {
+                    observer.didDeleteItems(withIdentifiers: deletes)
+                }
+                observer.finishEnumeratingChanges(
+                    upTo: NSFileProviderSyncAnchor(nextAnchor),
+                    moreComing: false
+                )
+            } catch {
+                trace.log(logger, error: error)
+                observer.finishEnumeratingWithError(error)
+            }
+        }
     }
 
     public func currentSyncAnchor(
         completionHandler: @escaping (NSFileProviderSyncAnchor?) -> Void
     ) {
         logger.debug("Current sync anchor for \(itemIdentifier.desc)")
-        completionHandler(anchor)
+        let trace = StackTrace.capture()
+
+        Task {
+            do {
+                let anchor = try await agent.currentAnchor()
+                completionHandler(NSFileProviderSyncAnchor(anchor))
+            } catch {
+                trace.log(logger, error: error)
+                completionHandler(nil)
+            }
+        }
     }
 }

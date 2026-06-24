@@ -35,6 +35,14 @@ extension Enumerator {
         }
         return (items.withLock { items in items }, next)
     }
+
+    fileprivate func currentSyncAnchor() async -> NSFileProviderSyncAnchor? {
+        await withCheckedContinuation { continuation in
+            currentSyncAnchor { anchor in
+                continuation.resume(returning: anchor)
+            }
+        }
+    }
 }
 
 @Suite(.serialized)
@@ -117,5 +125,24 @@ struct EnumeratorTests {
         let (items, _) = try await enumerator.enumerateItems()
 
         #expect(items.isEmpty)
+    }
+
+    @Test func currentSyncAnchorReflectsAgentState() async throws {
+        let sandbox = TestSandbox()
+        let agent = try await sandbox.getAgentClient()
+        let enumerator = Enumerator(
+            agent: agent,
+            itemIdentifier: .rootContainer
+        )
+
+        let initial = try #require(await enumerator.currentSyncAnchor())
+        #expect(initial.value == 0)
+
+        // touch new.txt
+        try sandbox.createFolder(at: "new.txt")
+        try await agent.poll()
+
+        let advanced = try #require(await enumerator.currentSyncAnchor())
+        #expect(advanced.value == 1)
     }
 }

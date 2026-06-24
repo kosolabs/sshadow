@@ -1,4 +1,5 @@
 import Common
+import FileProvider
 import Foundation
 import SwiftData
 import SwiftLibSSH
@@ -9,6 +10,7 @@ actor SessionManager {
     private let db: AppDB
     private let domainDbConfig: ModelConfiguration?
     private let sharedUrl: URL
+    private let signal: SignalEnumerator
 
     private var sessions: [UUID: Session] = [:]
     private var connectTasks: [UUID: Task<Session, any Error>] = [:]
@@ -17,25 +19,29 @@ actor SessionManager {
     init(
         appDb: AppDB,
         domainDbConfig: ModelConfiguration? = nil,
-        sharedUrl: URL = SSHadow.groupUrl
+        sharedUrl: URL = SSHadow.groupUrl,
+        signal: @escaping SignalEnumerator = defaultSignalEnumerator
     ) {
         self.db = appDb
         self.domainDbConfig = domainDbConfig
         self.sharedUrl = sharedUrl
+        self.signal = signal
     }
 
+    @discardableResult
     func connect(id: UUID) async throws -> Session {
         if let session = sessions[id] {
             return session
+        }
+
+        guard let profile = await db.fetch(id: id) else {
+            throw AgentError.notAuthenticated
         }
 
         if let task = connectTasks[id] {
             return try await task.value
         }
 
-        guard let profile = await db.fetch(id: id) else {
-            throw AgentError.notAuthenticated
-        }
         let config = try ConnectionConfig(from: profile)
 
         let domainDbConfig = self.domainDbConfig ?? DomainDB.model(for: id)
@@ -49,7 +55,8 @@ actor SessionManager {
                 ssh: ssh,
                 sftp: sftp,
                 db: db,
-                sharedUrl: sharedUrl
+                sharedUrl: sharedUrl,
+                signal: signal
             )
         }
         connectTasks[id] = task
@@ -58,8 +65,6 @@ actor SessionManager {
             let session = try await task.value
             sessions[id] = session
             connectTasks[id] = nil
-            let dbPath = domainDbConfig.url.path
-            logger.info("Connected: \(config.url), DB path: \(dbPath)")
             return session
         } catch {
             connectTasks[id] = nil
@@ -72,7 +77,6 @@ actor SessionManager {
         connectTasks[id] = nil
         if let session = sessions.removeValue(forKey: id) {
             await session.close()
-            logger.info("Disconnected: \(await session.url)")
         }
     }
 
