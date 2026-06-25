@@ -10,50 +10,51 @@ public class Agent {
     private let sessions: SessionManager
     private let domainDbConfig: ModelConfiguration?
 
-    public init(
+    private init(
         appDb: AppDB,
-        domainDbConfig: ModelConfiguration? = nil,
-        sharedUrl: URL = SSHadow.groupUrl,
-        signal: @escaping SignalEnumerator
+        domainDbConfig: ModelConfiguration?,
+        sharedUrl: URL,
+        signal: @escaping SignalEnumerator,
+        pollInterval: Duration?
     ) {
         self.domainDbConfig = domainDbConfig
         self.sessions = SessionManager(
             appDb: appDb,
             domainDbConfig: domainDbConfig,
             sharedUrl: sharedUrl,
-            signal: signal
+            signal: signal,
+            pollInterval: pollInterval
         )
     }
 
-    public static func create(
-        service: String = SSHadow.appServiceName,
-        appDb: AppDB? = nil,
-        domainDbConfig: ModelConfiguration? = nil,
-        sharedUrl: URL = SSHadow.groupUrl
-    ) throws -> XPCListener {
-        let db = try appDb ?? AppDB.open()
+    public static func listener() throws -> XPCListener {
         let agent = Agent(
-            appDb: db,
-            domainDbConfig: domainDbConfig,
-            sharedUrl: sharedUrl,
-            signal: defaultSignalEnumerator
+            appDb: try AppDB.open(),
+            domainDbConfig: nil,
+            sharedUrl: SSHadow.groupUrl,
+            signal: { config in
+                try await config.domain.manager.signalEnumerator(
+                    for: .workingSet
+                )
+            },
+            pollInterval: .seconds(30)
         )
-        return try XPCListener(service: service) { request in
+        return try XPCListener(service: SSHadow.appServiceName) { request in
             accept(request: request, agent: agent)
         }
     }
 
-    public static func createAnonymous(
-        appDb: AppDB? = nil,
-        domainDbConfig: ModelConfiguration? = nil,
-        sharedUrl: URL = SSHadow.groupUrl
-    ) throws -> XPCListener {
-        let db = try appDb ?? AppDB.open()
+    public static func testListener(
+        appDb: AppDB,
+        domainDbConfig: ModelConfiguration,
+        sharedUrl: URL
+    ) -> XPCListener {
         let agent = Agent(
-            appDb: db,
+            appDb: appDb,
             domainDbConfig: domainDbConfig,
             sharedUrl: sharedUrl,
-            signal: { _ in }
+            signal: { _ in },
+            pollInterval: nil
         )
         return XPCListener(targetQueue: nil) { request in
             accept(request: request, agent: agent)
