@@ -80,8 +80,8 @@ struct SSHadowApp: App {
         .modelContainer(modelContainer)
         .environment(coordinator)
 
-        Window("SSHadow Settings", id: "settings") {
-            ConnectionProfileListView()
+        Settings {
+            SettingsView()
         }
         .modelContainer(modelContainer)
         .environment(coordinator)

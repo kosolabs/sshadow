@@ -11,44 +11,45 @@ struct ConnectionProfileListView: View {
     @State private var selection: ConnectionProfile?
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $selection) {
-                ForEach(configs) { config in
-                    NavigationLink(value: config) {
-                        HStack {
-                            Image(systemName: "externaldrive.badge.icloud")
-                                .font(.system(size: 18))
-                                .foregroundColor(
-                                    config.isEnabled() ? .green : .secondary
-                                )
-                            VStack(alignment: .leading) {
-                                if let name = config.name {
-                                    Text(name)
-                                    Text(config.displayUrl).font(.caption)
-                                } else {
-                                    Text(config.displayUrl)
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                List(selection: $selection) {
+                    ForEach(configs) { config in
+                        NavigationLink(value: config) {
+                            HStack {
+                                Image(systemName: "externaldrive.badge.icloud")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(
+                                        config.isEnabled() ? .green : .secondary
+                                    )
+                                VStack(alignment: .leading) {
+                                    if let name = config.name {
+                                        Text(name)
+                                        Text(config.displayUrl).font(.caption)
+                                    } else {
+                                        Text(config.displayUrl)
+                                    }
                                 }
                             }
                         }
                     }
-                    .accessibilityIdentifier("connectionLink_\(config.url)")
                 }
-            }
-            .frame(minWidth: 250, minHeight: 500)
-            .accessibilityIdentifier("connectionsList")
-            .navigationTitle("Connections")
-            .toolbar {
-                ToolbarItem(placement: .automatic) {
-                    Button(action: {
+
+                Divider()
+
+                HStack(spacing: 0) {
+                    Button {
                         let config = ConnectionProfile()
                         modelContext.insert(config)
                         selection = config
-                    }) {
-                        Label("Add Connection", systemImage: "plus")
+                    } label: {
+                        Image(systemName: "plus")
+                            .frame(width: 24, height: 20)
                     }
-                    .accessibilityIdentifier("addConnectionButton")
-                }
-                ToolbarItem(placement: .automatic) {
+                    .help("Add Connection")
+
+                    Divider().frame(height: 16)
+
                     Button(role: .destructive) {
                         if let selection {
                             Task {
@@ -59,52 +60,34 @@ struct ConnectionProfileListView: View {
                             self.selection = nil
                         }
                     } label: {
-                        Label("Delete", systemImage: "trash")
+                        Image(systemName: "minus")
+                            .frame(width: 24, height: 20)
                     }
                     .disabled(selection == nil)
-                    .accessibilityIdentifier("deleteConnectionButton")
+                    .help("Remove Connection")
+
+                    Spacer()
+                }
+                .buttonStyle(.borderless)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+            }
+            .frame(width: 300)
+            
+            Divider()
+            
+            Group {
+                if let selection {
+                    ConnectionProfileEditView(config: selection)
+                } else {
+                    ContentUnavailableView(
+                        "Select a Connection",
+                        systemImage: "globe"
+                    )
                 }
             }
-        } detail: {
-            if let selection {
-                ConnectionProfileEditView(config: selection)
-                    .navigationTitle("Connection Settings")
-            } else {
-                ContentUnavailableView(
-                    "Select a Connection",
-                    systemImage: "globe"
-                )
-                .navigationTitle("Connection Settings")
-            }
+            .frame(width: 500)
         }
-    }
-}
-
-#Preview {
-    do {
-        let container = try ModelContainer(
-            for: ConnectionProfile.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-
-        container.mainContext.insert(
-            ConnectionProfile(
-                name: "Media",
-                host: "example.com",
-                user: "user",
-                path: "/mnt/media"
-            )
-        )
-
-        container.mainContext.insert(
-            ConnectionProfile(
-                host: "example.com",
-            )
-        )
-
-        return ConnectionProfileListView()
-            .modelContainer(container)
-    } catch {
-        return Text("Preview failed: \(error.localizedDescription)")
+        .frame(height: 600)
     }
 }

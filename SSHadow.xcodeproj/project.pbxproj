@@ -224,7 +224,6 @@
 		7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = UnitTests.xctestplan; sourceTree = "<group>"; };
 		73799A3E2F9811DD00A15109 /* AgentKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AgentKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		73799A482F9811DD00A15109 /* AgentKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AgentKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		738D63342F3FAFEA00FED311 /* UITests.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = UITests.xctestplan; sourceTree = "<group>"; };
 		738D63A22F3FD1F100FED311 /* ExtensionKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ExtensionKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		738D63AC2F3FD1F100FED311 /* ExtensionKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ExtensionKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7393A9C02F3134FB00213730 /* Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Extension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -279,11 +278,6 @@
 				73EC8FBD2F996C53008A08C9 /* Exceptions for "CommonTests" folder in "AgentKitTests" target */,
 			);
 			path = CommonTests;
-			sourceTree = "<group>";
-		};
-		7322A9122F28212400D8117D /* UITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = UITests;
 			sourceTree = "<group>";
 		};
 		7334708B2F22037100B8181D /* SSHadow */ = {
@@ -411,7 +405,6 @@
 			isa = PBXGroup;
 			children = (
 				7334708B2F22037100B8181D /* SSHadow */,
-				7322A9122F28212400D8117D /* UITests */,
 				730981002F318825009F7AA2 /* Common */,
 				7309810F2F318825009F7AA2 /* CommonTests */,
 				73799A3F2F9811DD00A15109 /* AgentKit */,
@@ -422,7 +415,6 @@
 				7381F0C32F22B3C5005F4099 /* Frameworks */,
 				7334708A2F22037100B8181D /* Products */,
 				7322A9212F2857C700D8117D /* SSHadow.icon */,
-				738D63342F3FAFEA00FED311 /* UITests.xctestplan */,
 				7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */,
 				73F2BBF02FA134AF00D68338 /* clean.sh */,
 				73B13EBC2F7DF9440047EBA7 /* CLAUDE.md */,
@@ -541,9 +533,6 @@
 			);
 			dependencies = (
 				7322A9182F28212400D8117D /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				7322A9122F28212400D8117D /* UITests */,
 			);
 			name = UITests;
 			packageProductDependencies = (

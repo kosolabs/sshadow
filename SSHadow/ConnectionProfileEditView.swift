@@ -242,8 +242,3 @@ extension URL {
         }
     }
 }
-
-#Preview {
-    ConnectionProfileEditView()
-        .environment(ConnectionCoordinator())
-}
