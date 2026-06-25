@@ -97,6 +97,16 @@ FileProvider identifies files by opaque `NSFileProviderItemIdentifier` strings. 
 - `DomainDB` stores a tree of `ItemModel(id, parentId, name)`.
 - `Session.path(for: itemId)` walks the tree to the root and joins segments, then prepends the connection's configured remote path.
 
+### Change tracking and working-set enumeration
+
+`Session` polls every directory with `enumeratedAt != nil` over SFTP, diffs the listings against cached `ItemModel` snapshots, applies upserts/deletes to `DomainDB`, and signals macOS via `NSFileProviderManager.signalEnumerator(for: .workingSet)`. macOS then calls `enumerateChanges` on the working-set enumerator, which forwards to `agent.changes(domainId:since:)`.
+
+Key invariants:
+- **Single observer.** Only the `.workingSet` enumerator reports changes; per-directory `enumerateChanges` stays a no-op. macOS only polls the working-set enumerator in practice.
+- **Anchor and change journal are in-memory.** `Session` holds `anchor: Int`, `pendingUpdates: [String: Item]`, `pendingDeletes: Set<String>`. Never persisted. On agent restart, `enumerateChanges` returns `expired = true` and macOS re-enumerates the working set against the persisted `ItemModel` snapshots in `DomainDB` — same end state, one full local re-enumeration.
+- **Working set = every non-virtual `ItemModel` in the DB.** No explicit membership column. Rows only enter the DB via macOS-initiated operations (`list`, `item`, create RPCs) or polling new children of already-enumerated directories, so by construction every row corresponds to something in macOS's view.
+- **Clear-on-read pending state.** The agent clears `pendingUpdates` / `pendingDeletes` on every successful `enumerateChanges` response. Safe because there's only one observer.
+
 ### Adding a new agent operation
 
 1. Add `XxxRequest` / `XxxResponse` structs to `Common/AgentProtocol.swift`

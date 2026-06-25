@@ -228,8 +228,8 @@
 		738D63A22F3FD1F100FED311 /* ExtensionKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ExtensionKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		738D63AC2F3FD1F100FED311 /* ExtensionKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ExtensionKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7393A9C02F3134FB00213730 /* Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Extension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		739BF6982FEDB73800C60205 /* Justfile */ = {isa = PBXFileReference; lastKnownFileType = text; path = Justfile; sourceTree = "<group>"; };
 		73B13EBC2F7DF9440047EBA7 /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
-		73D769AB2FC7861000C905CA /* ENUMERATION_PLAN.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ENUMERATION_PLAN.md; sourceTree = "<group>"; };
 		73F2BBF02FA134AF00D68338 /* clean.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = clean.sh; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -424,9 +424,9 @@
 				7322A9212F2857C700D8117D /* SSHadow.icon */,
 				738D63342F3FAFEA00FED311 /* UITests.xctestplan */,
 				7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */,
-				73B13EBC2F7DF9440047EBA7 /* CLAUDE.md */,
-				73D769AB2FC7861000C905CA /* ENUMERATION_PLAN.md */,
 				73F2BBF02FA134AF00D68338 /* clean.sh */,
+				73B13EBC2F7DF9440047EBA7 /* CLAUDE.md */,
+				739BF6982FEDB73800C60205 /* Justfile */,
 			);
 			sourceTree = "<group>";
 		};
