@@ -118,7 +118,7 @@ class TestSandbox {
 
         try await appDb.upsert(profile: profile)
 
-        let listener = try Agent.createAnonymous(
+        let listener = Agent.testListener(
             appDb: appDb,
             domainDbConfig: ModelConfiguration(isStoredInMemoryOnly: true),
             sharedUrl: shared

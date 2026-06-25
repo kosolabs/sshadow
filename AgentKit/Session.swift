@@ -6,11 +6,8 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Session")
 
-public typealias SignalEnumerator = @Sendable (ConnectionConfig) async throws -> Void
-
-public let defaultSignalEnumerator: SignalEnumerator = { config in
-    try await config.domain.manager.signalEnumerator(for: .workingSet)
-}
+typealias SignalEnumerator =
+    @Sendable (ConnectionConfig) async throws -> Void
 
 actor Session {
     private let config: ConnectionConfig
@@ -19,8 +16,11 @@ actor Session {
     private let db: DomainDB
     private let sharedUrl: URL
     private let signal: SignalEnumerator
+    private let pollInterval: Duration?
 
     private let cache: FileCache
+
+    private var bgTask: Task<Void, Never>?
     private var changes: [(UInt64, [Change])] = []
     private var anchor: UInt64 = 0
 
@@ -30,7 +30,8 @@ actor Session {
         sftp: SFTPClient,
         db: DomainDB,
         sharedUrl: URL = SSHadow.groupUrl,
-        signal: @escaping SignalEnumerator
+        signal: @escaping SignalEnumerator,
+        pollInterval: Duration?
     ) {
         self.config = config
         self.ssh = ssh
@@ -38,6 +39,7 @@ actor Session {
         self.db = db
         self.sharedUrl = sharedUrl
         self.signal = signal
+        self.pollInterval = pollInterval
 
         self.cache = FileCache { itemId, range in
             let path = try await config.path(for: db.path(for: itemId))
@@ -48,7 +50,7 @@ actor Session {
                 try await file.read(range: range)
             }
         }
-
+        
         if let dbConfig = db.modelContainer.configurations.first {
             logger.info("Connected: \(config.url), DB: \(dbConfig.url.path)")
         } else {
@@ -56,7 +58,30 @@ actor Session {
         }
     }
 
+    func start() {
+        guard bgTask == nil, let pollInterval else { return }
+        bgTask = Task { [weak self] in
+            await self?.run(interval: pollInterval)
+        }
+    }
+
+    private func run(interval: Duration) async {
+        while !Task.isCancelled {
+            do {
+                try await Task.sleep(for: interval)
+                try await poll()
+            } catch is CancellationError {
+                return
+            } catch {
+                logger.error("Periodic poll failed: \(error)")
+            }
+        }
+    }
+
     func close() async {
+        bgTask?.cancel()
+        bgTask = nil
+
         await sftp.close()
         await ssh.close()
 
@@ -240,6 +265,8 @@ actor Session {
     }
 
     func poll() async throws {
+        logger.debug("Polling: \(config.url), anchor: \(anchor)")
+
         let newChanges = try await reconcile()
         guard !newChanges.isEmpty else {
             return
@@ -248,9 +275,7 @@ actor Session {
         changes.append((anchor, newChanges))
         anchor += 1
 
-        logger.info(
-            "Poll anchor at \(anchor) with \(newChanges.count) change(s)"
-        )
+        logger.info("Polled: \(newChanges.count) change(s), anchor: \(anchor)")
         try await signal(config)
     }
 
@@ -597,7 +622,6 @@ actor Session {
         mode: mode_t = 0o600,
         perform: @Sendable (SFTPFile) async throws -> T
     ) async throws -> T {
-        try await logger.debug("With \(accessType) file \(id(of: itemId))")
         return try await mapError(with: itemId) {
             try await sftp.withSftpFile(
                 at: path(for: itemId),
@@ -612,7 +636,6 @@ actor Session {
         for itemId: NSFileProviderItemIdentifier,
         perform: @Sendable (SFTPDirectory) async throws -> T
     ) async throws -> T {
-        try await logger.debug("With directory \(id(of: itemId))")
         return try await mapError(with: itemId) {
             try await sftp.withDirectory(
                 at: path(for: itemId),

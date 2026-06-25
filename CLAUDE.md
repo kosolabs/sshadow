@@ -55,7 +55,7 @@ macOS FileProvider ──► Extension.appex ──► [XPC] ──► SSHadow.a
                        (ExtensionKit)              (AgentKit)
 ```
 
-1. **SSHadow (main app)** — SwiftUI profile manager. On launch it starts an `XPCListener` (via `Agent.create()`) that the extension connects to. The app itself never touches SSH directly.
+1. **SSHadow (main app)** — SwiftUI profile manager. On launch it starts an `XPCListener` (via `Agent.listener()`) that the extension connects to. The app itself never touches SSH directly.
 2. **Extension.appex** — A `NSFileProviderReplicatedExtension` that macOS calls for every file operation. It holds an `AgentClient` and forwards every call as an XPC request to the main app.
 3. **Shared app group** `group.com.kosolabs.SSHadow` — Used for both XPC service name resolution and the shared file URL where downloaded content is written (`SSHadow.groupUrl`).
 
@@ -117,7 +117,7 @@ FileProvider identifies files by opaque `NSFileProviderItemIdentifier` strings. 
 
 - All tests use in-memory SwiftData: `ModelConfiguration(isStoredInMemoryOnly: true)`.
 - `TestSandbox.swift` provides helpers to stand up a `Session` connected to the local test sshd (port 2248) and to create test files/directories.
-- `Agent.createAnonymous()` is used in tests to get an agent without a named XPC service.
+- `Agent.testListener(appDb:domainDbConfig:sharedUrl:)` is used in tests to get an agent without a named XPC service.
 - The UI tests pass `-uiTesting` as a launch argument, which causes `SSHadowApp` to use an in-memory model container.
 
 ## Git Conventions

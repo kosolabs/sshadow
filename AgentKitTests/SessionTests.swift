@@ -22,7 +22,8 @@ extension TestSandbox {
             sftp: sftp,
             db: db,
             sharedUrl: shared,
-            signal: { _ in }
+            signal: { _ in },
+            pollInterval: nil
         )
 
         var folders: [NSFileProviderItemIdentifier] = [

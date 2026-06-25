@@ -11,21 +11,23 @@ actor SessionManager {
     private let domainDbConfig: ModelConfiguration?
     private let sharedUrl: URL
     private let signal: SignalEnumerator
+    private let pollInterval: Duration?
 
     private var sessions: [UUID: Session] = [:]
     private var connectTasks: [UUID: Task<Session, any Error>] = [:]
-    private var pollers: [UUID: Task<Void, any Error>] = [:]
 
     init(
         appDb: AppDB,
         domainDbConfig: ModelConfiguration? = nil,
         sharedUrl: URL = SSHadow.groupUrl,
-        signal: @escaping SignalEnumerator = defaultSignalEnumerator
+        signal: @escaping SignalEnumerator,
+        pollInterval: Duration? = nil
     ) {
         self.db = appDb
         self.domainDbConfig = domainDbConfig
         self.sharedUrl = sharedUrl
         self.signal = signal
+        self.pollInterval = pollInterval
     }
 
     @discardableResult
@@ -43,9 +45,8 @@ actor SessionManager {
         }
 
         let config = try ConnectionConfig(from: profile)
+        let domainDbConfig = domainDbConfig ?? DomainDB.model(for: id)
 
-        let domainDbConfig = self.domainDbConfig ?? DomainDB.model(for: id)
-        let sharedUrl = self.sharedUrl
         let task = Task {
             let ssh = try await SSHClient.connect(config: config)
             let sftp = try await ssh.sftp()
@@ -56,7 +57,8 @@ actor SessionManager {
                 sftp: sftp,
                 db: db,
                 sharedUrl: sharedUrl,
-                signal: signal
+                signal: signal,
+                pollInterval: pollInterval
             )
         }
         connectTasks[id] = task
@@ -65,6 +67,7 @@ actor SessionManager {
             let session = try await task.value
             sessions[id] = session
             connectTasks[id] = nil
+            await session.start()
             return session
         } catch {
             connectTasks[id] = nil
