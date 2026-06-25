@@ -4,7 +4,6 @@ import SwiftData
 import SwiftUI
 
 struct RichMenuMainView: View {
-    @Environment(\.openWindow) private var openWindow
     @Environment(ConnectionCoordinator.self) private var coordinator
 
     @Query(sort: \ConnectionProfile.host) private var configs:
@@ -12,6 +11,7 @@ struct RichMenuMainView: View {
 
     @State private var isPolling = false
     @State private var isDebug = false
+    @State private var isSettingsHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -25,11 +25,12 @@ struct RichMenuMainView: View {
                 Divider().padding(.vertical, 4)
             }
 
-            RichMenuButton {
-                openWindow(id: "settings")
-                NSApp.activate()
-            } label: {
-                RichMenuLabel("Open SSHadow Settings...", systemImage: "gear")
+            RichMenuSettingsButton {
+                RichMenuLabel(
+                    "Open SSHadow Settings...",
+                    systemImage: "gear",
+                    shortcut: .init(",", modifiers: .command)
+                )
             }
 
             if isDebug {
@@ -58,7 +59,11 @@ struct RichMenuMainView: View {
             RichMenuButton {
                 NSApplication.shared.terminate(nil)
             } label: {
-                RichMenuLabel("Quit SSHadow", systemImage: "power")
+                RichMenuLabel(
+                    "Quit SSHadow",
+                    systemImage: "power",
+                    shortcut: .init("q", modifiers: .command)
+                )
             }
         }
         .padding(.vertical, 8)

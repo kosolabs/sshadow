@@ -91,19 +91,3 @@ struct ConnectionTestStatusView: View {
         }
     }
 }
-
-#Preview {
-    VStack(alignment: .leading) {
-        ConnectionTestStatusView(testing: false, error: nil)
-        ConnectionTestStatusView(testing: true, error: nil)
-        ConnectionTestStatusView(
-            testing: false,
-            error: InitDomainError.pathNotADirectory
-        )
-        ConnectionTestStatusView(
-            testing: false,
-            error: InitDomainError.pathNotFound
-        )
-    }
-    .padding()
-}
