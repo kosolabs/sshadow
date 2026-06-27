@@ -35,8 +35,8 @@ struct ConnectionTestStatusView: View {
                 )
                 .foregroundStyle(.red)
             }
-        } else if let connectionTestError = error as? InitDomainError {
-            switch connectionTestError {
+        } else if let agentError = error as? AgentError {
+            switch agentError {
             case .unknownHost:
                 Label(
                     "Unknown host",
@@ -49,7 +49,7 @@ struct ConnectionTestStatusView: View {
                     systemImage: "network.slash"
                 )
                 .foregroundStyle(.red)
-            case .timeout:
+            case .connectionTimedOut:
                 Label(
                     "Connection timed out",
                     systemImage: "network.slash"
@@ -61,22 +61,28 @@ struct ConnectionTestStatusView: View {
                     systemImage: "lock.circle"
                 )
                 .foregroundStyle(.red)
-            case .userauthPasswordFailed:
+            case .passwordAuthFailed:
                 Label(
                     "Password authentication failed",
                     systemImage: "lock.circle"
                 )
                 .foregroundStyle(.red)
-            case .pathNotADirectory:
+            case .remotePathNotDirectory:
                 Label(
                     "Remote path is not a directory",
                     systemImage: "questionmark.folder"
                 )
                 .foregroundStyle(.red)
-            case .pathNotFound:
+            case .remotePathNotFound:
                 Label(
                     "Remote path does not exist",
                     systemImage: "questionmark.folder"
+                )
+                .foregroundStyle(.red)
+            default:
+                Label(
+                    "Other: \(agentError.localizedDescription)",
+                    systemImage: "bolt.slash"
                 )
                 .foregroundStyle(.red)
             }

@@ -18,8 +18,31 @@ extension TestSandbox {
 
 @Suite(.serialized)
 struct ExtensionTests {
-    // TODO: Add a test for invalid config throws NSFileProviderError(.notAuthenticated)
-    // TODO: Add a test for unreachable server throws NSFileProviderError(.serverUnreachable)
+    @Test(arguments: [
+        AgentError.agentUnreachable,
+        AgentError.unknownHost,
+        AgentError.connectionRefused,
+        AgentError.connectionTimedOut,
+        AgentError.remotePathNotFound,
+        AgentError.remotePathNotDirectory,
+        AgentError.unexpectedResponse,
+    ])
+    func mapsToFileProviderServerUnreachable(error: AgentError) {
+        let nsError = error.asNSError as NSError
+        #expect(nsError.domain == NSFileProviderErrorDomain)
+        #expect(nsError.code == NSFileProviderError.serverUnreachable.rawValue)
+    }
+
+    @Test(arguments: [
+        AgentError.profileNotFound,
+        AgentError.invalidPrivateKey,
+        AgentError.passwordAuthFailed,
+    ])
+    func mapsToFileProviderNotAuthenticated(error: AgentError) {
+        let nsError = error.asNSError as NSError
+        #expect(nsError.domain == NSFileProviderErrorDomain)
+        #expect(nsError.code == NSFileProviderError.notAuthenticated.rawValue)
+    }
 
     @Test func readSmallFileSucceeds() async throws {
         // cat small-file.txt
@@ -122,7 +145,7 @@ struct ExtensionTests {
         }
         progress.cancel()
 
-        await #expect(throws: CocoaError(.userCancelled).self) {
+        await #expect(throws: AgentError.userCancelled) {
             try await fetchTask.value
         }
     }

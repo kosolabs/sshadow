@@ -83,7 +83,7 @@ public enum AgentResult: Message, PrettyDescribable {
     public func get() throws -> AgentResponse {
         switch self {
         case .success(let response): return response
-        case .failure(let error): throw error.asError
+        case .failure(let error): throw error
         }
     }
 }
@@ -111,24 +111,21 @@ public enum AgentResponse: Message, PrettyDescribable {
     case stream(StreamResponse)
 }
 
-public enum InitDomainError: Message, PrettyDescribable, Error {
-    case unknownHost
-    case connectionRefused
-    case timeout
-    case userauthPasswordFailed
-    case invalidPrivateKey
-    case pathNotADirectory
-    case pathNotFound
-}
-
 public enum AgentError: Message, PrettyDescribable, Error {
-    case notAuthenticated
-    case serverUnreachable
+    case agentUnreachable
+    case profileNotFound
     case userCancelled
     case permissionDenied
     case itemNotFound(String?)
     case filenameCollision
-    case initDomainError(InitDomainError)
+    case unknownHost
+    case connectionRefused
+    case connectionTimedOut
+    case invalidPrivateKey
+    case passwordAuthFailed
+    case remotePathNotFound
+    case remotePathNotDirectory
+    case unexpectedResponse
     case unknown(domain: String, code: Int, message: String)
 
     public static var itemNotFound: AgentError {
@@ -146,10 +143,6 @@ public enum AgentError: Message, PrettyDescribable, Error {
             self = agentError
             return
         }
-        if let testError = error as? InitDomainError {
-            self = .initDomainError(testError)
-            return
-        }
         logger.error("Unhandled error type: \(error)")
         let nsError = error as NSError
         self = .unknown(
@@ -157,35 +150,6 @@ public enum AgentError: Message, PrettyDescribable, Error {
             code: nsError.code,
             message: nsError.localizedDescription
         )
-    }
-
-    public var asError: any Error {
-        switch self {
-        case .notAuthenticated:
-            NSFileProviderError(.notAuthenticated)
-        case .serverUnreachable:
-            NSFileProviderError(.serverUnreachable)
-        case .userCancelled:
-            CocoaError(.userCancelled)
-        case .permissionDenied:
-            CocoaError(.fileWriteNoPermission)
-        case .itemNotFound(let itemId?):
-            NSError.fileProviderErrorForNonExistentItem(
-                withIdentifier: NSFileProviderItemIdentifier(itemId)
-            )
-        case .itemNotFound(nil):
-            NSFileProviderError(.noSuchItem)
-        case .filenameCollision:
-            NSFileProviderError(.filenameCollision)
-        case .initDomainError(let testError):
-            testError
-        case .unknown(let domain, let code, let message):
-            NSError(
-                domain: domain,
-                code: code,
-                userInfo: [NSLocalizedDescriptionKey: message]
-            )
-        }
     }
 
     public var isUnknown: Bool {

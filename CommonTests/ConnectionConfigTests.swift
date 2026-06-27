@@ -18,6 +18,20 @@ struct ConnectionConfigTests {
         #expect(config.path(for: "file.txt") == "file.txt")
     }
 
+    @Test func testPathWithEmptyConfigPathAndEmptySubpath() {
+        let config = ConnectionConfig(
+            id: UUID(),
+            name: "test",
+            host: "host",
+            port: 22,
+            user: "user",
+            path: "",
+            authMethod: .none
+        )
+
+        #expect(config.path(for: "") == ".")
+    }
+
     @Test func testPathWithNonEmptyConfigPath() {
         let config = ConnectionConfig(
             id: UUID(),
