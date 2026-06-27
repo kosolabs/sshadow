@@ -37,7 +37,7 @@ actor SessionManager {
         }
 
         guard let profile = await db.fetch(id: id) else {
-            throw AgentError.notAuthenticated
+            throw AgentError.profileNotFound
         }
 
         if let task = connectTasks[id] {

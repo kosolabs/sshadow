@@ -28,14 +28,14 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         let trace = StackTrace.capture()
 
         Task {
-            do {
+            do throws(AgentError) {
                 let upTo = try await enumerateItems(startingAt: page) { items in
                     observer.didEnumerate(items)
                 }
                 observer.finishEnumerating(upTo: upTo)
             } catch {
                 trace.log(logger, error: error)
-                observer.finishEnumeratingWithError(error)
+                observer.finishEnumeratingWithError(error.asNSError)
             }
         }
     }
@@ -43,7 +43,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
     func enumerateItems(
         startingAt page: NSFileProviderPage,
         yield: @Sendable ([any NSFileProviderItemProtocol]) -> Void,
-    ) async throws -> NSFileProviderPage? {
+    ) async throws(AgentError) -> NSFileProviderPage? {
         logger.debug("Enumerate \(itemIdentifier.desc)")
 
         if itemIdentifier == .workingSet {
@@ -67,37 +67,46 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         let trace = StackTrace.capture()
 
         Task {
-            do {
-                let (nextAnchor, changes) = try await agent.changes(
-                    since: anchor.value
-                )
-
-                var updates: [FPItem] = []
-                var deletes: [NSFileProviderItemIdentifier] = []
-                for change in changes {
-                    switch change {
-                    case .delete(let itemId):
-                        deletes.append(NSFileProviderItemIdentifier(itemId))
-                    case .update(let item):
-                        updates.append(FPItem(item: item))
+            do throws(AgentError) {
+                let nextAnchor = try await enumerateChanges(
+                    from: anchor,
+                    update: { item in
+                        observer.didUpdate([item])
+                    },
+                    delete: { itemId in
+                        observer.didDeleteItems(withIdentifiers: [itemId])
                     }
-                }
-
-                if !updates.isEmpty {
-                    observer.didUpdate(updates)
-                }
-                if !deletes.isEmpty {
-                    observer.didDeleteItems(withIdentifiers: deletes)
-                }
+                )
                 observer.finishEnumeratingChanges(
-                    upTo: NSFileProviderSyncAnchor(nextAnchor),
+                    upTo: nextAnchor,
                     moreComing: false
                 )
             } catch {
                 trace.log(logger, error: error)
-                observer.finishEnumeratingWithError(error)
+                observer.finishEnumeratingWithError(error.asNSError)
             }
         }
+    }
+
+    func enumerateChanges(
+        from anchor: NSFileProviderSyncAnchor,
+        update: @Sendable (any NSFileProviderItemProtocol) -> Void,
+        delete: @Sendable (NSFileProviderItemIdentifier) -> Void
+    ) async throws(AgentError) -> NSFileProviderSyncAnchor {
+        let (nextAnchor, changes) = try await agent.changes(
+            since: anchor.value
+        )
+
+        for change in changes {
+            switch change {
+            case .delete(let itemId):
+                delete(NSFileProviderItemIdentifier(itemId))
+            case .update(let item):
+                update(FPItem(item: item))
+            }
+        }
+
+        return NSFileProviderSyncAnchor(nextAnchor)
     }
 
     public func currentSyncAnchor(

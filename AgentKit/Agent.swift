@@ -129,11 +129,31 @@ public class Agent {
                     try await .stream(stream(request))
                 }
             return .success(response)
-        } catch SSHError.connectionFailed {
+        } catch SSHError.connectionFailed(let message)
+            where message.contains("Failed to resolve hostname")
+        {
             await sessions.disconnect(id: request.domainId)
-            return .failure(.serverUnreachable)
-        } catch SSHError.authenticationFailed(_) {
-            return .failure(.notAuthenticated)
+            return .failure(.unknownHost)
+        } catch SSHError.connectionFailed(let message)
+            where message.contains("Connection refused")
+            || message.contains("Socket error")
+            || message.contains("Bad file descriptor")
+        {
+            await sessions.disconnect(id: request.domainId)
+            return .failure(.connectionRefused)
+        } catch SSHError.connectionFailed(let message)
+            where message.contains("Timeout")
+        {
+            await sessions.disconnect(id: request.domainId)
+            return .failure(.connectionTimedOut)
+        } catch SSHError.authenticationFailed(let message)
+            where message.contains("Failed to import private key")
+        {
+            return .failure(.invalidPrivateKey)
+        } catch SSHError.authenticationFailed {
+            return .failure(.passwordAuthFailed)
+        } catch SSHError.sftpError(.noSuchFile, _) {
+            return .failure(.remotePathNotFound)
         } catch {
             return .failure(AgentError(from: error))
         }
@@ -142,11 +162,18 @@ public class Agent {
     func initDomain(
         _ request: InitDomainRequest
     ) async throws -> InitDomainResponse {
-        try await SSHClient.test(config: request.config)
+        let config = request.config
+        try await SSHClient.withSession(config: config) { _, sftp in
+            let attrs = try await sftp.attributes(at: config.path())
+            if attrs.type != .directory {
+                throw AgentError.remotePathNotDirectory
+            }
+        }
+
         let domainDbConfig =
-            self.domainDbConfig ?? DomainDB.model(for: request.config.id)
+            self.domainDbConfig ?? DomainDB.model(for: config.id)
         try await DomainDB.open(config: domainDbConfig)
-        try await sessions.connect(id: request.config.id)
+        try await sessions.connect(id: config.id)
         return InitDomainResponse()
     }
 
