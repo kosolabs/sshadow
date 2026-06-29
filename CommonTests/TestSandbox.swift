@@ -100,7 +100,7 @@ class TestSandbox {
             config: ModelConfiguration(isStoredInMemoryOnly: true)
         )
 
-        let profile = try ConnectionProfile(
+        let profile = try ConnectionConfigModel(
             id: id,
             name: name,
             enabled: true,

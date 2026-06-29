@@ -6,8 +6,8 @@ import SwiftUI
 struct RichMenuMainView: View {
     @Environment(ConnectionCoordinator.self) private var coordinator
 
-    @Query(sort: \ConnectionProfile.host) private var configs:
-        [ConnectionProfile]
+    @Query(sort: \ConnectionConfigModel.host) private var configs:
+        [ConnectionConfigModel]
 
     @State private var isPolling = false
     @State private var isDebug = false

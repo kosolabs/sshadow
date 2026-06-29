@@ -13,7 +13,7 @@ struct ConnectionTestStatusView: View {
                     .foregroundStyle(.secondary)
             }
         } else if let validationError = error
-            as? ConnectionProfile.ValidationError
+            as? ConnectionConfigModel.ValidationError
         {
             switch validationError {
             case .passwordNil:

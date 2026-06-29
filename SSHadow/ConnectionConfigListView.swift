@@ -3,12 +3,12 @@ import Foundation
 import SwiftData
 import SwiftUI
 
-struct ConnectionProfileListView: View {
+struct ConnectionConfigListView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \ConnectionProfile.host) private var configs:
-        [ConnectionProfile]
+    @Query(sort: \ConnectionConfigModel.host) private var configs:
+        [ConnectionConfigModel]
 
-    @State private var selection: ConnectionProfile?
+    @State private var selection: ConnectionConfigModel?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -39,7 +39,7 @@ struct ConnectionProfileListView: View {
 
                 HStack(spacing: 0) {
                     Button {
-                        let config = ConnectionProfile()
+                        let config = ConnectionConfigModel()
                         modelContext.insert(config)
                         selection = config
                     } label: {
@@ -78,7 +78,7 @@ struct ConnectionProfileListView: View {
             
             Group {
                 if let selection {
-                    ConnectionProfileEditView(config: selection)
+                    ConnectionConfigEditView(config: selection)
                 } else {
                     ContentUnavailableView(
                         "Select a Connection",

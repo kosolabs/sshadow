@@ -15,15 +15,15 @@ final class ConnectionCoordinator {
         !errors.isEmpty
     }
 
-    func isBusy(_ profile: ConnectionProfile) -> Bool {
+    func isBusy(_ profile: ConnectionConfigModel) -> Bool {
         tasks[profile.id] != nil
     }
 
-    func error(_ profile: ConnectionProfile) -> Error? {
+    func error(_ profile: ConnectionConfigModel) -> Error? {
         errors[profile.id]
     }
 
-    func setEnabled(_ enabled: Bool, on profile: ConnectionProfile) {
+    func setEnabled(_ enabled: Bool, on profile: ConnectionConfigModel) {
         let id = profile.id
         tasks[id]?.cancel()
         errors[id] = nil

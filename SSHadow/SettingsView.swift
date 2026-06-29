@@ -4,7 +4,7 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             Tab {
-                ConnectionProfileListView()
+                ConnectionConfigListView()
             } label: {
                 Label(
                     "Connections",
