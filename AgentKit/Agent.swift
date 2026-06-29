@@ -15,6 +15,7 @@ public class Agent {
         domainDbConfig: ModelConfiguration?,
         sharedUrl: URL,
         signal: @escaping SignalEnumerator,
+        transfers: Transfers,
         pollInterval: Duration?
     ) {
         self.domainDbConfig = domainDbConfig
@@ -23,11 +24,14 @@ public class Agent {
             domainDbConfig: domainDbConfig,
             sharedUrl: sharedUrl,
             signal: signal,
+            transfers: transfers,
             pollInterval: pollInterval
         )
     }
 
-    public static func listener() throws -> XPCListener {
+    public static func listener(
+        transfers: Transfers
+    ) throws -> XPCListener {
         let agent = Agent(
             appDb: try AppDB.open(),
             domainDbConfig: nil,
@@ -37,7 +41,8 @@ public class Agent {
                     for: .workingSet
                 )
             },
-            pollInterval: .seconds(30)
+            transfers: transfers,
+            pollInterval: .seconds(30),
         )
         return try XPCListener(service: SSHadow.appServiceName) { request in
             accept(request: request, agent: agent)
@@ -47,14 +52,16 @@ public class Agent {
     public static func testListener(
         appDb: AppDB,
         domainDbConfig: ModelConfiguration,
-        sharedUrl: URL
+        sharedUrl: URL,
+        transfers: Transfers
     ) -> XPCListener {
         let agent = Agent(
             appDb: appDb,
             domainDbConfig: domainDbConfig,
             sharedUrl: sharedUrl,
             signal: { _ in },
-            pollInterval: nil
+            transfers: transfers,
+            pollInterval: nil,
         )
         return XPCListener(targetQueue: nil) { request in
             accept(request: request, agent: agent)

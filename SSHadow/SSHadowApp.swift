@@ -27,14 +27,16 @@ private func reconnectAllDomains() {
     }
 }
 
+@MainActor
 private class AppXPCService {
     static let shared = AppXPCService()
 
+    let transfers = Transfers()
     private let listener: XPCListener?
 
     private init() {
         do {
-            listener = try Agent.listener()
+            listener = try Agent.listener(transfers: transfers)
         } catch {
             listener = nil
             logger.error("Failed to create XPC listener: \(error)")
@@ -62,6 +64,10 @@ struct SSHadowApp: App {
         )
     }
 
+    private var transfers: Transfers {
+        AppXPCService.shared.transfers
+    }
+
     var menuIcon: String {
         if coordinator.isAnyBusy {
             return "externaldrive.badge.timemachine"
@@ -79,11 +85,13 @@ struct SSHadowApp: App {
         .menuBarExtraStyle(.window)
         .modelContainer(modelContainer)
         .environment(coordinator)
+        .environment(transfers)
 
         Settings {
             SettingsView()
         }
         .modelContainer(modelContainer)
         .environment(coordinator)
+        .environment(transfers)
     }
 }

@@ -11,6 +11,7 @@ actor SessionManager {
     private let domainDbConfig: ModelConfiguration?
     private let sharedUrl: URL
     private let signal: SignalEnumerator
+    private let transfers: Transfers
     private let pollInterval: Duration?
 
     private var sessions: [UUID: Session] = [:]
@@ -21,12 +22,14 @@ actor SessionManager {
         domainDbConfig: ModelConfiguration? = nil,
         sharedUrl: URL = SSHadow.groupUrl,
         signal: @escaping SignalEnumerator,
+        transfers: Transfers,
         pollInterval: Duration? = nil
     ) {
         self.db = appDb
         self.domainDbConfig = domainDbConfig
         self.sharedUrl = sharedUrl
         self.signal = signal
+        self.transfers = transfers
         self.pollInterval = pollInterval
     }
 
@@ -58,6 +61,7 @@ actor SessionManager {
                 db: db,
                 sharedUrl: sharedUrl,
                 signal: signal,
+                transfers: transfers,
                 pollInterval: pollInterval
             )
         }

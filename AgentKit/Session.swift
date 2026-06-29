@@ -16,6 +16,7 @@ actor Session {
     private let db: DomainDB
     private let sharedUrl: URL
     private let signal: SignalEnumerator
+    private let transfers: Transfers
     private let pollInterval: Duration?
 
     private let cache: FileCache
@@ -31,6 +32,7 @@ actor Session {
         db: DomainDB,
         sharedUrl: URL = SSHadow.groupUrl,
         signal: @escaping SignalEnumerator,
+        transfers: Transfers,
         pollInterval: Duration?
     ) {
         self.config = config
@@ -39,6 +41,7 @@ actor Session {
         self.db = db
         self.sharedUrl = sharedUrl
         self.signal = signal
+        self.transfers = transfers
         self.pollInterval = pollInterval
 
         self.cache = FileCache { itemId, range in
@@ -488,7 +491,7 @@ actor Session {
         file url: URL,
         flags: Item.Flags,
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
-        progress: Progress,
+        progress: Progress
     ) async throws -> Item {
         let path = try await self.path(for: name, parentId: parentId)
         let fp = try FileHandle(forReadingFrom: url)
@@ -499,24 +502,19 @@ actor Session {
 
         progress.kind = .file
         progress.fileOperationKind = .uploading
+
+        let transfer = await transfers.begin(
+            name: name,
+            progress: progress
+        )
+        defer { transfers.end(transfer: transfer) }
+
         let estimator = ThroughputEstimator(
             progress: progress,
             totalUnitCount: Int64(size),
             reporters: [
-                ThrottledProgressReporter(
-                    onUpdate: {
-                        logger.debug(
-                            "Uploading \(path): "
-                                + $0.localizedAdditionalDescription
-                        )
-                    },
-                    onFinalize: {
-                        logger.info(
-                            "Uploaded \(path): "
-                                + $0.localizedAdditionalDescription
-                        )
-                    }
-                )
+                transferProgressReporter(for: transfer),
+                loggingProgressReporter(for: "Upload", detail: path),
             ]
         )
 
@@ -553,7 +551,7 @@ actor Session {
     func download(
         itemId: NSFileProviderItemIdentifier,
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
-        progress: Progress,
+        progress: Progress
     ) async throws -> (URL, Item) {
         let item = try await item(for: itemId)
         let url = sharedUrl.appending(path: itemId.rawValue)
@@ -565,24 +563,19 @@ actor Session {
 
         progress.kind = .file
         progress.fileOperationKind = .downloading
+
+        let transfer = await transfers.begin(
+            name: item.name,
+            progress: progress
+        )
+        defer { transfers.end(transfer: transfer) }
+
         let estimator = ThroughputEstimator(
             progress: progress,
             totalUnitCount: Int64(item.size ?? 0),
             reporters: [
-                ThrottledProgressReporter(
-                    onUpdate: {
-                        logger.debug(
-                            "Downloading \(item): "
-                                + $0.localizedAdditionalDescription
-                        )
-                    },
-                    onFinalize: {
-                        logger.info(
-                            "Downloaded \(item): "
-                                + $0.localizedAdditionalDescription
-                        )
-                    }
-                )
+                transferProgressReporter(for: transfer),
+                loggingProgressReporter(for: "Download", detail: item),
             ]
         )
 
@@ -607,7 +600,8 @@ actor Session {
         range: Range<UInt64>,
         progress: Progress
     ) async throws -> (URL, Range<UInt64>) {
-        let file = try await File(item: item(for: itemId))
+        let item = try await item(for: itemId)
+        let file = File(item: item)
         let url = sharedUrl.appending(path: "\(itemId.rawValue)")
         let slice = file.slice(for: range)
 
@@ -618,18 +612,12 @@ actor Session {
 
         progress.kind = .file
         progress.fileOperationKind = .downloading
+
         let estimator = ThroughputEstimator(
             progress: progress,
             totalUnitCount: Int64(slice.byteRange.length),
             reporters: [
-                ThrottledProgressReporter(
-                    onFinalize: {
-                        logger.info(
-                            "Streamed \(slice): "
-                                + $0.localizedAdditionalDescription
-                        )
-                    }
-                )
+                loggingProgressReporter(for: "Stream", detail: slice)
             ]
         )
 
@@ -738,5 +726,31 @@ actor Session {
         } catch SSHError.sftpError(.fileAlreadyExists, _) {
             throw AgentError.filenameCollision
         }
+    }
+
+    func transferProgressReporter(
+        for transfer: Transfer
+    ) -> ThrottledProgressReporter {
+        ThrottledProgressReporter(
+            frequency: TimeInterval(0.2),
+            onUpdate: { _ in transfer.update() }
+        )
+    }
+
+    func loggingProgressReporter(
+        for operation: String,
+        detail: any CustomStringConvertible
+    ) -> ThrottledProgressReporter {
+        ThrottledProgressReporter(
+            frequency: TimeInterval(1.0),
+            onUpdate: {
+                let desc = $0.localizedAdditionalDescription!
+                logger.debug("\(operation)ing \(detail): \(desc)")
+            },
+            onFinalize: {
+                let desc = $0.localizedAdditionalDescription!
+                logger.info("\(operation)ed \(detail): \(desc)")
+            }
+        )
     }
 }
