@@ -3,13 +3,13 @@ import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
-private let logger = Logger(category: "ConnectionProfileEditView")
+private let logger = Logger(category: "ConnectionConfigEditView")
 
-struct ConnectionProfileEditView: View {
+struct ConnectionConfigEditView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(ConnectionCoordinator.self) private var coordinator
 
-    var config = ConnectionProfile()
+    var config = ConnectionConfigModel()
     @State private var isImportingKey: Bool = false
 
     private var name: Binding<String> {

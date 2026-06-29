@@ -1,15 +1,14 @@
 import FileProvider
 import SwiftData
 
-private let logger = Logger(category: "ConnectionProfile")
+private let logger = Logger(category: "ConnectionConfigModel")
 
 @Model
-public class ConnectionProfile: CustomStringConvertible {
+public class ConnectionConfigModel: CustomStringConvertible {
     public enum ValidationError: Error {
         case passwordNil
         case privateKeyUrlNil
         case privateKeyReadFailed
-        case encodeToJsonFailed
     }
 
     public enum AuthMethod: Codable, CustomStringConvertible, Sendable {
@@ -241,7 +240,7 @@ public class ConnectionProfile: CustomStringConvertible {
 
 extension ModelContext {
     public func delete(
-        connectionConfig config: ConnectionProfile
+        connectionConfig config: ConnectionConfigModel
     ) async throws {
         if config.enabled {
             try await config.disable()
@@ -253,7 +252,7 @@ extension ModelContext {
 }
 
 extension ConnectionConfig {
-    public init(from profile: ConnectionProfile) throws {
+    public init(from profile: ConnectionConfigModel) throws {
         try self.init(
             id: profile.id,
             name: profile.displayName,

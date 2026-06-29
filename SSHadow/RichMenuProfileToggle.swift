@@ -5,7 +5,7 @@ import SwiftUI
 struct RichMenuProfileToggle: View {
     @Environment(ConnectionCoordinator.self) private var coordinator
 
-    let config: ConnectionProfile
+    let config: ConnectionConfigModel
 
     @State private var isHovered = false
 

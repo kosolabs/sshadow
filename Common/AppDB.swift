@@ -11,7 +11,7 @@ public actor AppDB {
             groupContainer: .identifier(SSHadow.appGroup)
         )
     ) throws -> ModelContainer {
-        let schema = Schema([ConnectionProfile.self])
+        let schema = Schema([ConnectionConfigModel.self])
         return try ModelContainer(
             for: schema,
             configurations: config
@@ -26,8 +26,8 @@ public actor AppDB {
         return try AppDB(modelContainer: getModelContainer(config: config))
     }
 
-    public func fetch(id: UUID) -> ConnectionProfile? {
-        let descriptor = FetchDescriptor<ConnectionProfile>(
+    public func fetch(id: UUID) -> ConnectionConfigModel? {
+        let descriptor = FetchDescriptor<ConnectionConfigModel>(
             predicate: #Predicate { profile in
                 profile.id == id
             }
@@ -35,7 +35,7 @@ public actor AppDB {
         return try? modelContext.fetch(descriptor).first
     }
 
-    public func upsert(profile: ConnectionProfile) throws {
+    public func upsert(profile: ConnectionConfigModel) throws {
         modelContext.insert(profile)
         try modelContext.save()
     }
