@@ -1,25 +1,26 @@
 import Foundation
 import Synchronization
 
-public struct Speedometer: Sendable, ~Copyable {
+public final class ThroughputEstimator: Sendable {
     private let start: UInt64
     private let progress: Progress
-    private let frequency: UInt64
-    private let lastUpdate: Atomic<UInt64>
-    private let pending: Atomic<Int>
+    private let smoothing: Double
+    private let reporters: [ThrottledProgressReporter]
+    private let lastSample: Atomic<UInt64>
 
     public init(
         progress: Progress,
         totalUnitCount: Int64,
         completedUnitCount: Int64 = 0,
-        frequency: TimeInterval = 1.0
+        smoothing: TimeInterval = 1.0,
+        reporters: [ThrottledProgressReporter] = []
     ) {
         self.progress = progress
-        self.frequency = UInt64(frequency * 1_000_000_000)
+        self.smoothing = smoothing
+        self.reporters = reporters
 
         self.start = DispatchTime.now().uptimeNanoseconds
-        self.lastUpdate = Atomic(start)
-        self.pending = Atomic(0)
+        self.lastSample = Atomic(start)
 
         self.progress.totalUnitCount = totalUnitCount
         self.progress.completedUnitCount = completedUnitCount
@@ -27,30 +28,44 @@ public struct Speedometer: Sendable, ~Copyable {
         self.progress.fileCompletedCount = 0
     }
 
-    @discardableResult
-    public func update(delta: Int) -> String? {
-        self.pending.add(delta, ordering: .relaxed)
+    public func update(delta: Int) {
         self.progress.completedUnitCount += Int64(delta)
+
         let now = DispatchTime.now().uptimeNanoseconds
-        let interval = now - lastUpdate.load(ordering: .relaxed)
-        guard interval >= frequency else { return nil }
-        let pending = self.pending.exchange(0, ordering: .relaxed)
-        self.lastUpdate.store(now, ordering: .relaxed)
-        return update(bytes: pending, interval: interval)
+        let interval = now - lastSample.exchange(now, ordering: .relaxed)
+        sample(bytes: delta, interval: interval)
+
+        for reporter in reporters {
+            reporter.update(progress)
+        }
     }
 
-    public func finalize() -> String {
+    public func finalize() {
         let interval = DispatchTime.now().uptimeNanoseconds - start
-        return update(interval: interval)
+        sample(interval: interval)
+
+        for reporter in reporters {
+            reporter.finalize(progress)
+        }
     }
 
-    private func update(bytes: Int? = nil, interval: UInt64) -> String {
+    private func sample(bytes: Int? = nil, interval: UInt64) {
         let bytes = bytes ?? Int(self.progress.totalUnitCount)
 
         if interval > 0 && bytes > 0 {
             let total = Double(progress.totalUnitCount)
             let completed = Double(progress.completedUnitCount)
-            let throughput = Double(bytes) / Double(interval) * 1_000_000_000
+            let instant = Double(bytes) / Double(interval) * 1_000_000_000
+
+            let throughput: Double
+            if let previous = progress.throughput, previous > 0 {
+                let dt = Double(interval) / 1_000_000_000
+                let alpha = 1 - exp(-dt / smoothing)
+                throughput = Double(previous) + alpha * (instant - Double(previous))
+            } else {
+                throughput = instant
+            }
+
             progress.throughput = Int(throughput)
             progress.estimatedTimeRemaining = (total - completed) / throughput
         } else {
@@ -67,7 +82,5 @@ public struct Speedometer: Sendable, ~Copyable {
             self.progress.fileCompletedCount = 1
             self.progress.estimatedTimeRemaining = nil
         }
-
-        return progress.localizedAdditionalDescription
     }
 }
