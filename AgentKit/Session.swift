@@ -50,7 +50,7 @@ actor Session {
                 try await file.read(range: range)
             }
         }
-        
+
         if let dbConfig = db.modelContainer.configurations.first {
             logger.info("Connected: \(config.url), DB: \(dbConfig.url.path)")
         } else {
@@ -499,9 +499,25 @@ actor Session {
 
         progress.kind = .file
         progress.fileOperationKind = .uploading
-        let speedometer = Speedometer(
+        let estimator = ThroughputEstimator(
             progress: progress,
-            totalUnitCount: Int64(size)
+            totalUnitCount: Int64(size),
+            reporters: [
+                ThrottledProgressReporter(
+                    onUpdate: {
+                        logger.debug(
+                            "Uploading \(path): "
+                                + $0.localizedAdditionalDescription
+                        )
+                    },
+                    onFinalize: {
+                        logger.info(
+                            "Uploaded \(path): "
+                                + $0.localizedAdditionalDescription
+                        )
+                    }
+                )
+            ]
         )
 
         let bufferSize = sftp.limits.writeLength(for: chunkSize)
@@ -518,16 +534,13 @@ actor Session {
                             throw AgentError.userCancelled
                         }
                         try await writer.write(data: data)
-                        if let progress = speedometer.update(delta: data.count)
-                        {
-                            logger.debug("Uploading \(path): \(progress)")
-                        }
+                        estimator.update(delta: data.count)
                     }
                 }
             }
         }
 
-        logger.info("Uploaded \(path): \(speedometer.finalize())")
+        estimator.finalize()
         return try await record(parentId: parentId, name: name, kind: .file)
     }
 
@@ -552,9 +565,25 @@ actor Session {
 
         progress.kind = .file
         progress.fileOperationKind = .downloading
-        let speedometer = Speedometer(
+        let estimator = ThroughputEstimator(
             progress: progress,
-            totalUnitCount: Int64(item.size ?? 0)
+            totalUnitCount: Int64(item.size ?? 0),
+            reporters: [
+                ThrottledProgressReporter(
+                    onUpdate: {
+                        logger.debug(
+                            "Downloading \(item): "
+                                + $0.localizedAdditionalDescription
+                        )
+                    },
+                    onFinalize: {
+                        logger.info(
+                            "Downloaded \(item): "
+                                + $0.localizedAdditionalDescription
+                        )
+                    }
+                )
+            ]
         )
 
         let bufferSize = sftp.limits.readLength(for: chunkSize)
@@ -565,13 +594,11 @@ actor Session {
                     throw AgentError.userCancelled
                 }
                 try handle.write(contentsOf: data)
-                if let progress = speedometer.update(delta: data.count) {
-                    logger.debug("Downloading \(item): \(progress)")
-                }
+                estimator.update(delta: data.count)
             }
         }
 
-        logger.info("Downloaded \(item): \(speedometer.finalize())")
+        estimator.finalize()
         return (url, item)
     }
 
@@ -591,16 +618,26 @@ actor Session {
 
         progress.kind = .file
         progress.fileOperationKind = .downloading
-        let speedometer = Speedometer(
+        let estimator = ThroughputEstimator(
             progress: progress,
-            totalUnitCount: Int64(slice.byteRange.length)
+            totalUnitCount: Int64(slice.byteRange.length),
+            reporters: [
+                ThrottledProgressReporter(
+                    onFinalize: {
+                        logger.info(
+                            "Streamed \(slice): "
+                                + $0.localizedAdditionalDescription
+                        )
+                    }
+                )
+            ]
         )
 
         for chunk in slice {
             let data = try await cache.fetch(chunk)
             try handle.seek(toOffset: chunk.byteRange.lowerBound)
             try handle.write(contentsOf: data)
-            speedometer.update(delta: data.count)
+            estimator.update(delta: data.count)
         }
 
         let prefetchRange =
@@ -612,7 +649,7 @@ actor Session {
             }
         }
 
-        logger.info("Streamed \(slice): \(speedometer.finalize())")
+        estimator.finalize()
         return (url, slice.byteRange)
     }
 
