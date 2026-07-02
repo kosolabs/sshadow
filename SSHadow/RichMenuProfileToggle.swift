@@ -20,7 +20,10 @@ struct RichMenuProfileToggle: View {
         Button {
             openInFinder()
         } label: {
-            HStack {
+            HStack(spacing: 8) {
+                Image(systemName: "externaldrive.badge.icloud")
+                    .frame(width: 20, alignment: .center)
+
                 VStack(alignment: .leading) {
                     if let name = config.name {
                         Text(name)

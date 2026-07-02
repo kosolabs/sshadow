@@ -23,6 +23,7 @@ extension TestSandbox {
             db: db,
             sharedUrl: shared,
             signal: { _ in },
+            transfers: Transfers(),
             pollInterval: nil
         )
 

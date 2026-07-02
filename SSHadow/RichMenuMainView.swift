@@ -1,3 +1,4 @@
+import AgentKit
 import Common
 import Foundation
 import SwiftData
@@ -5,6 +6,7 @@ import SwiftUI
 
 struct RichMenuMainView: View {
     @Environment(ConnectionCoordinator.self) private var coordinator
+    @Environment(Transfers.self) private var transfers
 
     @Query(sort: \ConnectionConfigModel.host) private var configs:
         [ConnectionConfigModel]
@@ -12,9 +14,19 @@ struct RichMenuMainView: View {
     @State private var isPolling = false
     @State private var isDebug = false
     @State private var isSettingsHovered = false
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
+            if !transfers.isEmpty {
+                RichMenuHeading(title: "Transfers")
+
+                ForEach(transfers.value) { transfer in
+                    RichMenuTransfer(transfer: transfer)
+                }
+
+                Divider().padding(.vertical, 4)
+            }
+
             if !configs.isEmpty {
                 RichMenuHeading(title: "Connections")
 
@@ -68,7 +80,7 @@ struct RichMenuMainView: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 8)
-        .frame(width: 320)
+        .frame(width: 400)
         .onAppear {
             isDebug = NSEvent.modifierFlags.contains(.option)
         }

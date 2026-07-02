@@ -5,26 +5,27 @@ import SwiftData
 import Testing
 import XPC
 
-@Suite struct AgentInitDomainTests {
-    private static func makeBareAgent() throws -> (AgentClient, XPCListener) {
-        let appDb = try AppDB.open(
-            config: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let shared = FileManager.default.temporaryDirectory
-        let listener = Agent.testListener(
-            appDb: appDb,
-            domainDbConfig: ModelConfiguration(isStoredInMemoryOnly: true),
-            sharedUrl: shared
-        )
-        let session = try XPCSession(endpoint: listener.endpoint)
-        let agent = AgentClient(
-            domainId: UUID(),
-            session: session,
-            sharedUrl: shared
-        )
-        return (agent, listener)
-    }
+private func makeBareAgent() throws -> (AgentClient, XPCListener) {
+    let appDb = try AppDB.open(
+        config: ModelConfiguration(isStoredInMemoryOnly: true)
+    )
+    let shared = FileManager.default.temporaryDirectory
+    let listener = Agent.testListener(
+        appDb: appDb,
+        domainDbConfig: ModelConfiguration(isStoredInMemoryOnly: true),
+        sharedUrl: shared,
+        transfers: Transfers()
+    )
+    let session = try XPCSession(endpoint: listener.endpoint)
+    let agent = AgentClient(
+        domainId: UUID(),
+        session: session,
+        sharedUrl: shared
+    )
+    return (agent, listener)
+}
 
+@Suite struct AgentInitDomainTests {
     @Test func initDomainSucceeds() async throws {
         let sandbox = TestSandbox()
         let agent = try await sandbox.getAgentClient()
@@ -34,7 +35,7 @@ import XPC
     }
 
     @Test func initDomainThrowsUnknownHost() async throws {
-        let (agent, listener) = try Self.makeBareAgent()
+        let (agent, listener) = try makeBareAgent()
         defer { listener.cancel() }
 
         let config = ConnectionConfig(
@@ -53,7 +54,7 @@ import XPC
     }
 
     @Test func initDomainThrowsConnectionRefused() async throws {
-        let (agent, listener) = try Self.makeBareAgent()
+        let (agent, listener) = try makeBareAgent()
         defer { listener.cancel() }
 
         let config = ConnectionConfig(

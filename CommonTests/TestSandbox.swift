@@ -121,7 +121,8 @@ class TestSandbox {
         let listener = Agent.testListener(
             appDb: appDb,
             domainDbConfig: ModelConfiguration(isStoredInMemoryOnly: true),
-            sharedUrl: shared
+            sharedUrl: shared,
+            transfers: Transfers()
         )
         self.listener = listener
 
