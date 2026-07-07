@@ -17,7 +17,7 @@ jobs:
       uses: actions/checkout@v6
 
     - name: Start SSH test server
-      run: ./ci_scripts/ci_pre_xcodebuild.sh
+      run: ./ci_scripts/start_test_server.sh
 
     - name: Run unit tests
       run: xcodebuild test -scheme SSHadow -testPlan UnitTests -destination 'platform=macOS' CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_ENTITLEMENTS="" CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
@@ -27,4 +27,4 @@ jobs:
 
     - name: Stop SSH test server
       if: always()
-      run: ./ci_scripts/ci_post_xcodebuild.sh
+      run: ./ci_scripts/stop_test_server.sh

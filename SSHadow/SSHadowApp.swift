@@ -85,5 +85,10 @@ struct SSHadowApp: App {
         .modelContainer(modelContainer)
         .environment(coordinator)
         .environment(transfers)
+
+        Window("About SSHadow", id: "about") {
+            AboutView()
+        }
+        .windowResizability(.contentSize)
     }
 }

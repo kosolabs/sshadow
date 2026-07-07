@@ -1,8 +1,8 @@
 start-test-server: stop-test-server
-    ./ci_scripts/ci_pre_xcodebuild.sh
+    ./ci_scripts/start_test_server.sh
 
 stop-test-server:
-    ./ci_scripts/ci_post_xcodebuild.sh
+    ./ci_scripts/stop_test_server.sh
 
 test: start-test-server
     xcodebuild test -scheme SSHadow -testPlan UnitTests -destination 'platform=macOS'

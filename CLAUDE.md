@@ -20,16 +20,14 @@ The project uses an Xcode project (`SSHadow.xcodeproj`) with a single scheme `SS
 Tests require a local SSH test server. Use the Justfile:
 
 ```sh
-just unit-test    # Start test server, run unit tests
-just ui-test      # Start test server, run UI tests
-just test-all     # Run both
+just test    # Start test server, run unit tests
 ```
 
 Or manage the server manually:
 
 ```sh
-./ci_scripts/ci_pre_xcodebuild.sh   # Start test server (localhost:2248)
-./ci_scripts/ci_post_xcodebuild.sh  # Stop test server
+./ci_scripts/start_test_server.sh   # Start test server (localhost:2248)
+./ci_scripts/stop_test_server.sh    # Stop test server
 ```
 
 To run a single test:
