@@ -68,19 +68,11 @@ struct SSHadowApp: App {
         AppXPCService.shared.transfers
     }
 
-    var menuIcon: String {
-        if coordinator.isAnyBusy {
-            return "externaldrive.badge.timemachine"
-        }
-        if coordinator.isAnyError {
-            return "externaldrive.trianglebadge.exclamationmark"
-        }
-        return "externaldrive.badge.icloud"
-    }
-
     var body: some Scene {
-        MenuBarExtra("SSHadow", systemImage: menuIcon) {
+        MenuBarExtra {
             RichMenuMainView()
+        } label: {
+            MenuBarIcon(isLoading: coordinator.isAnyBusy || !transfers.isEmpty)
         }
         .menuBarExtraStyle(.window)
         .modelContainer(modelContainer)
