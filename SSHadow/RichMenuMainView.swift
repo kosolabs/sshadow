@@ -7,6 +7,7 @@ import SwiftUI
 struct RichMenuMainView: View {
     @Environment(ConnectionCoordinator.self) private var coordinator
     @Environment(Transfers.self) private var transfers
+    @Environment(\.openWindow) private var openWindow
 
     @Query(sort: \ConnectionConfigModel.host) private var configs:
         [ConnectionConfigModel]
@@ -69,6 +70,13 @@ struct RichMenuMainView: View {
             }
 
             RichMenuButton {
+                NSApp.activate()
+                openWindow(id: "about")
+            } label: {
+                RichMenuLabel("About SSHadow", systemImage: "info.circle")
+            }
+
+            RichMenuButton {
                 NSApplication.shared.terminate(nil)
             } label: {
                 RichMenuLabel(
@@ -85,4 +93,5 @@ struct RichMenuMainView: View {
             isDebug = NSEvent.modifierFlags.contains(.option)
         }
     }
+
 }
