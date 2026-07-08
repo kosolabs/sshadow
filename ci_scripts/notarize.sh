@@ -9,10 +9,11 @@ if [[ "${CI_XCODEBUILD_ACTION:-}" != "archive" ]]; then
 fi
 
 # Requires these Xcode Cloud workflow environment variables (App Store Connect ->
-# Xcode Cloud -> workflow -> Environment, added as Secret):
+# Xcode Cloud -> workflow -> Environment). Variable names cannot start with "CI_".
+#   DEVELOPMENT_TEAM                   Apple Developer Team ID (not a secret)
 #   APP_STORE_CONNECT_API_KEY_ID       Key ID of an App Store Connect API key
 #   APP_STORE_CONNECT_API_ISSUER_ID    Issuer ID for that key
-#   APP_STORE_CONNECT_API_PRIVATE_KEY  base64 of the AuthKey_<key id>.p8 contents
+#   APP_STORE_CONNECT_API_PRIVATE_KEY  base64 of the AuthKey_<key id>.p8 contents (Secret)
 # and a "Developer ID Application" certificate available under Xcode Cloud's
 # managed signing certificates, since App Store signing can't notarize outside
 # the App Store.
@@ -32,7 +33,7 @@ cat >"$WORK_DIR/ExportOptions.plist" <<EOF
     <key>method</key>
     <string>developer-id</string>
     <key>teamID</key>
-    <string>${CI_DEVELOPMENT_TEAM}</string>
+    <string>${CI_TEAM_ID}</string>
     <key>signingStyle</key>
     <string>automatic</string>
 </dict>

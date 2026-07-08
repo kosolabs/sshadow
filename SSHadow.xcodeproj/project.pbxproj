@@ -316,6 +316,11 @@
 			path = Extension;
 			sourceTree = "<group>";
 		};
+		73AD67942FFEC25100733D75 /* ci_scripts */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ci_scripts;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -414,6 +419,7 @@
 				738D63B22F3FD1F100FED311 /* ExtensionKitTests */,
 				7381F0C32F22B3C5005F4099 /* Frameworks */,
 				7334708A2F22037100B8181D /* Products */,
+				73AD67942FFEC25100733D75 /* ci_scripts */,
 				7322A9212F2857C700D8117D /* SSHadow.icon */,
 				7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */,
 				73F2BBF02FA134AF00D68338 /* clean.sh */,

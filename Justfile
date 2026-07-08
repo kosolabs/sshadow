@@ -15,5 +15,5 @@ log:
 archive:
     xcodebuild archive -scheme SSHadow -destination 'generic/platform=macOS' -archivePath build/SSHadow.xcarchive
 
-notarize: archive
+notarize:
     CI_XCODEBUILD_ACTION=archive CI_ARCHIVE_PATH=build/SSHadow.xcarchive CI_PRODUCT=SSHadow CI_ARTIFACTS_DIR=artifacts ./ci_scripts/notarize.sh
