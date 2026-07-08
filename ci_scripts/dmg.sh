@@ -17,6 +17,9 @@ cd "${0:a:h}/.."
 
 APP_NAME="SSHadow"
 TEAM_ID="A5S59GAS97"
+
+git fetch --unshallow 2>/dev/null || true
+BUILD_NUMBER="$(git rev-list --count HEAD)"
 ARCHIVE_PATH="build/${APP_NAME}.xcarchive"
 EXPORT_DIR="build/export"
 STAGING_DIR="build/staging"
@@ -45,11 +48,12 @@ cat >build/ExportOptions.plist <<EOF
 </plist>
 EOF
 
-echo "Archiving ${APP_NAME}..."
+echo "Archiving ${APP_NAME} (build ${BUILD_NUMBER})..."
 xcodebuild archive \
   -scheme "$APP_NAME" \
   -destination 'generic/platform=macOS' \
-  -archivePath "$ARCHIVE_PATH"
+  -archivePath "$ARCHIVE_PATH" \
+  CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
 echo "Exporting Developer ID build of ${APP_NAME}..."
 xcodebuild -exportArchive \
