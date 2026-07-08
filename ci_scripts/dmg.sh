@@ -20,9 +20,9 @@ TEAM_ID="A5S59GAS97"
 
 git fetch --unshallow 2>/dev/null || true
 BUILD_NUMBER="$(git rev-list --count HEAD)"
-ARCHIVE_PATH="build/${APP_NAME}.xcarchive"
-EXPORT_DIR="build/export"
 STAGING_DIR="build/staging"
+ARCHIVE_PATH="build/${APP_NAME}.xcarchive"
+APP_PATH="build/${APP_NAME}.app"
 DMG_PATH="build/${APP_NAME}.dmg"
 
 KEY_DIR="$(mktemp -d)"
@@ -30,7 +30,6 @@ trap 'rm -rf "$KEY_DIR"' EXIT
 API_KEY_PATH="$KEY_DIR/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
 base64 --decode <<<"$APP_STORE_CONNECT_API_PRIVATE_KEY" >"$API_KEY_PATH"
 
-rm -rf "$EXPORT_DIR" "$STAGING_DIR" "$DMG_PATH"
 mkdir -p build
 
 cat >build/ExportOptions.plist <<EOF
@@ -58,7 +57,7 @@ xcodebuild archive \
 echo "Exporting Developer ID build of ${APP_NAME}..."
 xcodebuild -exportArchive \
   -archivePath "$ARCHIVE_PATH" \
-  -exportPath "$EXPORT_DIR" \
+  -exportPath build \
   -exportOptionsPlist build/ExportOptions.plist \
   -allowProvisioningUpdates \
   -authenticationKeyPath "$API_KEY_PATH" \
@@ -67,8 +66,9 @@ xcodebuild -exportArchive \
 
 echo "Building DMG..."
 mkdir -p "$STAGING_DIR"
-cp -R "$EXPORT_DIR/${APP_NAME}.app" "$STAGING_DIR/"
+cp -R "$APP_PATH" "$STAGING_DIR/"
 ln -s /Applications "$STAGING_DIR/Applications"
+trap 'rm -rf "$STAGING_DIR"' EXIT
 
 hdiutil create -volname "$APP_NAME" \
   -srcfolder "$STAGING_DIR" \
