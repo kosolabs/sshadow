@@ -1,6 +1,11 @@
-# Generated user config
+# Generated
+build/
+artifacts/
 xcuserdata/
 
-# Temporary test files
+# Env
+.env
+
+# Temp
 sshd.pid
 sshd.log
