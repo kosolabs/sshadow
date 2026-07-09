@@ -32,15 +32,13 @@ private class AppXPCService {
     static let shared = AppXPCService()
 
     let transfers = Transfers()
-    private let listener: XPCListener?
+    private let listener: XPCListener
 
     private init() {
         do {
             listener = try Agent.listener(transfers: transfers)
         } catch {
-            listener = nil
-            logger.error("Failed to create XPC listener: \(error)")
-            return
+            logger.fatal("Failed to create XPC listener: \(error)")
         }
         logger.info("App XPC: listening on \(SSHadow.appServiceName)")
 

@@ -222,6 +222,7 @@
 		7322A92E2F2957AF00D8117D /* UniformTypeIdentifiers.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UniformTypeIdentifiers.framework; path = System/Library/Frameworks/UniformTypeIdentifiers.framework; sourceTree = SDKROOT; };
 		733470892F22037100B8181D /* SSHadow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SSHadow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = UnitTests.xctestplan; sourceTree = "<group>"; };
+		73781BC9300029A600EEA1F4 /* logfilter.jq */ = {isa = PBXFileReference; lastKnownFileType = text; path = logfilter.jq; sourceTree = "<group>"; };
 		73799A3E2F9811DD00A15109 /* AgentKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AgentKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		73799A482F9811DD00A15109 /* AgentKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AgentKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		738D63A22F3FD1F100FED311 /* ExtensionKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ExtensionKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -422,6 +423,7 @@
 				7322A9212F2857C700D8117D /* SSHadow.icon */,
 				7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */,
 				73B13EBC2F7DF9440047EBA7 /* CLAUDE.md */,
+				73781BC9300029A600EEA1F4 /* logfilter.jq */,
 				739BF6982FEDB73800C60205 /* Justfile */,
 			);
 			sourceTree = "<group>";

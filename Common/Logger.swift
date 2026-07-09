@@ -33,4 +33,13 @@ public struct Logger: Sendable {
     public func fault(_ message: String) {
         logger.fault("\(message, privacy: .public)")
     }
+
+    public func fatal(
+        _ message: String,
+        file: StaticString = #file,
+        line: UInt = #line
+    ) -> Never {
+        logger.fault("FATAL: \(message, privacy: .public)")
+        fatalError(message, file: file, line: line)
+    }
 }
