@@ -288,6 +288,11 @@
 			path = SSHadow;
 			sourceTree = "<group>";
 		};
+		73781BCB3000343800EEA1F4 /* docs */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = docs;
+			sourceTree = "<group>";
+		};
 		73799A3F2F9811DD00A15109 /* AgentKit */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = AgentKit;
@@ -420,6 +425,7 @@
 				7381F0C32F22B3C5005F4099 /* Frameworks */,
 				7334708A2F22037100B8181D /* Products */,
 				73AD67942FFEC25100733D75 /* ci_scripts */,
+				73781BCB3000343800EEA1F4 /* docs */,
 				7322A9212F2857C700D8117D /* SSHadow.icon */,
 				7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */,
 				73B13EBC2F7DF9440047EBA7 /* CLAUDE.md */,
