@@ -6,11 +6,24 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Agent")
 
-public class Agent {
+public final class Agent: Sendable {
+    public static let shared: Agent = Agent(
+        appDb: AppDB.shared,
+        domainDbConfig: nil,
+        sharedUrl: SSHadow.groupUrl,
+        signal: { config in
+            try await config.domain.manager.signalEnumerator(
+                for: .workingSet
+            )
+        },
+        transfers: Transfers(),
+        pollInterval: .seconds(30),
+    )
+
     private let sessions: SessionManager
     private let domainDbConfig: ModelConfiguration?
 
-    private init(
+    public init(
         appDb: AppDB,
         domainDbConfig: ModelConfiguration?,
         sharedUrl: URL,
@@ -29,26 +42,6 @@ public class Agent {
         )
     }
 
-    public static func listener(
-        transfers: Transfers
-    ) throws -> XPCListener {
-        let agent = Agent(
-            appDb: try AppDB.open(),
-            domainDbConfig: nil,
-            sharedUrl: SSHadow.groupUrl,
-            signal: { config in
-                try await config.domain.manager.signalEnumerator(
-                    for: .workingSet
-                )
-            },
-            transfers: transfers,
-            pollInterval: .seconds(30),
-        )
-        return try XPCListener(service: SSHadow.appServiceName) { request in
-            accept(request: request, agent: agent)
-        }
-    }
-
     public static func testListener(
         appDb: AppDB,
         domainDbConfig: ModelConfiguration,
@@ -64,13 +57,12 @@ public class Agent {
             pollInterval: nil,
         )
         return XPCListener(targetQueue: nil) { request in
-            accept(request: request, agent: agent)
+            agent.accept(request: request)
         }
     }
 
-    private static func accept(
+    public func accept(
         request: XPCListener.IncomingSessionRequest,
-        agent: Agent
     ) -> XPCListener.IncomingSessionRequest.Decision {
         return request.accept { message in
             let agentRequest: AgentRequest
@@ -82,7 +74,7 @@ public class Agent {
             }
             Task {
                 logger.debug("Request: \(agentRequest)")
-                let agentResult = await agent.handle(agentRequest)
+                let agentResult = await self.handle(agentRequest)
                 logger.debug("Result: \(agentResult)")
                 message.reply(agentResult)
             }
@@ -94,10 +86,6 @@ public class Agent {
         do {
             let response: AgentResponse =
                 switch request {
-                case .initDomain(let request):
-                    try await .initDomain(initDomain(request))
-                case .deinitDomain(let request):
-                    try await .deinitDomain(deinitDomain(request))
                 case .name(let request):
                     try await .name(name(request))
                 case .child(let request):
@@ -108,8 +96,6 @@ public class Agent {
                     try await .item(item(request))
                 case .list(let request):
                     try await .list(list(request))
-                case .poll(let request):
-                    try await .poll(poll(request))
                 case .currentAnchor(let request):
                     try await .currentAnchor(currentAnchor(request))
                 case .changes(let request):
@@ -136,61 +122,38 @@ public class Agent {
                     try await .stream(stream(request))
                 }
             return .success(response)
-        } catch SSHError.connectionFailed(let message)
-            where message.contains("Failed to resolve hostname")
-        {
+        } catch SSHError.connectionFailed {
             await sessions.disconnect(id: request.domainId)
-            return .failure(.unknownHost)
-        } catch SSHError.connectionFailed(let message)
-            where message.contains("Connection refused")
-            || message.contains("Socket error")
-            || message.contains("Bad file descriptor")
-        {
-            await sessions.disconnect(id: request.domainId)
-            return .failure(.connectionRefused)
-        } catch SSHError.connectionFailed(let message)
-            where message.contains("Timeout")
-        {
-            await sessions.disconnect(id: request.domainId)
-            return .failure(.connectionTimedOut)
-        } catch SSHError.authenticationFailed(let message)
-            where message.contains("Failed to import private key")
-        {
-            return .failure(.invalidPrivateKey)
+            return .failure(.serverUnreachable)
         } catch SSHError.authenticationFailed {
-            return .failure(.passwordAuthFailed)
+            return .failure(.notAuthenticated)
         } catch SSHError.sftpError(.noSuchFile, _) {
             return .failure(.remotePathNotFound)
         } catch {
             return .failure(AgentError(from: error))
         }
     }
+    
+    // MARK: App
 
-    func initDomain(
-        _ request: InitDomainRequest
-    ) async throws -> InitDomainResponse {
-        let config = request.config
-        try await SSHClient.withSession(config: config) { _, sftp in
-            let attrs = try await sftp.attributes(at: config.path())
-            if attrs.type != .directory {
-                throw AgentError.remotePathNotDirectory
-            }
-        }
-
+    func initDomain(_ domainId: UUID) async throws {
         let domainDbConfig =
-            self.domainDbConfig ?? DomainDB.model(for: config.id)
+            self.domainDbConfig ?? DomainDB.model(for: domainId)
         try await DomainDB.open(config: domainDbConfig)
-        try await sessions.connect(id: config.id)
-        return InitDomainResponse()
+        try await sessions.connect(id: domainId)
     }
 
-    func deinitDomain(
-        _ request: DeinitDomainRequest
-    ) async throws -> DeinitDomainResponse {
-        await sessions.disconnect(id: request.domainId)
-        try await DomainDB.delete(id: request.domainId)
-        return DeinitDomainResponse()
+    func deinitDomain(_ domainId: UUID) async throws {
+        await sessions.disconnect(id: domainId)
+        try await DomainDB.delete(id: domainId)
     }
+    
+    func poll(domainId: UUID) async throws {
+        let session = try await sessions.connect(id: domainId)
+        try await session.poll()
+    }
+    
+    // MARK: Extension
 
     func name(
         _ request: NameRequest
@@ -241,14 +204,6 @@ public class Agent {
             for: NSFileProviderItemIdentifier(request.itemId)
         )
         return ListResponse(fileInfos: entries)
-    }
-
-    func poll(
-        _ request: PollRequest
-    ) async throws -> PollResponse {
-        let session = try await sessions.connect(id: request.domainId)
-        try await session.poll()
-        return PollResponse()
     }
 
     func currentAnchor(

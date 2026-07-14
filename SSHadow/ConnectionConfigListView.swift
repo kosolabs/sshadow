@@ -1,3 +1,4 @@
+import AgentKit
 import Common
 import Foundation
 import SwiftData
@@ -73,9 +74,9 @@ struct ConnectionConfigListView: View {
                 .padding(.vertical, 2)
             }
             .frame(width: 300)
-            
+
             Divider()
-            
+
             Group {
                 if let selection {
                     ConnectionConfigEditView(config: selection)

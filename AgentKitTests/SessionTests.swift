@@ -9,7 +9,7 @@ import Testing
 
 extension TestSandbox {
     fileprivate func getSession() async throws -> Session {
-        let config = try getConnectionConfig()
+        let config = try config
         let ssh = try await SSHClient.connect(config: config)
         let sftp = try await ssh.sftp()
         let db = try await DomainDB.open(

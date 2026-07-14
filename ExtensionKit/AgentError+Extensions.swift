@@ -5,14 +5,11 @@ extension AgentError {
     public var asNSError: any Error {
         switch self {
         case .agentUnreachable,
-            .unknownHost,
-            .connectionRefused,
-            .connectionTimedOut,
             .remotePathNotFound,
-            .remotePathNotDirectory,
-            .unexpectedResponse:
+            .unexpectedResponse,
+            .serverUnreachable:
             NSFileProviderError(.serverUnreachable)
-        case .profileNotFound, .invalidPrivateKey, .passwordAuthFailed:
+        case .profileNotFound, .notAuthenticated:
             NSFileProviderError(.notAuthenticated)
         case .permissionDenied:
             CocoaError(.fileWriteNoPermission)

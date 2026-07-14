@@ -1,43 +1,14 @@
-import AgentKit
 import Common
 import Foundation
 import SwiftData
+import SwiftLibSSH
 import Testing
 import XPC
 
-private func makeBareAgent() throws -> (AgentClient, XPCListener) {
-    let appDb = try AppDB.open(
-        config: ModelConfiguration(isStoredInMemoryOnly: true)
-    )
-    let shared = FileManager.default.temporaryDirectory
-    let listener = Agent.testListener(
-        appDb: appDb,
-        domainDbConfig: ModelConfiguration(isStoredInMemoryOnly: true),
-        sharedUrl: shared,
-        transfers: Transfers()
-    )
-    let session = try XPCSession(endpoint: listener.endpoint)
-    let agent = AgentClient(
-        domainId: UUID(),
-        session: session,
-        sharedUrl: shared
-    )
-    return (agent, listener)
-}
+@testable import AgentKit
 
-@Suite struct AgentInitDomainTests {
-    @Test func initDomainSucceeds() async throws {
-        let sandbox = TestSandbox()
-        let agent = try await sandbox.getAgentClient()
-        let config = try sandbox.getConnectionConfig()
-
-        try await agent.initDomain(config: config)
-    }
-
-    @Test func initDomainThrowsUnknownHost() async throws {
-        let (agent, listener) = try makeBareAgent()
-        defer { listener.cancel() }
-
+@Suite struct SSHClientExtensionTests {
+    @Test func testThrowsUnknownHost() async throws {
         let config = ConnectionConfig(
             id: UUID(),
             name: "test",
@@ -48,15 +19,12 @@ private func makeBareAgent() throws -> (AgentClient, XPCListener) {
             authMethod: .none,
         )
 
-        await #expect(throws: AgentError.unknownHost) {
-            try await agent.initDomain(config: config)
+        await #expect(throws: SSHClient.TestError.unknownHost) {
+            try await SSHClient.test(config: config)
         }
     }
 
-    @Test func initDomainThrowsConnectionRefused() async throws {
-        let (agent, listener) = try makeBareAgent()
-        defer { listener.cancel() }
-
+    @Test func testThrowsConnectionRefused() async throws {
         let config = ConnectionConfig(
             id: UUID(),
             name: "test",
@@ -67,8 +35,8 @@ private func makeBareAgent() throws -> (AgentClient, XPCListener) {
             authMethod: .none,
         )
 
-        await #expect(throws: AgentError.connectionRefused) {
-            try await agent.initDomain(config: config)
+        await #expect(throws: SSHClient.TestError.connectionRefused) {
+            try await SSHClient.test(config: config)
         }
     }
 }

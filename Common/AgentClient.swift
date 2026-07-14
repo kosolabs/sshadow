@@ -61,32 +61,6 @@ public class AgentClient {
         }
     }
 
-    public static func initDomain(
-        config: ConnectionConfig
-    ) async throws(AgentError) {
-        try await AgentClient(domainId: config.id).initDomain(config: config)
-    }
-
-    public func initDomain(
-        config: ConnectionConfig
-    ) async throws(AgentError) {
-        let reply = try await perform(
-            .initDomain(InitDomainRequest(config: config))
-        )
-        guard case .initDomain = reply else {
-            throw AgentError.unexpectedResponse
-        }
-    }
-
-    public func deinitDomain() async throws(AgentError) {
-        let reply = try await perform(
-            .deinitDomain(DeinitDomainRequest(domainId: domainId))
-        )
-        guard case .deinitDomain = reply else {
-            throw AgentError.unexpectedResponse
-        }
-    }
-
     public func name(
         of itemId: NSFileProviderItemIdentifier
     ) async throws(AgentError) -> String {
@@ -161,15 +135,6 @@ public class AgentClient {
             throw AgentError.unexpectedResponse
         }
         return response.fileInfos
-    }
-    
-    public func poll() async throws(AgentError) {
-        let reply = try await perform(
-            .poll(PollRequest(domainId: domainId))
-        )
-        guard case .poll(_) = reply else {
-            throw AgentError.unexpectedResponse
-        }
     }
 
     public func currentAnchor() async throws(AgentError) -> UInt64 {

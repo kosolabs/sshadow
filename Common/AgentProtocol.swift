@@ -11,10 +11,6 @@ public enum OnExists: Message, PrettyDescribable {
 public enum AgentRequest: Message, PrettyDescribable {
     public var domainId: UUID {
         switch self {
-        case .initDomain(let request):
-            request.config.id
-        case .deinitDomain(let request):
-            request.domainId
         case .name(let request):
             request.domainId
         case .child(let request):
@@ -24,8 +20,6 @@ public enum AgentRequest: Message, PrettyDescribable {
         case .item(let request):
             request.domainId
         case .list(let request):
-            request.domainId
-        case .poll(let request):
             request.domainId
         case .currentAnchor(let request):
             request.domainId
@@ -54,14 +48,11 @@ public enum AgentRequest: Message, PrettyDescribable {
         }
     }
 
-    case initDomain(InitDomainRequest)
-    case deinitDomain(DeinitDomainRequest)
     case name(NameRequest)
     case child(ChildRequest)
     case parent(ParentRequest)
     case item(ItemRequest)
     case list(ListRequest)
-    case poll(PollRequest)
     case currentAnchor(CurrentAnchorRequest)
     case changes(ChangesRequest)
     case setAttributes(SetAttributesRequest)
@@ -89,14 +80,11 @@ public enum AgentResult: Message, PrettyDescribable {
 }
 
 public enum AgentResponse: Message, PrettyDescribable {
-    case initDomain(InitDomainResponse)
-    case deinitDomain(DeinitDomainResponse)
     case name(NameResponse)
     case child(ChildResponse)
     case parent(ParentResponse)
     case item(ItemResponse)
     case list(ListResponse)
-    case poll(PollResponse)
     case currentAnchor(CurrentAnchorResponse)
     case changes(ChangesResponse)
     case setAttributes(SetAttributesResponse)
@@ -118,13 +106,9 @@ public enum AgentError: Message, PrettyDescribable, Error {
     case permissionDenied
     case itemNotFound(String?)
     case filenameCollision
-    case unknownHost
-    case connectionRefused
-    case connectionTimedOut
-    case invalidPrivateKey
-    case passwordAuthFailed
+    case serverUnreachable
+    case notAuthenticated
     case remotePathNotFound
-    case remotePathNotDirectory
     case unexpectedResponse
     case unknown(domain: String, code: Int, message: String)
 
@@ -156,30 +140,6 @@ public enum AgentError: Message, PrettyDescribable, Error {
         if case .unknown = self { return true }
         return false
     }
-}
-
-public struct InitDomainRequest: Message, PrettyDescribable {
-    public let config: ConnectionConfig
-
-    public init(config: ConnectionConfig) {
-        self.config = config
-    }
-}
-
-public struct InitDomainResponse: Message, PrettyDescribable {
-    public init() {}
-}
-
-public struct DeinitDomainRequest: Message, PrettyDescribable {
-    public let domainId: UUID
-
-    public init(domainId: UUID) {
-        self.domainId = domainId
-    }
-}
-
-public struct DeinitDomainResponse: Message, PrettyDescribable {
-    public init() {}
 }
 
 public struct NameRequest: Message, PrettyDescribable {
@@ -276,18 +236,6 @@ public struct ListResponse: Message, PrettyDescribable {
     public init(fileInfos: [Item]) {
         self.fileInfos = fileInfos
     }
-}
-
-public struct PollRequest: Message, PrettyDescribable {
-    public let domainId: UUID
-
-    public init(domainId: UUID) {
-        self.domainId = domainId
-    }
-}
-
-public struct PollResponse: Message, PrettyDescribable {
-    public init() {}
 }
 
 public struct CurrentAnchorRequest: Message, PrettyDescribable {
