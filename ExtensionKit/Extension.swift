@@ -21,16 +21,15 @@ private func disconnect(domain: NSFileProviderDomain) {
 }
 
 public class Extension: NSObject, NSFileProviderReplicatedExtension,
-    NSFileProviderPartialContentFetching
+    NSFileProviderPartialContentFetching, NSFileProviderServicing
 {
     private let agent: AgentClient
     private let invalidated: Flag = Flag(false)
 
     required public init(domain: NSFileProviderDomain) {
-        let domainId = UUID(uuidString: domain.identifier.rawValue)!
         let invalidated = self.invalidated
         agent = AgentClient(
-            domainId: domainId,
+            domainId: domain.id,
             cancellationHandler: { _ in
                 if !invalidated.isSet {
                     disconnect(domain: domain)
@@ -458,6 +457,17 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             modifyTime: fields.contains(.contentModificationDate)
                 ? item.contentModificationDate ?? nil : nil,
         )
+    }
+
+    public func supportedServiceSources(
+        for itemIdentifier: NSFileProviderItemIdentifier,
+        completionHandler:
+            @escaping ([any NSFileProviderServiceSource]?, (any Error)?) -> Void
+    ) -> Progress {
+        let progress = Progress(totalUnitCount: 1)
+        completionHandler([agent], nil)
+        progress.completedUnitCount = 1
+        return progress
     }
 }
 

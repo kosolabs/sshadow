@@ -103,10 +103,7 @@ public class ConnectionConfigModel: CustomStringConvertible {
     }
 
     public var domain: NSFileProviderDomain {
-        NSFileProviderDomain(
-            identifier: NSFileProviderDomainIdentifier(id.uuidString),
-            displayName: displayName,
-        )
+        NSFileProviderDomain(id: id, displayName: displayName)
     }
 
     // MARK: - Enable / Disable
@@ -117,14 +114,17 @@ public class ConnectionConfigModel: CustomStringConvertible {
 
     public func enable() async throws {
         try await SSHClient.test(config: ConnectionConfig(from: self))
+
         try await Agent.shared.initDomain(id)
         try await domain.add()
+        try await DomainXPCBroker.shared.broker(domain)
 
         self.enabled = true
         logger.info("Enabled: \(self)")
     }
 
     public func disable() async throws {
+        await DomainXPCBroker.shared.teardown(domainId: id)
         try await domain.remove()
         try await Agent.shared.deinitDomain(id)
 

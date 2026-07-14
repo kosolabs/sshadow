@@ -25,6 +25,7 @@ class TestSandbox {
     let domain: NSFileProviderDomain
 
     private var listener: XPCListener?
+    private var connection: NSXPCConnection?
     private var _agent: Agent?
     private var _client: AgentClient?
 
@@ -48,19 +49,15 @@ class TestSandbox {
             withIntermediateDirectories: true
         )
 
-        self.domain = NSFileProviderDomain(
-            identifier: NSFileProviderDomainIdentifier(
-                rawValue: id.uuidString
-            ),
-            displayName: "Test"
-        )
+        self.domain = NSFileProviderDomain(id: id, displayName: "Test")
     }
 
     deinit {
+        self.connection?.invalidate()
         self.listener?.cancel()
         try? FileManager.default.removeItem(at: root)
     }
-    
+
     var config: ConnectionConfig {
         get throws {
             try ConnectionConfig(
@@ -158,6 +155,18 @@ class TestSandbox {
                 session: session,
                 sharedUrl: shared
             )
+
+            let connection = NSXPCConnection(
+                listenerEndpoint: try client.makeListenerEndpoint()
+            )
+            connection.exportedInterface = NSXPCInterface(with: AppXPC.self)
+            connection.exportedObject = AppService.shared
+            connection.remoteObjectInterface = NSXPCInterface(with: ExtXPC.self)
+            connection.resume()
+            self.connection = connection
+
+            let ext = connection.remoteObjectProxy as! ExtXPC
+            await ext.broker()
 
             var folders: [NSFileProviderItemIdentifier] = [.rootContainer]
             while !folders.isEmpty {

@@ -68,10 +68,7 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
     }
 
     public var domain: NSFileProviderDomain {
-        NSFileProviderDomain(
-            identifier: NSFileProviderDomainIdentifier(id.uuidString),
-            displayName: name
-        )
+        NSFileProviderDomain(id: id, displayName: name)
     }
 
     public func path(for subpath: String = "") -> String {
