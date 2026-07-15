@@ -1,5 +1,7 @@
+import Common
 import FileProvider
 import SwiftData
+import SwiftLibSSH
 
 private let logger = Logger(category: "ConnectionConfigModel")
 
@@ -114,8 +116,8 @@ public class ConnectionConfigModel: CustomStringConvertible {
     }
 
     public func enable() async throws {
-        let config = try ConnectionConfig(from: self)
-        try await AgentClient.initDomain(config: config)
+        try await SSHClient.test(config: ConnectionConfig(from: self))
+        try await Agent.shared.initDomain(id)
         try await domain.add()
 
         self.enabled = true
@@ -123,17 +125,15 @@ public class ConnectionConfigModel: CustomStringConvertible {
     }
 
     public func disable() async throws {
-        let agent = AgentClient(domainId: id)
         try await domain.remove()
-        try await agent.deinitDomain()
+        try await Agent.shared.deinitDomain(id)
 
         self.enabled = false
         logger.info("Disabled: \(self)")
     }
-    
+
     public func poll() async throws {
-        let agent = AgentClient(domainId: id)
-        try await agent.poll()
+        try await Agent.shared.poll(domainId: id)
     }
 
     // MARK: - Password Management

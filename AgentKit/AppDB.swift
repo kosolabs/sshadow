@@ -1,3 +1,4 @@
+import Common
 import FileProvider
 import Foundation
 import SwiftData
@@ -6,6 +7,8 @@ private let logger = Logger(category: "AppDB")
 
 @ModelActor
 public actor AppDB {
+    public static let shared: AppDB = try! open()
+    
     public static func getModelContainer(
         config: ModelConfiguration = ModelConfiguration(
             groupContainer: .identifier(SSHadow.appGroup)

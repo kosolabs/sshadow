@@ -12,14 +12,13 @@ struct AgentClientTests {
             at: "folder/file.txt",
             contents: "Hello, World!"
         )
-        let agent = try await sandbox.getAgentClient()
-
-        let folderId = try await agent.child(name: "folder")
-        let nestedFile = try await agent.child(of: folderId, name: "file.txt")
-        let nestedFileName = try await agent.name(of: nestedFile)
+        let client = try await sandbox.client
+        let folderId = try await client.child(name: "folder")
+        let nestedFile = try await client.child(of: folderId, name: "file.txt")
+        let nestedFileName = try await client.name(of: nestedFile)
         #expect(nestedFileName == "file.txt")
 
-        let parentOfFileId = try await agent.parent(of: nestedFile)
+        let parentOfFileId = try await client.parent(of: nestedFile)
         #expect(parentOfFileId == folderId)
     }
 
@@ -27,10 +26,9 @@ struct AgentClientTests {
         let sandbox = TestSandbox()
         let contents = "Hello, World!"
         try sandbox.createFile(at: "file.txt", contents: contents)
-        let agent = try await sandbox.getAgentClient()
-
-        let itemId = try await agent.child(name: "file.txt")
-        let item = try await agent.item(for: itemId)
+        let client = try await sandbox.client
+        let itemId = try await client.child(name: "file.txt")
+        let item = try await client.item(for: itemId)
 
         #expect(item.name == "file.txt")
         #expect(item.kind == .file)
@@ -40,10 +38,9 @@ struct AgentClientTests {
     @Test func itemForFolderSucceeds() async throws {
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: "folder")
-        let agent = try await sandbox.getAgentClient()
-
-        let itemId = try await agent.child(name: "folder")
-        let item = try await agent.item(for: itemId)
+        let client = try await sandbox.client
+        let itemId = try await client.child(name: "folder")
+        let item = try await client.item(for: itemId)
 
         #expect(item.name == "folder")
         #expect(item.kind == .folder)
@@ -53,10 +50,9 @@ struct AgentClientTests {
         let sandbox = TestSandbox()
         try sandbox.createFile(at: "target.txt", contents: "Hello, World!")
         try sandbox.createSymlink(at: "symlink.txt", target: "target.txt")
-        let agent = try await sandbox.getAgentClient()
-
-        let itemId = try await agent.child(name: "symlink.txt")
-        let item = try await agent.item(for: itemId)
+        let client = try await sandbox.client
+        let itemId = try await client.child(name: "symlink.txt")
+        let item = try await client.item(for: itemId)
 
         #expect(item.name == "symlink.txt")
         #expect(item.kind == .symlink(target: "target.txt"))
@@ -67,9 +63,8 @@ struct AgentClientTests {
         try sandbox.createFile(at: "file.txt")
         try sandbox.createFolder(at: "folder")
         try sandbox.createSymlink(at: "symlink.txt", target: "file.txt")
-        let agent = try await sandbox.getAgentClient()
-
-        let entries = try await agent.list(for: .rootContainer)
+        let client = try await sandbox.client
+        let entries = try await client.list(for: .rootContainer)
 
         let file = try #require(entries.first { $0.name == "file.txt" })
         #expect(file.kind == .file)
@@ -84,41 +79,20 @@ struct AgentClientTests {
     @Test func listEmptyDirectorySucceeds() async throws {
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: "empty-dir")
-        let agent = try await sandbox.getAgentClient()
-
-        let dirId = try await agent.child(name: "empty-dir")
-        let entries = try await agent.list(for: dirId)
+        let client = try await sandbox.client
+        let dirId = try await client.child(name: "empty-dir")
+        let entries = try await client.list(for: dirId)
 
         #expect(entries.isEmpty)
-    }
-
-    @Test func pollSucceeds() async throws {
-        let sandbox = TestSandbox()
-        let agent = try await sandbox.getAgentClient()
-
-        try await agent.poll()
-    }
-
-    @Test func currentAnchorAdvancesOnPoll() async throws {
-        let sandbox = TestSandbox()
-        let agent = try await sandbox.getAgentClient()
-
-        #expect(try await agent.currentAnchor() == 0)
-
-        try sandbox.createFolder(at: "new.txt")
-        try await agent.poll()
-
-        #expect(try await agent.currentAnchor() == 1)
     }
 
     @Test func setAttributesSucceeds() async throws {
         let sandbox = TestSandbox()
         try sandbox.createFile(at: "set-attrs.txt")
-        let agent = try await sandbox.getAgentClient()
-
-        let itemId = try await agent.child(name: "set-attrs.txt")
-        try await agent.setAttributes(for: itemId, flags: .rw)
-        let item = try await agent.item(for: itemId)
+        let client = try await sandbox.client
+        let itemId = try await client.child(name: "set-attrs.txt")
+        try await client.setAttributes(for: itemId, flags: .rw)
+        let item = try await client.item(for: itemId)
 
         #expect(item.flags == .rw)
     }
@@ -126,9 +100,8 @@ struct AgentClientTests {
     @Test func createSymlinkSucceeds() async throws {
         let sandbox = TestSandbox()
         try sandbox.createFile(at: "target.txt")
-        let agent = try await sandbox.getAgentClient()
-
-        let item = try await agent.createSymlink(
+        let client = try await sandbox.client
+        let item = try await client.createSymlink(
             parentId: .rootContainer,
             name: "symlink.txt",
             target: "target.txt"
@@ -140,9 +113,8 @@ struct AgentClientTests {
 
     @Test func createDirectorySucceeds() async throws {
         let sandbox = TestSandbox()
-        let agent = try await sandbox.getAgentClient()
-
-        let item = try await agent.createDirectory(
+        let client = try await sandbox.client
+        let item = try await client.createDirectory(
             parentId: .rootContainer,
             name: "new-dir",
             mode: 0o755
@@ -156,27 +128,25 @@ struct AgentClientTests {
         let sandbox = TestSandbox()
         try sandbox.createFile(at: "src/old.txt")
         try sandbox.createFolder(at: "dest")
-        let agent = try await sandbox.getAgentClient()
+        let client = try await sandbox.client
+        let srcId = try await client.child(name: "src")
+        let itemId = try await client.child(of: srcId, name: "old.txt")
+        let destId = try await client.child(name: "dest")
 
-        let srcId = try await agent.child(name: "src")
-        let itemId = try await agent.child(of: srcId, name: "old.txt")
-        let destId = try await agent.child(name: "dest")
+        try await client.move(itemId, toParent: destId, name: "new.txt")
 
-        try await agent.move(itemId, toParent: destId, name: "new.txt")
-
-        let name = try await agent.name(of: itemId)
+        let name = try await client.name(of: itemId)
         #expect(name == "new.txt")
-        let parentId = try await agent.parent(of: itemId)
+        let parentId = try await client.parent(of: itemId)
         #expect(parentId == destId)
     }
 
     @Test func removeFileSucceeds() async throws {
         let sandbox = TestSandbox()
         try sandbox.createFile(at: "file.txt")
-        let agent = try await sandbox.getAgentClient()
-
-        let itemId = try await agent.child(name: "file.txt")
-        try await agent.removeFile(for: itemId)
+        let client = try await sandbox.client
+        let itemId = try await client.child(name: "file.txt")
+        try await client.removeFile(for: itemId)
 
         #expect(!sandbox.exists(at: "file.txt"))
     }
@@ -184,19 +154,17 @@ struct AgentClientTests {
     @Test func removeDirectorySucceeds() async throws {
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: "folder")
-        let agent = try await sandbox.getAgentClient()
-
-        let itemId = try await agent.child(name: "folder")
-        try await agent.removeDirectory(for: itemId)
+        let client = try await sandbox.client
+        let itemId = try await client.child(name: "folder")
+        try await client.removeDirectory(for: itemId)
 
         #expect(!sandbox.exists(at: "folder"))
     }
 
     @Test func limitsSucceeds() async throws {
         let sandbox = TestSandbox()
-        let agent = try await sandbox.getAgentClient()
-
-        let limits = try await agent.limits()
+        let client = try await sandbox.client
+        let limits = try await client.limits()
 
         #expect(limits.maxReadLength > 0)
         #expect(limits.maxWriteLength > 0)
@@ -204,13 +172,12 @@ struct AgentClientTests {
 
     @Test func uploadSucceeds() async throws {
         let sandbox = TestSandbox()
-        let agent = try await sandbox.getAgentClient()
-
+        let client = try await sandbox.client
         let contents = "uploaded content"
         let localFile = sandbox.shared.appending(path: UUID().uuidString)
         try contents.write(to: localFile, atomically: true, encoding: .utf8)
 
-        let item = try await agent.upload(
+        let item = try await client.upload(
             parentId: .rootContainer,
             name: "upload.txt",
             file: localFile,
@@ -226,10 +193,9 @@ struct AgentClientTests {
         let sandbox = TestSandbox()
         let contents = "download me"
         try sandbox.createFile(at: "download.txt", contents: contents)
-        let agent = try await sandbox.getAgentClient()
-
-        let itemId = try await agent.child(name: "download.txt")
-        let (url, item) = try await agent.download(
+        let client = try await sandbox.client
+        let itemId = try await client.child(name: "download.txt")
+        let (url, item) = try await client.download(
             itemId: itemId,
             progress: Progress()
         )

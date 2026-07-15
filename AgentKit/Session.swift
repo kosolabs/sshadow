@@ -6,7 +6,7 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Session")
 
-typealias SignalEnumerator =
+public typealias SignalEnumerator =
     @Sendable (ConnectionConfig) async throws -> Void
 
 actor Session {

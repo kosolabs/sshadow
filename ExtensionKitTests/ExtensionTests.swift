@@ -10,9 +10,9 @@ extension TestSandbox {
     fileprivate func getExtensionAndAgent() async throws -> (
         Extension, AgentClient
     ) {
-        let agent = try await getAgentClient()
-        let ext = Extension(agent: agent)
-        return (ext, agent)
+        let client = try await client
+        let ext = Extension(agent: client)
+        return (ext, client)
     }
 }
 
@@ -20,11 +20,7 @@ extension TestSandbox {
 struct ExtensionTests {
     @Test(arguments: [
         AgentError.agentUnreachable,
-        AgentError.unknownHost,
-        AgentError.connectionRefused,
-        AgentError.connectionTimedOut,
         AgentError.remotePathNotFound,
-        AgentError.remotePathNotDirectory,
         AgentError.unexpectedResponse,
     ])
     func mapsToFileProviderServerUnreachable(error: AgentError) {
@@ -35,8 +31,7 @@ struct ExtensionTests {
 
     @Test(arguments: [
         AgentError.profileNotFound,
-        AgentError.invalidPrivateKey,
-        AgentError.passwordAuthFailed,
+        AgentError.notAuthenticated,
     ])
     func mapsToFileProviderNotAuthenticated(error: AgentError) {
         let nsError = error.asNSError as NSError

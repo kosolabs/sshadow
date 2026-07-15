@@ -4,21 +4,22 @@ import Synchronization
 import Testing
 
 @testable import ExtensionKit
+@testable import AgentKit
 
 extension TestSandbox {
     fileprivate func getEnumerator(
         for name: String
     ) async throws -> Enumerator {
-        let agent = try await getAgentClient()
-        let itemId = try await agent.child(name: name)
-        return Enumerator(agent: agent, itemIdentifier: itemId)
+        let client = try await client
+        let itemId = try await client.child(name: name)
+        return Enumerator(agent: client, itemIdentifier: itemId)
     }
 
     fileprivate func getEnumerator(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> Enumerator {
-        let agent = try await getAgentClient()
-        return Enumerator(agent: agent, itemIdentifier: itemId)
+        let client = try await client
+        return Enumerator(agent: client, itemIdentifier: itemId)
     }
 }
 
@@ -129,9 +130,8 @@ struct EnumeratorTests {
 
     @Test func currentSyncAnchorReflectsAgentState() async throws {
         let sandbox = TestSandbox()
-        let agent = try await sandbox.getAgentClient()
-        let enumerator = Enumerator(
-            agent: agent,
+        let enumerator = try await Enumerator(
+            agent: sandbox.client,
             itemIdentifier: .rootContainer
         )
 
@@ -140,7 +140,7 @@ struct EnumeratorTests {
 
         // touch new.txt
         try sandbox.createFolder(at: "new.txt")
-        try await agent.poll()
+        try await sandbox.agent.poll(domainId: sandbox.id)
 
         let advanced = try #require(await enumerator.currentSyncAnchor())
         #expect(advanced.value == 1)

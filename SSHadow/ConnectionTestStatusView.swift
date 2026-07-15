@@ -1,5 +1,7 @@
+import AgentKit
 import Common
 import SwiftUI
+import SwiftLibSSH
 
 struct ConnectionTestStatusView: View {
     let testing: Bool
@@ -35,7 +37,7 @@ struct ConnectionTestStatusView: View {
                 )
                 .foregroundStyle(.red)
             }
-        } else if let agentError = error as? AgentError {
+        } else if let agentError = error as? SSHClient.TestError {
             switch agentError {
             case .unknownHost:
                 Label(

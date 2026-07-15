@@ -36,7 +36,10 @@ private class AppXPCService {
 
     private init() {
         do {
-            listener = try Agent.listener(transfers: transfers)
+            listener = try XPCListener(service: SSHadow.appServiceName) {
+                request in
+                Agent.shared.accept(request: request)
+            }
         } catch {
             logger.fatal("Failed to create XPC listener: \(error)")
         }

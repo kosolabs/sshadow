@@ -3,6 +3,7 @@ import Common
 import FileProvider
 import Foundation
 import SwiftData
+import Testing
 import XPC
 
 private let logger = Logger(category: "TestData")
@@ -22,7 +23,10 @@ class TestSandbox {
     let mount: URL
     let shared: URL
     let domain: NSFileProviderDomain
+
     private var listener: XPCListener?
+    private var _agent: Agent?
+    private var _client: AgentClient?
 
     init() {
         self.id = UUID()
@@ -56,98 +60,122 @@ class TestSandbox {
         self.listener?.cancel()
         try? FileManager.default.removeItem(at: root)
     }
-
-    func getConnectionConfig() throws -> ConnectionConfig {
-        try ConnectionConfig(
-            id: id,
-            name: name,
-            host: host,
-            port: port,
-            user: user,
-            path: mount.path(),
-            authMethod: .privateKey(
-                base64PrivateKey: getBase64PrivateKey(),
-                passphrase: nil
-            ),
-        )
-    }
-
-    func getBase64PrivateKey() throws -> String {
-        return try String(contentsOf: getPrivateKeyUrl(), encoding: .utf8)
-    }
-
-    func getPrivateKeyUrl() throws -> URL {
-        let bundle = Bundle(for: BundleMarker.self)
-
-        guard
-            let url = bundle.url(forResource: "id_ed25519", withExtension: nil)
-        else {
-            throw NSError(
-                domain: "TestData",
-                code: 1,
-                userInfo: [
-                    NSLocalizedDescriptionKey:
-                        "Failed to locate id_ed25519 in bundle"
-                ]
+    
+    var config: ConnectionConfig {
+        get throws {
+            try ConnectionConfig(
+                id: id,
+                name: name,
+                host: host,
+                port: port,
+                user: user,
+                path: mount.path(),
+                authMethod: .privateKey(
+                    base64PrivateKey: base64PrivateKey,
+                    passphrase: nil
+                ),
             )
         }
-
-        return url
     }
 
-    func getAgentClient() async throws -> AgentClient {
-        let appDb = try AppDB.open(
-            config: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
+    var base64PrivateKey: String {
+        get throws {
+            try String(contentsOf: privateKeyUrl, encoding: .utf8)
+        }
+    }
 
-        let profile = try ConnectionConfigModel(
-            id: id,
-            name: name,
-            enabled: true,
-            host: host,
-            port: port,
-            user: user,
-            path: mount.path(),
-            authMethod: .privateKey,
-            bookmark: getPrivateKeyUrl().bookmarkData(
-                options: .withSecurityScope,
-                includingResourceValuesForKeys: nil,
-                relativeTo: nil
+    var privateKeyUrl: URL {
+        get throws {
+            try #require(
+                Bundle(for: BundleMarker.self).url(
+                    forResource: "id_ed25519",
+                    withExtension: nil
+                ),
+                "Failed to locate id_ed25519 in bundle"
             )
-        )
+        }
+    }
 
-        try await appDb.upsert(profile: profile)
+    var agent: Agent {
+        get async throws {
+            if let _agent {
+                return _agent
+            }
 
-        let listener = Agent.testListener(
-            appDb: appDb,
-            domainDbConfig: ModelConfiguration(isStoredInMemoryOnly: true),
-            sharedUrl: shared,
-            transfers: Transfers()
-        )
-        self.listener = listener
+            let memoryOnlyConfig = ModelConfiguration(
+                isStoredInMemoryOnly: true
+            )
 
-        let session = try XPCSession(endpoint: listener.endpoint)
-        let agent = AgentClient(
-            domainId: id,
-            session: session,
-            sharedUrl: shared
-        )
+            let appDb = try AppDB.open(config: memoryOnlyConfig)
 
-        var folders: [NSFileProviderItemIdentifier] = [.rootContainer]
-        while !folders.isEmpty {
-            let folder = folders.removeFirst()
-            let items = try await agent.list(for: folder)
-            for item in items {
-                if item.kind == .folder,
-                    let flags = item.flags,
-                    flags.contains(.executable)
-                {
-                    folders.append(item.id)
+            let profile = try ConnectionConfigModel(
+                id: id,
+                name: name,
+                enabled: true,
+                host: host,
+                port: port,
+                user: user,
+                path: mount.path(),
+                authMethod: .privateKey,
+                bookmark: privateKeyUrl.bookmarkData(
+                    options: .withSecurityScope,
+                    includingResourceValuesForKeys: nil,
+                    relativeTo: nil
+                )
+            )
+
+            try await appDb.upsert(profile: profile)
+
+            let agent = Agent(
+                appDb: appDb,
+                domainDbConfig: memoryOnlyConfig,
+                sharedUrl: shared,
+                signal: { _ in },
+                transfers: Transfers(),
+                pollInterval: nil
+            )
+            self._agent = agent
+            return agent
+        }
+    }
+
+    var client: AgentClient {
+        get async throws {
+            if let _client {
+                return _client
+            }
+
+            let agent = try await agent
+
+            let listener = XPCListener(targetQueue: nil) { request in
+                agent.accept(request: request)
+            }
+            self.listener = listener
+
+            let session = try XPCSession(endpoint: listener.endpoint)
+            let client = AgentClient(
+                domainId: id,
+                session: session,
+                sharedUrl: shared
+            )
+
+            var folders: [NSFileProviderItemIdentifier] = [.rootContainer]
+            while !folders.isEmpty {
+                let folder = folders.removeFirst()
+                let items = try await client.list(for: folder)
+                for item in items {
+                    if item.kind == .folder,
+                        let flags = item.flags,
+                        flags.contains(.executable)
+                    {
+                        folders.append(item.id)
+                    }
                 }
             }
-        }
 
-        return agent
+            self._client = client
+            return client
+        }
     }
 
     func getUrl(for path: String, relativeTo: RelativeTo = .mount) -> URL {
