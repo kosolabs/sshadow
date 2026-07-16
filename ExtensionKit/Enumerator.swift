@@ -116,7 +116,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         let trace = StackTrace.capture()
 
         Task {
-            do {
+            do throws(AgentError) {
                 let anchor = try await agent.currentAnchor()
                 completionHandler(NSFileProviderSyncAnchor(anchor))
             } catch {

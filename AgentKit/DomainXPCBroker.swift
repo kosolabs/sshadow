@@ -9,17 +9,12 @@ public final class DomainXPCBroker {
 
     private var connections: [UUID: NSXPCConnection] = [:]
 
-    public func broker(_ domain: NSFileProviderDomain) async {
+    public func broker(_ domain: NSFileProviderDomain) async throws {
+        logger.info("Brokering XPC: \(domain.id)")
+
         teardown(domainId: domain.id)
 
-        let connection: NSXPCConnection
-        do {
-            connection = try await domain.service.fileProviderConnection()
-        } catch {
-            // TODO: Look in to rebrokering failed to broker connections
-            logger.error("Failed to broker XPC for \(domain.id): \(error)")
-            return
-        }
+        let connection = try await domain.service.fileProviderConnection()
 
         connection.exportedInterface = NSXPCInterface(with: AppXPC.self)
         connection.exportedObject = AppService.shared
@@ -29,7 +24,15 @@ public final class DomainXPCBroker {
             Task { @MainActor in
                 guard let self else { return }
                 self.connections[domain.id] = nil
-                await self.broker(domain)
+                do {
+                    try await self.broker(domain)
+                } catch {
+                    // TODO: Look in to rebrokering failed to broker connections
+                    logger.error(
+                        "Failed to broker XPC for \(domain.id): \(error)"
+                    )
+                    return
+                }
             }
         }
         connection.interruptionHandler = { connection.invalidate() }

@@ -103,34 +103,15 @@ class TestSandbox {
                 isStoredInMemoryOnly: true
             )
 
-            let appDb = try AppDB.open(config: memoryOnlyConfig)
-
-            let profile = try ConnectionConfigModel(
-                id: id,
-                name: name,
-                enabled: true,
-                host: host,
-                port: port,
-                user: user,
-                path: mount.path(),
-                authMethod: .privateKey,
-                bookmark: privateKeyUrl.bookmarkData(
-                    options: .withSecurityScope,
-                    includingResourceValuesForKeys: nil,
-                    relativeTo: nil
-                )
-            )
-
-            try await appDb.upsert(profile: profile)
-
             let agent = Agent(
-                appDb: appDb,
                 domainDbConfig: memoryOnlyConfig,
                 sharedUrl: shared,
                 signal: { _ in },
                 transfers: Transfers(),
                 pollInterval: nil
             )
+
+            try await agent.register(config: try config)
             self._agent = agent
             return agent
         }

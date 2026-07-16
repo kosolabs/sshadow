@@ -9,14 +9,13 @@ private let logger = Logger(category: "SSHadowApp")
 
 private func reconnectAllDomains() {
     Task {
-        let domains: [NSFileProviderDomain]
-        do {
-            domains = try await NSFileProviderManager.domains()
-        } catch {
-            logger.error("Failed to list domains: \(error)")
-            return
-        }
-        for domain in domains {
+        for config in await AppDB.shared.enabledConfigs() {
+            let domain = config.domain
+            do {
+                try await Agent.shared.register(config: config)
+            } catch {
+                logger.error("Failed to register \(domain): \(error)")
+            }
             do {
                 try await domain.manager.reconnect()
             } catch {
@@ -25,7 +24,7 @@ private func reconnectAllDomains() {
             do {
                 try await DomainXPCBroker.shared.broker(domain)
             } catch {
-                logger.error("Failed to bootstrap \(domain): \(error)")
+                logger.error("Failed to broker \(domain): \(error)")
             }
             logger.info("Reconnected \(domain)")
         }
