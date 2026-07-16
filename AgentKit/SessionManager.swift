@@ -7,25 +7,23 @@ import SwiftLibSSH
 private let logger = Logger(category: "SessionManager")
 
 actor SessionManager {
-    private let db: AppDB
     private let domainDbConfig: ModelConfiguration?
     private let sharedUrl: URL
     private let signal: SignalEnumerator
     private let transfers: Transfers
     private let pollInterval: Duration?
 
+    private var configs: [UUID: ConnectionConfig] = [:]
     private var sessions: [UUID: Session] = [:]
     private var connectTasks: [UUID: Task<Session, any Error>] = [:]
 
     init(
-        appDb: AppDB,
         domainDbConfig: ModelConfiguration? = nil,
         sharedUrl: URL = SSHadow.groupUrl,
         signal: @escaping SignalEnumerator,
         transfers: Transfers,
         pollInterval: Duration? = nil
     ) {
-        self.db = appDb
         self.domainDbConfig = domainDbConfig
         self.sharedUrl = sharedUrl
         self.signal = signal
@@ -34,12 +32,18 @@ actor SessionManager {
     }
 
     @discardableResult
+    func register(config: ConnectionConfig) async throws -> Session {
+        configs[config.id] = config
+        return try await connect(id: config.id)
+    }
+
+    @discardableResult
     func connect(id: UUID) async throws -> Session {
         if let session = sessions[id] {
             return session
         }
 
-        guard let profile = await db.fetch(id: id) else {
+        guard let config = configs[id] else {
             throw AgentError.profileNotFound
         }
 
@@ -47,7 +51,6 @@ actor SessionManager {
             return try await task.value
         }
 
-        let config = try ConnectionConfig(from: profile)
         let domainDbConfig = domainDbConfig ?? DomainDB.model(for: id)
 
         let task = Task {
@@ -79,17 +82,16 @@ actor SessionManager {
         }
     }
 
+    func forget(id: UUID) async {
+        await disconnect(id: id)
+        configs[id] = nil
+    }
+
     func disconnect(id: UUID) async {
         connectTasks[id]?.cancel()
         connectTasks[id] = nil
         if let session = sessions.removeValue(forKey: id) {
             await session.close()
-        }
-    }
-
-    func disconnectAll() async {
-        for id in sessions.keys {
-            await disconnect(id: id)
         }
     }
 }

@@ -485,12 +485,10 @@ private func withProgress<T>(
         do {
             let result = try await perform(progress)
             onSuccess(result)
-        } catch let error as AgentError {
-            trace.log(logger, error: error)
-            onError(error.asNSError)
         } catch {
-            trace.log(logger, error: error)
-            onError(error)
+            let agentError = AgentError(from: error)
+            trace.log(logger, error: agentError)
+            onError(agentError.asNSError)
         }
     }
     return progress

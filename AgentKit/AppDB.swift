@@ -8,7 +8,7 @@ private let logger = Logger(category: "AppDB")
 @ModelActor
 public actor AppDB {
     public static let shared: AppDB = try! open()
-    
+
     public static func getModelContainer(
         config: ModelConfiguration = ModelConfiguration(
             groupContainer: .identifier(SSHadow.appGroup)
@@ -29,17 +29,15 @@ public actor AppDB {
         return try AppDB(modelContainer: getModelContainer(config: config))
     }
 
-    public func fetch(id: UUID) -> ConnectionConfigModel? {
+    public func enabledConfigs() -> [ConnectionConfig] {
         let descriptor = FetchDescriptor<ConnectionConfigModel>(
             predicate: #Predicate { profile in
-                profile.id == id
+                profile.enabled
             }
         )
-        return try? modelContext.fetch(descriptor).first
-    }
-
-    public func upsert(profile: ConnectionConfigModel) throws {
-        modelContext.insert(profile)
-        try modelContext.save()
+        guard let profiles = try? modelContext.fetch(descriptor) else {
+            return []
+        }
+        return profiles.compactMap { try? ConnectionConfig(from: $0) }
     }
 }

@@ -3,12 +3,9 @@ import FileProvider
 extension StackTrace {
     public func log(
         _ logger: Logger = Logger(category: "StackTrace"),
-        error: Error
+        error: AgentError
     ) {
-        let nsError = error as NSError
-        if nsError.domain != NSFileProviderErrorDomain
-            && nsError.domain != NSCocoaErrorDomain
-        {
+        if error.isUnknown {
             logger.fault(
                 "Unmapped error at \(caller): \(error)\n\(description)"
             )

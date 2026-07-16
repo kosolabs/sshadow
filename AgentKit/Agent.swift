@@ -17,7 +17,6 @@ public final class AppService: NSObject, AppXPC {
 
 public final class Agent: Sendable {
     public static let shared: Agent = Agent(
-        appDb: AppDB.shared,
         domainDbConfig: nil,
         sharedUrl: SSHadow.groupUrl,
         signal: { config in
@@ -33,7 +32,6 @@ public final class Agent: Sendable {
     private let domainDbConfig: ModelConfiguration?
 
     public init(
-        appDb: AppDB,
         domainDbConfig: ModelConfiguration?,
         sharedUrl: URL,
         signal: @escaping SignalEnumerator,
@@ -42,7 +40,6 @@ public final class Agent: Sendable {
     ) {
         self.domainDbConfig = domainDbConfig
         self.sessions = SessionManager(
-            appDb: appDb,
             domainDbConfig: domainDbConfig,
             sharedUrl: sharedUrl,
             signal: signal,
@@ -52,13 +49,11 @@ public final class Agent: Sendable {
     }
 
     public static func testListener(
-        appDb: AppDB,
         domainDbConfig: ModelConfiguration,
         sharedUrl: URL,
         transfers: Transfers
     ) -> XPCListener {
         let agent = Agent(
-            appDb: appDb,
             domainDbConfig: domainDbConfig,
             sharedUrl: sharedUrl,
             signal: { _ in },
@@ -145,15 +140,15 @@ public final class Agent: Sendable {
     
     // MARK: App
 
-    func initDomain(_ domainId: UUID) async throws {
+    public func register(config: ConnectionConfig) async throws {
         let domainDbConfig =
-            self.domainDbConfig ?? DomainDB.model(for: domainId)
+            self.domainDbConfig ?? DomainDB.model(for: config.id)
         try await DomainDB.open(config: domainDbConfig)
-        try await sessions.connect(id: domainId)
+        try await sessions.register(config: config)
     }
 
-    func deinitDomain(_ domainId: UUID) async throws {
-        await sessions.disconnect(id: domainId)
+    public func forget(_ domainId: UUID) async throws {
+        await sessions.forget(id: domainId)
         try await DomainDB.delete(id: domainId)
     }
     

@@ -113,9 +113,11 @@ public class ConnectionConfigModel: CustomStringConvertible {
     }
 
     public func enable() async throws {
-        try await SSHClient.test(config: ConnectionConfig(from: self))
+        try modelContext?.save()
+        let config = try ConnectionConfig(from: self)
+        try await SSHClient.test(config: config)
 
-        try await Agent.shared.initDomain(id)
+        try await Agent.shared.register(config: config)
         try await domain.add()
         try await DomainXPCBroker.shared.broker(domain)
 
@@ -126,7 +128,7 @@ public class ConnectionConfigModel: CustomStringConvertible {
     public func disable() async throws {
         await DomainXPCBroker.shared.teardown(domainId: id)
         try await domain.remove()
-        try await Agent.shared.deinitDomain(id)
+        try await Agent.shared.forget(id)
 
         self.enabled = false
         logger.info("Disabled: \(self)")
