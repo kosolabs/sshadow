@@ -6,6 +6,15 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Agent")
 
+public final class AppService: NSObject, AppXPC {
+    public static let shared: AppService = AppService()
+
+    public func ping() async throws -> String {
+        logger.info("App Pong!")
+        return "App Pong!"
+    }
+}
+
 public final class Agent: Sendable {
     public static let shared: Agent = Agent(
         appDb: AppDB.shared,

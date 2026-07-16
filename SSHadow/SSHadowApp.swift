@@ -19,10 +19,15 @@ private func reconnectAllDomains() {
         for domain in domains {
             do {
                 try await domain.manager.reconnect()
-                logger.info("Reconnected \(domain)")
             } catch {
                 logger.error("Failed to reconnect \(domain): \(error)")
             }
+            do {
+                try await DomainXPCBroker.shared.broker(domain)
+            } catch {
+                logger.error("Failed to bootstrap \(domain): \(error)")
+            }
+            logger.info("Reconnected \(domain)")
         }
     }
 }

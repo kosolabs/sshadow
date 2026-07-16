@@ -4,9 +4,14 @@ import XPC
 
 private let logger = Logger(category: "AgentClient")
 
-public class AgentClient {
+public final class AgentClient: NSObject, NSFileProviderServiceSource,
+    NSXPCListenerDelegate, ExtXPC
+{
+    public let serviceName = SSHadow.extensionServiceName
     private let domainId: UUID
+    private let listener = NSXPCListener.anonymous()
     private let session: XPCSession
+    private var connection: NSXPCConnection?
     private let sharedUrl: URL
 
     public convenience init(
@@ -28,16 +33,51 @@ public class AgentClient {
         self.domainId = domainId
         self.session = session
         self.sharedUrl = sharedUrl
+
+        super.init()
+        listener.delegate = self
+        listener.resume()
     }
 
     deinit {
         session.cancel(reason: "AgentClient deallocated")
     }
 
+    public func makeListenerEndpoint() throws -> NSXPCListenerEndpoint {
+        listener.endpoint
+    }
+
+    public func listener(
+        _ listener: NSXPCListener,
+        shouldAcceptNewConnection connection: NSXPCConnection
+    ) -> Bool {
+        connection.exportedInterface = NSXPCInterface(with: ExtXPC.self)
+        connection.exportedObject = self
+        connection.remoteObjectInterface = NSXPCInterface(with: AppXPC.self)
+        connection.invalidationHandler = {
+            self.connection = nil
+            logger.debug("Agent disconnected")
+        }
+        connection.interruptionHandler = { connection.invalidate() }
+        connection.resume()
+        self.connection = connection
+
+        logger.debug("Agent connected")
+        return true
+    }
+
+    public func broker() async {}
+
     private func perform(
         _ request: AgentRequest
     ) async throws(AgentError) -> AgentResponse {
+        guard let agent = connection?.remoteObjectProxy as? AppXPC else {
+            throw AgentError.agentUnreachable
+        }
         do {
+            let response = try await agent.ping()
+            logger.info("Received \(response) from App")
+
             return try await withCheckedThrowingContinuation { continuation in
                 do {
                     try session.send(request) {
