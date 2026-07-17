@@ -6,16 +6,7 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Agent")
 
-public final class AppService: NSObject, AppXPC {
-    public static let shared: AppService = AppService()
-
-    public func ping() async throws -> String {
-        logger.info("App Pong!")
-        return "App Pong!"
-    }
-}
-
-public final class Agent: Sendable {
+public final class Agent: Sendable, AppXPC {
     public static let shared: Agent = Agent(
         domainDbConfig: nil,
         sharedUrl: SSHadow.groupUrl,
@@ -137,7 +128,7 @@ public final class Agent: Sendable {
             return .failure(AgentError(from: error))
         }
     }
-    
+
     // MARK: App
 
     public func register(config: ConnectionConfig) async throws {
@@ -151,13 +142,18 @@ public final class Agent: Sendable {
         await sessions.forget(id: domainId)
         try await DomainDB.delete(id: domainId)
     }
-    
+
     func poll(domainId: UUID) async throws {
         let session = try await sessions.connect(id: domainId)
         try await session.poll()
     }
-    
+
     // MARK: Extension
+
+    public func ping() async throws -> String {
+        logger.info("App Pong!")
+        return "App Pong!"
+    }
 
     func name(
         _ request: NameRequest
