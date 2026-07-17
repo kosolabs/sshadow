@@ -75,9 +75,20 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
             throw AgentError.agentUnreachable
         }
         do {
-            let response = try await agent.ping()
-            logger.info("Received \(response) from App")
+            let response = try await agent.handle(request.encoded())
+            return try AgentResult.decoded(from: response).get()
+        } catch let error as AgentError {
+            throw error
+        } catch {
+            logger.error("Request failed: \(error)")
+            throw AgentError(from: error)
+        }
+    }
 
+    private func send(
+        _ request: AgentRequest
+    ) async throws(AgentError) -> AgentResponse {
+        do {
             return try await withCheckedThrowingContinuation { continuation in
                 do {
                     try session.send(request) {
@@ -351,7 +362,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         progress.fileOperationKind = .uploading
 
         let sync = XPCProgressSubscriber(progress: progress)
-        let reply = try await perform(
+        let reply = try await send(
             .upload(
                 UploadRequest(
                     domainId: domainId,
@@ -379,7 +390,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         progress.fileOperationKind = .downloading
 
         let sync = XPCProgressSubscriber(progress: progress)
-        let reply = try await perform(
+        let reply = try await send(
             .download(
                 DownloadRequest(
                     domainId: domainId,
@@ -404,7 +415,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         progress.fileOperationKind = .downloading
 
         let sync = XPCProgressSubscriber(progress: progress)
-        let reply = try await perform(
+        let reply = try await send(
             .stream(
                 StreamRequest(
                     domainId: domainId,

@@ -15,7 +15,7 @@ public final class Agent: Sendable, AppXPC {
                 for: .workingSet
             )
         },
-        transfers: Transfers(),
+        transfers: Transfers.shared,
         pollInterval: .seconds(30),
     )
 
@@ -58,6 +58,22 @@ public final class Agent: Sendable, AppXPC {
             }
             return nil
         }
+    }
+
+    public func handle(_ data: Data) async throws -> Data {
+        let request: AgentRequest
+        do {
+            request = try AgentRequest.decoded(from: data)
+        } catch {
+            logger.error("Failed to decode request: \(error)")
+            return try JSONEncoder().encode(
+                AgentResult.failure(AgentError(from: error))
+            )
+        }
+        logger.debug("Request: \(request)")
+        let result = await handle(request)
+        logger.debug("Result: \(result)")
+        return try result.encoded()
     }
 
     public func handle(_ request: AgentRequest) async -> AgentResult {
@@ -132,11 +148,6 @@ public final class Agent: Sendable, AppXPC {
     }
 
     // MARK: Extension
-
-    public func ping() async throws -> String {
-        logger.info("App Pong!")
-        return "App Pong!"
-    }
 
     func name(
         _ request: NameRequest

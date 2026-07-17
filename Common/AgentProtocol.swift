@@ -8,7 +8,7 @@ private let logger = Logger(category: "AgentProtocol")
 }
 
 @objc public protocol AppXPC {
-    func ping() async throws -> String
+    func handle(_ data: Data) async throws -> Data
 }
 
 public enum OnExists: Message, PrettyDescribable {
@@ -73,6 +73,14 @@ public enum AgentRequest: Message, PrettyDescribable {
     case upload(UploadRequest)
     case download(DownloadRequest)
     case stream(StreamRequest)
+
+    public func encoded() throws -> Data {
+        try JSONEncoder().encode(self)
+    }
+
+    public static func decoded(from data: Data) throws -> AgentRequest {
+        try JSONDecoder().decode(AgentRequest.self, from: data)
+    }
 }
 
 public enum AgentResult: Message, PrettyDescribable {
@@ -84,6 +92,14 @@ public enum AgentResult: Message, PrettyDescribable {
         case .success(let response): return response
         case .failure(let error): throw error
         }
+    }
+
+    public func encoded() throws -> Data {
+        try JSONEncoder().encode(self)
+    }
+
+    public static func decoded(from data: Data) throws -> AgentResult {
+        try JSONDecoder().decode(AgentResult.self, from: data)
     }
 }
 
