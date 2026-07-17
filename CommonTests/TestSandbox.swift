@@ -141,7 +141,7 @@ class TestSandbox {
                 listenerEndpoint: try client.makeListenerEndpoint()
             )
             connection.exportedInterface = NSXPCInterface(with: AppXPC.self)
-            connection.exportedObject = AppService.shared
+            connection.exportedObject = agent
             connection.remoteObjectInterface = NSXPCInterface(with: ExtXPC.self)
             connection.resume()
             self.connection = connection
