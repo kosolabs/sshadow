@@ -35,7 +35,6 @@ private func reconnectAllDomains() {
 private class AppXPCService {
     static let shared = AppXPCService()
 
-    let transfers = Transfers()
     private let listener: XPCListener
 
     private init() {
@@ -69,27 +68,25 @@ struct SSHadowApp: App {
         )
     }
 
-    private var transfers: Transfers {
-        AppXPCService.shared.transfers
-    }
-
     var body: some Scene {
         MenuBarExtra {
             RichMenuMainView()
         } label: {
-            MenuBarIcon(isLoading: coordinator.isAnyBusy || !transfers.isEmpty)
+            MenuBarIcon(
+                isLoading: coordinator.isAnyBusy || !Transfers.shared.isEmpty
+            )
         }
         .menuBarExtraStyle(.window)
         .modelContainer(modelContainer)
         .environment(coordinator)
-        .environment(transfers)
+        .environment(Transfers.shared)
 
         Settings {
             SettingsView()
         }
         .modelContainer(modelContainer)
         .environment(coordinator)
-        .environment(transfers)
+        .environment(Transfers.shared)
 
         Window("About SSHadow", id: "about") {
             AboutView()

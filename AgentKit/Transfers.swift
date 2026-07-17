@@ -3,6 +3,8 @@ import Foundation
 @MainActor
 @Observable
 public final class Transfers {
+    nonisolated public static let shared: Transfers = Transfers()
+
     private var transfers: [Transfer] = []
 
     nonisolated public init() {}
