@@ -3,12 +3,12 @@ import Foundation
 
 private let logger = Logger(category: "AgentProtocol")
 
-@objc public protocol AppXPC {
-    func ping() async throws -> String
-}
-
 @objc public protocol ExtXPC {
     func broker() async
+}
+
+@objc public protocol AppXPC {
+    func ping() async throws -> String
 }
 
 public enum OnExists: Message, PrettyDescribable {
