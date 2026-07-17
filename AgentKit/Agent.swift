@@ -39,23 +39,6 @@ public final class Agent: Sendable, AppXPC {
         )
     }
 
-    public static func testListener(
-        domainDbConfig: ModelConfiguration,
-        sharedUrl: URL,
-        transfers: Transfers
-    ) -> XPCListener {
-        let agent = Agent(
-            domainDbConfig: domainDbConfig,
-            sharedUrl: sharedUrl,
-            signal: { _ in },
-            transfers: transfers,
-            pollInterval: nil,
-        )
-        return XPCListener(targetQueue: nil) { request in
-            agent.accept(request: request)
-        }
-    }
-
     public func accept(
         request: XPCListener.IncomingSessionRequest,
     ) -> XPCListener.IncomingSessionRequest.Decision {
