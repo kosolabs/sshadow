@@ -4,11 +4,16 @@ import Foundation
 private let logger = Logger(category: "AgentProtocol")
 
 @objc public protocol ExtXPC {
-    func broker() async
+    func attach() async
+    func detach() async
 }
 
-@objc public protocol AppXPC {
+@objc public protocol AgentXPC {
     func handle(_ data: Data) async throws -> Data
+    func handle(
+        _ data: Data,
+        progressEndpoint: NSXPCListenerEndpoint
+    ) async throws -> Data
 }
 
 public enum OnExists: Message, PrettyDescribable {
@@ -47,12 +52,6 @@ public enum AgentRequest: Message, PrettyDescribable {
             request.domainId
         case .limits(let request):
             request.domainId
-        case .upload(let request):
-            request.domainId
-        case .download(let request):
-            request.domainId
-        case .stream(let request):
-            request.domainId
         }
     }
 
@@ -70,6 +69,28 @@ public enum AgentRequest: Message, PrettyDescribable {
     case removeFile(RemoveFileRequest)
     case removeDirectory(RemoveDirectoryRequest)
     case limits(LimitsRequest)
+
+    public func encoded() throws -> Data {
+        try JSONEncoder().encode(self)
+    }
+
+    public static func decoded(from data: Data) throws -> AgentRequest {
+        try JSONDecoder().decode(AgentRequest.self, from: data)
+    }
+}
+
+public enum AgentProgressRequest: Message, PrettyDescribable {
+    public var domainId: UUID {
+        switch self {
+        case .upload(let request):
+            request.domainId
+        case .download(let request):
+            request.domainId
+        case .stream(let request):
+            request.domainId
+        }
+    }
+
     case upload(UploadRequest)
     case download(DownloadRequest)
     case stream(StreamRequest)
@@ -78,8 +99,8 @@ public enum AgentRequest: Message, PrettyDescribable {
         try JSONEncoder().encode(self)
     }
 
-    public static func decoded(from data: Data) throws -> AgentRequest {
-        try JSONDecoder().decode(AgentRequest.self, from: data)
+    public static func decoded(from data: Data) throws -> AgentProgressRequest {
+        try JSONDecoder().decode(AgentProgressRequest.self, from: data)
     }
 }
 
@@ -471,7 +492,6 @@ public struct UploadRequest: Message, PrettyDescribable {
     public let file: URL
     public let flags: Item.Flags
     public let chunkSize: UInt64
-    public let progressEndpoint: XPCEndpoint
 
     public init(
         domainId: UUID,
@@ -479,8 +499,7 @@ public struct UploadRequest: Message, PrettyDescribable {
         name: String,
         file: URL,
         flags: Item.Flags,
-        chunkSize: UInt64,
-        progressEndpoint: XPCEndpoint
+        chunkSize: UInt64
     ) {
         self.domainId = domainId
         self.parentId = parentId
@@ -488,7 +507,6 @@ public struct UploadRequest: Message, PrettyDescribable {
         self.file = file
         self.flags = flags
         self.chunkSize = chunkSize
-        self.progressEndpoint = progressEndpoint
     }
 }
 
@@ -504,18 +522,15 @@ public struct DownloadRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
     public let chunkSize: UInt64
-    public let progressEndpoint: XPCEndpoint
 
     public init(
         domainId: UUID,
         itemId: String,
-        chunkSize: UInt64,
-        progressEndpoint: XPCEndpoint
+        chunkSize: UInt64
     ) {
         self.domainId = domainId
         self.itemId = itemId
         self.chunkSize = chunkSize
-        self.progressEndpoint = progressEndpoint
     }
 }
 
@@ -533,18 +548,15 @@ public struct StreamRequest: Message, PrettyDescribable {
     public let domainId: UUID
     public let itemId: String
     public let range: Range<UInt64>
-    public let progressEndpoint: XPCEndpoint
 
     public init(
         domainId: UUID,
         itemId: String,
-        range: Range<UInt64>,
-        progressEndpoint: XPCEndpoint
+        range: Range<UInt64>
     ) {
         self.domainId = domainId
         self.itemId = itemId
         self.range = range
-        self.progressEndpoint = progressEndpoint
     }
 }
 

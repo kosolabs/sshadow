@@ -3,7 +3,6 @@ import Common
 import FileProvider
 import SwiftData
 import SwiftUI
-import XPC
 
 private let logger = Logger(category: "SSHadowApp")
 
@@ -13,20 +12,11 @@ private func reconnectAllDomains() {
             let domain = config.domain
             do {
                 try await Agent.shared.register(config: config)
-            } catch {
-                logger.error("Failed to register \(domain): \(error)")
-            }
-            do {
-                try await domain.manager.reconnect()
-            } catch {
-                logger.error("Failed to reconnect \(domain): \(error)")
-            }
-            do {
+                try await domain.resume()
                 try await DomainXPCBroker.shared.broker(domain)
             } catch {
-                logger.error("Failed to broker \(domain): \(error)")
+                logger.error("Failed to resume sync \(domain): \(error)")
             }
-            logger.info("Reconnected \(domain)")
         }
     }
 }
@@ -47,8 +37,6 @@ private class AppXPCService {
             logger.fatal("Failed to create XPC listener: \(error)")
         }
         logger.info("App XPC: listening on \(SSHadow.appServiceName)")
-
-        reconnectAllDomains()
     }
 }
 
@@ -59,6 +47,7 @@ struct SSHadowApp: App {
 
     init() {
         _ = AppXPCService.shared
+        reconnectAllDomains()
         modelContainer = try! AppDB.getModelContainer(
             config: ModelConfiguration(
                 isStoredInMemoryOnly: ProcessInfo.processInfo

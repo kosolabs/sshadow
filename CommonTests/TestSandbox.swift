@@ -130,24 +130,19 @@ class TestSandbox {
             }
             self.listener = listener
 
-            let session = try XPCSession(endpoint: listener.endpoint)
-            let client = AgentClient(
-                domainId: id,
-                session: session,
-                sharedUrl: shared
-            )
+            let client = AgentClient(domain: domain, sharedUrl: shared)
 
             let connection = NSXPCConnection(
                 listenerEndpoint: try client.makeListenerEndpoint()
             )
-            connection.exportedInterface = NSXPCInterface(with: AppXPC.self)
+            connection.exportedInterface = NSXPCInterface(with: AgentXPC.self)
             connection.exportedObject = agent
             connection.remoteObjectInterface = NSXPCInterface(with: ExtXPC.self)
             connection.resume()
             self.connection = connection
 
             let ext = connection.remoteObjectProxy as! ExtXPC
-            await ext.broker()
+            await ext.attach()
 
             var folders: [NSFileProviderItemIdentifier] = [.rootContainer]
             while !folders.isEmpty {
@@ -162,6 +157,9 @@ class TestSandbox {
                     }
                 }
             }
+
+            // Prevent suspend when the client is eventually torn down
+            await ext.detach()
 
             self._client = client
             return client

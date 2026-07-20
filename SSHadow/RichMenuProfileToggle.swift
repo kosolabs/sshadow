@@ -57,10 +57,9 @@ struct RichMenuProfileToggle: View {
     private func openInFinder() {
         guard config.isEnabled() else { return }
         Task {
-            guard
-                let url = try? await NSFileProviderManager(for: config.domain)?
-                    .getUserVisibleURL(for: .rootContainer)
-            else { return }
+            let url = try await config.domain.manager.getUserVisibleURL(
+                for: .rootContainer
+            )
             NSWorkspace.shared.activateFileViewerSelecting([url])
             NSApp.dismissMenuBarExtra()
         }

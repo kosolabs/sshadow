@@ -1,6 +1,5 @@
 import FileProvider
 import Foundation
-import XPC
 
 private let logger = Logger(category: "AgentClient")
 
@@ -8,30 +7,17 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
     NSXPCListenerDelegate, ExtXPC
 {
     public let serviceName = SSHadow.extensionServiceName
-    private let domainId: UUID
+    private let domain: NSFileProviderDomain
     private let listener = NSXPCListener.anonymous()
-    private let session: XPCSession
     private var connection: NSXPCConnection?
     private let sharedUrl: URL
-
-    public convenience init(
-        domainId: UUID,
-        cancellationHandler: (@Sendable (XPCRichError) -> Void)? = nil
-    ) {
-        let session = try! XPCSession(
-            machService: SSHadow.appServiceName,
-            cancellationHandler: cancellationHandler
-        )
-        self.init(domainId: domainId, session: session)
-    }
+    private var attached: Bool = true
 
     public init(
-        domainId: UUID,
-        session: XPCSession,
+        domain: NSFileProviderDomain,
         sharedUrl: URL = SSHadow.groupUrl
     ) {
-        self.domainId = domainId
-        self.session = session
+        self.domain = domain
         self.sharedUrl = sharedUrl
 
         super.init()
@@ -40,75 +26,91 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
     }
 
     deinit {
-        session.cancel(reason: "AgentClient deallocated")
+        connection?.invalidate()
     }
 
     public func makeListenerEndpoint() throws -> NSXPCListenerEndpoint {
         listener.endpoint
     }
 
+    private func suspend() {
+        guard attached else { return }
+        Task {
+            do {
+                try await domain.suspend(
+                    reason:
+                        "SSHadow needs to be running in order to sync this volume.",
+                    options: .temporary
+                )
+            } catch {
+                logger.error("Failed to suspend \(domain): \(error)")
+            }
+        }
+    }
+
     public func listener(
         _ listener: NSXPCListener,
         shouldAcceptNewConnection connection: NSXPCConnection
     ) -> Bool {
+        attached = true
         connection.exportedInterface = NSXPCInterface(with: ExtXPC.self)
         connection.exportedObject = self
-        connection.remoteObjectInterface = NSXPCInterface(with: AppXPC.self)
+        connection.remoteObjectInterface = NSXPCInterface(with: AgentXPC.self)
         connection.invalidationHandler = {
             self.connection = nil
-            logger.debug("Agent disconnected")
+            self.suspend()
+            logger.debug("Agent XPC disconnected")
         }
         connection.interruptionHandler = { connection.invalidate() }
         connection.resume()
         self.connection = connection
 
-        logger.debug("Agent connected")
+        logger.debug("Agent XPC connected")
         return true
     }
 
-    public func broker() async {}
+    public func attach() async {}
+
+    public func detach() async {
+        attached = false
+    }
+
+    private func perform(
+        _ handle: (AgentXPC) async throws -> Data
+    ) async throws(AgentError) -> AgentResponse {
+        guard let agent = connection?.remoteObjectProxy as? AgentXPC else {
+            throw AgentError.agentUnreachable
+        }
+        do {
+            let response = try await handle(agent)
+            let result = try AgentResult.decoded(from: response)
+            logger.debug("Result: \(result)")
+            return try result.get()
+        } catch let error as AgentError {
+            throw error
+        } catch {
+            logger.error("Request failed: \(error)")
+            throw AgentError(from: error)
+        }
+    }
 
     private func perform(
         _ request: AgentRequest
     ) async throws(AgentError) -> AgentResponse {
-        guard let agent = connection?.remoteObjectProxy as? AppXPC else {
-            throw AgentError.agentUnreachable
-        }
-        do {
-            let response = try await agent.handle(request.encoded())
-            return try AgentResult.decoded(from: response).get()
-        } catch let error as AgentError {
-            throw error
-        } catch {
-            logger.error("Request failed: \(error)")
-            throw AgentError(from: error)
-        }
+        logger.debug("Request: \(request)")
+        return try await perform { try await $0.handle(request.encoded()) }
     }
 
-    private func send(
-        _ request: AgentRequest
+    private func perform(
+        _ request: AgentProgressRequest,
+        progressEndpoint: NSXPCListenerEndpoint
     ) async throws(AgentError) -> AgentResponse {
-        do {
-            return try await withCheckedThrowingContinuation { continuation in
-                do {
-                    try session.send(request) {
-                        (result: Result<AgentResult, any Error>) in
-                        continuation.resume(
-                            with: Result { try result.get().get() }
-                        )
-                    }
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
-        } catch let error as AgentError {
-            throw error
-        } catch let error as XPCRichError {
-            logger.error("XPC failure: \(error)")
-            throw AgentError.agentUnreachable
-        } catch {
-            logger.error("Request failed: \(error)")
-            throw AgentError(from: error)
+        logger.debug("Request: \(request)")
+        return try await perform {
+            try await $0.handle(
+                request.encoded(),
+                progressEndpoint: progressEndpoint
+            )
         }
     }
 
@@ -116,7 +118,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         of itemId: NSFileProviderItemIdentifier
     ) async throws(AgentError) -> String {
         let reply = try await perform(
-            .name(NameRequest(domainId: domainId, itemId: itemId.rawValue))
+            .name(NameRequest(domainId: domain.id, itemId: itemId.rawValue))
         )
         guard case .name(let response) = reply else {
             throw AgentError.unexpectedResponse
@@ -131,7 +133,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         let reply = try await perform(
             .child(
                 ChildRequest(
-                    domainId: domainId,
+                    domainId: domain.id,
                     parentId: parentId.rawValue,
                     name: name
                 )
@@ -149,7 +151,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         let reply = try await perform(
             .parent(
                 ParentRequest(
-                    domainId: domainId,
+                    domainId: domain.id,
                     itemId: itemId.rawValue
                 )
             )
@@ -165,7 +167,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
     ) async throws(AgentError) -> Item {
         let reply = try await perform(
             .item(
-                ItemRequest(domainId: domainId, itemId: itemId.rawValue)
+                ItemRequest(domainId: domain.id, itemId: itemId.rawValue)
             )
         )
         guard case .item(let response) = reply else {
@@ -179,7 +181,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
     ) async throws(AgentError) -> [Item] {
         let reply = try await perform(
             .list(
-                ListRequest(domainId: domainId, itemId: itemId.rawValue)
+                ListRequest(domainId: domain.id, itemId: itemId.rawValue)
             )
         )
         guard case .list(let response) = reply else {
@@ -190,7 +192,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
 
     public func currentAnchor() async throws(AgentError) -> UInt64 {
         let reply = try await perform(
-            .currentAnchor(CurrentAnchorRequest(domainId: domainId))
+            .currentAnchor(CurrentAnchorRequest(domainId: domain.id))
         )
         guard case .currentAnchor(let response) = reply else {
             throw AgentError.unexpectedResponse
@@ -202,7 +204,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         since anchor: UInt64
     ) async throws(AgentError) -> (UInt64, [Change]) {
         let reply = try await perform(
-            .changes(ChangesRequest(domainId: domainId, anchor: anchor))
+            .changes(ChangesRequest(domainId: domain.id, anchor: anchor))
         )
         guard case .changes(let response) = reply else {
             throw AgentError.unexpectedResponse
@@ -219,7 +221,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         let reply = try await perform(
             .setAttributes(
                 SetAttributesRequest(
-                    domainId: domainId,
+                    domainId: domain.id,
                     itemId: itemId.rawValue,
                     flags: flags,
                     accessTime: accessTime,
@@ -240,7 +242,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         let reply = try await perform(
             .createSymlink(
                 CreateSymlinkRequest(
-                    domainId: domainId,
+                    domainId: domain.id,
                     parentId: parentId.rawValue,
                     name: name,
                     target: target
@@ -262,7 +264,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         let reply = try await perform(
             .createDirectory(
                 CreateDirectoryRequest(
-                    domainId: domainId,
+                    domainId: domain.id,
                     parentId: parentId.rawValue,
                     name: name,
                     mode: mode,
@@ -284,7 +286,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         let reply = try await perform(
             .move(
                 MoveRequest(
-                    domainId: domainId,
+                    domainId: domain.id,
                     itemId: itemId.rawValue,
                     newParentId: newParentId.rawValue,
                     newName: newName
@@ -301,7 +303,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
     ) async throws(AgentError) {
         let reply = try await perform(
             .removeFile(
-                RemoveFileRequest(domainId: domainId, itemId: itemId.rawValue)
+                RemoveFileRequest(domainId: domain.id, itemId: itemId.rawValue)
             )
         )
         guard case .removeFile = reply else {
@@ -315,7 +317,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         let reply = try await perform(
             .removeDirectory(
                 RemoveDirectoryRequest(
-                    domainId: domainId,
+                    domainId: domain.id,
                     itemId: itemId.rawValue
                 )
             )
@@ -329,7 +331,7 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         let reply = try await perform(
             .limits(
                 LimitsRequest(
-                    domainId: domainId
+                    domainId: domain.id
                 )
             )
         )
@@ -362,18 +364,18 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         progress.fileOperationKind = .uploading
 
         let sync = XPCProgressSubscriber(progress: progress)
-        let reply = try await send(
+        let reply = try await perform(
             .upload(
                 UploadRequest(
-                    domainId: domainId,
+                    domainId: domain.id,
                     parentId: parentId.rawValue,
                     name: name,
                     file: stagedUrl,
                     flags: flags,
-                    chunkSize: chunkSize,
-                    progressEndpoint: sync.endpoint
+                    chunkSize: chunkSize
                 )
-            )
+            ),
+            progressEndpoint: sync.endpoint
         )
         guard case .upload(let response) = reply else {
             throw AgentError.unexpectedResponse
@@ -390,15 +392,15 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         progress.fileOperationKind = .downloading
 
         let sync = XPCProgressSubscriber(progress: progress)
-        let reply = try await send(
+        let reply = try await perform(
             .download(
                 DownloadRequest(
-                    domainId: domainId,
+                    domainId: domain.id,
                     itemId: itemId.rawValue,
-                    chunkSize: chunkSize,
-                    progressEndpoint: sync.endpoint
+                    chunkSize: chunkSize
                 )
-            )
+            ),
+            progressEndpoint: sync.endpoint
         )
         guard case .download(let response) = reply else {
             throw AgentError.unexpectedResponse
@@ -415,15 +417,15 @@ public final class AgentClient: NSObject, NSFileProviderServiceSource,
         progress.fileOperationKind = .downloading
 
         let sync = XPCProgressSubscriber(progress: progress)
-        let reply = try await send(
+        let reply = try await perform(
             .stream(
                 StreamRequest(
-                    domainId: domainId,
+                    domainId: domain.id,
                     itemId: itemId.rawValue,
-                    range: range,
-                    progressEndpoint: sync.endpoint
+                    range: range
                 )
-            )
+            ),
+            progressEndpoint: sync.endpoint
         )
         guard case .stream(let response) = reply else {
             throw AgentError.unexpectedResponse

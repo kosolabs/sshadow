@@ -10,13 +10,11 @@ public final class DomainXPCBroker {
     private var connections: [UUID: NSXPCConnection] = [:]
 
     public func broker(_ domain: NSFileProviderDomain) async throws {
-        logger.info("Brokering XPC: \(domain.id)")
-
-        teardown(domainId: domain.id)
+        await teardown(domainId: domain.id)
 
         let connection = try await domain.service.fileProviderConnection()
 
-        connection.exportedInterface = NSXPCInterface(with: AppXPC.self)
+        connection.exportedInterface = NSXPCInterface(with: AgentXPC.self)
         connection.exportedObject = Agent.shared
         connection.remoteObjectInterface = NSXPCInterface(with: ExtXPC.self)
         connection.invalidationHandler = { [weak self] in
@@ -41,18 +39,20 @@ public final class DomainXPCBroker {
         connections[domain.id] = connection
 
         let ext = connection.remoteObjectProxy as! ExtXPC
-        await ext.broker()
+        await ext.attach()
 
         logger.info("Brokered XPC: \(domain.id)")
     }
 
-    public func teardown(domainId: UUID) {
+    public func teardown(domainId: UUID) async {
         guard let connection = connections.removeValue(forKey: domainId) else {
             return
         }
+        let ext = connection.remoteObjectProxy as! ExtXPC
+        await ext.detach()
         connection.invalidationHandler = nil
         connection.interruptionHandler = nil
         connection.invalidate()
-        logger.info("Tore Down XPC: \(domainId)")
+        logger.info("Tore down XPC: \(domainId)")
     }
 }

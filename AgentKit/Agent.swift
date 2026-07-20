@@ -6,7 +6,7 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Agent")
 
-public final class Agent: Sendable, AppXPC {
+public final class Agent: Sendable, AgentXPC {
     public static let shared: Agent = Agent(
         domainDbConfig: nil,
         sharedUrl: SSHadow.groupUrl,
@@ -77,47 +77,89 @@ public final class Agent: Sendable, AppXPC {
     }
 
     public func handle(_ request: AgentRequest) async -> AgentResult {
+        await mapError(domainId: request.domainId) {
+            switch request {
+            case .name(let request):
+                try await .name(self.name(request))
+            case .child(let request):
+                try await .child(self.child(request))
+            case .parent(let request):
+                try await .parent(self.parent(request))
+            case .item(let request):
+                try await .item(self.item(request))
+            case .list(let request):
+                try await .list(self.list(request))
+            case .currentAnchor(let request):
+                try await .currentAnchor(self.currentAnchor(request))
+            case .changes(let request):
+                try await .changes(self.changes(request))
+            case .setAttributes(let request):
+                try await .setAttributes(self.setAttributes(request))
+            case .createSymlink(let request):
+                try await .createSymlink(self.createSymlink(request))
+            case .createDirectory(let request):
+                try await .createDirectory(self.createDirectory(request))
+            case .move(let request):
+                try await .move(self.move(request))
+            case .removeFile(let request):
+                try await .removeFile(self.removeFile(request))
+            case .removeDirectory(let request):
+                try await .removeDirectory(self.removeDirectory(request))
+            case .limits(let request):
+                try await .limits(self.limits(request))
+            }
+        }
+    }
+
+    public func handle(
+        _ data: Data,
+        progressEndpoint: NSXPCListenerEndpoint
+    ) async throws -> Data {
+        let request: AgentProgressRequest
         do {
-            let response: AgentResponse =
-                switch request {
-                case .name(let request):
-                    try await .name(name(request))
-                case .child(let request):
-                    try await .child(child(request))
-                case .parent(let request):
-                    try await .parent(parent(request))
-                case .item(let request):
-                    try await .item(item(request))
-                case .list(let request):
-                    try await .list(list(request))
-                case .currentAnchor(let request):
-                    try await .currentAnchor(currentAnchor(request))
-                case .changes(let request):
-                    try await .changes(changes(request))
-                case .setAttributes(let request):
-                    try await .setAttributes(setAttributes(request))
-                case .createSymlink(let request):
-                    try await .createSymlink(createSymlink(request))
-                case .createDirectory(let request):
-                    try await .createDirectory(createDirectory(request))
-                case .move(let request):
-                    try await .move(move(request))
-                case .removeFile(let request):
-                    try await .removeFile(removeFile(request))
-                case .removeDirectory(let request):
-                    try await .removeDirectory(removeDirectory(request))
-                case .limits(let request):
-                    try await .limits(limits(request))
-                case .upload(let request):
-                    try await .upload(upload(request))
-                case .download(let request):
-                    try await .download(download(request))
-                case .stream(let request):
-                    try await .stream(stream(request))
-                }
-            return .success(response)
+            request = try AgentProgressRequest.decoded(from: data)
+        } catch {
+            logger.error("Failed to decode request: \(error)")
+            return try JSONEncoder().encode(
+                AgentResult.failure(AgentError(from: error))
+            )
+        }
+        logger.debug("Request: \(request)")
+        let result = await handle(request, progressEndpoint: progressEndpoint)
+        logger.debug("Result: \(result)")
+        return try result.encoded()
+    }
+
+    public func handle(
+        _ request: AgentProgressRequest,
+        progressEndpoint: NSXPCListenerEndpoint
+    ) async -> AgentResult {
+        await mapError(domainId: request.domainId) {
+            switch request {
+            case .upload(let request):
+                try await .upload(
+                    self.upload(request, progressEndpoint: progressEndpoint)
+                )
+            case .download(let request):
+                try await .download(
+                    self.download(request, progressEndpoint: progressEndpoint)
+                )
+            case .stream(let request):
+                try await .stream(
+                    self.stream(request, progressEndpoint: progressEndpoint)
+                )
+            }
+        }
+    }
+    
+    private func mapError(
+        domainId: UUID,
+        _ operation: () async throws -> AgentResponse
+    ) async -> AgentResult {
+        do {
+            return .success(try await operation())
         } catch SSHError.connectionFailed {
-            await sessions.disconnect(id: request.domainId)
+            await sessions.disconnect(id: domainId)
             return .failure(.serverUnreachable)
         } catch SSHError.authenticationFailed {
             return .failure(.notAuthenticated)
@@ -300,13 +342,11 @@ public final class Agent: Sendable, AppXPC {
     }
 
     func upload(
-        _ request: UploadRequest
+        _ request: UploadRequest,
+        progressEndpoint: NSXPCListenerEndpoint
     ) async throws -> UploadResponse {
         let session = try await sessions.connect(id: request.domainId)
-
-        let sync = XPCProgressPublisher(
-            endpoint: request.progressEndpoint
-        )
+        let sync = XPCProgressPublisher(endpoint: progressEndpoint)
         let item = try await session.upload(
             parentId: NSFileProviderItemIdentifier(request.parentId),
             name: request.name,
@@ -318,13 +358,11 @@ public final class Agent: Sendable, AppXPC {
     }
 
     func download(
-        _ request: DownloadRequest
+        _ request: DownloadRequest,
+        progressEndpoint: NSXPCListenerEndpoint
     ) async throws -> DownloadResponse {
         let session = try await sessions.connect(id: request.domainId)
-
-        let sync = XPCProgressPublisher(
-            endpoint: request.progressEndpoint
-        )
+        let sync = XPCProgressPublisher(endpoint: progressEndpoint)
         let (url, item) = try await session.download(
             itemId: NSFileProviderItemIdentifier(request.itemId),
             progress: sync.progress
@@ -333,13 +371,11 @@ public final class Agent: Sendable, AppXPC {
     }
 
     func stream(
-        _ request: StreamRequest
+        _ request: StreamRequest,
+        progressEndpoint: NSXPCListenerEndpoint
     ) async throws -> StreamResponse {
         let session = try await sessions.connect(id: request.domainId)
-
-        let sync = XPCProgressPublisher(
-            endpoint: request.progressEndpoint
-        )
+        let sync = XPCProgressPublisher(endpoint: progressEndpoint)
         let (url, range) = try await session.stream(
             itemId: NSFileProviderItemIdentifier(request.itemId),
             range: request.range,
