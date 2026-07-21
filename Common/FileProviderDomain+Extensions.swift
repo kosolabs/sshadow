@@ -44,12 +44,25 @@ extension NSFileProviderDomain {
 
     public func add() async throws {
         try await NSFileProviderManager.add(self)
-        logger.info("Added: \(self)")
+        logger.info("Added domain: \(self)")
     }
 
     public func remove() async throws {
         try await NSFileProviderManager.remove(self)
-        logger.info("Removed: \(self)")
+        logger.info("Removed domain: \(self)")
+    }
+
+    public func suspend(
+        reason: String,
+        options: NSFileProviderManager.DisconnectionOptions = []
+    ) async throws {
+        try await manager.disconnect(reason: reason, options: options)
+        logger.info("Suspended sync: \(self)")
+    }
+    
+    public func resume() async throws {
+        try await manager.reconnect()
+        logger.info("Resumed sync: \(self)")
     }
 
     public override var description: String {

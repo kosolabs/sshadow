@@ -5,37 +5,13 @@ import UniformTypeIdentifiers
 
 private let logger = Logger(category: "Extension")
 
-private func disconnect(domain: NSFileProviderDomain) {
-    Task {
-        do {
-            try await domain.manager.disconnect(
-                reason:
-                    "SSHadow needs to be running in order to sync this volume.",
-                options: .temporary
-            )
-            logger.info("Disconnected \(domain)")
-        } catch {
-            logger.error("Failed to disconnect \(domain): \(error)")
-        }
-    }
-}
-
 public class Extension: NSObject, NSFileProviderReplicatedExtension,
     NSFileProviderPartialContentFetching, NSFileProviderServicing
 {
     private let agent: AgentClient
-    private let invalidated: Flag = Flag(false)
 
     required public init(domain: NSFileProviderDomain) {
-        let invalidated = self.invalidated
-        agent = AgentClient(
-            domainId: domain.id,
-            cancellationHandler: { _ in
-                if !invalidated.isSet {
-                    disconnect(domain: domain)
-                }
-            }
-        )
+        agent = AgentClient(domain: domain)
         logger.debug("Init \(domain)")
         super.init()
     }
@@ -45,9 +21,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         super.init()
     }
 
-    public func invalidate() {
-        invalidated.set()
-    }
+    public func invalidate() {}
 
     func item(
         for identifier: NSFileProviderItemIdentifier,

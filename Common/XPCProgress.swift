@@ -2,39 +2,44 @@ import Foundation
 
 private let logger = Logger(category: "XPCProgress")
 
-private enum XPCProgressUpdate: Codable {
-    case totalUnitCount(Int64)
-    case completedUnitCount(Int64)
+@objc private protocol XPCProgressProtocol {
+    func setTotalUnitCount(_ count: Int64)
+    func setCompletedUnitCount(_ count: Int64)
 }
 
 public final class XPCProgressPublisher {
     public let progress: Progress
-    private let session: XPCSession?
+    private let connection: NSXPCConnection
     private let observers: [NSKeyValueObservation]
 
-    public init(progress: Progress = Progress(), endpoint: XPCEndpoint) {
-        let session = try? XPCSession(endpoint: endpoint) { error in
-            progress.cancel()
-        }
+    public init(
+        progress: Progress = Progress(),
+        endpoint: NSXPCListenerEndpoint
+    ) {
+        let connection = NSXPCConnection(listenerEndpoint: endpoint)
+        connection.remoteObjectInterface = NSXPCInterface(
+            with: XPCProgressProtocol.self
+        )
+        connection.invalidationHandler = { progress.cancel() }
+        connection.interruptionHandler = { progress.cancel() }
+        connection.resume()
+
+        let sink = connection.remoteObjectProxy as? XPCProgressProtocol
 
         var observers: [NSKeyValueObservation] = []
         observers.append(
             progress.observe(\.totalUnitCount) { p, _ in
-                try? session?.send(
-                    XPCProgressUpdate.totalUnitCount(p.totalUnitCount)
-                )
+                sink?.setTotalUnitCount(p.totalUnitCount)
             }
         )
         observers.append(
             progress.observe(\.completedUnitCount) { p, _ in
-                try? session?.send(
-                    XPCProgressUpdate.completedUnitCount(p.completedUnitCount)
-                )
+                sink?.setCompletedUnitCount(p.completedUnitCount)
             }
         )
 
         self.progress = progress
-        self.session = session
+        self.connection = connection
         self.observers = observers
     }
 
@@ -42,37 +47,54 @@ public final class XPCProgressPublisher {
         for observer in observers {
             observer.invalidate()
         }
-        session?.cancel(reason: "Complete")
+        connection.invalidate()
     }
 }
 
-public final class XPCProgressSubscriber {
-    private let listener: XPCListener
+public final class XPCProgressSubscriber: NSObject, NSXPCListenerDelegate,
+    XPCProgressProtocol
+{
+    private let progress: Progress
+    private let listener: NSXPCListener
 
     public init(progress: Progress) {
-        let listener = XPCListener(targetQueue: nil) { request in
-            request.accept { message in
-                if let update = try? message.decode(as: XPCProgressUpdate.self)
-                {
-                    switch update {
-                    case .totalUnitCount(let totalUnitCount):
-                        progress.totalUnitCount = totalUnitCount
-                    case .completedUnitCount(let completedUnitCount):
-                        progress.completedUnitCount = completedUnitCount
-                    }
-                }
-                return nil
-            }
-        }
+        self.progress = progress
+        self.listener = NSXPCListener.anonymous()
+        super.init()
 
         progress.cancellationHandler = {
-            listener.cancel()
+            self.listener.invalidate()
         }
 
-        self.listener = listener
+        listener.delegate = self
+        listener.resume()
     }
 
-    public var endpoint: XPCEndpoint {
-        self.listener.endpoint
+    deinit {
+        listener.invalidate()
+    }
+
+    public var endpoint: NSXPCListenerEndpoint {
+        listener.endpoint
+    }
+
+    public func listener(
+        _ listener: NSXPCListener,
+        shouldAcceptNewConnection connection: NSXPCConnection
+    ) -> Bool {
+        connection.exportedInterface = NSXPCInterface(
+            with: XPCProgressProtocol.self
+        )
+        connection.exportedObject = self
+        connection.resume()
+        return true
+    }
+
+    public func setTotalUnitCount(_ count: Int64) {
+        progress.totalUnitCount = count
+    }
+
+    public func setCompletedUnitCount(_ count: Int64) {
+        progress.completedUnitCount = count
     }
 }

@@ -122,7 +122,7 @@ public class ConnectionConfigModel: CustomStringConvertible {
         try await DomainXPCBroker.shared.broker(domain)
 
         self.enabled = true
-        logger.info("Enabled: \(self)")
+        logger.info("Enabled profile: \(self)")
     }
 
     public func disable() async throws {
@@ -131,7 +131,7 @@ public class ConnectionConfigModel: CustomStringConvertible {
         try await Agent.shared.forget(id)
 
         self.enabled = false
-        logger.info("Disabled: \(self)")
+        logger.info("Disabled profile: \(self)")
     }
 
     public func poll() async throws {
