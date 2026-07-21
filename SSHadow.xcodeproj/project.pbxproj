@@ -229,7 +229,6 @@
 		738D63AC2F3FD1F100FED311 /* ExtensionKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ExtensionKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7393A9C02F3134FB00213730 /* Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Extension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		739BF6982FEDB73800C60205 /* Justfile */ = {isa = PBXFileReference; lastKnownFileType = text; path = Justfile; sourceTree = "<group>"; };
-		73B13EBC2F7DF9440047EBA7 /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -286,11 +285,6 @@
 				73A54A682F2DE36A0097064D /* Exceptions for "SSHadow" folder in "SSHadow" target */,
 			);
 			path = SSHadow;
-			sourceTree = "<group>";
-		};
-		73781BCB3000343800EEA1F4 /* docs */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = docs;
 			sourceTree = "<group>";
 		};
 		73799A3F2F9811DD00A15109 /* AgentKit */ = {
@@ -425,10 +419,8 @@
 				7381F0C32F22B3C5005F4099 /* Frameworks */,
 				7334708A2F22037100B8181D /* Products */,
 				73AD67942FFEC25100733D75 /* ci_scripts */,
-				73781BCB3000343800EEA1F4 /* docs */,
 				7322A9212F2857C700D8117D /* SSHadow.icon */,
 				7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */,
-				73B13EBC2F7DF9440047EBA7 /* CLAUDE.md */,
 				73781BC9300029A600EEA1F4 /* logfilter.jq */,
 				739BF6982FEDB73800C60205 /* Justfile */,
 			);
