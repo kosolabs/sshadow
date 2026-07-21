@@ -24,7 +24,6 @@ class TestSandbox {
     let shared: URL
     let domain: NSFileProviderDomain
 
-    private var listener: XPCListener?
     private var connection: NSXPCConnection?
     private var _agent: Agent?
     private var _client: AgentClient?
@@ -54,7 +53,6 @@ class TestSandbox {
 
     deinit {
         self.connection?.invalidate()
-        self.listener?.cancel()
         try? FileManager.default.removeItem(at: root)
     }
 
@@ -124,11 +122,6 @@ class TestSandbox {
             }
 
             let agent = try await agent
-
-            let listener = XPCListener(targetQueue: nil) { request in
-                agent.accept(request: request)
-            }
-            self.listener = listener
 
             let client = AgentClient(domain: domain, sharedUrl: shared)
 

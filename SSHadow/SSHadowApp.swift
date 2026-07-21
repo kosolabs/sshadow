@@ -21,32 +21,12 @@ private func reconnectAllDomains() {
     }
 }
 
-@MainActor
-private class AppXPCService {
-    static let shared = AppXPCService()
-
-    private let listener: XPCListener
-
-    private init() {
-        do {
-            listener = try XPCListener(service: SSHadow.appServiceName) {
-                request in
-                Agent.shared.accept(request: request)
-            }
-        } catch {
-            logger.fatal("Failed to create XPC listener: \(error)")
-        }
-        logger.info("App XPC: listening on \(SSHadow.appServiceName)")
-    }
-}
-
 @main
 struct SSHadowApp: App {
     private let modelContainer: ModelContainer
     @State private var coordinator = ConnectionCoordinator()
 
     init() {
-        _ = AppXPCService.shared
         reconnectAllDomains()
         modelContainer = try! AppDB.getModelContainer(
             config: ModelConfiguration(

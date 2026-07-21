@@ -39,27 +39,6 @@ public final class Agent: Sendable, AgentXPC {
         )
     }
 
-    public func accept(
-        request: XPCListener.IncomingSessionRequest,
-    ) -> XPCListener.IncomingSessionRequest.Decision {
-        return request.accept { message in
-            let agentRequest: AgentRequest
-            do {
-                agentRequest = try message.decode(as: AgentRequest.self)
-            } catch {
-                logger.error("Failed to decode request: \(error)")
-                return AgentResult.failure(AgentError(from: error))
-            }
-            Task {
-                logger.debug("Request: \(agentRequest)")
-                let agentResult = await self.handle(agentRequest)
-                logger.debug("Result: \(agentResult)")
-                message.reply(agentResult)
-            }
-            return nil
-        }
-    }
-
     public func handle(_ data: Data) async throws -> Data {
         let request: AgentRequest
         do {
