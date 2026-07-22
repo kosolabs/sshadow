@@ -92,8 +92,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "73799A472F9811DD00A15109"
-               BuildableName = "AgentKitTests.xctest"
-               BlueprintName = "AgentKitTests"
+               BuildableName = "CoreKitTests.xctest"
+               BlueprintName = "CoreKitTests"
                ReferencedContainer = "container:SSHadow.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -153,8 +153,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "73799A472F9811DD00A15109"
-               BuildableName = "AgentKitTests.xctest"
-               BlueprintName = "AgentKitTests"
+               BuildableName = "CoreKitTests.xctest"
+               BlueprintName = "CoreKitTests"
                ReferencedContainer = "container:SSHadow.xcodeproj">
             </BuildableReference>
          </TestableReference>

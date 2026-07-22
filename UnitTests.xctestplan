@@ -30,7 +30,7 @@
       "target" : {
         "containerPath" : "container:SSHadow.xcodeproj",
         "identifier" : "73799A472F9811DD00A15109",
-        "name" : "AgentKitTests"
+        "name" : "CoreKitTests"
       }
     }
   ],

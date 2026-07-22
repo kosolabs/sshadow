@@ -78,14 +78,14 @@ actor DomainDB {
         if let child = parent.child(named: name) {
             return Item(from: child)
         }
-        throw AgentError.itemNotFound
+        throw CoreError.itemNotFound
     }
 
     func parent(of id: NSFileProviderItemIdentifier) throws -> Item {
         if let parent = try model(for: id).parent {
             return Item(from: parent)
         }
-        throw AgentError.itemNotFound
+        throw CoreError.itemNotFound
     }
 
     func path(for id: NSFileProviderItemIdentifier) throws -> String {
@@ -206,7 +206,7 @@ actor DomainDB {
         if let model = try modelContext.fetch(descriptor).first {
             return model
         }
-        throw AgentError.itemNotFound(id)
+        throw CoreError.itemNotFound(id)
     }
 
     @discardableResult

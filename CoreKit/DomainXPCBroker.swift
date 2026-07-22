@@ -14,8 +14,8 @@ public final class DomainXPCBroker {
 
         let connection = try await domain.service.fileProviderConnection()
 
-        connection.exportedInterface = NSXPCInterface(with: AgentXPC.self)
-        connection.exportedObject = Agent.shared
+        connection.exportedInterface = NSXPCInterface(with: CoreXPC.self)
+        connection.exportedObject = CoreService.shared
         connection.remoteObjectInterface = NSXPCInterface(with: ExtXPC.self)
         connection.invalidationHandler = { [weak self] in
             logger.info("Invalidated XPC: \(domain.id)")

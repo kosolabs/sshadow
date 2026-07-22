@@ -5,7 +5,7 @@ import Testing
 @testable import Common
 
 @Suite(.serialized)
-struct AgentClientTests {
+struct CoreClientTests {
     @Test func nameAndChildAndParentSucceed() async throws {
         let sandbox = TestSandbox()
         try sandbox.createFile(

@@ -8,16 +8,16 @@ private let logger = Logger(category: "Extension")
 public class Extension: NSObject, NSFileProviderReplicatedExtension,
     NSFileProviderPartialContentFetching, NSFileProviderServicing
 {
-    private let agent: AgentClient
+    private let client: CoreClient
 
     required public init(domain: NSFileProviderDomain) {
-        agent = AgentClient(domain: domain)
+        client = CoreClient(domain: domain)
         logger.debug("Init \(domain)")
         super.init()
     }
 
-    public init(agent: AgentClient) {
-        self.agent = agent
+    public init(client: CoreClient) {
+        self.client = client
         super.init()
     }
 
@@ -26,7 +26,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     func item(
         for identifier: NSFileProviderItemIdentifier,
     ) async throws -> FPItem {
-        try await FPItem(item: agent.item(for: identifier))
+        try await FPItem(item: client.item(for: identifier))
     }
 
     public func item(
@@ -90,7 +90,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> (URL, NSFileProviderItem) {
-        let (url, item) = try await agent.download(
+        let (url, item) = try await client.download(
             itemId: itemIdentifier,
             progress: progress
         )
@@ -141,7 +141,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         progress.kind = .file
         progress.fileOperationKind = .downloading
 
-        let (url, fetchedRange) = try await agent.stream(
+        let (url, fetchedRange) = try await client.stream(
             itemId: itemIdentifier,
             range: requestedRange.asRange(),
             progress: progress
@@ -200,7 +200,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             remaining.subtract([.contents])
 
             steps.add {
-                createdItem = try await self.agent.createSymlink(
+                createdItem = try await self.client.createSymlink(
                     parentId: parentId,
                     name: filename,
                     target: target
@@ -210,7 +210,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
         if item.contentType == .folder {
             steps.add {
-                createdItem = try await self.agent.createDirectory(
+                createdItem = try await self.client.createDirectory(
                     parentId: parentId,
                     name: filename
                 )
@@ -219,7 +219,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
         if let url = url, remaining.intersects(with: .writeFields) {
             let fileSize = try FileManager.default.size(of: url)
-            let limits = try await agent.limits()
+            let limits = try await client.limits()
             let chunkSize = limits.maxWriteLength
             let fileTransferUnits = Int64(
                 (fileSize + chunkSize - 1) / chunkSize
@@ -230,7 +230,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             remaining.subtract([.fileSystemFlags, .contents])
 
             steps.add(weight: fileTransferUnits) { subprogress in
-                createdItem = try await self.agent.upload(
+                createdItem = try await self.client.upload(
                     parentId: parentId,
                     name: filename,
                     file: url,
@@ -306,7 +306,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             }
 
             let fileSize = try FileManager.default.size(of: newContents)
-            let limits = try await agent.limits()
+            let limits = try await client.limits()
             let chunkSize = limits.maxWriteLength
             let fileTransferUnits = Int64(
                 (fileSize + chunkSize - 1) / chunkSize
@@ -319,13 +319,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             steps.add(weight: fileTransferUnits) { subprogress in
                 // Upload to the file's current parent/name; rename/move
                 // happens in a later step if .nameFields is present.
-                let currentParent = try await self.agent.parent(
+                let currentParent = try await self.client.parent(
                     of: item.itemIdentifier
                 )
-                let currentName = try await self.agent.name(
+                let currentName = try await self.client.name(
                     of: item.itemIdentifier
                 )
-                _ = try await self.agent.upload(
+                _ = try await self.client.upload(
                     parentId: currentParent,
                     name: currentName,
                     file: newContents,
@@ -338,7 +338,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         if remaining.intersects(with: .nameFields) {
             remaining.subtract(.nameFields)
             steps.add {
-                try await self.agent.move(
+                try await self.client.move(
                     item.itemIdentifier,
                     toParent: item.parentId,
                     name: item.filename
@@ -398,11 +398,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     ) async throws {
         logger.debug("Delete \(identifier.desc)")
         return try await progress.withChild {
-            let item = try await agent.item(for: identifier)
+            let item = try await client.item(for: identifier)
             if item.kind == .folder {
-                try await agent.removeDirectory(for: identifier)
+                try await client.removeDirectory(for: identifier)
             } else {
-                try await agent.removeFile(for: identifier)
+                try await client.removeFile(for: identifier)
             }
         }
     }
@@ -413,7 +413,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     ) throws -> NSFileProviderEnumerator {
         logger.debug("Create enumerator for \(containerItemIdentifier.desc)")
         return Enumerator(
-            agent: agent,
+            client: client,
             itemIdentifier: containerItemIdentifier
         )
     }
@@ -422,8 +422,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         _ item: NSFileProviderItem,
         fields: NSFileProviderItemFields
     ) async throws {
-        try await agent.setAttributes(
-            for: agent.child(of: item.parentId, name: item.filename),
+        try await client.setAttributes(
+            for: client.child(of: item.parentId, name: item.filename),
             flags: fields.contains(.fileSystemFlags)
                 ? .from(item.fileSystemFlags) : nil,
             accessTime: fields.contains(.lastUsedDate)
@@ -439,7 +439,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             @escaping ([any NSFileProviderServiceSource]?, (any Error)?) -> Void
     ) -> Progress {
         let progress = Progress(totalUnitCount: 1)
-        completionHandler([agent], nil)
+        completionHandler([client], nil)
         progress.completedUnitCount = 1
         return progress
     }
@@ -460,9 +460,9 @@ private func withProgress<T>(
             let result = try await perform(progress)
             onSuccess(result)
         } catch {
-            let agentError = AgentError(from: error)
-            trace.log(logger, error: agentError)
-            onError(agentError.asNSError)
+            let coreError = CoreError(from: error)
+            trace.log(logger, error: coreError)
+            onError(coreError.asNSError)
         }
     }
     return progress

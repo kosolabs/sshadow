@@ -44,7 +44,7 @@ actor SessionManager {
         }
 
         guard let config = configs[id] else {
-            throw AgentError.profileNotFound
+            throw CoreError.profileNotFound
         }
 
         if let task = connectTasks[id] {

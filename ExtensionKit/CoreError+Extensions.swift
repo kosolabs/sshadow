@@ -1,10 +1,10 @@
 import Common
 import FileProvider
 
-extension AgentError {
+extension CoreError {
     public var asNSError: any Error {
         switch self {
-        case .agentUnreachable,
+        case .serviceUnreachable,
             .remotePathNotFound,
             .unexpectedResponse,
             .serverUnreachable:

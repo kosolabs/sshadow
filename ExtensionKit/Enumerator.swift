@@ -4,15 +4,15 @@ import FileProvider
 private let logger = Logger(category: "Enumerator")
 
 public class Enumerator: NSObject, NSFileProviderEnumerator {
-    private let agent: AgentClient
+    private let client: CoreClient
     private let itemIdentifier: NSFileProviderItemIdentifier
 
     init(
-        agent: AgentClient,
+        client: CoreClient,
         itemIdentifier: NSFileProviderItemIdentifier
     ) {
         logger.debug("Init \(itemIdentifier.desc)")
-        self.agent = agent
+        self.client = client
         self.itemIdentifier = itemIdentifier
         super.init()
     }
@@ -28,7 +28,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         let trace = StackTrace.capture()
 
         Task {
-            do throws(AgentError) {
+            do throws(CoreError) {
                 let upTo = try await enumerateItems(startingAt: page) { items in
                     observer.didEnumerate(items)
                 }
@@ -43,14 +43,14 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
     func enumerateItems(
         startingAt page: NSFileProviderPage,
         yield: @Sendable ([any NSFileProviderItemProtocol]) -> Void,
-    ) async throws(AgentError) -> NSFileProviderPage? {
+    ) async throws(CoreError) -> NSFileProviderPage? {
         logger.debug("Enumerate \(itemIdentifier.desc)")
 
         if itemIdentifier == .workingSet {
             return nil
         }
 
-        let entries = try await agent.list(for: itemIdentifier)
+        let entries = try await client.list(for: itemIdentifier)
         for entry in entries {
             let item = FPItem(item: entry)
             yield([item])
@@ -67,7 +67,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         let trace = StackTrace.capture()
 
         Task {
-            do throws(AgentError) {
+            do throws(CoreError) {
                 let nextAnchor = try await enumerateChanges(
                     from: anchor,
                     update: { item in
@@ -92,8 +92,8 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         from anchor: NSFileProviderSyncAnchor,
         update: @Sendable (any NSFileProviderItemProtocol) -> Void,
         delete: @Sendable (NSFileProviderItemIdentifier) -> Void
-    ) async throws(AgentError) -> NSFileProviderSyncAnchor {
-        let (nextAnchor, changes) = try await agent.changes(
+    ) async throws(CoreError) -> NSFileProviderSyncAnchor {
+        let (nextAnchor, changes) = try await client.changes(
             since: anchor.value
         )
 
@@ -116,8 +116,8 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         let trace = StackTrace.capture()
 
         Task {
-            do throws(AgentError) {
-                let anchor = try await agent.currentAnchor()
+            do throws(CoreError) {
+                let anchor = try await client.currentAnchor()
                 completionHandler(NSFileProviderSyncAnchor(anchor))
             } catch {
                 trace.log(logger, error: error)

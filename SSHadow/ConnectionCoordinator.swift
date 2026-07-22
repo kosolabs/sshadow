@@ -1,5 +1,5 @@
-import AgentKit
 import Common
+import CoreKit
 import Foundation
 
 @MainActor
@@ -11,7 +11,7 @@ final class ConnectionCoordinator {
     var isAnyBusy: Bool {
         !tasks.isEmpty
     }
-    
+
     var isAnyError: Bool {
         !errors.isEmpty
     }

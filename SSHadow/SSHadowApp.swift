@@ -1,5 +1,5 @@
-import AgentKit
 import Common
+import CoreKit
 import FileProvider
 import SwiftData
 import SwiftUI
@@ -11,7 +11,7 @@ private func reconnectAllDomains() {
         for config in await AppDB.shared.enabledConfigs() {
             let domain = config.domain
             do {
-                try await Agent.shared.register(config: config)
+                try await CoreService.shared.register(config: config)
                 try await domain.resume()
                 try await DomainXPCBroker.shared.broker(domain)
             } catch {

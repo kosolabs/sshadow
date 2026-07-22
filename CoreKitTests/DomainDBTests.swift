@@ -4,7 +4,7 @@ import Foundation
 import SwiftData
 import Testing
 
-@testable import AgentKit
+@testable import CoreKit
 
 extension DomainDB {
     fileprivate func exists(id: NSFileProviderItemIdentifier) throws -> Bool {
@@ -46,7 +46,7 @@ struct DomainDBTests {
     @Test func nameThrowsForUnknownId() async throws {
         let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+        await #expect(throws: CoreError.itemNotFound(unknownId)) {
             try await db.name(of: unknownId)
         }
     }
@@ -67,7 +67,7 @@ struct DomainDBTests {
     @Test func parentThrowsForUnknownId() async throws {
         let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+        await #expect(throws: CoreError.itemNotFound(unknownId)) {
             try await db.parent(of: unknownId)
         }
     }
@@ -81,7 +81,7 @@ struct DomainDBTests {
     }
 
     @Test func childWithFailThrowsForMissingItem() async throws {
-        await #expect(throws: AgentError.itemNotFound) {
+        await #expect(throws: CoreError.itemNotFound) {
             try await db.child(name: "missing.txt")
         }
     }
@@ -134,7 +134,7 @@ struct DomainDBTests {
     @Test func pathThrowsForUnknownId() async throws {
         let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+        await #expect(throws: CoreError.itemNotFound(unknownId)) {
             try await db.path(for: unknownId)
         }
     }
@@ -189,7 +189,7 @@ struct DomainDBTests {
     @Test func moveThrowsForUnknownId() async throws {
         let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+        await #expect(throws: CoreError.itemNotFound(unknownId)) {
             try await db.move(
                 unknownId,
                 toParent: .rootContainer,
@@ -244,7 +244,7 @@ struct DomainDBTests {
     @Test func removeThrowsForUnknownId() async throws {
         let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+        await #expect(throws: CoreError.itemNotFound(unknownId)) {
             try await db.remove(unknownId)
         }
     }
@@ -299,7 +299,7 @@ struct DomainDBTests {
     @Test func setAttributesThrowsForUnknownId() async throws {
         let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+        await #expect(throws: CoreError.itemNotFound(unknownId)) {
             try await db.setAttributes(for: unknownId, flags: .rw)
         }
     }
@@ -315,7 +315,7 @@ struct DomainDBTests {
     @Test func markEnumeratedThrowsForUnknownId() async throws {
         let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+        await #expect(throws: CoreError.itemNotFound(unknownId)) {
             try await db.markEnumerated(unknownId)
         }
     }
@@ -375,7 +375,7 @@ struct DomainDBTests {
     @Test func refreshThrowsForUnknownId() async throws {
         let unknownId = NSFileProviderItemIdentifier(UUID().uuidString)
 
-        await #expect(throws: AgentError.itemNotFound(unknownId)) {
+        await #expect(throws: CoreError.itemNotFound(unknownId)) {
             try await db.refresh(
                 unknownId,
                 size: 1,

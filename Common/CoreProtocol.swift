@@ -1,14 +1,14 @@
 import FileProvider
 import Foundation
 
-private let logger = Logger(category: "AgentProtocol")
+private let logger = Logger(category: "CoreProtocol")
 
 @objc public protocol ExtXPC {
     func attach() async
     func detach() async
 }
 
-@objc public protocol AgentXPC {
+@objc public protocol CoreXPC {
     func handle(_ data: Data) async throws -> Data
     func handle(
         _ data: Data,
@@ -21,7 +21,7 @@ public enum OnExists: Message, PrettyDescribable {
     case succeed
 }
 
-public enum AgentRequest: Message, PrettyDescribable {
+public enum CoreRequest: Message, PrettyDescribable {
     public var domainId: UUID {
         switch self {
         case .name(let request):
@@ -74,12 +74,12 @@ public enum AgentRequest: Message, PrettyDescribable {
         try JSONEncoder().encode(self)
     }
 
-    public static func decoded(from data: Data) throws -> AgentRequest {
-        try JSONDecoder().decode(AgentRequest.self, from: data)
+    public static func decoded(from data: Data) throws -> CoreRequest {
+        try JSONDecoder().decode(CoreRequest.self, from: data)
     }
 }
 
-public enum AgentProgressRequest: Message, PrettyDescribable {
+public enum CoreProgressRequest: Message, PrettyDescribable {
     public var domainId: UUID {
         switch self {
         case .upload(let request):
@@ -99,16 +99,16 @@ public enum AgentProgressRequest: Message, PrettyDescribable {
         try JSONEncoder().encode(self)
     }
 
-    public static func decoded(from data: Data) throws -> AgentProgressRequest {
-        try JSONDecoder().decode(AgentProgressRequest.self, from: data)
+    public static func decoded(from data: Data) throws -> CoreProgressRequest {
+        try JSONDecoder().decode(CoreProgressRequest.self, from: data)
     }
 }
 
-public enum AgentResult: Message, PrettyDescribable {
-    case success(AgentResponse)
-    case failure(AgentError)
+public enum CoreResult: Message, PrettyDescribable {
+    case success(CoreResponse)
+    case failure(CoreError)
 
-    public func get() throws -> AgentResponse {
+    public func get() throws -> CoreResponse {
         switch self {
         case .success(let response): return response
         case .failure(let error): throw error
@@ -119,12 +119,12 @@ public enum AgentResult: Message, PrettyDescribable {
         try JSONEncoder().encode(self)
     }
 
-    public static func decoded(from data: Data) throws -> AgentResult {
-        try JSONDecoder().decode(AgentResult.self, from: data)
+    public static func decoded(from data: Data) throws -> CoreResult {
+        try JSONDecoder().decode(CoreResult.self, from: data)
     }
 }
 
-public enum AgentResponse: Message, PrettyDescribable {
+public enum CoreResponse: Message, PrettyDescribable {
     case name(NameResponse)
     case child(ChildResponse)
     case parent(ParentResponse)
@@ -144,8 +144,8 @@ public enum AgentResponse: Message, PrettyDescribable {
     case stream(StreamResponse)
 }
 
-public enum AgentError: Message, PrettyDescribable, Error {
-    case agentUnreachable
+public enum CoreError: Message, PrettyDescribable, Error {
+    case serviceUnreachable
     case profileNotFound
     case userCancelled
     case permissionDenied
@@ -157,19 +157,19 @@ public enum AgentError: Message, PrettyDescribable, Error {
     case unexpectedResponse
     case unknown(domain: String, code: Int, message: String)
 
-    public static var itemNotFound: AgentError {
+    public static var itemNotFound: CoreError {
         .itemNotFound(nil)
     }
 
     public static func itemNotFound(
         _ id: NSFileProviderItemIdentifier
-    ) -> AgentError {
+    ) -> CoreError {
         .itemNotFound(id.rawValue)
     }
 
     public init(from error: any Error) {
-        if let agentError = error as? AgentError {
-            self = agentError
+        if let coreError = error as? CoreError {
+            self = coreError
             return
         }
         logger.error("Unhandled error type: \(error)")
