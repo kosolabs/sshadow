@@ -42,7 +42,16 @@ cat >build/ExportOptions.plist <<EOF
     <key>teamID</key>
     <string>${TEAM_ID}</string>
     <key>signingStyle</key>
-    <string>automatic</string>
+    <string>manual</string>
+    <key>signingCertificate</key>
+    <string>Developer ID Application</string>
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>com.kosolabs.SSHadow</key>
+        <string>SSHadow Developer ID</string>
+        <key>com.kosolabs.SSHadow.Extension</key>
+        <string>SSHadow Extension Developer ID</string>
+    </dict>
 </dict>
 </plist>
 EOF
@@ -52,6 +61,10 @@ xcodebuild archive \
   -scheme "$APP_NAME" \
   -destination 'generic/platform=macOS' \
   -archivePath "$ARCHIVE_PATH" \
+  -allowProvisioningUpdates \
+  -authenticationKeyPath "$API_KEY_PATH" \
+  -authenticationKeyID "$APP_STORE_CONNECT_API_KEY_ID" \
+  -authenticationKeyIssuerID "$APP_STORE_CONNECT_API_ISSUER_ID" \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
 echo "Exporting Developer ID build of ${APP_NAME}..."
