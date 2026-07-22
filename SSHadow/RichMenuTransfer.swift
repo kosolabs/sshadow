@@ -1,4 +1,4 @@
-import AgentKit
+import CoreKit
 import SwiftUI
 
 struct RichMenuTransfer: View {

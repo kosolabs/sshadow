@@ -3,7 +3,7 @@ import FileProvider
 import Foundation
 import Testing
 
-@testable import AgentKit
+@testable import CoreKit
 
 private func file(size: UInt64 = 10 * File.defaultChunkSize) -> File {
     File(item: Item(

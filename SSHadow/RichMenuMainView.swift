@@ -1,5 +1,5 @@
-import AgentKit
 import Common
+import CoreKit
 import Foundation
 import SwiftData
 import SwiftUI
@@ -15,7 +15,7 @@ struct RichMenuMainView: View {
     @State private var isPolling = false
     @State private var isDebug = false
     @State private var isSettingsHovered = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             if !transfers.isEmpty {

@@ -5,7 +5,7 @@ import SwiftData
 import SwiftLibSSH
 import Testing
 
-@testable import AgentKit
+@testable import CoreKit
 
 extension TestSandbox {
     fileprivate func getSession() async throws -> Session {
@@ -473,7 +473,7 @@ struct SessionTests {
             )
             try sandbox.removeItem(at: "ghost")
 
-            await #expect(throws: AgentError.itemNotFound(ghost.id.rawValue)) {
+            await #expect(throws: CoreError.itemNotFound(ghost.id.rawValue)) {
                 try await session.list(for: ghost.id)
             }
         }
@@ -888,7 +888,7 @@ struct SessionTests {
             let itemId = try await session.child(name: "missing.txt")
             try sandbox.removeItem(at: "missing.txt")
 
-            await #expect(throws: AgentError.itemNotFound(itemId.rawValue)) {
+            await #expect(throws: CoreError.itemNotFound(itemId.rawValue)) {
                 try await session.setAttributes(for: itemId, flags: .rw)
             }
         }
@@ -940,7 +940,7 @@ struct SessionTests {
                     name: "already-exists"
                 )
             } throws: { error in
-                guard case AgentError.filenameCollision = error else {
+                guard case CoreError.filenameCollision = error else {
                     return false
                 }
                 return true
@@ -969,7 +969,7 @@ struct SessionTests {
             try sandbox.createFolder(at: "collide-dir")
             let session = try await sandbox.getSession()
 
-            await #expect(throws: AgentError.filenameCollision) {
+            await #expect(throws: CoreError.filenameCollision) {
                 _ = try await session.createDirectory(
                     parentId: .rootContainer,
                     name: "collide-dir"
@@ -1151,7 +1151,7 @@ struct SessionTests {
             let itemId = try await session.child(name: "missing.txt")
             try await session.removeFile(for: itemId)
 
-            await #expect(throws: AgentError.itemNotFound(itemId)) {
+            await #expect(throws: CoreError.itemNotFound(itemId)) {
                 try await session.removeFile(for: itemId)
             }
             let changes = try await session.reconcile()
@@ -1284,7 +1284,7 @@ struct SessionTests {
             let progress = Progress()
             progress.cancel()
 
-            await #expect(throws: AgentError.userCancelled) {
+            await #expect(throws: CoreError.userCancelled) {
                 _ = try await session.upload(
                     parentId: .rootContainer,
                     name: "cancelled.dat",
@@ -1379,7 +1379,7 @@ struct SessionTests {
             let progress = Progress()
             progress.cancel()
 
-            await #expect(throws: AgentError.userCancelled) {
+            await #expect(throws: CoreError.userCancelled) {
                 _ = try await session.download(
                     itemId: itemId,
                     progress: progress
@@ -1520,7 +1520,7 @@ struct SessionTests {
             let itemId = try await session.child(name: "missing.txt")
             try sandbox.removeItem(at: "missing.txt")
 
-            await #expect(throws: AgentError.itemNotFound(itemId.rawValue)) {
+            await #expect(throws: CoreError.itemNotFound(itemId.rawValue)) {
                 try await session.withFile(for: itemId, accessType: .readOnly) {
                     _ in
                 }

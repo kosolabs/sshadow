@@ -1,5 +1,5 @@
-import AgentKit
 import Common
+import CoreKit
 import FileProvider
 import Foundation
 import SwiftData
@@ -25,8 +25,8 @@ class TestSandbox {
     let domain: NSFileProviderDomain
 
     private var connection: NSXPCConnection?
-    private var _agent: Agent?
-    private var _client: AgentClient?
+    private var _service: CoreService?
+    private var _client: CoreClient?
 
     init() {
         self.id = UUID()
@@ -91,17 +91,17 @@ class TestSandbox {
         }
     }
 
-    var agent: Agent {
+    var service: CoreService {
         get async throws {
-            if let _agent {
-                return _agent
+            if let _service {
+                return _service
             }
 
             let memoryOnlyConfig = ModelConfiguration(
                 isStoredInMemoryOnly: true
             )
 
-            let agent = Agent(
+            let service = CoreService(
                 domainDbConfig: memoryOnlyConfig,
                 sharedUrl: shared,
                 signal: { _ in },
@@ -109,27 +109,25 @@ class TestSandbox {
                 pollInterval: nil
             )
 
-            try await agent.register(config: try config)
-            self._agent = agent
-            return agent
+            try await service.register(config: try config)
+            self._service = service
+            return service
         }
     }
 
-    var client: AgentClient {
+    var client: CoreClient {
         get async throws {
             if let _client {
                 return _client
             }
 
-            let agent = try await agent
-
-            let client = AgentClient(domain: domain, sharedUrl: shared)
+            let client = CoreClient(domain: domain, sharedUrl: shared)
 
             let connection = NSXPCConnection(
                 listenerEndpoint: try client.makeListenerEndpoint()
             )
-            connection.exportedInterface = NSXPCInterface(with: AgentXPC.self)
-            connection.exportedObject = agent
+            connection.exportedInterface = NSXPCInterface(with: CoreXPC.self)
+            connection.exportedObject = try await service
             connection.remoteObjectInterface = NSXPCInterface(with: ExtXPC.self)
             connection.resume()
             self.connection = connection

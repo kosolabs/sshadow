@@ -3,7 +3,7 @@ import FileProvider
 import Foundation
 import Testing
 
-@testable import AgentKit
+@testable import CoreKit
 
 private func item(size: UInt64) -> Item {
     Item(

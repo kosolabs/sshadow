@@ -4,10 +4,10 @@ import Foundation
 import SwiftData
 import SwiftLibSSH
 
-private let logger = Logger(category: "Agent")
+private let logger = Logger(category: "CoreService")
 
-public final class Agent: Sendable, AgentXPC {
-    public static let shared: Agent = Agent(
+public final class CoreService: Sendable, CoreXPC {
+    public static let shared: CoreService = CoreService(
         domainDbConfig: nil,
         sharedUrl: SSHadow.groupUrl,
         signal: { config in
@@ -40,13 +40,13 @@ public final class Agent: Sendable, AgentXPC {
     }
 
     public func handle(_ data: Data) async throws -> Data {
-        let request: AgentRequest
+        let request: CoreRequest
         do {
-            request = try AgentRequest.decoded(from: data)
+            request = try CoreRequest.decoded(from: data)
         } catch {
             logger.error("Failed to decode request: \(error)")
             return try JSONEncoder().encode(
-                AgentResult.failure(AgentError(from: error))
+                CoreResult.failure(CoreError(from: error))
             )
         }
         logger.debug("Request: \(request)")
@@ -55,7 +55,7 @@ public final class Agent: Sendable, AgentXPC {
         return try result.encoded()
     }
 
-    public func handle(_ request: AgentRequest) async -> AgentResult {
+    public func handle(_ request: CoreRequest) async -> CoreResult {
         await mapError(domainId: request.domainId) {
             switch request {
             case .name(let request):
@@ -94,13 +94,13 @@ public final class Agent: Sendable, AgentXPC {
         _ data: Data,
         progressEndpoint: NSXPCListenerEndpoint
     ) async throws -> Data {
-        let request: AgentProgressRequest
+        let request: CoreProgressRequest
         do {
-            request = try AgentProgressRequest.decoded(from: data)
+            request = try CoreProgressRequest.decoded(from: data)
         } catch {
             logger.error("Failed to decode request: \(error)")
             return try JSONEncoder().encode(
-                AgentResult.failure(AgentError(from: error))
+                CoreResult.failure(CoreError(from: error))
             )
         }
         logger.debug("Request: \(request)")
@@ -110,9 +110,9 @@ public final class Agent: Sendable, AgentXPC {
     }
 
     public func handle(
-        _ request: AgentProgressRequest,
+        _ request: CoreProgressRequest,
         progressEndpoint: NSXPCListenerEndpoint
-    ) async -> AgentResult {
+    ) async -> CoreResult {
         await mapError(domainId: request.domainId) {
             switch request {
             case .upload(let request):
@@ -130,11 +130,11 @@ public final class Agent: Sendable, AgentXPC {
             }
         }
     }
-    
+
     private func mapError(
         domainId: UUID,
-        _ operation: () async throws -> AgentResponse
-    ) async -> AgentResult {
+        _ operation: () async throws -> CoreResponse
+    ) async -> CoreResult {
         do {
             return .success(try await operation())
         } catch SSHError.connectionFailed {
@@ -145,7 +145,7 @@ public final class Agent: Sendable, AgentXPC {
         } catch SSHError.sftpError(.noSuchFile, _) {
             return .failure(.remotePathNotFound)
         } catch {
-            return .failure(AgentError(from: error))
+            return .failure(CoreError(from: error))
         }
     }
 

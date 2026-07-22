@@ -3,7 +3,7 @@ import FileProvider
 extension StackTrace {
     public func log(
         _ logger: Logger = Logger(category: "StackTrace"),
-        error: AgentError
+        error: CoreError
     ) {
         if error.isUnknown {
             logger.fault(

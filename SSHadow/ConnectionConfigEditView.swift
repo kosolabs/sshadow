@@ -1,5 +1,5 @@
-import AgentKit
 import Common
+import CoreKit
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers

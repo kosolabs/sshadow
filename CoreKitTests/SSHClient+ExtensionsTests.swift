@@ -5,7 +5,7 @@ import SwiftLibSSH
 import Testing
 import XPC
 
-@testable import AgentKit
+@testable import CoreKit
 
 @Suite struct SSHClientExtensionTests {
     @Test func testThrowsUnknownHost() async throws {

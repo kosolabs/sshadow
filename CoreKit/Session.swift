@@ -385,7 +385,7 @@ actor Session {
             case .succeed:
                 logger.info("Directory already exists at \(path)")
             case .fail:
-                throw AgentError.filenameCollision
+                throw CoreError.filenameCollision
             }
         }
         return try await record(
@@ -527,7 +527,7 @@ actor Session {
                     while let data = try fp.read(upToCount: Int(bufferSize)) {
                         if progress.isCancelled {
                             logger.info("Upload \(path) cancelled")
-                            throw AgentError.userCancelled
+                            throw CoreError.userCancelled
                         }
                         try await writer.write(data: data)
                         estimator.update(delta: data.count)
@@ -582,7 +582,7 @@ actor Session {
             for try await data in fp.stream(bufferSize: bufferSize) {
                 if progress.isCancelled {
                     logger.info("Download \(item) cancelled")
-                    throw AgentError.userCancelled
+                    throw CoreError.userCancelled
                 }
                 try handle.write(contentsOf: data)
                 estimator.update(delta: data.count)
@@ -706,7 +706,7 @@ actor Session {
                 }
                 return try await perform(entries)
             }
-        } catch AgentError.itemNotFound where itemId == .trashContainer {
+        } catch CoreError.itemNotFound where itemId == .trashContainer {
             return try await perform(SSHItem.EmptyStream())
         }
     }
@@ -718,11 +718,11 @@ actor Session {
         do {
             return try await operation()
         } catch SSHError.sftpError(.noSuchFile, _) {
-            throw AgentError.itemNotFound(itemId.rawValue)
+            throw CoreError.itemNotFound(itemId.rawValue)
         } catch SSHError.sftpError(.permissionDenied, _) {
-            throw AgentError.permissionDenied
+            throw CoreError.permissionDenied
         } catch SSHError.sftpError(.fileAlreadyExists, _) {
-            throw AgentError.filenameCollision
+            throw CoreError.filenameCollision
         }
     }
 
