@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  release:
+    name: Build and publish DMG
+    runs-on: macos-26
+
+    environment:
+      name: sshadow-release
+
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Import Developer ID certificate
+      env:
+        DEVELOPER_ID_CERTIFICATE_P12: ${{ secrets.DEVELOPER_ID_CERTIFICATE_P12 }}
+        DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+      run: |
+        CERTIFICATE_PATH="$RUNNER_TEMP/certificate.p12"
+        KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
+        KEYCHAIN_PASSWORD="$(uuidgen)"
+
+        base64 --decode -o "$CERTIFICATE_PATH" <<<"$DEVELOPER_ID_CERTIFICATE_P12"
+
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+        security import "$CERTIFICATE_PATH" -P "$DEVELOPER_ID_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security list-keychains -d user -s "$KEYCHAIN_PATH"
+
+        rm -f "$CERTIFICATE_PATH"
+
+    - name: Install provisioning profiles
+      env:
+        PROVISIONING_PROFILE_APP: ${{ secrets.PROVISIONING_PROFILE_APP }}
+        PROVISIONING_PROFILE_EXTENSION: ${{ secrets.PROVISIONING_PROFILE_EXTENSION }}
+      run: |
+        PROFILES_DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+        mkdir -p "$PROFILES_DIR"
+
+        install_profile() {
+          local base64_content="$1"
+          local profile_path plist_path uuid
+
+          profile_path="$RUNNER_TEMP/profile.provisionprofile"
+          plist_path="$RUNNER_TEMP/profile.plist"
+          base64 --decode -o "$profile_path" <<<"$base64_content"
+
+          security cms -D -i "$profile_path" >"$plist_path"
+          uuid="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$plist_path")"
+
+          mv "$profile_path" "$PROFILES_DIR/$uuid.provisionprofile"
+          rm -f "$plist_path"
+        }
+
+        install_profile "$PROVISIONING_PROFILE_APP"
+        install_profile "$PROVISIONING_PROFILE_EXTENSION"
+
+    - name: Build, sign, and notarize DMG
+      env:
+        APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
+      run: ./ci_scripts/dmg.sh
+
+    - name: Publish GitHub release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        BUILD_NUMBER="$(git rev-list --count HEAD)"
+        MARKETING_VERSION="$(grep -m1 'MARKETING_VERSION' SSHadow.xcodeproj/project.pbxproj | sed -E 's/.*= ([^;]+);.*/\1/')"
+        TAG="v${BUILD_NUMBER}"
+
+        # Replace any existing release for this build (e.g. re-running the
+        # workflow on the same commit).
+        gh release delete "$TAG" --yes || true
+
+        gh release create "$TAG" build/SSHadow.dmg \
+          --title "SSHadow ${MARKETING_VERSION} build ${BUILD_NUMBER}" \
+          --generate-notes
