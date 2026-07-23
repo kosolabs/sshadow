@@ -86,7 +86,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         BUILD_NUMBER="$(git rev-list --count HEAD)"
-        MARKETING_VERSION="$(grep -m1 'MARKETING_VERSION' SSHadow.xcodeproj/project.pbxproj | sed -E 's/.*= ([^;]+);.*/\1/')"
+        MARKETING_VERSION="$(xcodebuild -showBuildSettings -scheme SSHadow -configuration Release 2>/dev/null | awk -F' = ' '/MARKETING_VERSION/ {print $2}')"
         TAG="v${BUILD_NUMBER}"
 
         # Replace any existing release for this build (e.g. re-running the
