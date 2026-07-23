@@ -19,26 +19,34 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
-    - name: Import Developer ID certificate
+    - name: Import signing certificates
       env:
         DEVELOPER_ID_CERTIFICATE_P12: ${{ secrets.DEVELOPER_ID_CERTIFICATE_P12 }}
         DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+        APPLE_DEVELOPMENT_CERTIFICATE_P12: ${{ secrets.APPLE_DEVELOPMENT_CERTIFICATE_P12 }}
+        APPLE_DEVELOPMENT_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPMENT_CERTIFICATE_PASSWORD }}
       run: |
-        CERTIFICATE_PATH="$RUNNER_TEMP/certificate.p12"
         KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
         KEYCHAIN_PASSWORD="$(uuidgen)"
-
-        base64 --decode -o "$CERTIFICATE_PATH" <<<"$DEVELOPER_ID_CERTIFICATE_P12"
 
         security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
         security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
         security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-        security import "$CERTIFICATE_PATH" -P "$DEVELOPER_ID_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        import_cert() {
+          local base64_content="$1" password="$2"
+          local cert_path="$RUNNER_TEMP/certificate.p12"
+
+          base64 --decode -o "$cert_path" <<<"$base64_content"
+          security import "$cert_path" -P "$password" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          rm -f "$cert_path"
+        }
+
+        import_cert "$DEVELOPER_ID_CERTIFICATE_P12" "$DEVELOPER_ID_CERTIFICATE_PASSWORD"
+        import_cert "$APPLE_DEVELOPMENT_CERTIFICATE_P12" "$APPLE_DEVELOPMENT_CERTIFICATE_PASSWORD"
+
         security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
         security list-keychains -d user -s "$KEYCHAIN_PATH"
-
-        rm -f "$CERTIFICATE_PATH"
 
     - name: Install provisioning profiles
       env:
