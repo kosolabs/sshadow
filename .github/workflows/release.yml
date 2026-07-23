@@ -94,5 +94,5 @@ jobs:
         gh release delete "$TAG" --yes || true
 
         gh release create "$TAG" build/SSHadow.dmg \
-          --title "SSHadow ${MARKETING_VERSION} build ${BUILD_NUMBER}" \
+          --title "SSHadow v${MARKETING_VERSION} build ${BUILD_NUMBER}" \
           --generate-notes
