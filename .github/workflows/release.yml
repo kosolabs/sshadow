@@ -2,10 +2,40 @@ name: Release
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'SSHadow.xcodeproj/project.pbxproj'
 
 jobs:
+  check-version:
+    name: Check if MARKETING_VERSION changed
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 2
+
+    - name: Diff MARKETING_VERSION
+      id: check
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        elif git diff "${{ github.event.before }}" "${{ github.sha }}" -- SSHadow.xcodeproj/project.pbxproj \
+            | grep -q '^[+-].*MARKETING_VERSION'; then
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+        fi
+
   release:
     name: Build and publish DMG
+    needs: check-version
+    if: needs.check-version.outputs.changed == 'true'
     runs-on: macos-26
 
     environment:
