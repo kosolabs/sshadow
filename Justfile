@@ -31,3 +31,14 @@ unregister:
 
 dmg:
     ./ci_scripts/dmg.sh
+
+# Set the marketing version for all targets. Run with Xcode closed.
+set-version version:
+    #!/bin/bash
+    set -euo pipefail
+    if [[ ! "{{version}}" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]]; then
+        echo "error: version must look like 1.2 or 1.2.3, got '{{version}}'" >&2
+        exit 1
+    fi
+    sed -i '' 's/MARKETING_VERSION = .*;/MARKETING_VERSION = {{version}};/' SSHadow.xcodeproj/project.pbxproj
+    echo "MARKETING_VERSION set to {{version}}"
