@@ -6,6 +6,8 @@ import UniformTypeIdentifiers
 
 private let logger = Logger(category: "ConnectionConfigEditView")
 
+private let disabledHelp = "Disable this connection to edit its settings."
+
 struct ConnectionConfigEditView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(ConnectionCoordinator.self) private var coordinator
@@ -104,6 +106,7 @@ struct ConnectionConfigEditView: View {
                         text: name,
                         prompt: Text(config.displayName)
                     )
+                    .disabled(enabled.wrappedValue)
                     .accessibilityIdentifier("nameField")
                     HStack {
                         Toggle(isOn: enabled) {
@@ -119,6 +122,16 @@ struct ConnectionConfigEditView: View {
                         .disabled(coordinator.isBusy(config))
                         .accessibilityIdentifier("enabledToggle")
                     }
+                } footer: {
+                    if enabled.wrappedValue {
+                        HStack {
+                            Spacer()
+                            Image(systemName: "info.circle")
+                            Text(
+                                "Disable this connection to edit its settings."
+                            )
+                        }
+                    }
                 }
                 Section("Connection") {
                     TextField(
@@ -126,18 +139,21 @@ struct ConnectionConfigEditView: View {
                         text: host,
                         prompt: Text("example.com")
                     )
+                    .disabled(enabled.wrappedValue)
                     .accessibilityIdentifier("hostField")
                     TextField(
                         "Port",
                         text: port,
                         prompt: Text("22 (default)")
                     )
+                    .disabled(enabled.wrappedValue)
                     .accessibilityIdentifier("portField")
                     TextField(
                         "Remote Path",
                         text: path,
                         prompt: Text("~")
                     )
+                    .disabled(enabled.wrappedValue)
                     .accessibilityIdentifier("pathField")
                 }
                 Section("Authentication") {
@@ -146,8 +162,10 @@ struct ConnectionConfigEditView: View {
                         text: user,
                         prompt: Text(NSUserName())
                     )
+                    .disabled(enabled.wrappedValue)
                     .accessibilityIdentifier("userField")
                     Toggle("Use Private Key", isOn: usePrivateKey)
+                        .disabled(enabled.wrappedValue)
                         .accessibilityIdentifier("usePrivateKeyToggle")
                     if usePrivateKey.wrappedValue {
                         LabeledContent("Private Key") {
@@ -167,6 +185,7 @@ struct ConnectionConfigEditView: View {
                                 }
                                 .buttonStyle(.borderless)
                                 .help("Clear private key selection")
+                                .disabled(enabled.wrappedValue)
                             } else {
                                 Button(
                                     "Select Private Key…",
@@ -175,6 +194,7 @@ struct ConnectionConfigEditView: View {
                                     isImportingKey = true
                                 }
                                 .buttonStyle(.link)
+                                .disabled(enabled.wrappedValue)
                             }
                         }
                         SecureField(
@@ -182,8 +202,10 @@ struct ConnectionConfigEditView: View {
                             text: privateKeyPassphrase,
                             prompt: Text("(optional)")
                         )
+                        .disabled(enabled.wrappedValue)
                     } else {
                         SecureField("Password", text: password)
+                            .disabled(enabled.wrappedValue)
                             .accessibilityIdentifier("passwordField")
                     }
                 }
