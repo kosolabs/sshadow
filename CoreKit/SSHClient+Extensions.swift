@@ -1,6 +1,6 @@
 import Common
-import SwiftLibSSH
 import Foundation
+import SwiftLibSSH
 
 private let logger = Logger(category: "SSHClient")
 
@@ -14,7 +14,7 @@ extension SSHClient {
         case remotePathNotFound
         case remotePathNotDirectory
         case unknown(domain: String, code: Int, message: String)
-        
+
         public init(from error: any Error) {
             if let testError = error as? TestError {
                 self = testError
@@ -73,22 +73,24 @@ extension SSHClient {
             return try await SSHClient.connect(
                 host: config.host,
                 port: config.port,
-                user: config.user,
+                user: config.user
             )
         case .password(let password):
             return try await SSHClient.connect(
                 host: config.host,
                 port: config.port,
                 user: config.user,
-                password: password,
+                auth: .password(password)
             )
         case .privateKey(let base64PrivateKey, let passphrase):
             return try await SSHClient.connect(
                 host: config.host,
                 port: config.port,
                 user: config.user,
-                base64PrivateKey: base64PrivateKey,
-                passphrase: passphrase,
+                auth: .privateKeyData(
+                    base64: base64PrivateKey,
+                    passphrase: passphrase
+                )
             )
         }
     }
