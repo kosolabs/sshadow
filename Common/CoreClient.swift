@@ -33,18 +33,16 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         listener.endpoint
     }
 
-    private func suspend() {
+    private func suspend() async {
         guard attached else { return }
-        Task {
-            do {
-                try await domain.suspend(
-                    reason:
-                        "SSHadow needs to be running in order to sync this volume.",
-                    options: .temporary
-                )
-            } catch {
-                logger.error("Failed to suspend \(domain): \(error)")
-            }
+        do {
+            try await domain.suspend(
+                reason:
+                    "SSHadow needs to be running in order to sync this volume.",
+                options: .temporary
+            )
+        } catch {
+            logger.error("Failed to suspend \(domain): \(error)")
         }
     }
 
@@ -58,14 +56,14 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         connection.remoteObjectInterface = NSXPCInterface(with: CoreXPC.self)
         connection.invalidationHandler = {
             self.connection = nil
-            self.suspend()
-            logger.debug("Core XPC disconnected")
+            Task { await self.suspend() }
+            logger.info("Core XPC disconnected")
         }
         connection.interruptionHandler = { connection.invalidate() }
         connection.resume()
         self.connection = connection
 
-        logger.debug("Core XPC connected")
+        logger.info("Core XPC connected")
         return true
     }
 
@@ -75,12 +73,26 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         attached = false
     }
 
+    private func requireService() async throws(CoreError) -> CoreXPC {
+        if connection == nil {
+            logger.info("Waiting for Core XPC to connect")
+            let deadline = ContinuousClock.now + .seconds(1)
+            while connection == nil, ContinuousClock.now < deadline {
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
+        guard let service = connection?.remoteObjectProxy as? CoreXPC else {
+            await suspend()
+            logger.error("Core XPC never connected")
+            throw CoreError.serviceUnreachable
+        }
+        return service
+    }
+
     private func perform(
         _ handle: (CoreXPC) async throws -> Data
     ) async throws(CoreError) -> CoreResponse {
-        guard let service = connection?.remoteObjectProxy as? CoreXPC else {
-            throw CoreError.serviceUnreachable
-        }
+        let service = try await requireService()
         do {
             let response = try await handle(service)
             let result = try CoreResult.decoded(from: response)
