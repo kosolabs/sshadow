@@ -11,8 +11,9 @@ public final class DomainXPCBroker {
 
     public func broker(_ domain: NSFileProviderDomain) async throws {
         await teardown(domainId: domain.id)
+        try await domain.resume()
 
-        let connection = try await domain.service.fileProviderConnection()
+        let connection = try await requireConnection(for: domain)
 
         connection.exportedInterface = NSXPCInterface(with: CoreXPC.self)
         connection.exportedObject = CoreService.shared
@@ -25,7 +26,6 @@ public final class DomainXPCBroker {
                 do {
                     try await self.broker(domain)
                 } catch {
-                    // TODO: Look in to rebrokering failed to broker connections
                     logger.error(
                         "Failed to broker XPC for \(domain.id): \(error)"
                     )
@@ -42,6 +42,21 @@ public final class DomainXPCBroker {
         await ext.attach()
 
         logger.info("Brokered XPC: \(domain.id)")
+    }
+
+    private func requireConnection(
+        for domain: NSFileProviderDomain
+    ) async throws -> NSXPCConnection {
+        while true {
+            do {
+                return try await domain.service.fileProviderConnection()
+            } catch {
+                logger.error(
+                    "Failed to broker XPC for \(domain.id): \(error)"
+                )
+                try await Task.sleep(for: .seconds(1))
+            }
+        }
     }
 
     public func teardown(domainId: UUID) async {
