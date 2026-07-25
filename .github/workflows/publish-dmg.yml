@@ -1,41 +1,13 @@
-name: Release
+name: Publish DMG
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
-    paths:
-      - 'SSHadow.xcodeproj/project.pbxproj'
+  release:
+    types: [ published ]
 
 jobs:
-  check-version:
-    name: Check if MARKETING_VERSION changed
-    runs-on: ubuntu-latest
-    outputs:
-      changed: ${{ steps.check.outputs.changed }}
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-      with:
-        fetch-depth: 2
-
-    - name: Diff MARKETING_VERSION
-      id: check
-      run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-        elif git diff "${{ github.event.before }}" "${{ github.sha }}" -- SSHadow.xcodeproj/project.pbxproj \
-            | grep -q '^[+-].*MARKETING_VERSION'; then
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "changed=false" >> "$GITHUB_OUTPUT"
-        fi
-
-  release:
+  publish-dmg:
     name: Build and publish DMG
-    needs: check-version
-    if: needs.check-version.outputs.changed == 'true'
     runs-on: macos-26
 
     environment:
@@ -47,6 +19,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v6
+      with:
+        ref: ${{ github.event.release.tag_name }}
 
     - name: Import signing certificates
       env:
@@ -110,18 +84,14 @@ jobs:
         APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
       run: ./ci_scripts/dmg.sh
 
-    - name: Publish GitHub release
+    - name: Upload DMG to release
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        BUILD_NUMBER="$(git rev-list --count HEAD)"
-        MARKETING_VERSION="$(xcodebuild -showBuildSettings -scheme SSHadow -configuration Release 2>/dev/null | awk -F' = ' '/MARKETING_VERSION/ {print $2}')"
-        TAG="v${BUILD_NUMBER}"
+        TAG="${{ github.event.release.tag_name }}"
+        if [[ -z "$TAG" ]]; then
+          TAG="$(gh release list --limit 1 --json tagName --jq '.[0].tagName')"
+        fi
 
-        # Replace any existing release for this build (e.g. re-running the
-        # workflow on the same commit).
-        gh release delete "$TAG" --yes || true
-
-        gh release create "$TAG" build/SSHadow.dmg \
-          --title "SSHadow v${MARKETING_VERSION} build ${BUILD_NUMBER}" \
-          --generate-notes
+        # --clobber replaces the asset if the workflow is re-run on the same release.
+        gh release upload "$TAG" build/SSHadow.dmg --clobber
