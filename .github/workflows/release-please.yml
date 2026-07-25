@@ -1,0 +1,22 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    environment:
+      name: sshadow-release
+    steps:
+      - id: app
+        uses: actions/create-github-app-token@v3.2.0
+        with:
+          client-id: Iv23liXdlxbyAb7jyk9P
+          private-key: ${{ secrets.RELEASER_PRIVATE_KEY }}
+      - id: release
+        uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ steps.app.outputs.token }}
