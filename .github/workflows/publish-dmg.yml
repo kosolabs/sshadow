@@ -3,7 +3,7 @@ name: Publish DMG
 on:
   workflow_dispatch:
   release:
-    types: [ published ]
+    types: [ created ]
 
 jobs:
   publish-dmg:
@@ -95,3 +95,6 @@ jobs:
 
         # --clobber replaces the asset if the workflow is re-run on the same release.
         gh release upload "$TAG" build/SSHadow.dmg --clobber
+
+        # The release is created as a draft so it only becomes visible once the DMG is attached.
+        gh release edit "$TAG" --draft=false
