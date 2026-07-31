@@ -23,8 +23,7 @@ extension TestSandbox {
             db: db,
             sharedUrl: shared,
             signal: { _ in },
-            transfers: Transfers(),
-            pollInterval: nil
+            transfers: Transfers()
         )
 
         var folders: [NSFileProviderItemIdentifier] = [

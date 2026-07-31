@@ -20,11 +20,11 @@ domain based on composite health.
 Three distinct connection/state layers, each with its own verb pair. Keep them
 separate in code, comments, and log messages.
 
-| Layer | Verbs | Mechanism |
-|---|---|---|
-| App ↔ extension link | **resume / suspend** | `NSFileProviderManager.reconnect()` / `disconnect(reason:)`; raw `NSXPCConnection.resume()` / `invalidate()` |
-| App ↔ remote SSH server | **connect / disconnect** | `SSHClient.connect` / `close` |
-| File Provider domains | **enable / disable** | `NSFileProviderManager.add` / `remove` |
+| Layer                   | Verbs                    | Mechanism                                                                                                    |
+| ----------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| App ↔ extension link    | **resume / suspend**     | `NSFileProviderManager.reconnect()` / `disconnect(reason:)`; raw `NSXPCConnection.resume()` / `invalidate()` |
+| App ↔ remote SSH server | **connect / disconnect** | `SSHClient.connect` / `close`                                                                                |
+| File Provider domains   | **enable / disable**     | `NSFileProviderManager.add` / `remove`                                                                       |
 
 So "the server went offline" is an **SSH disconnect**, and the desired reaction is
 to **suspend** the domain with a reason, then **connect** again and **resume**.
@@ -81,19 +81,19 @@ to **suspend** the domain with a reason, then **connect** again and **resume**.
 
 ### Types
 
-| Name | Isolation | Responsibility |
-|---|---|---|
-| `Session` (keep) | actor | One *connected* SSH session: `ssh`+`sftp`+`db`+`cache` and the file operations. Immutable connection; replaced wholesale on reconnect. Loses the poll loop. |
-| `DomainRegistry` (was `SessionManager`) | actor | Thin `[UUID: SessionSupervisor]` registry. `register`/`connect`/`disconnect`/`forget` delegate to a supervisor. |
-| `SessionSupervisor` (new) | actor | Per-domain owner of the live `Session`: single-flight connect, reconnect, poll loop, health state, and the single decision-maker for suspend/resume. |
-| `DomainLink` (new) | `@MainActor` class | Per-domain owner of the `NSXPCConnection` to the extension plus domain suspend/resume. The supervisor's main-actor arm. Absorbs `DomainXPCBroker`. |
-| `DomainXPCBroker` | — | Removed. Per-domain slice becomes `DomainLink`; the singleton-with-a-dict disappears. |
+| Name                                    | Isolation          | Responsibility                                                                                                                                              |
+| --------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Session` (keep)                        | actor              | One _connected_ SSH session: `ssh`+`sftp`+`db`+`cache` and the file operations. Immutable connection; replaced wholesale on reconnect. Loses the poll loop. |
+| `DomainRegistry` (was `SessionManager`) | actor              | Thin `[UUID: SessionSupervisor]` registry. `register`/`connect`/`disconnect`/`forget` delegate to a supervisor.                                             |
+| `SessionSupervisor` (new)               | actor              | Per-domain owner of the live `Session`: single-flight connect, reconnect, poll loop, health state, and the single decision-maker for suspend/resume.        |
+| `DomainLink` (new)                      | `@MainActor` class | Per-domain owner of the `NSXPCConnection` to the extension plus domain suspend/resume. The supervisor's main-actor arm. Absorbs `DomainXPCBroker`.          |
+| `DomainXPCBroker`                       | —                  | Removed. Per-domain slice becomes `DomainLink`; the singleton-with-a-dict disappears.                                                                       |
 
 ### Isolation rationale
 
 SSH work must stay off the main actor; `NSXPCConnection` setup and
 `NSFileProviderManager` calls must be on it. Rather than smear one object across both,
-`SessionSupervisor` is a (non-main) actor that *holds* a `@MainActor DomainLink`. The
+`SessionSupervisor` is a (non-main) actor that _holds_ a `@MainActor DomainLink`. The
 supervisor is the single authority that decides suspend/resume; `DomainLink` is only
 its main-actor hands. `DomainXPCBroker` still goes away — its responsibilities split
 into `DomainLink` (mechanism) and the supervisor (policy).
@@ -116,7 +116,7 @@ a request, or a failed poll. On entering `disconnected` the dead `Session` is dr
 While `disconnected`, a retry loop attempts `connect` on a backoff.
 
 Domain resume is **gated on composite health**: the supervisor resumes only when the
-XPC link is up *and* SSH is connected. This is what prevents a re-broker from resuming
+XPC link is up _and_ SSH is connected. This is what prevents a re-broker from resuming
 a domain whose server is still down.
 
 ### Extension-side fallback
@@ -131,7 +131,7 @@ resume authority.
 Strict order 1 → 2 → 3 → 4; PR 5 depends on 3. PRs 1 and 3 are behavior-preserving
 relocations; the user-visible win lands in PR 4.
 
-### PR 1 — Extract `SessionSupervisor` (no behavior change)
+### PR 1 — Extract `SessionSupervisor` (no behavior change) [DONE]
 
 Introduce the supervisor as a pure refactor. Move single-flight connect
 (`connectTasks`), `start()`, and the poll loop (`run`) out of `Session`/`SessionManager`
@@ -143,7 +143,7 @@ per request. Behavior identical; update `SessionTests`.
 ### PR 2 — Reconnect + health state
 
 Add the health state machine to `SessionSupervisor`. On `SSHError.connectionFailed`
-(request *or* poll), transition to `disconnected` and drop the dead `Session`; next
+(request _or_ poll), transition to `disconnected` and drop the dead `Session`; next
 `currentSession()` reconnects via single-flight. The poll loop stops spinning on a dead
 session — on failure it transitions health and retries connect with backoff. Move the
 recovery currently in `CoreService.mapError` (`sessions.disconnect` on
@@ -165,7 +165,7 @@ detach and re-broker-on-invalidation still work.
 On transition to `disconnected`, call
 `link.suspend(reason: "The server is currently unreachable; check your network connection.")`.
 The retry loop connects with backoff; on success it resumes — gated on composite health
-(XPC up *and* SSH connected), closing the re-broker race. Demote `CoreClient.suspend`
+(XPC up _and_ SSH connected), closing the re-broker race. Demote `CoreClient.suspend`
 to the app-absent fallback. Manual test: kill the server → domain suspends with the
 reason in Finder; restore → domain resumes and sync catches up.
 
