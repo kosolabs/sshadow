@@ -56,7 +56,7 @@ public final class CoreService: Sendable, CoreXPC {
     }
 
     public func handle(_ request: CoreRequest) async -> CoreResult {
-        await mapError(domainId: request.domainId) {
+        await mapError {
             switch request {
             case .name(let request):
                 try await .name(self.name(request))
@@ -113,7 +113,7 @@ public final class CoreService: Sendable, CoreXPC {
         _ request: CoreProgressRequest,
         progressEndpoint: NSXPCListenerEndpoint
     ) async -> CoreResult {
-        await mapError(domainId: request.domainId) {
+        await mapError {
             switch request {
             case .upload(let request):
                 try await .upload(
@@ -132,13 +132,11 @@ public final class CoreService: Sendable, CoreXPC {
     }
 
     private func mapError(
-        domainId: UUID,
         _ operation: () async throws -> CoreResponse
     ) async -> CoreResult {
         do {
             return .success(try await operation())
         } catch SSHError.connectionFailed {
-            await registry.disconnect(id: domainId)
             return .failure(.serverUnreachable)
         } catch SSHError.authenticationFailed {
             return .failure(.notAuthenticated)
@@ -164,8 +162,9 @@ public final class CoreService: Sendable, CoreXPC {
     }
 
     func poll(domainId: UUID) async throws {
-        let session = try await registry.connect(id: domainId)
-        try await session.poll()
+        try await registry.withSession(id: domainId) { session in
+            try await session.poll()
+        }
     }
 
     // MARK: Extension
@@ -173,193 +172,212 @@ public final class CoreService: Sendable, CoreXPC {
     func name(
         _ request: NameRequest
     ) async throws -> NameResponse {
-        let session = try await registry.connect(id: request.domainId)
-        let name = try await session.name(
-            of: NSFileProviderItemIdentifier(request.itemId)
-        )
-        return NameResponse(name: name)
+        try await registry.withSession(id: request.domainId) { session in
+            let name = try await session.name(
+                of: NSFileProviderItemIdentifier(request.itemId)
+            )
+            return NameResponse(name: name)
+        }
     }
 
     func child(
         _ request: ChildRequest
     ) async throws -> ChildResponse {
-        let session = try await registry.connect(id: request.domainId)
-        let childId = try await session.child(
-            of: NSFileProviderItemIdentifier(request.parentId),
-            name: request.name
-        )
-        return ChildResponse(itemId: childId.rawValue)
+        try await registry.withSession(id: request.domainId) { session in
+            let childId = try await session.child(
+                of: NSFileProviderItemIdentifier(request.parentId),
+                name: request.name
+            )
+            return ChildResponse(itemId: childId.rawValue)
+        }
     }
 
     func parent(
         _ request: ParentRequest
     ) async throws -> ParentResponse {
-        let session = try await registry.connect(id: request.domainId)
-        let parentId = try await session.parent(
-            of: NSFileProviderItemIdentifier(request.itemId)
-        )
-        return ParentResponse(itemId: parentId.rawValue)
+        try await registry.withSession(id: request.domainId) { session in
+            let parentId = try await session.parent(
+                of: NSFileProviderItemIdentifier(request.itemId)
+            )
+            return ParentResponse(itemId: parentId.rawValue)
+        }
     }
 
     func item(
         _ request: ItemRequest
     ) async throws -> ItemResponse {
-        let session = try await registry.connect(id: request.domainId)
-        let item = try await session.item(
-            for: NSFileProviderItemIdentifier(request.itemId)
-        )
-        return ItemResponse(item: item)
+        try await registry.withSession(id: request.domainId) { session in
+            let item = try await session.item(
+                for: NSFileProviderItemIdentifier(request.itemId)
+            )
+            return ItemResponse(item: item)
+        }
     }
 
     func list(
         _ request: ListRequest
     ) async throws -> ListResponse {
-        let session = try await registry.connect(id: request.domainId)
-        let entries = try await session.list(
-            for: NSFileProviderItemIdentifier(request.itemId)
-        )
-        return ListResponse(fileInfos: entries)
+        try await registry.withSession(id: request.domainId) { session in
+            let entries = try await session.list(
+                for: NSFileProviderItemIdentifier(request.itemId)
+            )
+            return ListResponse(fileInfos: entries)
+        }
     }
 
     func currentAnchor(
         _ request: CurrentAnchorRequest
     ) async throws -> CurrentAnchorResponse {
-        let session = try await registry.connect(id: request.domainId)
-        let anchor = await session.currentAnchor
-        return CurrentAnchorResponse(anchor: anchor)
+        try await registry.withSession(id: request.domainId) { session in
+            let anchor = await session.currentAnchor
+            return CurrentAnchorResponse(anchor: anchor)
+        }
     }
 
     func changes(
         _ request: ChangesRequest
     ) async throws -> ChangesResponse {
-        let session = try await registry.connect(id: request.domainId)
-        let (anchor, changes) = await session.changes(since: request.anchor)
-        return ChangesResponse(anchor: anchor, changes: changes)
+        try await registry.withSession(id: request.domainId) { session in
+            let (anchor, changes) = await session.changes(
+                since: request.anchor
+            )
+            return ChangesResponse(anchor: anchor, changes: changes)
+        }
     }
 
     func setAttributes(
         _ request: SetAttributesRequest
     ) async throws -> SetAttributesResponse {
-        let session = try await registry.connect(id: request.domainId)
-        try await session.setAttributes(
-            for: NSFileProviderItemIdentifier(request.itemId),
-            flags: request.flags,
-            accessTime: request.accessTime,
-            modifyTime: request.modifyTime
-        )
-        return SetAttributesResponse()
+        try await registry.withSession(id: request.domainId) { session in
+            try await session.setAttributes(
+                for: NSFileProviderItemIdentifier(request.itemId),
+                flags: request.flags,
+                accessTime: request.accessTime,
+                modifyTime: request.modifyTime
+            )
+            return SetAttributesResponse()
+        }
     }
 
     func createSymlink(
         _ request: CreateSymlinkRequest
     ) async throws -> CreateSymlinkResponse {
-        let session = try await registry.connect(id: request.domainId)
-        let item = try await session.createSymlink(
-            parentId: NSFileProviderItemIdentifier(request.parentId),
-            name: request.name,
-            target: request.target
-        )
-        return CreateSymlinkResponse(item: item)
+        try await registry.withSession(id: request.domainId) { session in
+            let item = try await session.createSymlink(
+                parentId: NSFileProviderItemIdentifier(request.parentId),
+                name: request.name,
+                target: request.target
+            )
+            return CreateSymlinkResponse(item: item)
+        }
     }
 
     func createDirectory(
         _ request: CreateDirectoryRequest
     ) async throws -> CreateDirectoryResponse {
-        let session = try await registry.connect(id: request.domainId)
-        let item = try await session.createDirectory(
-            parentId: NSFileProviderItemIdentifier(request.parentId),
-            name: request.name,
-            mode: request.mode,
-            ifExists: request.ifExists
-        )
-        return CreateDirectoryResponse(item: item)
+        try await registry.withSession(id: request.domainId) { session in
+            let item = try await session.createDirectory(
+                parentId: NSFileProviderItemIdentifier(request.parentId),
+                name: request.name,
+                mode: request.mode,
+                ifExists: request.ifExists
+            )
+            return CreateDirectoryResponse(item: item)
+        }
     }
 
     func move(
         _ request: MoveRequest
     ) async throws -> MoveResponse {
-        let session = try await registry.connect(id: request.domainId)
-        try await session.move(
-            NSFileProviderItemIdentifier(request.itemId),
-            toParent: NSFileProviderItemIdentifier(request.newParentId),
-            name: request.newName
-        )
-        return MoveResponse()
+        try await registry.withSession(id: request.domainId) { session in
+            try await session.move(
+                NSFileProviderItemIdentifier(request.itemId),
+                toParent: NSFileProviderItemIdentifier(request.newParentId),
+                name: request.newName
+            )
+            return MoveResponse()
+        }
     }
 
     func removeFile(
         _ request: RemoveFileRequest
     ) async throws -> RemoveFileResponse {
-        let session = try await registry.connect(id: request.domainId)
-        try await session.removeFile(
-            for: NSFileProviderItemIdentifier(request.itemId)
-        )
-        return RemoveFileResponse()
+        try await registry.withSession(id: request.domainId) { session in
+            try await session.removeFile(
+                for: NSFileProviderItemIdentifier(request.itemId)
+            )
+            return RemoveFileResponse()
+        }
     }
 
     func removeDirectory(
         _ request: RemoveDirectoryRequest
     ) async throws -> RemoveDirectoryResponse {
-        let session = try await registry.connect(id: request.domainId)
-        try await session.removeDirectory(
-            for: NSFileProviderItemIdentifier(request.itemId)
-        )
-        return RemoveDirectoryResponse()
+        try await registry.withSession(id: request.domainId) { session in
+            try await session.removeDirectory(
+                for: NSFileProviderItemIdentifier(request.itemId)
+            )
+            return RemoveDirectoryResponse()
+        }
     }
 
     func limits(
         _ request: LimitsRequest
     ) async throws -> LimitsResponse {
-        let session = try await registry.connect(id: request.domainId)
-        let limits = await session.limits
-        return LimitsResponse(
-            maxOpenHandles: limits.maxOpenHandles,
-            maxPacketLength: limits.maxPacketLength,
-            maxReadLength: limits.maxReadLength,
-            maxWriteLength: limits.maxWriteLength
-        )
+        try await registry.withSession(id: request.domainId) { session in
+            let limits = await session.limits
+            return LimitsResponse(
+                maxOpenHandles: limits.maxOpenHandles,
+                maxPacketLength: limits.maxPacketLength,
+                maxReadLength: limits.maxReadLength,
+                maxWriteLength: limits.maxWriteLength
+            )
+        }
     }
 
     func upload(
         _ request: UploadRequest,
         progressEndpoint: NSXPCListenerEndpoint
     ) async throws -> UploadResponse {
-        let session = try await registry.connect(id: request.domainId)
-        let sync = XPCProgressPublisher(endpoint: progressEndpoint)
-        let item = try await session.upload(
-            parentId: NSFileProviderItemIdentifier(request.parentId),
-            name: request.name,
-            file: request.file,
-            flags: request.flags,
-            progress: sync.progress
-        )
-        return UploadResponse(item: item)
+        try await registry.withSession(id: request.domainId) { session in
+            let sync = XPCProgressPublisher(endpoint: progressEndpoint)
+            let item = try await session.upload(
+                parentId: NSFileProviderItemIdentifier(request.parentId),
+                name: request.name,
+                file: request.file,
+                flags: request.flags,
+                progress: sync.progress
+            )
+            return UploadResponse(item: item)
+        }
     }
 
     func download(
         _ request: DownloadRequest,
         progressEndpoint: NSXPCListenerEndpoint
     ) async throws -> DownloadResponse {
-        let session = try await registry.connect(id: request.domainId)
-        let sync = XPCProgressPublisher(endpoint: progressEndpoint)
-        let (url, item) = try await session.download(
-            itemId: NSFileProviderItemIdentifier(request.itemId),
-            progress: sync.progress
-        )
-        return DownloadResponse(url: url, item: item)
+        try await registry.withSession(id: request.domainId) { session in
+            let sync = XPCProgressPublisher(endpoint: progressEndpoint)
+            let (url, item) = try await session.download(
+                itemId: NSFileProviderItemIdentifier(request.itemId),
+                progress: sync.progress
+            )
+            return DownloadResponse(url: url, item: item)
+        }
     }
 
     func stream(
         _ request: StreamRequest,
         progressEndpoint: NSXPCListenerEndpoint
     ) async throws -> StreamResponse {
-        let session = try await registry.connect(id: request.domainId)
-        let sync = XPCProgressPublisher(endpoint: progressEndpoint)
-        let (url, range) = try await session.stream(
-            itemId: NSFileProviderItemIdentifier(request.itemId),
-            range: request.range,
-            progress: sync.progress
-        )
-        return StreamResponse(url: url, range: range)
+        try await registry.withSession(id: request.domainId) { session in
+            let sync = XPCProgressPublisher(endpoint: progressEndpoint)
+            let (url, range) = try await session.stream(
+                itemId: NSFileProviderItemIdentifier(request.itemId),
+                range: request.range,
+                progress: sync.progress
+            )
+            return StreamResponse(url: url, range: range)
+        }
     }
 }

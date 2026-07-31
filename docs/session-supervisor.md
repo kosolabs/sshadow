@@ -140,7 +140,7 @@ no longer holds `bgTask`. Rename `SessionManager` → `DomainRegistry`, now a
 `[UUID: SessionSupervisor]` map. `CoreService` keeps calling `registry.connect(id:)`
 per request. Behavior identical; update `SessionTests`.
 
-### PR 2 — Reconnect + health state
+### PR 2 — Reconnect + health state [DONE]
 
 Add the health state machine to `SessionSupervisor`. On `SSHError.connectionFailed`
 (request _or_ poll), transition to `disconnected` and drop the dead `Session`; next
