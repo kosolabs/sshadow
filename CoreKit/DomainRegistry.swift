@@ -41,6 +41,14 @@ actor DomainRegistry {
         try await supervisor(for: id).connect()
     }
 
+    @discardableResult
+    func withSession<T: Sendable>(
+        id: UUID,
+        _ operation: @Sendable (Session) async throws -> T
+    ) async throws -> T {
+        try await supervisor(for: id).withSession(operation)
+    }
+
     private func supervisor(for id: UUID) throws -> SessionSupervisor {
         if let supervisor = supervisors[id] {
             return supervisor
