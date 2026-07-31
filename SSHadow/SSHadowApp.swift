@@ -12,7 +12,7 @@ private func reconnectAllDomains() {
             let domain = config.domain
             do {
                 try await CoreService.shared.register(config: config)
-                try await DomainXPCBroker.shared.broker(domain)
+                try await CoreService.shared.broker(domainId: domain.id)
             } catch {
                 logger.error("Failed to resume sync \(domain): \(error)")
             }

@@ -119,14 +119,14 @@ public class ConnectionConfigModel: CustomStringConvertible {
 
         try await CoreService.shared.register(config: config)
         try await domain.add()
-        try await DomainXPCBroker.shared.broker(domain)
+        try await CoreService.shared.broker(domainId: id)
 
         self.enabled = true
         logger.info("Enabled profile: \(self)")
     }
 
     public func disable() async throws {
-        await DomainXPCBroker.shared.teardown(domainId: id)
+        await CoreService.shared.teardown(domainId: id)
         try await domain.remove()
         try await CoreService.shared.forget(id)
 
