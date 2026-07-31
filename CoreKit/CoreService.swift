@@ -19,7 +19,7 @@ public final class CoreService: Sendable, CoreXPC {
         pollInterval: .seconds(30),
     )
 
-    private let sessions: SessionManager
+    private let registry: DomainRegistry
     private let domainDbConfig: ModelConfiguration?
 
     public init(
@@ -30,7 +30,7 @@ public final class CoreService: Sendable, CoreXPC {
         pollInterval: Duration?
     ) {
         self.domainDbConfig = domainDbConfig
-        self.sessions = SessionManager(
+        self.registry = DomainRegistry(
             domainDbConfig: domainDbConfig,
             sharedUrl: sharedUrl,
             signal: signal,
@@ -138,7 +138,7 @@ public final class CoreService: Sendable, CoreXPC {
         do {
             return .success(try await operation())
         } catch SSHError.connectionFailed {
-            await sessions.disconnect(id: domainId)
+            await registry.disconnect(id: domainId)
             return .failure(.serverUnreachable)
         } catch SSHError.authenticationFailed {
             return .failure(.notAuthenticated)
@@ -155,16 +155,16 @@ public final class CoreService: Sendable, CoreXPC {
         let domainDbConfig =
             self.domainDbConfig ?? DomainDB.model(for: config.id)
         try await DomainDB.open(config: domainDbConfig)
-        try await sessions.register(config: config)
+        try await registry.register(config: config)
     }
 
     public func forget(_ domainId: UUID) async throws {
-        await sessions.forget(id: domainId)
+        await registry.forget(id: domainId)
         try await DomainDB.delete(id: domainId)
     }
 
     func poll(domainId: UUID) async throws {
-        let session = try await sessions.connect(id: domainId)
+        let session = try await registry.connect(id: domainId)
         try await session.poll()
     }
 
@@ -173,7 +173,7 @@ public final class CoreService: Sendable, CoreXPC {
     func name(
         _ request: NameRequest
     ) async throws -> NameResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         let name = try await session.name(
             of: NSFileProviderItemIdentifier(request.itemId)
         )
@@ -183,7 +183,7 @@ public final class CoreService: Sendable, CoreXPC {
     func child(
         _ request: ChildRequest
     ) async throws -> ChildResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         let childId = try await session.child(
             of: NSFileProviderItemIdentifier(request.parentId),
             name: request.name
@@ -194,7 +194,7 @@ public final class CoreService: Sendable, CoreXPC {
     func parent(
         _ request: ParentRequest
     ) async throws -> ParentResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         let parentId = try await session.parent(
             of: NSFileProviderItemIdentifier(request.itemId)
         )
@@ -204,7 +204,7 @@ public final class CoreService: Sendable, CoreXPC {
     func item(
         _ request: ItemRequest
     ) async throws -> ItemResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         let item = try await session.item(
             for: NSFileProviderItemIdentifier(request.itemId)
         )
@@ -214,7 +214,7 @@ public final class CoreService: Sendable, CoreXPC {
     func list(
         _ request: ListRequest
     ) async throws -> ListResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         let entries = try await session.list(
             for: NSFileProviderItemIdentifier(request.itemId)
         )
@@ -224,7 +224,7 @@ public final class CoreService: Sendable, CoreXPC {
     func currentAnchor(
         _ request: CurrentAnchorRequest
     ) async throws -> CurrentAnchorResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         let anchor = await session.currentAnchor
         return CurrentAnchorResponse(anchor: anchor)
     }
@@ -232,7 +232,7 @@ public final class CoreService: Sendable, CoreXPC {
     func changes(
         _ request: ChangesRequest
     ) async throws -> ChangesResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         let (anchor, changes) = await session.changes(since: request.anchor)
         return ChangesResponse(anchor: anchor, changes: changes)
     }
@@ -240,7 +240,7 @@ public final class CoreService: Sendable, CoreXPC {
     func setAttributes(
         _ request: SetAttributesRequest
     ) async throws -> SetAttributesResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         try await session.setAttributes(
             for: NSFileProviderItemIdentifier(request.itemId),
             flags: request.flags,
@@ -253,7 +253,7 @@ public final class CoreService: Sendable, CoreXPC {
     func createSymlink(
         _ request: CreateSymlinkRequest
     ) async throws -> CreateSymlinkResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         let item = try await session.createSymlink(
             parentId: NSFileProviderItemIdentifier(request.parentId),
             name: request.name,
@@ -265,7 +265,7 @@ public final class CoreService: Sendable, CoreXPC {
     func createDirectory(
         _ request: CreateDirectoryRequest
     ) async throws -> CreateDirectoryResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         let item = try await session.createDirectory(
             parentId: NSFileProviderItemIdentifier(request.parentId),
             name: request.name,
@@ -278,7 +278,7 @@ public final class CoreService: Sendable, CoreXPC {
     func move(
         _ request: MoveRequest
     ) async throws -> MoveResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         try await session.move(
             NSFileProviderItemIdentifier(request.itemId),
             toParent: NSFileProviderItemIdentifier(request.newParentId),
@@ -290,7 +290,7 @@ public final class CoreService: Sendable, CoreXPC {
     func removeFile(
         _ request: RemoveFileRequest
     ) async throws -> RemoveFileResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         try await session.removeFile(
             for: NSFileProviderItemIdentifier(request.itemId)
         )
@@ -300,7 +300,7 @@ public final class CoreService: Sendable, CoreXPC {
     func removeDirectory(
         _ request: RemoveDirectoryRequest
     ) async throws -> RemoveDirectoryResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         try await session.removeDirectory(
             for: NSFileProviderItemIdentifier(request.itemId)
         )
@@ -310,7 +310,7 @@ public final class CoreService: Sendable, CoreXPC {
     func limits(
         _ request: LimitsRequest
     ) async throws -> LimitsResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         let limits = await session.limits
         return LimitsResponse(
             maxOpenHandles: limits.maxOpenHandles,
@@ -324,7 +324,7 @@ public final class CoreService: Sendable, CoreXPC {
         _ request: UploadRequest,
         progressEndpoint: NSXPCListenerEndpoint
     ) async throws -> UploadResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         let sync = XPCProgressPublisher(endpoint: progressEndpoint)
         let item = try await session.upload(
             parentId: NSFileProviderItemIdentifier(request.parentId),
@@ -340,7 +340,7 @@ public final class CoreService: Sendable, CoreXPC {
         _ request: DownloadRequest,
         progressEndpoint: NSXPCListenerEndpoint
     ) async throws -> DownloadResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         let sync = XPCProgressPublisher(endpoint: progressEndpoint)
         let (url, item) = try await session.download(
             itemId: NSFileProviderItemIdentifier(request.itemId),
@@ -353,7 +353,7 @@ public final class CoreService: Sendable, CoreXPC {
         _ request: StreamRequest,
         progressEndpoint: NSXPCListenerEndpoint
     ) async throws -> StreamResponse {
-        let session = try await sessions.connect(id: request.domainId)
+        let session = try await registry.connect(id: request.domainId)
         let sync = XPCProgressPublisher(endpoint: progressEndpoint)
         let (url, range) = try await session.stream(
             itemId: NSFileProviderItemIdentifier(request.itemId),

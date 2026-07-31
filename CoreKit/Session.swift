@@ -17,11 +17,9 @@ actor Session {
     private let sharedUrl: URL
     private let signal: SignalEnumerator
     private let transfers: Transfers
-    private let pollInterval: Duration?
 
     private let cache: FileCache
 
-    private var bgTask: Task<Void, Never>?
     private var changes: [(UInt64, [Change])] = []
     private var anchor: UInt64 = 0
 
@@ -32,8 +30,7 @@ actor Session {
         db: DomainDB,
         sharedUrl: URL = SSHadow.groupUrl,
         signal: @escaping SignalEnumerator,
-        transfers: Transfers,
-        pollInterval: Duration?
+        transfers: Transfers
     ) {
         self.config = config
         self.ssh = ssh
@@ -42,7 +39,6 @@ actor Session {
         self.sharedUrl = sharedUrl
         self.signal = signal
         self.transfers = transfers
-        self.pollInterval = pollInterval
 
         self.cache = FileCache { itemId, range in
             let path = try await config.path(for: db.path(for: itemId))
@@ -59,30 +55,7 @@ actor Session {
         logger.info("Connected SSH: \(config.url), DB: \(dbPath)")
     }
 
-    func start() {
-        guard bgTask == nil, let pollInterval else { return }
-        bgTask = Task { [weak self] in
-            await self?.run(interval: pollInterval)
-        }
-    }
-
-    private func run(interval: Duration) async {
-        while !Task.isCancelled {
-            do {
-                try await Task.sleep(for: interval)
-                try await poll()
-            } catch is CancellationError {
-                return
-            } catch {
-                logger.error("Periodic poll failed: \(error)")
-            }
-        }
-    }
-
     func close() async {
-        bgTask?.cancel()
-        bgTask = nil
-
         await sftp.close()
         await ssh.close()
 
