@@ -39,6 +39,9 @@ actor SessionSupervisor {
     private let maxBackoff: Duration
     private let makeSession: SessionFactory
 
+    /// The domain's XPC link to the extension — the supervisor's main-actor arm.
+    let link: DomainLink
+
     private var session: Session?
     private var connectTask: Task<Session, any Error>?
     private var bgTask: Task<Void, Never>?
@@ -58,6 +61,7 @@ actor SessionSupervisor {
         self.pollInterval = pollInterval
         self.initialBackoff = initialBackoff
         self.maxBackoff = maxBackoff
+        self.link = DomainLink(domain: config.domain)
         self.makeSession = makeSession ?? {
             let ssh = try await SSHClient.connect(config: config)
             let sftp = try await ssh.sftp()
@@ -122,11 +126,22 @@ actor SessionSupervisor {
         }
     }
 
+    /// Brokers the domain's XPC link to the extension.
+    func broker() async throws {
+        try await link.broker()
+    }
+
+    /// Tears down the domain's XPC link to the extension.
+    func teardown() async {
+        await link.teardown()
+    }
+
     func disconnect() async {
         bgTask?.cancel()
         bgTask = nil
         connectTask?.cancel()
         connectTask = nil
+        await link.teardown()
         await drop()
     }
 

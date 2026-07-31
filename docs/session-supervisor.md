@@ -151,7 +151,7 @@ recovery currently in `CoreService.mapError` (`sessions.disconnect` on
 app-internal — no domain suspend/resume yet. Tests: reconnect-after-drop, poll recovers
 after a transient disconnect.
 
-### PR 3 — Move XPC ownership into `DomainLink`; retire `DomainXPCBroker`
+### PR 3 — Move XPC ownership into `DomainLink`; retire `DomainXPCBroker` [DONE]
 
 Introduce `@MainActor DomainLink` owning the per-domain `NSXPCConnection`, exported
 object, and the invalidation/interruption/re-broker handling from

@@ -70,6 +70,16 @@ actor DomainRegistry {
         return supervisor
     }
 
+    /// Brokers the domain's XPC link to the extension.
+    func broker(id: UUID) async throws {
+        try await supervisor(for: id).broker()
+    }
+
+    /// Tears down the domain's XPC link to the extension, if it exists.
+    func teardown(id: UUID) async {
+        await supervisors[id]?.teardown()
+    }
+
     func forget(id: UUID) async {
         await disconnect(id: id)
         configs[id] = nil

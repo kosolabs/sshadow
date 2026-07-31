@@ -156,6 +156,14 @@ public final class CoreService: Sendable, CoreXPC {
         try await registry.register(config: config)
     }
 
+    public func broker(domainId: UUID) async throws {
+        try await registry.broker(id: domainId)
+    }
+
+    public func teardown(domainId: UUID) async {
+        await registry.teardown(id: domainId)
+    }
+
     public func forget(_ domainId: UUID) async throws {
         await registry.forget(id: domainId)
         try await DomainDB.delete(id: domainId)
