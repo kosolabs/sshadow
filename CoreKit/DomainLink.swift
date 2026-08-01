@@ -6,43 +6,61 @@ private let logger = Logger(category: "DomainLink")
 
 /// Per-domain owner of the `NSXPCConnection` to the File Provider extension: it
 /// brokers the connection (exporting the core service and attaching the
-/// extension), re-brokers on invalidation, and tears it down. This is the
-/// supervisor's main-actor arm and absorbs the old `DomainXPCBroker` — one
-/// instance per domain rather than a singleton holding a dictionary.
+/// extension), re-brokers on invalidation, and tears it down. It is also the
+/// supervisor's main-actor "hands" for suspending and resuming the domain — but
+/// only the mechanism. The supervisor decides *when* to suspend or resume; this
+/// class never touches domain connection state on its own. Absorbs the old
+/// `DomainXPCBroker` — one instance per domain rather than a singleton holding a
+/// dictionary.
 ///
-/// The domain-facing steps (`resume`, `connect`) are injectable so the link can
-/// be exercised without a live File Provider domain; production wires them to
-/// `NSFileProviderManager`.
+/// The domain-facing steps (`connect`, `suspend`, `resume`) are injectable so
+/// the link can be exercised without a live File Provider domain; production
+/// wires them to `NSFileProviderManager`.
 @MainActor
 final class DomainLink {
     typealias Connect = @Sendable () async throws -> NSXPCConnection
 
     private let domain: NSFileProviderDomain
     private let exportedObject: any CoreXPC
-    private let resume: @Sendable () async throws -> Void
     private let connect: Connect
+    private let suspendDomain: @Sendable (String) async throws -> Void
+    private let resumeDomain: @Sendable () async throws -> Void
 
     private var connection: NSXPCConnection?
+
+    /// Invoked after every successful broker (including automatic re-brokers on
+    /// invalidation), so the supervisor can gate a resume on composite health.
+    private var onBrokered: (@Sendable () async -> Void)?
 
     nonisolated init(
         domain: NSFileProviderDomain,
         exportedObject: any CoreXPC = CoreService.shared,
-        resume: (@Sendable () async throws -> Void)? = nil,
-        connect: Connect? = nil
+        connect: Connect? = nil,
+        suspend: (@Sendable (String) async throws -> Void)? = nil,
+        resume: (@Sendable () async throws -> Void)? = nil
     ) {
         self.domain = domain
         self.exportedObject = exportedObject
-        self.resume = resume ?? { try await domain.resume() }
         self.connect =
             connect ?? { try await domain.service.fileProviderConnection() }
+        self.suspendDomain =
+            suspend ?? { reason in
+                try await domain.suspend(reason: reason, options: .temporary)
+            }
+        self.resumeDomain = resume ?? { try await domain.resume() }
     }
 
-    /// (Re)establishes the XPC link: resumes the domain, connects, exports the
-    /// core service, and attaches the extension. Tears down any existing
-    /// connection first, so it is safe to call repeatedly.
+    /// Sets the hook invoked after each successful broker.
+    func setOnBrokered(_ handler: @escaping @Sendable () async -> Void) {
+        onBrokered = handler
+    }
+
+    /// (Re)establishes the XPC link: connects, exports the core service, and
+    /// attaches the extension. Tears down any existing connection first, so it
+    /// is safe to call repeatedly. Does not touch domain suspend/resume — that
+    /// is the supervisor's decision, taken in `onBrokered`.
     func broker() async throws {
         await teardown()
-        try await resume()
 
         let domainId = domain.id
         let connection = try await requireConnection()
@@ -71,6 +89,7 @@ final class DomainLink {
         await ext.attach()
 
         logger.info("Brokered XPC: \(domainId)")
+        await onBrokered?()
     }
 
     private func requireConnection() async throws -> NSXPCConnection {
@@ -100,5 +119,27 @@ final class DomainLink {
         connection.invalidate()
 
         logger.info("Tore down XPC: \(domain.id)")
+    }
+
+    /// Suspends the domain with a user-facing reason. Best-effort: failures are
+    /// logged, not thrown, since suspend runs on error/shutdown paths.
+    func suspend(reason: String) async {
+        do {
+            try await suspendDomain(reason)
+            logger.info("Suspended sync: \(domain.id)")
+        } catch {
+            logger.error("Failed to suspend \(domain.id): \(error)")
+        }
+    }
+
+    /// Resumes the domain. A safe no-op when the domain is already connected.
+    /// Best-effort: failures are logged, not thrown.
+    func resume() async {
+        do {
+            try await resumeDomain()
+            logger.info("Resumed sync: \(domain.id)")
+        } catch {
+            logger.error("Failed to resume \(domain.id): \(error)")
+        }
     }
 }

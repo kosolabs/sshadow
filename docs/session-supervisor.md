@@ -160,7 +160,7 @@ Delete the `DomainXPCBroker` singleton; domain registration now creates supervis
 Keep resume behavior equivalent for now (centralized, not yet gated). Tests: attach/
 detach and re-broker-on-invalidation still work.
 
-### PR 4 — Wire SSH health to domain suspend/resume (the payoff)
+### PR 4 — Wire SSH health to domain suspend/resume (the payoff) [DONE]
 
 On transition to `disconnected`, call
 `link.suspend(reason: "The server is currently unreachable; check your network connection.")`.
