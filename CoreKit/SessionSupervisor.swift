@@ -26,8 +26,11 @@ typealias SessionFactory = @Sendable () async throws -> Session
 /// dead session and transitions to `disconnected`; the poll loop then retries
 /// `connect()` on a backoff until it recovers. This is the single recovery path.
 actor SessionSupervisor {
-    /// SSH connection health. Not yet wired to domain suspend/resume — that
-    /// lands in a later PR — but tracked here so there is one authority for it.
+    /// Shown in Finder while a domain is suspended because its server dropped.
+    static let unreachableReason =
+        "The server is currently unreachable; check your network connection."
+
+    /// SSH connection health, the supervisor's own half of composite health.
     enum Health: Sendable, Equatable {
         case connecting
         case connected
@@ -47,6 +50,11 @@ actor SessionSupervisor {
     private var bgTask: Task<Void, Never>?
     private(set) var health: Health = .disconnected
 
+    /// Whether the XPC link is currently brokered — the other half of composite
+    /// health. The domain is resumed only when SSH is `connected` *and* the XPC
+    /// link is up, so a re-broker can never resume a domain whose server is down.
+    private var xpcUp = false
+
     init(
         config: ConnectionConfig,
         domainDbConfig: ModelConfiguration,
@@ -56,12 +64,13 @@ actor SessionSupervisor {
         pollInterval: Duration?,
         initialBackoff: Duration = .seconds(1),
         maxBackoff: Duration = .seconds(60),
+        link: DomainLink? = nil,
         makeSession: SessionFactory? = nil
     ) {
         self.pollInterval = pollInterval
         self.initialBackoff = initialBackoff
         self.maxBackoff = maxBackoff
-        self.link = DomainLink(domain: config.domain)
+        self.link = link ?? DomainLink(domain: config.domain)
         self.makeSession = makeSession ?? {
             let ssh = try await SSHClient.connect(config: config)
             let sftp = try await ssh.sftp()
@@ -100,6 +109,7 @@ actor SessionSupervisor {
             connectTask = nil
             health = .connected
             start()
+            await reconcileDomainState()
             return session
         } catch {
             connectTask = nil
@@ -126,33 +136,64 @@ actor SessionSupervisor {
         }
     }
 
-    /// Brokers the domain's XPC link to the extension.
+    /// Brokers the domain's XPC link to the extension, then reconciles domain
+    /// state (resuming only when SSH is also connected).
     func broker() async throws {
+        await link.setOnBrokered { [weak self] in
+            await self?.handleBrokered()
+        }
         try await link.broker()
     }
 
     /// Tears down the domain's XPC link to the extension.
     func teardown() async {
+        xpcUp = false
         await link.teardown()
     }
 
+    /// Shuts the supervisor down: cancels the poll loop, tears down the XPC
+    /// link, and closes the session. Does not suspend the domain — this is an
+    /// intentional teardown (disable/forget), not a server drop.
     func disconnect() async {
         bgTask?.cancel()
         bgTask = nil
         connectTask?.cancel()
         connectTask = nil
+        health = .disconnected
+        xpcUp = false
         await link.teardown()
-        await drop()
+        await closeSession()
     }
 
-    /// Drops the live session and marks SSH `disconnected`. The reference is
-    /// cleared before awaiting `close()` so a concurrent `connect()` can begin
-    /// rebuilding immediately. Leaves the poll loop running so it can recover.
+    /// Marks SSH `disconnected` on a server drop: closes the dead session and
+    /// suspends the domain with a user-facing reason. Leaves the poll loop
+    /// running so it can reconnect and later resume.
     private func drop() async {
         health = .disconnected
+        await closeSession()
+        await link.suspend(reason: Self.unreachableReason)
+    }
+
+    /// Releases the live session. The reference is cleared before awaiting
+    /// `close()` so a concurrent `connect()` can begin rebuilding immediately.
+    private func closeSession() async {
         guard let session else { return }
         self.session = nil
         await session.close()
+    }
+
+    /// Called after the XPC link (re)brokers. Marks the link up and reconciles;
+    /// gating means a re-broker while the server is down will not resume.
+    private func handleBrokered() async {
+        xpcUp = true
+        await reconcileDomainState()
+    }
+
+    /// The single authority on domain suspend/resume: resumes only when both
+    /// halves of composite health are good (SSH connected *and* XPC up).
+    private func reconcileDomainState() async {
+        guard health == .connected, xpcUp else { return }
+        await link.resume()
     }
 
     private func start() {

@@ -52,20 +52,6 @@ private actor FlakyConnector {
 private struct NonConnectionError: Error {}
 
 /// Polls `condition` until it holds or the timeout elapses.
-private func eventually(
-    timeout: Duration = .seconds(10),
-    _ condition: @Sendable () async throws -> Bool
-) async throws {
-    let deadline = ContinuousClock.now.advanced(by: timeout)
-    while ContinuousClock.now < deadline {
-        if try await condition() {
-            return
-        }
-        try await Task.sleep(for: .milliseconds(20))
-    }
-    Issue.record("Condition not met within \(timeout)")
-}
-
 extension TestSandbox {
     fileprivate func makeSupervisor(
         pollInterval: Duration? = nil,
