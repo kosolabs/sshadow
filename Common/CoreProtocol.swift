@@ -22,39 +22,6 @@ public enum OnExists: Message, PrettyDescribable {
 }
 
 public enum CoreRequest: Message, PrettyDescribable {
-    public var domainId: UUID {
-        switch self {
-        case .name(let request):
-            request.domainId
-        case .child(let request):
-            request.domainId
-        case .parent(let request):
-            request.domainId
-        case .item(let request):
-            request.domainId
-        case .list(let request):
-            request.domainId
-        case .currentAnchor(let request):
-            request.domainId
-        case .changes(let request):
-            request.domainId
-        case .setAttributes(let request):
-            request.domainId
-        case .createSymlink(let request):
-            request.domainId
-        case .createDirectory(let request):
-            request.domainId
-        case .move(let request):
-            request.domainId
-        case .removeFile(let request):
-            request.domainId
-        case .removeDirectory(let request):
-            request.domainId
-        case .limits(let request):
-            request.domainId
-        }
-    }
-
     case name(NameRequest)
     case child(ChildRequest)
     case parent(ParentRequest)
@@ -80,17 +47,6 @@ public enum CoreRequest: Message, PrettyDescribable {
 }
 
 public enum CoreProgressRequest: Message, PrettyDescribable {
-    public var domainId: UUID {
-        switch self {
-        case .upload(let request):
-            request.domainId
-        case .download(let request):
-            request.domainId
-        case .stream(let request):
-            request.domainId
-        }
-    }
-
     case upload(UploadRequest)
     case download(DownloadRequest)
     case stream(StreamRequest)
@@ -188,11 +144,9 @@ public enum CoreError: Message, PrettyDescribable, Error {
 }
 
 public struct NameRequest: Message, PrettyDescribable {
-    public let domainId: UUID
     public let itemId: String
 
-    public init(domainId: UUID, itemId: String) {
-        self.domainId = domainId
+    public init(itemId: String) {
         self.itemId = itemId
     }
 }
@@ -206,16 +160,10 @@ public struct NameResponse: Message, PrettyDescribable {
 }
 
 public struct ChildRequest: Message, PrettyDescribable {
-    public let domainId: UUID
     public let parentId: String
     public let name: String
 
-    public init(
-        domainId: UUID,
-        parentId: String,
-        name: String,
-    ) {
-        self.domainId = domainId
+    public init(parentId: String, name: String, ) {
         self.parentId = parentId
         self.name = name
     }
@@ -230,11 +178,9 @@ public struct ChildResponse: Message, PrettyDescribable {
 }
 
 public struct ParentRequest: Message, PrettyDescribable {
-    public let domainId: UUID
     public let itemId: String
 
-    public init(domainId: UUID, itemId: String) {
-        self.domainId = domainId
+    public init(itemId: String) {
         self.itemId = itemId
     }
 }
@@ -248,11 +194,9 @@ public struct ParentResponse: Message, PrettyDescribable {
 }
 
 public struct ItemRequest: Message, PrettyDescribable {
-    public let domainId: UUID
     public let itemId: String
 
-    public init(domainId: UUID, itemId: String) {
-        self.domainId = domainId
+    public init(itemId: String) {
         self.itemId = itemId
     }
 }
@@ -266,11 +210,9 @@ public struct ItemResponse: Message, PrettyDescribable {
 }
 
 public struct ListRequest: Message, PrettyDescribable {
-    public let domainId: UUID
     public let itemId: String
 
-    public init(domainId: UUID, itemId: String) {
-        self.domainId = domainId
+    public init(itemId: String) {
         self.itemId = itemId
     }
 }
@@ -284,11 +226,7 @@ public struct ListResponse: Message, PrettyDescribable {
 }
 
 public struct CurrentAnchorRequest: Message, PrettyDescribable {
-    public let domainId: UUID
-
-    public init(domainId: UUID) {
-        self.domainId = domainId
-    }
+    public init() {}
 }
 
 public struct CurrentAnchorResponse: Message, PrettyDescribable {
@@ -305,11 +243,9 @@ public enum Change: Message, PrettyDescribable {
 }
 
 public struct ChangesRequest: Message, PrettyDescribable {
-    public let domainId: UUID
     public let anchor: UInt64
 
-    public init(domainId: UUID, anchor: UInt64) {
-        self.domainId = domainId
+    public init(anchor: UInt64) {
         self.anchor = anchor
     }
 }
@@ -325,20 +261,17 @@ public struct ChangesResponse: Message, PrettyDescribable {
 }
 
 public struct SetAttributesRequest: Message, PrettyDescribable {
-    public let domainId: UUID
     public let itemId: String
     public let flags: Item.Flags?
     public let accessTime: Date?
     public let modifyTime: Date?
 
     public init(
-        domainId: UUID,
         itemId: String,
         flags: Item.Flags?,
         accessTime: Date?,
         modifyTime: Date?
     ) {
-        self.domainId = domainId
         self.itemId = itemId
         self.flags = flags
         self.accessTime = accessTime
@@ -351,18 +284,15 @@ public struct SetAttributesResponse: Message, PrettyDescribable {
 }
 
 public struct CreateSymlinkRequest: Message, PrettyDescribable {
-    public let domainId: UUID
     public let parentId: String
     public let name: String
     public let target: String
 
     public init(
-        domainId: UUID,
         parentId: String,
         name: String,
         target: String
     ) {
-        self.domainId = domainId
         self.parentId = parentId
         self.name = name
         self.target = target
@@ -378,20 +308,17 @@ public struct CreateSymlinkResponse: Message, PrettyDescribable {
 }
 
 public struct CreateDirectoryRequest: Message, PrettyDescribable {
-    public let domainId: UUID
     public let parentId: String
     public let name: String
     public let mode: mode_t
     public let ifExists: OnExists
 
     public init(
-        domainId: UUID,
         parentId: String,
         name: String,
         mode: mode_t,
         ifExists: OnExists
     ) {
-        self.domainId = domainId
         self.parentId = parentId
         self.name = name
         self.mode = mode
@@ -408,18 +335,15 @@ public struct CreateDirectoryResponse: Message, PrettyDescribable {
 }
 
 public struct MoveRequest: Message, PrettyDescribable {
-    public let domainId: UUID
     public let itemId: String
     public let newParentId: String
     public let newName: String
 
     public init(
-        domainId: UUID,
         itemId: String,
         newParentId: String,
         newName: String
     ) {
-        self.domainId = domainId
         self.itemId = itemId
         self.newParentId = newParentId
         self.newName = newName
@@ -431,11 +355,9 @@ public struct MoveResponse: Message, PrettyDescribable {
 }
 
 public struct RemoveFileRequest: Message, PrettyDescribable {
-    public let domainId: UUID
     public let itemId: String
 
-    public init(domainId: UUID, itemId: String) {
-        self.domainId = domainId
+    public init(itemId: String) {
         self.itemId = itemId
     }
 }
@@ -445,11 +367,9 @@ public struct RemoveFileResponse: Message, PrettyDescribable {
 }
 
 public struct RemoveDirectoryRequest: Message, PrettyDescribable {
-    public let domainId: UUID
     public let itemId: String
 
-    public init(domainId: UUID, itemId: String) {
-        self.domainId = domainId
+    public init(itemId: String) {
         self.itemId = itemId
     }
 }
@@ -459,11 +379,7 @@ public struct RemoveDirectoryResponse: Message, PrettyDescribable {
 }
 
 public struct LimitsRequest: Message, PrettyDescribable {
-    public let domainId: UUID
-
-    public init(domainId: UUID) {
-        self.domainId = domainId
-    }
+    public init() {}
 }
 
 public struct LimitsResponse: Message, PrettyDescribable {
@@ -486,7 +402,6 @@ public struct LimitsResponse: Message, PrettyDescribable {
 }
 
 public struct UploadRequest: Message, PrettyDescribable {
-    public let domainId: UUID
     public let parentId: String
     public let name: String
     public let file: URL
@@ -494,14 +409,12 @@ public struct UploadRequest: Message, PrettyDescribable {
     public let chunkSize: UInt64
 
     public init(
-        domainId: UUID,
         parentId: String,
         name: String,
         file: URL,
         flags: Item.Flags,
         chunkSize: UInt64
     ) {
-        self.domainId = domainId
         self.parentId = parentId
         self.name = name
         self.file = file
@@ -519,16 +432,10 @@ public struct UploadResponse: Message, PrettyDescribable {
 }
 
 public struct DownloadRequest: Message, PrettyDescribable {
-    public let domainId: UUID
     public let itemId: String
     public let chunkSize: UInt64
 
-    public init(
-        domainId: UUID,
-        itemId: String,
-        chunkSize: UInt64
-    ) {
-        self.domainId = domainId
+    public init(itemId: String, chunkSize: UInt64) {
         self.itemId = itemId
         self.chunkSize = chunkSize
     }
@@ -545,16 +452,10 @@ public struct DownloadResponse: Message, PrettyDescribable {
 }
 
 public struct StreamRequest: Message, PrettyDescribable {
-    public let domainId: UUID
     public let itemId: String
     public let range: Range<UInt64>
 
-    public init(
-        domainId: UUID,
-        itemId: String,
-        range: Range<UInt64>
-    ) {
-        self.domainId = domainId
+    public init(itemId: String, range: Range<UInt64>) {
         self.itemId = itemId
         self.range = range
     }

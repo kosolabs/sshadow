@@ -8,7 +8,7 @@ struct CoreTests {
     @Test func pollSucceeds() async throws {
         let sandbox = TestSandbox()
 
-        try await sandbox.service.poll(domainId: sandbox.id)
+        try await sandbox.poll()
     }
 
     @Test func currentAnchorAdvancesOnPoll() async throws {
@@ -17,7 +17,7 @@ struct CoreTests {
         #expect(try await sandbox.client.currentAnchor() == 0)
 
         try sandbox.createFolder(at: "new.txt")
-        try await sandbox.service.poll(domainId: sandbox.id)
+        try await sandbox.poll()
 
         #expect(try await sandbox.client.currentAnchor() == 1)
     }

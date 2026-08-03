@@ -117,25 +117,25 @@ public class ConnectionConfigModel: CustomStringConvertible {
         let config = try ConnectionConfig(from: self)
         try await SSHClient.test(config: config)
 
-        try await CoreService.shared.register(config: config)
+        try await DomainRegistry.shared.register(config: config)
         try await domain.add()
-        try await CoreService.shared.broker(domainId: id)
+        try await DomainRegistry.shared.broker(id: id)
 
         self.enabled = true
         logger.info("Enabled profile: \(self)")
     }
 
     public func disable() async throws {
-        await CoreService.shared.teardown(domainId: id)
+        await DomainRegistry.shared.teardown(id: id)
         try await domain.remove()
-        try await CoreService.shared.forget(id)
+        try await DomainRegistry.shared.forget(id: id)
 
         self.enabled = false
         logger.info("Disabled profile: \(self)")
     }
 
     public func poll() async throws {
-        try await CoreService.shared.poll(domainId: id)
+        try await DomainRegistry.shared.poll(id: id)
     }
 
     // MARK: - Password Management
