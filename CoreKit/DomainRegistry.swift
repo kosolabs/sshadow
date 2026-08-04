@@ -23,7 +23,7 @@ public actor DomainRegistry {
     private let pollInterval: Duration?
 
     private var configs: [UUID: ConnectionConfig] = [:]
-    private var supervisors: [UUID: Task<SessionSupervisor, Never>] = [:]
+    private var supervisors: [UUID: SessionSupervisor] = [:]
 
     init(
         sharedUrl: URL = SSHadow.groupUrl,
@@ -37,41 +37,25 @@ public actor DomainRegistry {
         self.pollInterval = pollInterval
     }
 
-    private func supervisor(for id: UUID) async throws -> SessionSupervisor {
-        if let task = supervisors[id] {
-            return await task.value
+    func supervisor(for id: UUID) throws -> SessionSupervisor {
+        if let supervisor = supervisors[id] {
+            return supervisor
         }
 
         guard let config = configs[id] else {
             throw CoreError.profileNotFound
         }
 
-        let task = Task {
-            await SessionSupervisor(
-                config: config,
-                domainDbConfig: DomainDB.model(for: id),
-                sharedUrl: sharedUrl,
-                signal: signal,
-                transfers: transfers,
-                pollInterval: pollInterval
-            )
-        }
-        supervisors[id] = task
-        return await task.value
-    }
-
-    @discardableResult
-    func withSession<T: Sendable>(
-        id: UUID,
-        _ operation: @Sendable (Session) async throws -> T
-    ) async throws -> T {
-        try await supervisor(for: id).withSession(operation)
-    }
-
-    func poll(id: UUID) async throws {
-        try await withSession(id: id) { session in
-            try await session.poll()
-        }
+        let supervisor = SessionSupervisor(
+            config: config,
+            domainDbConfig: DomainDB.model(for: id),
+            sharedUrl: sharedUrl,
+            signal: signal,
+            transfers: transfers,
+            pollInterval: pollInterval
+        )
+        supervisors[id] = supervisor
+        return supervisor
     }
 
     @discardableResult
@@ -80,15 +64,19 @@ public actor DomainRegistry {
     }
 
     func disconnect(id: UUID) async {
-        if let task = supervisors.removeValue(forKey: id) {
-            await task.value.disconnect()
+        if let supervisor = supervisors.removeValue(forKey: id) {
+            await supervisor.shutdown()
         }
+    }
+
+    func poll(id: UUID) async throws {
+        let session = try await connect(id: id)
+        try await session.poll()
     }
 
     public func register(config: ConnectionConfig) async throws {
         try await DomainDB.open(config: DomainDB.model(for: config.id))
         configs[config.id] = config
-        try await connect(id: config.id)
     }
 
     public func forget(id: UUID) async throws {
@@ -102,6 +90,6 @@ public actor DomainRegistry {
     }
 
     public func teardown(id: UUID) async {
-        await supervisors[id]?.value.teardown()
+        await supervisors[id]?.teardown()
     }
 }

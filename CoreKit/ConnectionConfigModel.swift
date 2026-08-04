@@ -113,7 +113,6 @@ public class ConnectionConfigModel: CustomStringConvertible {
     }
 
     public func enable() async throws {
-        try modelContext?.save()
         let config = try ConnectionConfig(from: self)
         try await SSHClient.test(config: config)
 
