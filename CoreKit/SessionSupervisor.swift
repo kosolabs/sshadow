@@ -12,7 +12,7 @@ private let logger = Logger(category: "SessionSupervisor")
 /// recovery means replacing the whole `Session` — which is why ownership lives
 /// here rather than inside `Session` itself.
 ///
-/// Health is a small state machine:
+/// `state` is a small state machine:
 ///
 ///     connecting ──success──▶ connected
 ///         ▲                       │
@@ -28,13 +28,6 @@ final class SessionSupervisor {
     static let unreachableReason =
         "The server is currently unreachable; check your network connection."
 
-    /// SSH connection health, the supervisor's own half of composite health.
-    enum Health: Sendable, Equatable {
-        case connecting
-        case connected
-        case disconnected
-    }
-
     private let config: ConnectionConfig
     private let domainDbConfig: ModelConfiguration
     private let sharedUrl: URL
@@ -46,18 +39,22 @@ final class SessionSupervisor {
     private let maxBackoff: Duration
     private var service: CoreService!
 
-    private var session: Session?
-    private var connectTask: Task<Session, any Error>?
+    /// The SSH connection lifecycle as a single value: `disconnected`, an
+    /// in-flight `connecting` connect (single-flight), or a live `connected`
+    /// session. Folding session + connect task + health into one enum keeps them
+    /// in lockstep and makes illegal states — such as connecting while a session
+    /// is already live — unrepresentable.
+    private enum State {
+        case disconnected
+        case connecting(Task<Session, any Error>)
+        case connected(Session)
+    }
+
+    private var state: State = .disconnected
     private var bgTask: Task<Void, Never>?
-    private(set) var health: Health = .disconnected
     private var connection: NSXPCConnection?
 
     private var domain: NSFileProviderDomain { config.domain }
-
-    /// Whether the XPC link is currently brokered — the other half of composite
-    /// health. The domain is resumed only when SSH is `connected` *and* the XPC
-    /// link is up, so a re-broker can never resume a domain whose server is down.
-    private var xpcUp = false
 
     init(
         config: ConnectionConfig,
@@ -86,15 +83,15 @@ final class SessionSupervisor {
     /// coalesce onto one in-flight connect (single-flight).
     @discardableResult
     func connect() async throws -> Session {
-        if let session {
+        switch state {
+        case .connected(let session):
             return session
+        case .connecting(let task):
+            return try await task.value
+        case .disconnected:
+            break
         }
 
-        if let connectTask {
-            return try await connectTask.value
-        }
-
-        health = .connecting
         let task = Task {
             let ssh = try await SSHClient.connect(config: config)
             let sftp = try await ssh.sftp()
@@ -109,19 +106,16 @@ final class SessionSupervisor {
                 transfers: transfers
             )
         }
-        connectTask = task
+        state = .connecting(task)
 
         do {
             let session = try await task.value
-            self.session = session
-            connectTask = nil
-            health = .connected
+            state = .connected(session)
             start()
             await reconcileDomainState()
             return session
         } catch {
-            connectTask = nil
-            health = .disconnected
+            state = .disconnected
             throw error
         }
     }
@@ -150,42 +144,48 @@ final class SessionSupervisor {
     func disconnect() async {
         bgTask?.cancel()
         bgTask = nil
-        connectTask?.cancel()
-        connectTask = nil
-        health = .disconnected
-        xpcUp = false
+
+        // Capture any live session before clearing state, then close it after
+        // teardown; cancel an in-flight connect instead.
+        let session: Session?
+        switch state {
+        case .connecting(let task):
+            task.cancel()
+            session = nil
+        case .connected(let live):
+            session = live
+        case .disconnected:
+            session = nil
+        }
+        state = .disconnected
+
         await teardown()
-        await closeSession()
+        await session?.close()
     }
 
     /// Marks SSH `disconnected` on a server drop: closes the dead session and
     /// suspends the domain with a user-facing reason. Leaves the poll loop
     /// running so it can reconnect and later resume.
     private func drop() async {
-        health = .disconnected
         await closeSession()
         await suspend(reason: Self.unreachableReason)
     }
 
-    /// Releases the live session. The reference is cleared before awaiting
+    /// Releases the live session, if any. The state is cleared before awaiting
     /// `close()` so a concurrent `connect()` can begin rebuilding immediately.
     private func closeSession() async {
-        guard let session else { return }
-        self.session = nil
+        guard case .connected(let session) = state else { return }
+        state = .disconnected
         await session.close()
     }
 
-    /// Called after the XPC link (re)brokers. Marks the link up and reconciles;
-    /// gating means a re-broker while the server is down will not resume.
-    private func handleBrokered() async {
-        xpcUp = true
-        await reconcileDomainState()
-    }
-
     /// The single authority on domain suspend/resume: resumes only when both
-    /// halves of composite health are good (SSH connected *and* XPC up).
+    /// halves of composite health are good (SSH `connected` *and* the XPC link
+    /// up, i.e. `connection` non-nil). Gating on the link means a re-broker while
+    /// the server is down will not resume, and an SSH reconnect while the link is
+    /// down will not resume either.
     private func reconcileDomainState() async {
-        guard health == .connected, xpcUp else { return }
+        guard case .connected = state, connection != nil else { return }
         await resume()
     }
 
@@ -229,8 +229,8 @@ final class SessionSupervisor {
 
     /// (Re)establishes the XPC link: connects, exports the core service, and
     /// attaches the extension. Tears down any existing connection first, so it
-    /// is safe to call repeatedly. Does not touch domain suspend/resume — that
-    /// is the supervisor's decision, taken in `onBrokered`.
+    /// is safe to call repeatedly. Reconciles once the link is up so a resume
+    /// gated on composite health can take effect.
     func broker() async throws {
         await teardown()
 
@@ -255,12 +255,13 @@ final class SessionSupervisor {
         }
         connection.interruptionHandler = { connection.invalidate() }
         connection.resume()
-        self.connection = connection
 
         let ext = connection.remoteObjectProxy as! ExtXPC
         await ext.attach()
+        self.connection = connection
 
         logger.info("Brokered XPC: \(domainId)")
+        await reconcileDomainState()
     }
 
     private func requireConnection() async throws -> NSXPCConnection {
@@ -278,7 +279,6 @@ final class SessionSupervisor {
     /// handlers first so the intentional invalidation does not trigger a
     /// re-broker. A no-op when there is no live connection.
     func teardown() async {
-        xpcUp = false
         guard let connection else { return }
         self.connection = nil
 
