@@ -17,7 +17,6 @@ public actor DomainRegistry {
         pollInterval: .seconds(30),
     )
 
-    private let domainDbConfig: ModelConfiguration?
     private let sharedUrl: URL
     private let signal: SignalEnumerator
     private let transfers: Transfers
@@ -27,13 +26,11 @@ public actor DomainRegistry {
     private var supervisors: [UUID: Task<SessionSupervisor, Never>] = [:]
 
     init(
-        domainDbConfig: ModelConfiguration? = nil,
         sharedUrl: URL = SSHadow.groupUrl,
         signal: @escaping SignalEnumerator,
         transfers: Transfers,
         pollInterval: Duration? = nil
     ) {
-        self.domainDbConfig = domainDbConfig
         self.sharedUrl = sharedUrl
         self.signal = signal
         self.transfers = transfers
@@ -52,7 +49,7 @@ public actor DomainRegistry {
         let task = Task {
             await SessionSupervisor(
                 config: config,
-                domainDbConfig: domainDbConfig ?? DomainDB.model(for: id),
+                domainDbConfig: DomainDB.model(for: id),
                 sharedUrl: sharedUrl,
                 signal: signal,
                 transfers: transfers,
@@ -89,9 +86,7 @@ public actor DomainRegistry {
     }
 
     public func register(config: ConnectionConfig) async throws {
-        try await DomainDB.open(
-            config: domainDbConfig ?? DomainDB.model(for: config.id)
-        )
+        try await DomainDB.open(config: DomainDB.model(for: config.id))
         configs[config.id] = config
         try await connect(id: config.id)
     }
