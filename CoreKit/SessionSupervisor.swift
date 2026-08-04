@@ -22,8 +22,7 @@ private let logger = Logger(category: "SessionSupervisor")
 /// A `connectionFailed` from a request (via `withSession`) or a poll drops the
 /// dead session and transitions to `disconnected`; the poll loop then retries
 /// `connect()` on a backoff until it recovers. This is the single recovery path.
-@MainActor
-final class SessionSupervisor {
+actor SessionSupervisor {
     /// Shown in Finder while a domain is suspended because its server dropped.
     static let unreachableReason =
         "The server is currently unreachable; check your network connection."
@@ -37,13 +36,8 @@ final class SessionSupervisor {
     private let pollInterval: Duration?
     private let initialBackoff: Duration
     private let maxBackoff: Duration
-    private var service: CoreService!
+    private lazy var service = CoreService(supervisor: self)
 
-    /// The SSH connection lifecycle as a single value: `disconnected`, an
-    /// in-flight `connecting` connect (single-flight), or a live `connected`
-    /// session. Folding session + connect task + health into one enum keeps them
-    /// in lockstep and makes illegal states — such as connecting while a session
-    /// is already live — unrepresentable.
     private enum State {
         case disconnected
         case connecting(Task<Session, any Error>)
@@ -75,12 +69,8 @@ final class SessionSupervisor {
         self.pollInterval = pollInterval
         self.initialBackoff = initialBackoff
         self.maxBackoff = maxBackoff
-
-        self.service = CoreService(supervisor: self)
     }
 
-    /// Returns the live session, connecting if needed. Concurrent callers
-    /// coalesce onto one in-flight connect (single-flight).
     @discardableResult
     func connect() async throws -> Session {
         switch state {
@@ -111,8 +101,8 @@ final class SessionSupervisor {
         do {
             let session = try await task.value
             state = .connected(session)
-            start()
-            await reconcileDomainState()
+            startPolling()
+            await resumeIfHealthy()
             return session
         } catch {
             state = .disconnected
@@ -120,10 +110,22 @@ final class SessionSupervisor {
         }
     }
 
-    /// Runs `operation` against the live session. If it fails because the SSH
-    /// connection dropped, transitions to `disconnected` and drops the dead
-    /// session so the next `connect()` rebuilds it. This is the recovery path
-    /// shared by request and poll failures.
+    func shutdown() async {
+        stopPolling()
+
+        switch state {
+        case .connecting(let task):
+            task.cancel()
+            await teardown()
+        case .connected(let session):
+            await teardown()
+            await session.close()
+        case .disconnected:
+            await teardown()
+        }
+        state = .disconnected
+    }
+
     @discardableResult
     func withSession<T: Sendable>(
         _ operation: @Sendable (Session) async throws -> T
@@ -133,124 +135,62 @@ final class SessionSupervisor {
             return try await operation(session)
         } catch let error as SSHError where error.isConnectionFailed {
             logger.error("SSH disconnected: \(error)")
-            await drop()
+            await disconnect()
+            await suspend(reason: Self.unreachableReason)
             throw error
         }
     }
 
-    /// Shuts the supervisor down: cancels the poll loop, tears down the XPC
-    /// link, and closes the session. Does not suspend the domain — this is an
-    /// intentional teardown (disable/forget), not a server drop.
-    func disconnect() async {
-        bgTask?.cancel()
-        bgTask = nil
-
-        // Capture any live session before clearing state, then close it after
-        // teardown; cancel an in-flight connect instead.
-        let session: Session?
-        switch state {
-        case .connecting(let task):
-            task.cancel()
-            session = nil
-        case .connected(let live):
-            session = live
-        case .disconnected:
-            session = nil
-        }
-        state = .disconnected
-
-        await teardown()
-        await session?.close()
-    }
-
-    /// Marks SSH `disconnected` on a server drop: closes the dead session and
-    /// suspends the domain with a user-facing reason. Leaves the poll loop
-    /// running so it can reconnect and later resume.
-    private func drop() async {
-        await closeSession()
-        await suspend(reason: Self.unreachableReason)
-    }
-
-    /// Releases the live session, if any. The state is cleared before awaiting
-    /// `close()` so a concurrent `connect()` can begin rebuilding immediately.
-    private func closeSession() async {
+    private func disconnect() async {
         guard case .connected(let session) = state else { return }
         state = .disconnected
         await session.close()
     }
 
-    /// The single authority on domain suspend/resume: resumes only when both
-    /// halves of composite health are good (SSH `connected` *and* the XPC link
-    /// up, i.e. `connection` non-nil). Gating on the link means a re-broker while
-    /// the server is down will not resume, and an SSH reconnect while the link is
-    /// down will not resume either.
-    private func reconcileDomainState() async {
-        guard case .connected = state, connection != nil else { return }
-        await resume()
-    }
-
-    private func start() {
+    private func startPolling() {
         guard bgTask == nil, let pollInterval else { return }
         bgTask = Task { [weak self] in
-            await self?.run(pollInterval: pollInterval)
+            guard let self else { return }
+            await self.pollLoop(interval: pollInterval)
         }
     }
 
-    /// Poll + recovery loop. While connected it polls every `pollInterval`; on a
-    /// failure it backs off, then the next iteration's `connect()` rebuilds the
-    /// session. Backoff resets once a connection is (re)established.
-    private func run(pollInterval: Duration) async {
+    private func pollLoop(interval: Duration) async {
         var backoff = initialBackoff
         while !Task.isCancelled {
+            do { try await Task.sleep(for: interval) } catch { return }
             do {
-                try await connect()
+                try await withSession { try await $0.poll() }
                 backoff = initialBackoff
-                try await Task.sleep(for: pollInterval)
-                try await poll()
-            } catch is CancellationError {
-                return
             } catch {
                 logger.error(
                     "Poll loop error; retrying in \(backoff): \(error)"
                 )
-                do {
-                    try await Task.sleep(for: backoff)
-                } catch {
-                    return
-                }
+                do { try await Task.sleep(for: backoff) } catch { return }
                 backoff = min(backoff * 2, maxBackoff)
             }
         }
     }
 
-    private func poll() async throws {
-        try await withSession { try await $0.poll() }
+    private func stopPolling() {
+        guard let bgTask else { return }
+        bgTask.cancel()
+        self.bgTask = nil
     }
 
-    /// (Re)establishes the XPC link: connects, exports the core service, and
-    /// attaches the extension. Tears down any existing connection first, so it
-    /// is safe to call repeatedly. Reconciles once the link is up so a resume
-    /// gated on composite health can take effect.
     func broker() async throws {
         await teardown()
 
         let domainId = domain.id
-        let connection = try await requireConnection()
+        let connection = try await awaitConnection()
         connection.exportedInterface = NSXPCInterface(with: CoreXPC.self)
         connection.exportedObject = service
         connection.remoteObjectInterface = NSXPCInterface(with: ExtXPC.self)
         connection.invalidationHandler = { [weak self] in
             logger.info("Invalidated XPC: \(domainId)")
-            Task { @MainActor in
+            Task {
                 guard let self else { return }
-                self.connection = nil
-                do {
-                    try await self.broker()
-                } catch {
-                    logger.error(
-                        "Failed to broker XPC for \(domainId): \(error)"
-                    )
-                }
+                await self.rebroker()
             }
         }
         connection.interruptionHandler = { connection.invalidate() }
@@ -261,10 +201,19 @@ final class SessionSupervisor {
         self.connection = connection
 
         logger.info("Brokered XPC: \(domainId)")
-        await reconcileDomainState()
+        await resumeIfHealthy()
     }
 
-    private func requireConnection() async throws -> NSXPCConnection {
+    private func rebroker() async {
+        do {
+            connection = nil
+            try await broker()
+        } catch {
+            logger.error("Failed to broker XPC for \(domain.id): \(error)")
+        }
+    }
+
+    private func awaitConnection() async throws -> NSXPCConnection {
         while true {
             do {
                 return try await domain.service.fileProviderConnection()
@@ -275,9 +224,6 @@ final class SessionSupervisor {
         }
     }
 
-    /// Detaches the extension and invalidates the connection. Clears the
-    /// handlers first so the intentional invalidation does not trigger a
-    /// re-broker. A no-op when there is no live connection.
     func teardown() async {
         guard let connection else { return }
         self.connection = nil
@@ -291,25 +237,26 @@ final class SessionSupervisor {
         logger.info("Tore down XPC: \(domain.id)")
     }
 
-    /// Suspends the domain with a user-facing reason. Best-effort: failures are
-    /// logged, not thrown, since suspend runs on error/shutdown paths.
-    func suspend(reason: String) async {
-        do {
-            try await domain.suspend(reason: reason, options: .temporary)
-            logger.info("Suspended sync: \(domain.id)")
-        } catch {
-            logger.error("Failed to suspend \(domain.id): \(error)")
-        }
+    private func resumeIfHealthy() async {
+        guard case .connected = state, connection != nil else { return }
+        await resume()
     }
 
-    /// Resumes the domain. A safe no-op when the domain is already connected.
-    /// Best-effort: failures are logged, not thrown.
-    func resume() async {
+    private func resume() async {
         do {
             try await domain.resume()
             logger.info("Resumed sync: \(domain.id)")
         } catch {
             logger.error("Failed to resume \(domain.id): \(error)")
+        }
+    }
+
+    private func suspend(reason: String) async {
+        do {
+            try await domain.suspend(reason: reason, options: .temporary)
+            logger.info("Suspended sync: \(domain.id)")
+        } catch {
+            logger.error("Failed to suspend \(domain.id): \(error)")
         }
     }
 }

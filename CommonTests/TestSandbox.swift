@@ -103,7 +103,7 @@ class TestSandbox {
             )
 
             let config = try config
-            let supervisor = await SessionSupervisor(
+            let supervisor = SessionSupervisor(
                 config: config,
                 domainDbConfig: memoryOnlyConfig,
                 sharedUrl: shared,
