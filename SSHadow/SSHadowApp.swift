@@ -11,8 +11,8 @@ private func reconnectAllDomains() {
         for config in await AppDB.shared.enabledConfigs() {
             let domain = config.domain
             do {
-                try await CoreService.shared.register(config: config)
-                try await CoreService.shared.broker(domainId: domain.id)
+                try await DomainRegistry.shared.register(config: config)
+                try await DomainRegistry.shared.broker(id: domain.id)
             } catch {
                 logger.error("Failed to resume sync \(domain): \(error)")
             }

@@ -6,7 +6,17 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "DomainRegistry")
 
-actor DomainRegistry {
+public actor DomainRegistry {
+    public static let shared: DomainRegistry = DomainRegistry(
+        signal: { config in
+            try await config.domain.manager.signalEnumerator(
+                for: .workingSet
+            )
+        },
+        transfers: Transfers.shared,
+        pollInterval: .seconds(30),
+    )
+
     private let domainDbConfig: ModelConfiguration?
     private let sharedUrl: URL
     private let signal: SignalEnumerator
@@ -14,7 +24,7 @@ actor DomainRegistry {
     private let pollInterval: Duration?
 
     private var configs: [UUID: ConnectionConfig] = [:]
-    private var supervisors: [UUID: SessionSupervisor] = [:]
+    private var supervisors: [UUID: Task<SessionSupervisor, Never>] = [:]
 
     init(
         domainDbConfig: ModelConfiguration? = nil,
@@ -30,15 +40,27 @@ actor DomainRegistry {
         self.pollInterval = pollInterval
     }
 
-    @discardableResult
-    func register(config: ConnectionConfig) async throws -> Session {
-        configs[config.id] = config
-        return try await connect(id: config.id)
-    }
+    private func supervisor(for id: UUID) async throws -> SessionSupervisor {
+        if let task = supervisors[id] {
+            return await task.value
+        }
 
-    @discardableResult
-    func connect(id: UUID) async throws -> Session {
-        try await supervisor(for: id).connect()
+        guard let config = configs[id] else {
+            throw CoreError.profileNotFound
+        }
+
+        let task = Task {
+            await SessionSupervisor(
+                config: config,
+                domainDbConfig: domainDbConfig ?? DomainDB.model(for: id),
+                sharedUrl: sharedUrl,
+                signal: signal,
+                transfers: transfers,
+                pollInterval: pollInterval
+            )
+        }
+        supervisors[id] = task
+        return await task.value
     }
 
     @discardableResult
@@ -49,45 +71,42 @@ actor DomainRegistry {
         try await supervisor(for: id).withSession(operation)
     }
 
-    private func supervisor(for id: UUID) throws -> SessionSupervisor {
-        if let supervisor = supervisors[id] {
-            return supervisor
+    func poll(id: UUID) async throws {
+        try await withSession(id: id) { session in
+            try await session.poll()
         }
-
-        guard let config = configs[id] else {
-            throw CoreError.profileNotFound
-        }
-
-        let supervisor = SessionSupervisor(
-            config: config,
-            domainDbConfig: domainDbConfig ?? DomainDB.model(for: id),
-            sharedUrl: sharedUrl,
-            signal: signal,
-            transfers: transfers,
-            pollInterval: pollInterval
-        )
-        supervisors[id] = supervisor
-        return supervisor
     }
 
-    /// Brokers the domain's XPC link to the extension.
-    func broker(id: UUID) async throws {
-        try await supervisor(for: id).broker()
-    }
-
-    /// Tears down the domain's XPC link to the extension, if it exists.
-    func teardown(id: UUID) async {
-        await supervisors[id]?.teardown()
-    }
-
-    func forget(id: UUID) async {
-        await disconnect(id: id)
-        configs[id] = nil
+    @discardableResult
+    func connect(id: UUID) async throws -> Session {
+        try await supervisor(for: id).connect()
     }
 
     func disconnect(id: UUID) async {
-        if let supervisor = supervisors.removeValue(forKey: id) {
-            await supervisor.disconnect()
+        if let task = supervisors.removeValue(forKey: id) {
+            await task.value.disconnect()
         }
+    }
+
+    public func register(config: ConnectionConfig) async throws {
+        try await DomainDB.open(
+            config: domainDbConfig ?? DomainDB.model(for: config.id)
+        )
+        configs[config.id] = config
+        try await connect(id: config.id)
+    }
+
+    public func forget(id: UUID) async throws {
+        await disconnect(id: id)
+        configs[id] = nil
+        try await DomainDB.delete(id: id)
+    }
+
+    public func broker(id: UUID) async throws {
+        try await supervisor(for: id).broker()
+    }
+
+    public func teardown(id: UUID) async {
+        await supervisors[id]?.value.teardown()
     }
 }
