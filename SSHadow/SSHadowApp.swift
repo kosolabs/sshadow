@@ -23,6 +23,7 @@ private func reconnectAllDomains() {
 @main
 struct SSHadowApp: App {
     private let modelContainer: ModelContainer
+    @State private var activation = WindowActivationTracker()
     @State private var coordinator = ConnectionCoordinator()
 
     init() {
@@ -53,6 +54,7 @@ struct SSHadowApp: App {
             SettingsView()
         }
         .modelContainer(modelContainer)
+        .environment(activation)
         .environment(coordinator)
         .environment(Transfers.shared)
 
@@ -60,5 +62,6 @@ struct SSHadowApp: App {
             AboutView()
         }
         .windowResizability(.contentSize)
+        .environment(activation)
     }
 }

@@ -2,6 +2,8 @@ import Common
 import SwiftUI
 
 struct AboutView: View {
+    @Environment(WindowActivationTracker.self) private var activation
+
     var body: some View {
         VStack(spacing: 12) {
             if let icon = NSApp.applicationIconImage {
@@ -23,5 +25,7 @@ struct AboutView: View {
         }
         .padding(32)
         .frame(width: 280)
+        .onAppear { activation.retain() }
+        .onDisappear { activation.release() }
     }
 }

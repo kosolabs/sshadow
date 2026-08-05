@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(WindowActivationTracker.self) private var activation
+
     var body: some View {
         TabView {
             Tab {
@@ -12,5 +14,7 @@ struct SettingsView: View {
                 )
             }
         }
+        .onAppear { activation.retain() }
+        .onDisappear { activation.release() }
     }
 }
