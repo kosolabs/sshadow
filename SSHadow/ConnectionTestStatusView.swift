@@ -63,9 +63,9 @@ struct ConnectionTestStatusView: View {
                     systemImage: "lock.circle"
                 )
                 .foregroundStyle(.red)
-            case .passwordAuthFailed:
+            case .authenticationFailed:
                 Label(
-                    "Password authentication failed",
+                    "Authentication failed",
                     systemImage: "lock.circle"
                 )
                 .foregroundStyle(.red)

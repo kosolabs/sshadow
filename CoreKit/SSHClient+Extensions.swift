@@ -10,7 +10,7 @@ extension SSHClient {
         case connectionRefused
         case connectionTimedOut
         case invalidPrivateKey
-        case passwordAuthFailed
+        case authenticationFailed
         case remotePathNotFound
         case remotePathNotDirectory
         case unknown(domain: String, code: Int, message: String)
@@ -57,7 +57,7 @@ extension SSHClient {
         {
             throw .invalidPrivateKey
         } catch SSHError.authenticationFailed {
-            throw .passwordAuthFailed
+            throw .authenticationFailed
         } catch SSHError.sftpError(.noSuchFile, _) {
             throw .remotePathNotFound
         } catch {
