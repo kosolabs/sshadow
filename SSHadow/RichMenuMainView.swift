@@ -37,10 +37,9 @@ struct RichMenuMainView: View {
 
                 Divider().padding(.vertical, 4)
             }
-            
+
             RichMenuButton {
-                NSApp.activate()
-                openWindow(id: "settings")
+                openWindowInFront(id: "settings")
             } label: {
                 RichMenuLabel("Open SSHadow Settings...", systemImage: "gear")
             }
@@ -69,8 +68,7 @@ struct RichMenuMainView: View {
             }
 
             RichMenuButton {
-                NSApp.activate()
-                openWindow(id: "about")
+                openWindowInFront(id: "about")
             } label: {
                 RichMenuLabel("About SSHadow", systemImage: "info.circle")
             }
@@ -93,4 +91,11 @@ struct RichMenuMainView: View {
         }
     }
 
+    private func openWindowInFront(id: String) {
+        openWindow(id: id)
+        NSApp.activate()
+        NSApp.windows
+            .first { $0.identifier?.rawValue.contains(id) == true }?
+            .makeKeyAndOrderFront(nil)
+    }
 }
