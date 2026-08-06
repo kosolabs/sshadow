@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0](https://github.com/kosolabs/sshadow/compare/v0.4.0...v0.5.0) (2026-08-06)
+
+
+### Features
+
+* reconnect with exponential backoff of transient disconnects ([#256](https://github.com/kosolabs/sshadow/issues/256)) ([0c6a17e](https://github.com/kosolabs/sshadow/commit/0c6a17e5b3cccbf694ca78727338921d5b00a80a))
+* show server unreachable message in finder when ssh is disconnected ([#259](https://github.com/kosolabs/sshadow/issues/259)) ([23bc9a9](https://github.com/kosolabs/sshadow/commit/23bc9a97c56ce53e732d65c4b8a20768aa27e871))
+
+
+### Bug Fixes
+
+* misleading error message when auth fails ([#268](https://github.com/kosolabs/sshadow/issues/268)) ([ed142b4](https://github.com/kosolabs/sshadow/commit/ed142b457cdac7631db4399394bfd792d7877544))
+* show app icon when any SSHadow window is open ([#267](https://github.com/kosolabs/sshadow/issues/267)) ([0dd622f](https://github.com/kosolabs/sshadow/commit/0dd622f022402b4de12589a3602cad584f65128c))
+
 ## [0.4.0](https://github.com/kosolabs/sshadow/compare/v0.3.0...v0.4.0) (2026-07-25)
 
 
