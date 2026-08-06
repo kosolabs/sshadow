@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/kosolabs/sshadow/compare/v0.5.0...v0.5.1) (2026-08-06)
+
+
+### Bug Fixes
+
+* bring windows to front when opening ([#280](https://github.com/kosolabs/sshadow/issues/280)) ([c7f111e](https://github.com/kosolabs/sshadow/commit/c7f111e23f457d067a1133c861294248e5e7d020))
+* refactor settings to be resizable ([#278](https://github.com/kosolabs/sshadow/issues/278)) ([5da357e](https://github.com/kosolabs/sshadow/commit/5da357e547acf9326470c0a8115e15f527bec160))
+
 ## [0.5.0](https://github.com/kosolabs/sshadow/compare/v0.4.0...v0.5.0) (2026-08-06)
 
 
