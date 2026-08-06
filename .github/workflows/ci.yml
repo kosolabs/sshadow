@@ -16,6 +16,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
+    - name: Check MARKETING_VERSION wiring
+      run: ./ci_scripts/check_version.sh
+
     - name: Start SSH test server
       run: ./ci_scripts/start_test_server.sh
 
