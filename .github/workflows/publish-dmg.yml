@@ -7,18 +7,8 @@ on:
         description: Release tag to build and publish the DMG for
         required: true
         type: string
-      ref:
-        description: Commit to build. Required while the release is still a draft, because a draft release has no git tag yet.
-        required: false
-        type: string
-  workflow_call:
-    inputs:
-      tag:
-        required: true
-        type: string
-      ref:
-        required: false
-        type: string
+  release:
+    types: [ published ]
 
 jobs:
   publish-dmg:
@@ -35,9 +25,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
       with:
-        # A draft release records its tag name but does not create the git ref,
-        # so the tag only becomes checkout-able once the release is published.
-        ref: ${{ inputs.ref || inputs.tag }}
+        ref: ${{ inputs.tag || github.event.release.tag_name }}
 
     - name: Import signing certificates
       env:
@@ -105,10 +93,7 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        TAG="${{ inputs.tag }}"
+        TAG="${{ inputs.tag || github.event.release.tag_name }}"
 
         # --clobber replaces the asset if the workflow is re-run on the same release.
         gh release upload "$TAG" build/SSHadow.dmg --clobber
-
-        # The release is created as a draft so it only becomes visible once the DMG is attached.
-        gh release edit "$TAG" --draft=false
