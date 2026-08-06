@@ -2,8 +2,16 @@ name: Publish DMG
 
 on:
   workflow_dispatch:
-  release:
-    types: [ created ]
+    inputs:
+      tag:
+        description: Release tag to build and publish the DMG for
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
 
 jobs:
   publish-dmg:
@@ -20,7 +28,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
       with:
-        ref: ${{ github.event.release.tag_name }}
+        ref: ${{ inputs.tag }}
 
     - name: Import signing certificates
       env:
@@ -88,10 +96,7 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        TAG="${{ github.event.release.tag_name }}"
-        if [[ -z "$TAG" ]]; then
-          TAG="$(gh release list --limit 1 --json tagName --jq '.[0].tagName')"
-        fi
+        TAG="${{ inputs.tag }}"
 
         # --clobber replaces the asset if the workflow is re-run on the same release.
         gh release upload "$TAG" build/SSHadow.dmg --clobber
