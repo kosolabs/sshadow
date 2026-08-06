@@ -37,13 +37,12 @@ struct RichMenuMainView: View {
 
                 Divider().padding(.vertical, 4)
             }
-
-            RichMenuSettingsButton {
-                RichMenuLabel(
-                    "Open SSHadow Settings...",
-                    systemImage: "gear",
-                    shortcut: .init(",", modifiers: .command)
-                )
+            
+            RichMenuButton {
+                NSApp.activate()
+                openWindow(id: "settings")
+            } label: {
+                RichMenuLabel("Open SSHadow Settings...", systemImage: "gear")
             }
 
             if isDebug {
