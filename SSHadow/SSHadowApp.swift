@@ -50,7 +50,7 @@ struct SSHadowApp: App {
         .environment(coordinator)
         .environment(Transfers.shared)
 
-        Settings {
+        Window("Settings", id: "settings") {
             SettingsView()
         }
         .modelContainer(modelContainer)

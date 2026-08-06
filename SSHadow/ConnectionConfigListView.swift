@@ -9,86 +9,56 @@ struct ConnectionConfigListView: View {
     @Query(sort: \ConnectionConfigModel.host) private var configs:
         [ConnectionConfigModel]
 
-    @State private var selection: ConnectionConfigModel?
+    @Binding var selection: ConnectionConfigModel?
 
     var body: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                List(selection: $selection) {
-                    ForEach(configs) { config in
-                        NavigationLink(value: config) {
-                            HStack {
-                                Image(systemName: "externaldrive.badge.icloud")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(
-                                        config.isEnabled() ? .green : .secondary
-                                    )
-                                VStack(alignment: .leading) {
-                                    if let name = config.name {
-                                        Text(name)
-                                        Text(config.displayUrl).font(.caption)
-                                    } else {
-                                        Text(config.displayUrl)
-                                    }
-                                }
-                            }
+        List(selection: $selection) {
+            ForEach(configs) { config in
+                HStack {
+                    Image(systemName: "externaldrive.badge.icloud")
+                        .font(.system(size: 18))
+                        .foregroundColor(
+                            config.isEnabled() ? .green : .secondary
+                        )
+                    VStack(alignment: .leading) {
+                        if let name = config.name {
+                            Text(name)
+                            Text(config.displayUrl).font(.caption)
+                        } else {
+                            Text(config.displayUrl)
                         }
                     }
                 }
-
-                Divider()
-
-                HStack(spacing: 0) {
-                    Button {
-                        let config = ConnectionConfigModel()
-                        modelContext.insert(config)
-                        selection = config
-                    } label: {
-                        Image(systemName: "plus")
-                            .frame(width: 24, height: 20)
-                    }
-                    .help("Add Connection")
-
-                    Divider().frame(height: 16)
-
-                    Button(role: .destructive) {
-                        if let selection {
-                            Task {
-                                try? await modelContext.delete(
-                                    connectionConfig: selection
-                                )
-                            }
-                            self.selection = nil
-                        }
-                    } label: {
-                        Image(systemName: "minus")
-                            .frame(width: 24, height: 20)
-                    }
-                    .disabled(selection == nil)
-                    .help("Remove Connection")
-
-                    Spacer()
-                }
-                .buttonStyle(.borderless)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
+                .tag(config)
             }
-            .frame(width: 300)
-
-            Divider()
-
-            Group {
-                if let selection {
-                    ConnectionConfigEditView(config: selection)
-                } else {
-                    ContentUnavailableView(
-                        "Select a Connection",
-                        systemImage: "globe"
-                    )
-                }
-            }
-            .frame(width: 500)
         }
-        .frame(height: 600)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    let config = ConnectionConfigModel()
+                    modelContext.insert(config)
+                    selection = config
+                } label: {
+                    Label("Add Connection", systemImage: "plus")
+                }
+                .help("Add Connection")
+            }
+
+            if let selection {
+                ToolbarItem(placement: .destructiveAction) {
+                    Button(role: .destructive) {
+                        Task {
+                            try? await modelContext.delete(
+                                connectionConfig: selection
+                            )
+                        }
+                        self.selection = nil
+                    } label: {
+                        Label("Remove Connection", systemImage: "trash")
+                    }
+                    .help("Remove Connection")
+                }
+            }
+        }
     }
 }
