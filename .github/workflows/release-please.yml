@@ -10,10 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: sshadow-release
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-      sha: ${{ steps.release.outputs.sha }}
     steps:
       - id: app
         uses: actions/create-github-app-token@v3.2.0
@@ -24,14 +20,3 @@ jobs:
         uses: googleapis/release-please-action@v5
         with:
           token: ${{ steps.app.outputs.token }}
-
-  publish-dmg:
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
-    permissions:
-      contents: write
-    uses: ./.github/workflows/publish-dmg.yml
-    with:
-      tag: ${{ needs.release-please.outputs.tag_name }}
-      ref: ${{ needs.release-please.outputs.sha }}
-    secrets: inherit
