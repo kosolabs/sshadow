@@ -35,3 +35,7 @@ dmg:
 # Print the current marketing version.
 version:
     @xcodebuild -showBuildSettings -scheme SSHadow -configuration Release 2>/dev/null | awk -F' = ' '/MARKETING_VERSION/ {print $2}'
+
+# Verify release-please can still bump the marketing version.
+check-version:
+    ./ci_scripts/check_version.sh
