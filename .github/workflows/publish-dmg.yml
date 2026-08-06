@@ -7,10 +7,17 @@ on:
         description: Release tag to build and publish the DMG for
         required: true
         type: string
+      ref:
+        description: Commit to build. Required while the release is still a draft, because a draft release has no git tag yet.
+        required: false
+        type: string
   workflow_call:
     inputs:
       tag:
         required: true
+        type: string
+      ref:
+        required: false
         type: string
 
 jobs:
@@ -28,7 +35,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
       with:
-        ref: ${{ inputs.tag }}
+        # A draft release records its tag name but does not create the git ref,
+        # so the tag only becomes checkout-able once the release is published.
+        ref: ${{ inputs.ref || inputs.tag }}
 
     - name: Import signing certificates
       env:
