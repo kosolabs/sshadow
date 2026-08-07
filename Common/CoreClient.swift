@@ -35,15 +35,10 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
 
     private func suspend() async {
         guard attached else { return }
-        do {
-            try await domain.suspend(
-                reason:
-                    "SSHadow needs to be running in order to sync this volume.",
-                options: .temporary
-            )
-        } catch {
-            logger.error("Failed to suspend \(domain): \(error)")
-        }
+        await domain.suspend(
+            reason: "SSHadow needs to be running in order to sync this volume.",
+            options: .temporary
+        )
     }
 
     public func listener(

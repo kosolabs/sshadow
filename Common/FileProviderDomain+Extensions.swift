@@ -42,27 +42,43 @@ extension NSFileProviderDomain {
         }
     }
 
-    public func add() async throws {
-        try await NSFileProviderManager.add(self)
-        logger.info("Added domain: \(self)")
+    public func add() async {
+        do {
+            try await NSFileProviderManager.add(self)
+            logger.info("Domain added: \(self)")
+        } catch {
+            logger.error("Failed to add domain \(self): \(error)")
+        }
     }
 
-    public func remove() async throws {
-        try await NSFileProviderManager.remove(self)
-        logger.info("Removed domain: \(self)")
+    public func remove() async {
+        do {
+            try await NSFileProviderManager.remove(self)
+            logger.info("Domain removed: \(self)")
+        } catch {
+            logger.error("Failed to remove domain \(self): \(error)")
+        }
     }
 
     public func suspend(
         reason: String,
         options: NSFileProviderManager.DisconnectionOptions = []
-    ) async throws {
-        try await manager.disconnect(reason: reason, options: options)
-        logger.info("Suspended sync: \(self)")
+    ) async {
+        do {
+            try await manager.disconnect(reason: reason, options: options)
+            logger.info("Sync suspended: \(self)")
+        } catch {
+            logger.error("Failed to suspend \(self): \(error)")
+        }
     }
-    
-    public func resume() async throws {
-        try await manager.reconnect()
-        logger.info("Resumed sync: \(self)")
+
+    public func resume() async {
+        do {
+            try await manager.reconnect()
+            logger.info("Sync resumed: \(self)")
+        } catch {
+            logger.error("Failed to resume \(self): \(error)")
+        }
     }
 
     public override var description: String {

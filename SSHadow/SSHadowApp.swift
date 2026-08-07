@@ -9,12 +9,10 @@ private let logger = Logger(category: "SSHadowApp")
 private func reconnectAllDomains() {
     Task {
         for config in await AppDB.shared.enabledConfigs() {
-            let domain = config.domain
             do {
-                try await DomainRegistry.shared.register(config: config)
-                try await DomainRegistry.shared.broker(id: domain.id)
+                try await DomainRegistry.shared.enable(config: config)
             } catch {
-                logger.error("Failed to resume sync \(domain): \(error)")
+                logger.error("Failed to enable \(config.domain): \(error)")
             }
         }
     }
