@@ -112,7 +112,7 @@ class TestSandbox {
                 pollInterval: nil
             )
 
-            try await supervisor.connect()
+            try await supervisor.connectForTests()
             self._supervisor = supervisor
             return supervisor
         }

@@ -52,14 +52,14 @@ actor Session {
 
         let dbConfig = db.modelContainer.configurations.first
         let dbPath = dbConfig?.url.path ?? "in-memory"
-        logger.info("Connected SSH: \(config.url), DB: \(dbPath)")
+        logger.info("SSH connected: \(config), DB: \(dbPath)")
     }
 
     func close() async {
         await sftp.close()
         await ssh.close()
 
-        logger.info("Disconnected SSH: \(config.url)")
+        logger.info("SSH disconnected: \(config)")
     }
 
     var url: String {

@@ -20,7 +20,36 @@ extension SSHClient {
                 self = testError
                 return
             }
-            logger.error("Unhandled error type: \(error)")
+            if let sshError = error as? SSHError {
+                switch sshError {
+                case .connectionFailed(let message)
+                where message.contains("Failed to resolve hostname"):
+                    self = .unknownHost
+                    return
+                case .connectionFailed(let message)
+                where message.contains("Connection refused")
+                    || message.contains("Socket error")
+                    || message.contains("Bad file descriptor"):
+                    self = .connectionRefused
+                    return
+                case .connectionFailed(let message)
+                where message.contains("Timeout"):
+                    self = .connectionTimedOut
+                    return
+                case .authenticationFailed(let message)
+                where message.contains("Failed to import private key"):
+                    self = .invalidPrivateKey
+                    return
+                case .authenticationFailed:
+                    self = .authenticationFailed
+                    return
+                case .sftpError(.noSuchFile, _):
+                    self = .remotePathNotFound
+                    return
+                default:
+                    break
+                }
+            }
             let nsError = error as NSError
             self = .unknown(
                 domain: nsError.domain,
@@ -38,29 +67,9 @@ extension SSHClient {
                     throw TestError.remotePathNotDirectory
                 }
             }
-        } catch SSHError.connectionFailed(let message)
-            where message.contains("Failed to resolve hostname")
-        {
-            throw .unknownHost
-        } catch SSHError.connectionFailed(let message)
-            where message.contains("Connection refused")
-            || message.contains("Socket error")
-            || message.contains("Bad file descriptor")
-        {
-            throw .connectionRefused
-        } catch SSHError.connectionFailed(let message)
-            where message.contains("Timeout")
-        {
-            throw .connectionTimedOut
-        } catch SSHError.authenticationFailed(let message)
-            where message.contains("Failed to import private key")
-        {
-            throw .invalidPrivateKey
-        } catch SSHError.authenticationFailed {
-            throw .authenticationFailed
-        } catch SSHError.sftpError(.noSuchFile, _) {
-            throw .remotePathNotFound
+            logger.info("SSH config validated: \(config)")
         } catch {
+            logger.error("Failed to validate SSH config \(config): \(error)")
             throw TestError(from: error)
         }
     }

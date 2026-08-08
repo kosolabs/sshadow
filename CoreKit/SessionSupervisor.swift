@@ -6,27 +6,7 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "SessionSupervisor")
 
-/// Owns a single domain's live SSH `Session`: builds it (coalescing concurrent
-/// callers onto one in-flight connect), runs the periodic poll loop, and
-/// recovers from SSH disconnects. The session's SSH connection is immutable, so
-/// recovery means replacing the whole `Session` — which is why ownership lives
-/// here rather than inside `Session` itself.
-///
-/// `state` is a small state machine:
-///
-///     connecting ──success──▶ connected
-///         ▲                       │
-///         │                    disconnect
-///         └────── retry ◀── disconnected
-///
-/// A `connectionFailed` from a request (via `withSession`) or a poll drops the
-/// dead session and transitions to `disconnected`; the poll loop then retries
-/// `connect()` on a backoff until it recovers. This is the single recovery path.
 actor SessionSupervisor {
-    /// Shown in Finder while a domain is suspended because its server dropped.
-    static let unreachableReason =
-        "The server is currently unreachable; check your network connection."
-
     private let config: ConnectionConfig
     private let domainDbConfig: ModelConfiguration
     private let sharedUrl: URL
@@ -38,14 +18,14 @@ actor SessionSupervisor {
     private let maxBackoff: Duration
     private lazy var service = CoreService(supervisor: self)
 
-    private enum State {
-        case disconnected
-        case connecting(Task<Session, any Error>)
-        case connected(Session)
+    private enum SSHState {
+        case offline
+        case online(Session)
     }
 
-    private var state: State = .disconnected
-    private var bgTask: Task<Void, Never>?
+    private var state: SSHState = .offline
+    private var connectTask: Task<Void, Never>?
+    private var pollTask: Task<Void, Never>?
     private var connection: NSXPCConnection?
 
     private var domain: NSFileProviderDomain { config.domain }
@@ -71,126 +51,151 @@ actor SessionSupervisor {
         self.maxBackoff = maxBackoff
     }
 
-    @discardableResult
-    func connect() async throws -> Session {
-        switch state {
-        case .connected(let session):
-            return session
-        case .connecting(let task):
-            return try await task.value
-        case .disconnected:
-            break
-        }
+    func enable() async {
+        startConnecting()
+    }
 
-        let task = Task {
-            let ssh = try await SSHClient.connect(config: config)
-            let sftp = try await ssh.sftp()
-            let db = try await DomainDB.open(config: domainDbConfig)
-            return Session(
-                config: config,
-                ssh: ssh,
-                sftp: sftp,
-                db: db,
-                sharedUrl: sharedUrl,
-                signal: signal,
-                transfers: transfers
-            )
+    func disable() async {
+        stopConnecting()
+        stopPolling()
+        await teardownXpc()
+        await domain.remove()
+        if case .online(let session) = state {
+            await session.close()
         }
-        state = .connecting(task)
+        state = .offline
+        logger.info("Supervisor disabled: \(domain)")
+    }
+    
+    func connectForTests() async throws {
+        let session = try await connectSsh()
+        state = .online(session)
+    }
 
-        do {
-            let session = try await task.value
-            state = .connected(session)
-            startPolling()
-            await resumeIfHealthy()
-            return session
-        } catch {
-            state = .disconnected
-            throw error
+    private func connect() async throws {
+        let session = try await connectSsh()
+        stopConnecting()
+        await domain.resume()
+        await brokerXpc()
+        startPolling()
+        state = .online(session)
+        logger.info("Session online: \(domain)")
+    }
+    
+    private func reconnect() async {
+        stopPolling()
+        await teardownXpc()
+        await domain.suspend(
+            reason: "The server is unreachable. Check your network connection.",
+            options: .temporary
+        )
+        if case .online(let session) = state {
+            await session.close()
+        }
+        startConnecting()
+        state = .offline
+        logger.info("Session offline: \(domain)")
+    }
+
+    private func startConnecting() {
+        guard connectTask == nil else { return }
+        connectTask = Task { [weak self] in
+            guard let self else { return }
+            var backoff = initialBackoff
+            while !Task.isCancelled {
+                do {
+                    try await connect()
+                    return
+                } catch is CancellationError {
+                    return
+                } catch {
+                    logger.error(
+                        "Connect failed; retrying in \(backoff): \(error)"
+                    )
+                    do { try await Task.sleep(for: backoff) } catch { return }
+                    backoff = min(backoff * 2, maxBackoff)
+                }
+            }
         }
     }
 
-    func shutdown() async {
-        stopPolling()
-
-        switch state {
-        case .connecting(let task):
-            task.cancel()
-            await teardown()
-        case .connected(let session):
-            await teardown()
-            await session.close()
-        case .disconnected:
-            await teardown()
+    private func stopConnecting() {
+        connectTask?.cancel()
+        connectTask = nil
+    }
+    
+    private func startPolling() {
+        guard pollTask == nil, let pollInterval else { return }
+        pollTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: pollInterval)
+                    try await withSession { try await $0.poll() }
+                } catch is CancellationError {
+                    return
+                } catch {
+                    logger.error("Poll error: \(error)")
+                }
+            }
         }
-        state = .disconnected
+    }
+
+    private func stopPolling() {
+        pollTask?.cancel()
+        pollTask = nil
     }
 
     @discardableResult
     func withSession<T: Sendable>(
         _ operation: @Sendable (Session) async throws -> T
     ) async throws -> T {
-        let session = try await connect()
+        guard case .online(let session) = state else {
+            throw CoreError.serverUnreachable
+        }
+
         do {
             return try await operation(session)
-        } catch let error as SSHError where error.isConnectionFailed {
-            logger.error("SSH disconnected: \(error)")
-            await disconnect()
-            await suspend(reason: Self.unreachableReason)
-            throw error
+        } catch let error as SSHError
+            where error.isConnectionFailed || error.sftpError == .failure
+            || error.sftpError == .connectionLost
+            || error.sftpError == .noConnection
+        {
+            logger.error("SSH connection lost: \(error)")
+            await reconnect()
+            throw CoreError.serverUnreachable
         }
     }
 
-    private func disconnect() async {
-        guard case .connected(let session) = state else { return }
-        state = .disconnected
-        await session.close()
+    @discardableResult
+    private func connectSsh() async throws -> Session {
+        let ssh = try await SSHClient.connect(config: config)
+        let sftp = try await ssh.sftp()
+        let db = try await DomainDB.open(config: domainDbConfig)
+        return Session(
+            config: config,
+            ssh: ssh,
+            sftp: sftp,
+            db: db,
+            sharedUrl: sharedUrl,
+            signal: signal,
+            transfers: transfers
+        )
     }
 
-    private func startPolling() {
-        guard bgTask == nil, let pollInterval else { return }
-        bgTask = Task { [weak self] in
-            guard let self else { return }
-            await self.pollLoop(interval: pollInterval)
-        }
-    }
+    private func brokerXpc() async {
+        guard connection == nil else { return }
 
-    private func pollLoop(interval: Duration) async {
-        var backoff = initialBackoff
-        while !Task.isCancelled {
-            do { try await Task.sleep(for: interval) } catch { return }
-            do {
-                try await withSession { try await $0.poll() }
-                backoff = initialBackoff
-            } catch {
-                logger.error(
-                    "Poll loop error; retrying in \(backoff): \(error)"
-                )
-                do { try await Task.sleep(for: backoff) } catch { return }
-                backoff = min(backoff * 2, maxBackoff)
-            }
-        }
-    }
-
-    private func stopPolling() {
-        guard let bgTask else { return }
-        bgTask.cancel()
-        self.bgTask = nil
-    }
-
-    func broker() async throws {
-        await teardown()
-
-        let domainId = domain.id
-        let connection = try await awaitConnection()
+        let domain = domain
+        let connection = await awaitXpc()
         connection.exportedInterface = NSXPCInterface(with: CoreXPC.self)
         connection.exportedObject = service
         connection.remoteObjectInterface = NSXPCInterface(with: ExtXPC.self)
         connection.invalidationHandler = { [weak self] in
-            logger.info("Invalidated XPC: \(domainId)")
+            logger.info("XPC invalidated: \(domain)")
             Task {
                 guard let self else { return }
-                await self.rebroker()
+                await self.rebrokerXpc()
             }
         }
         connection.interruptionHandler = { connection.invalidate() }
@@ -200,31 +205,26 @@ actor SessionSupervisor {
         await ext.attach()
         self.connection = connection
 
-        logger.info("Brokered XPC: \(domainId)")
-        await resumeIfHealthy()
+        logger.info("XPC brokered: \(domain)")
     }
 
-    private func rebroker() async {
-        do {
-            connection = nil
-            try await broker()
-        } catch {
-            logger.error("Failed to broker XPC for \(domain.id): \(error)")
-        }
-    }
-
-    private func awaitConnection() async throws -> NSXPCConnection {
+    private func awaitXpc() async -> NSXPCConnection {
         while true {
             do {
                 return try await domain.service.fileProviderConnection()
             } catch {
-                logger.error("Failed to broker XPC for \(domain.id): \(error)")
-                try await Task.sleep(for: .seconds(1))
+                logger.error("Failed to broker XPC for \(domain): \(error)")
+                try? await Task.sleep(for: .seconds(1))
             }
         }
     }
 
-    func teardown() async {
+    private func rebrokerXpc() async {
+        connection = nil
+        await brokerXpc()
+    }
+
+    private func teardownXpc() async {
         guard let connection else { return }
         self.connection = nil
 
@@ -234,29 +234,6 @@ actor SessionSupervisor {
         connection.interruptionHandler = nil
         connection.invalidate()
 
-        logger.info("Tore down XPC: \(domain.id)")
-    }
-
-    private func resumeIfHealthy() async {
-        guard case .connected = state, connection != nil else { return }
-        await resume()
-    }
-
-    private func resume() async {
-        do {
-            try await domain.resume()
-            logger.info("Resumed sync: \(domain.id)")
-        } catch {
-            logger.error("Failed to resume \(domain.id): \(error)")
-        }
-    }
-
-    private func suspend(reason: String) async {
-        do {
-            try await domain.suspend(reason: reason, options: .temporary)
-            logger.info("Suspended sync: \(domain.id)")
-        } catch {
-            logger.error("Failed to suspend \(domain.id): \(error)")
-        }
+        logger.info("XPC torn down: \(domain)")
     }
 }

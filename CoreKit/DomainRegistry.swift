@@ -58,38 +58,20 @@ public actor DomainRegistry {
         return supervisor
     }
 
-    @discardableResult
-    func connect(id: UUID) async throws -> Session {
-        try await supervisor(for: id).connect()
-    }
-
-    func disconnect(id: UUID) async {
-        if let supervisor = supervisors.removeValue(forKey: id) {
-            await supervisor.shutdown()
-        }
-    }
-
     func poll(id: UUID) async throws {
-        let session = try await connect(id: id)
-        try await session.poll()
+        try await supervisor(for: id).withSession { try await $0.poll() }
     }
 
-    public func register(config: ConnectionConfig) async throws {
+    public func enable(config: ConnectionConfig) async throws {
         try await DomainDB.open(config: DomainDB.model(for: config.id))
         configs[config.id] = config
+        try await supervisor(for: config.id).enable()
     }
-
-    public func forget(id: UUID) async throws {
-        await disconnect(id: id)
+    
+    public func disable(id: UUID) async throws {
+        if let supervisor = supervisors.removeValue(forKey: id) {
+            await supervisor.disable()
+        }
         configs[id] = nil
-        try await DomainDB.delete(id: id)
-    }
-
-    public func broker(id: UUID) async throws {
-        try await supervisor(for: id).broker()
-    }
-
-    public func teardown(id: UUID) async {
-        await supervisors[id]?.teardown()
     }
 }
