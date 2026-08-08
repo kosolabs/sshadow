@@ -109,7 +109,8 @@ class TestSandbox {
                 sharedUrl: shared,
                 signal: { _ in },
                 transfers: Transfers(),
-                pollInterval: nil
+                pollInterval: nil,
+                ext: config.domain
             )
 
             try await supervisor.connectForTests()
