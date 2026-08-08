@@ -16,6 +16,8 @@ actor SessionSupervisor {
     private let pollInterval: Duration?
     private let initialBackoff: Duration
     private let maxBackoff: Duration
+    private let ext: ExtensionController
+
     private lazy var service = CoreService(supervisor: self)
 
     private enum SSHState {
@@ -28,8 +30,6 @@ actor SessionSupervisor {
     private var pollTask: Task<Void, Never>?
     private var connection: NSXPCConnection?
 
-    private var domain: NSFileProviderDomain { config.domain }
-
     init(
         config: ConnectionConfig,
         domainDbConfig: ModelConfiguration,
@@ -38,7 +38,8 @@ actor SessionSupervisor {
         transfers: Transfers,
         pollInterval: Duration?,
         initialBackoff: Duration = .seconds(1),
-        maxBackoff: Duration = .seconds(60)
+        maxBackoff: Duration = .seconds(60),
+        ext: ExtensionController
     ) {
         self.config = config
         self.domainDbConfig = domainDbConfig
@@ -49,6 +50,7 @@ actor SessionSupervisor {
         self.pollInterval = pollInterval
         self.initialBackoff = initialBackoff
         self.maxBackoff = maxBackoff
+        self.ext = ext
     }
 
     func enable() async {
@@ -59,14 +61,14 @@ actor SessionSupervisor {
         stopConnecting()
         stopPolling()
         await teardownXpc()
-        await domain.remove()
+        await ext.remove()
         if case .online(let session) = state {
             await session.close()
         }
         state = .offline
-        logger.info("Supervisor disabled: \(domain)")
+        logger.info("Supervisor disabled: \(config)")
     }
-    
+
     func connectForTests() async throws {
         let session = try await connectSsh()
         state = .online(session)
@@ -75,17 +77,17 @@ actor SessionSupervisor {
     private func connect() async throws {
         let session = try await connectSsh()
         stopConnecting()
-        await domain.resume()
+        await ext.resume()
         await brokerXpc()
         startPolling()
         state = .online(session)
-        logger.info("Session online: \(domain)")
+        logger.info("Session online: \(config)")
     }
-    
+
     private func reconnect() async {
         stopPolling()
         await teardownXpc()
-        await domain.suspend(
+        await ext.suspend(
             reason: "The server is unreachable. Check your network connection.",
             options: .temporary
         )
@@ -94,7 +96,7 @@ actor SessionSupervisor {
         }
         startConnecting()
         state = .offline
-        logger.info("Session offline: \(domain)")
+        logger.info("Session offline: \(config)")
     }
 
     private func startConnecting() {
@@ -123,7 +125,7 @@ actor SessionSupervisor {
         connectTask?.cancel()
         connectTask = nil
     }
-    
+
     private func startPolling() {
         guard pollTask == nil, let pollInterval else { return }
         pollTask = Task { [weak self] in
@@ -186,13 +188,11 @@ actor SessionSupervisor {
     private func brokerXpc() async {
         guard connection == nil else { return }
 
-        let domain = domain
         let connection = await awaitXpc()
         connection.exportedInterface = NSXPCInterface(with: CoreXPC.self)
         connection.exportedObject = service
         connection.remoteObjectInterface = NSXPCInterface(with: ExtXPC.self)
         connection.invalidationHandler = { [weak self] in
-            logger.info("XPC invalidated: \(domain)")
             Task {
                 guard let self else { return }
                 await self.rebrokerXpc()
@@ -205,21 +205,22 @@ actor SessionSupervisor {
         await ext.attach()
         self.connection = connection
 
-        logger.info("XPC brokered: \(domain)")
+        logger.info("XPC brokered: \(config)")
     }
 
     private func awaitXpc() async -> NSXPCConnection {
         while true {
             do {
-                return try await domain.service.fileProviderConnection()
+                return try await config.domain.service.fileProviderConnection()
             } catch {
-                logger.error("Failed to broker XPC for \(domain): \(error)")
+                logger.error("Failed to broker XPC for \(config): \(error)")
                 try? await Task.sleep(for: .seconds(1))
             }
         }
     }
 
     private func rebrokerXpc() async {
+        logger.info("XPC invalidated: \(config)")
         connection = nil
         await brokerXpc()
     }
@@ -234,6 +235,6 @@ actor SessionSupervisor {
         connection.interruptionHandler = nil
         connection.invalidate()
 
-        logger.info("XPC torn down: \(domain)")
+        logger.info("XPC torn down: \(config)")
     }
 }
