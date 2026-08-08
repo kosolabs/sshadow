@@ -52,8 +52,7 @@ public actor DomainRegistry {
             sharedUrl: sharedUrl,
             signal: signal,
             transfers: transfers,
-            pollInterval: pollInterval,
-            ext: config.domain
+            pollInterval: pollInterval
         )
         supervisors[id] = supervisor
         return supervisor
