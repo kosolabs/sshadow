@@ -7,11 +7,14 @@ typealias SessionProvider =
     @Sendable (ConnectionConfig, @escaping ConnectionLostHandler) async throws
     -> Session
 
+typealias EnumeratorSignal =
+    @Sendable (ConnectionConfig) async throws -> Void
+
 extension Session {
     static func provider(
         domainDbConfig: ModelConfiguration,
         sharedUrl: URL,
-        signal: @escaping SignalEnumerator,
+        signalEnumerator: @escaping EnumeratorSignal,
         transfers: Transfers
     ) -> SessionProvider {
         { config, handler in
@@ -24,7 +27,7 @@ extension Session {
                 sftp: sftp,
                 db: db,
                 sharedUrl: sharedUrl,
-                signal: signal,
+                changesDetectedHandler: { try await signalEnumerator(config) },
                 connectionLostHandler: handler,
                 transfers: transfers
             )

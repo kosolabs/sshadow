@@ -8,7 +8,7 @@ private let logger = Logger(category: "DomainRegistry")
 
 public actor DomainRegistry {
     public static let shared: DomainRegistry = DomainRegistry(
-        signal: { config in
+        signalEnumerator: { config in
             try await config.domain.manager.signalEnumerator(
                 for: .workingSet
             )
@@ -18,7 +18,7 @@ public actor DomainRegistry {
     )
 
     private let sharedUrl: URL
-    private let signal: SignalEnumerator
+    private let signalEnumerator: EnumeratorSignal
     private let transfers: Transfers
     private let pollInterval: Duration?
 
@@ -27,12 +27,12 @@ public actor DomainRegistry {
 
     init(
         sharedUrl: URL = SSHadow.groupUrl,
-        signal: @escaping SignalEnumerator,
+        signalEnumerator: @escaping EnumeratorSignal,
         transfers: Transfers,
         pollInterval: Duration? = nil
     ) {
         self.sharedUrl = sharedUrl
-        self.signal = signal
+        self.signalEnumerator = signalEnumerator
         self.transfers = transfers
         self.pollInterval = pollInterval
     }
@@ -52,7 +52,7 @@ public actor DomainRegistry {
             connect: Session.provider(
                 domainDbConfig: DomainDB.model(for: id),
                 sharedUrl: sharedUrl,
-                signal: signal,
+                signalEnumerator: signalEnumerator,
                 transfers: transfers
             )
         )
@@ -69,7 +69,7 @@ public actor DomainRegistry {
         configs[config.id] = config
         try await supervisor(for: config.id).enable()
     }
-    
+
     public func disable(id: UUID) async throws {
         if let supervisor = supervisors.removeValue(forKey: id) {
             await supervisor.disable()
