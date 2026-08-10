@@ -9,6 +9,8 @@ private let logger = Logger(category: "Session")
 public typealias SignalEnumerator =
     @Sendable (ConnectionConfig) async throws -> Void
 
+public typealias ConnectionLostHandler = @Sendable () async -> Void
+
 actor Session {
     private let config: ConnectionConfig
     private let ssh: SSHClient
@@ -16,10 +18,12 @@ actor Session {
     private let db: DomainDB
     private let sharedUrl: URL
     private let signal: SignalEnumerator
+    private let connectionLostHandler: ConnectionLostHandler
     private let transfers: Transfers
 
-    private let cache: FileCache
+    private lazy var cache = FileCache(read: read)
 
+    private var pollTask: Task<Void, Never>?
     private var changes: [(UInt64, [Change])] = []
     private var anchor: UInt64 = 0
 
@@ -30,6 +34,7 @@ actor Session {
         db: DomainDB,
         sharedUrl: URL = SSHadow.groupUrl,
         signal: @escaping SignalEnumerator,
+        connectionLostHandler: @escaping ConnectionLostHandler,
         transfers: Transfers
     ) {
         self.config = config
@@ -38,28 +43,45 @@ actor Session {
         self.db = db
         self.sharedUrl = sharedUrl
         self.signal = signal
+        self.connectionLostHandler = connectionLostHandler
         self.transfers = transfers
-
-        self.cache = FileCache { itemId, range in
-            let path = try await config.path(for: db.path(for: itemId))
-            return try await sftp.withSftpFile(
-                at: path,
-                accessType: .readOnly
-            ) { file in
-                try await file.read(range: range)
-            }
-        }
 
         let dbConfig = db.modelContainer.configurations.first
         let dbPath = dbConfig?.url.path ?? "in-memory"
         logger.info("SSH connected: \(config), DB: \(dbPath)")
     }
 
+    func stopPolling() {
+        pollTask?.cancel()
+        pollTask = nil
+    }
+
     func close() async {
+        stopPolling()
+
         await sftp.close()
         await ssh.close()
 
         logger.info("SSH disconnected: \(config)")
+    }
+
+    func startPolling(every interval: Duration?) {
+        guard pollTask == nil, let interval else { return }
+        pollTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: interval)
+                    try await poll()
+                } catch is CancellationError {
+                    return
+                } catch CoreError.serverUnreachable {
+                    return
+                } catch {
+                    logger.error("Poll error: \(error)")
+                }
+            }
+        }
     }
 
     var url: String {
@@ -351,14 +373,16 @@ actor Session {
         logger.info(
             "Create directory \(path) with permissions \(String(mode, radix: 8))"
         )
-        do {
-            try await sftp.createDirectory(at: path, mode: mode)
-        } catch SSHError.sftpError(.fileAlreadyExists, _) {
-            switch ifExists {
-            case .succeed:
-                logger.info("Directory already exists at \(path)")
-            case .fail:
-                throw CoreError.filenameCollision
+        try await mapError(with: parentId) {
+            do {
+                try await sftp.createDirectory(at: path, mode: mode)
+            } catch SSHError.sftpError(.fileAlreadyExists, _) {
+                switch ifExists {
+                case .succeed:
+                    logger.info("Directory already exists at \(path)")
+                case .fail:
+                    throw CoreError.filenameCollision
+                }
             }
         }
         return try await record(
@@ -612,6 +636,21 @@ actor Session {
         return (url, slice.byteRange)
     }
 
+    func read(
+        _ itemId: NSFileProviderItemIdentifier,
+        range: Range<UInt64>
+    ) async throws -> Data {
+        let path = try await config.path(for: db.path(for: itemId))
+        return try await mapError(with: itemId) {
+            try await sftp.withSftpFile(
+                at: path,
+                accessType: .readOnly
+            ) { file in
+                try await file.read(range: range)
+            }
+        }
+    }
+
     func withFile<T: Sendable>(
         for itemId: NSFileProviderItemIdentifier,
         accessType: AccessType,
@@ -684,12 +723,20 @@ actor Session {
         }
     }
 
-    func mapError<T>(
+    private func mapError<T>(
         with itemId: NSFileProviderItemIdentifier,
         _ operation: () async throws -> T
     ) async throws -> T {
         do {
             return try await operation()
+        } catch let error as SSHError
+            where error.isConnectionFailed || error.sftpError == .failure
+            || error.sftpError == .connectionLost
+            || error.sftpError == .noConnection
+        {
+            logger.error("SSH connection lost: \(error)")
+            await connectionLostHandler()
+            throw CoreError.serverUnreachable
         } catch SSHError.sftpError(.noSuchFile, _) {
             throw CoreError.itemNotFound(itemId.rawValue)
         } catch SSHError.sftpError(.permissionDenied, _) {

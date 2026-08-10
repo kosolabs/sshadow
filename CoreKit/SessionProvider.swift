@@ -3,7 +3,9 @@ import Foundation
 import SwiftData
 import SwiftLibSSH
 
-typealias SessionProvider = @Sendable (ConnectionConfig) async throws -> Session
+typealias SessionProvider =
+    @Sendable (ConnectionConfig, @escaping ConnectionLostHandler) async throws
+    -> Session
 
 extension Session {
     static func provider(
@@ -12,7 +14,7 @@ extension Session {
         signal: @escaping SignalEnumerator,
         transfers: Transfers
     ) -> SessionProvider {
-        { config in
+        { config, handler in
             let ssh = try await SSHClient.connect(config: config)
             let sftp = try await ssh.sftp()
             let db = try await DomainDB.open(config: domainDbConfig)
@@ -23,6 +25,7 @@ extension Session {
                 db: db,
                 sharedUrl: sharedUrl,
                 signal: signal,
+                connectionLostHandler: handler,
                 transfers: transfers
             )
         }

@@ -175,7 +175,6 @@ class TestSandbox {
                 }
             }
 
-            // Prevent suspend when the client is eventually torn down
             await ext.detach()
 
             self._client = client
