@@ -22,7 +22,7 @@ extension TestSandbox {
             sftp: sftp,
             db: db,
             sharedUrl: shared,
-            signal: { _ in },
+            changesDetectedHandler: {},
             connectionLostHandler: {},
             transfers: Transfers()
         )

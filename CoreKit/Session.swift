@@ -6,8 +6,7 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Session")
 
-public typealias SignalEnumerator =
-    @Sendable (ConnectionConfig) async throws -> Void
+public typealias ChangesDetectedHandler = @Sendable () async throws -> Void
 
 public typealias ConnectionLostHandler = @Sendable () async -> Void
 
@@ -17,7 +16,7 @@ actor Session {
     private let sftp: SFTPClient
     private let db: DomainDB
     private let sharedUrl: URL
-    private let signal: SignalEnumerator
+    private let changesDetectedHandler: ChangesDetectedHandler
     private let connectionLostHandler: ConnectionLostHandler
     private let transfers: Transfers
 
@@ -33,7 +32,7 @@ actor Session {
         sftp: SFTPClient,
         db: DomainDB,
         sharedUrl: URL = SSHadow.groupUrl,
-        signal: @escaping SignalEnumerator,
+        changesDetectedHandler: @escaping ChangesDetectedHandler,
         connectionLostHandler: @escaping ConnectionLostHandler,
         transfers: Transfers
     ) {
@@ -42,7 +41,7 @@ actor Session {
         self.sftp = sftp
         self.db = db
         self.sharedUrl = sharedUrl
-        self.signal = signal
+        self.changesDetectedHandler = changesDetectedHandler
         self.connectionLostHandler = connectionLostHandler
         self.transfers = transfers
 
@@ -272,7 +271,7 @@ actor Session {
         anchor += 1
 
         logger.info("Polled: \(newChanges.count) change(s), anchor: \(anchor)")
-        try await signal(config)
+        try await changesDetectedHandler()
     }
 
     var currentAnchor: UInt64 {

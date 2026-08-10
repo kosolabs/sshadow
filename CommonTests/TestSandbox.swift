@@ -123,7 +123,7 @@ class TestSandbox {
                 connect: Session.provider(
                     domainDbConfig: memoryOnlyConfig,
                     sharedUrl: shared,
-                    signal: { _ in },
+                    signalEnumerator: { _ in },
                     transfers: Transfers()
                 ),
                 xpc: NoopXPCBroker(),
