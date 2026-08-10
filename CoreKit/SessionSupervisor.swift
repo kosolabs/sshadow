@@ -25,7 +25,10 @@ actor SessionSupervisor {
 
     private var state: SSHState = .offline
     private var connectTask: Task<Void, Never>?
-    private var pollTask: Task<Void, Never>?
+
+    private var session: Session? {
+        if case .online(let session) = state { session } else { nil }
+    }
 
     init(
         config: ConnectionConfig,
@@ -53,36 +56,35 @@ actor SessionSupervisor {
 
     func disable() async {
         stopConnecting()
-        stopPolling()
+        await session?.stopPolling()
         await xpc.teardown()
         await ext.remove()
-        if case .online(let session) = state {
-            await session.close()
-        }
+        await session?.close()
         state = .offline
         logger.info("Supervisor disabled: \(config)")
     }
 
     func goOnline() async throws {
-        let session = try await connect(config)
+        let session = try await connect(config) { [weak self] in
+            guard let self else { return }
+            await self.goOffline()
+        }
         stopConnecting()
         await ext.resume()
         await xpc.broker(exporting: service)
-        startPolling()
         state = .online(session)
+        await session.startPolling(every: pollInterval)
         logger.info("Session online: \(config)")
     }
 
     func goOffline() async {
-        stopPolling()
+        await session?.stopPolling()
         await xpc.teardown()
         await ext.suspend(
             reason: "The server is unreachable. Check your network connection.",
             options: .temporary
         )
-        if case .online(let session) = state {
-            await session.close()
-        }
+        await session?.close()
         startConnecting()
         state = .offline
         logger.info("Session offline: \(config)")
@@ -115,28 +117,6 @@ actor SessionSupervisor {
         connectTask = nil
     }
 
-    private func startPolling() {
-        guard pollTask == nil, let pollInterval else { return }
-        pollTask = Task { [weak self] in
-            guard let self else { return }
-            while !Task.isCancelled {
-                do {
-                    try await Task.sleep(for: pollInterval)
-                    try await withSession { try await $0.poll() }
-                } catch is CancellationError {
-                    return
-                } catch {
-                    logger.error("Poll error: \(error)")
-                }
-            }
-        }
-    }
-
-    private func stopPolling() {
-        pollTask?.cancel()
-        pollTask = nil
-    }
-
     @discardableResult
     func withSession<T: Sendable>(
         _ operation: @Sendable (Session) async throws -> T
@@ -144,17 +124,6 @@ actor SessionSupervisor {
         guard case .online(let session) = state else {
             throw CoreError.serverUnreachable
         }
-
-        do {
-            return try await operation(session)
-        } catch let error as SSHError
-            where error.isConnectionFailed || error.sftpError == .failure
-            || error.sftpError == .connectionLost
-            || error.sftpError == .noConnection
-        {
-            logger.error("SSH connection lost: \(error)")
-            await goOffline()
-            throw CoreError.serverUnreachable
-        }
+        return try await operation(session)
     }
 }
