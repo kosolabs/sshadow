@@ -1,21 +1,18 @@
 import Common
 import FileProvider
 import Foundation
-import SwiftData
 import SwiftLibSSH
 
 private let logger = Logger(category: "SessionSupervisor")
 
 actor SessionSupervisor {
     private let config: ConnectionConfig
-    private let domainDbConfig: ModelConfiguration
-    private let sharedUrl: URL
-    private let signal: SignalEnumerator
-    private let transfers: Transfers
 
     private let pollInterval: Duration?
     private let initialBackoff: Duration
     private let maxBackoff: Duration
+
+    private let connect: SessionProvider
     private let xpc: XPCBroker
     private let ext: ExtensionController
 
@@ -29,29 +26,23 @@ actor SessionSupervisor {
     private var state: SSHState = .offline
     private var connectTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
-    private var connection: NSXPCConnection?
 
     init(
         config: ConnectionConfig,
-        domainDbConfig: ModelConfiguration,
-        sharedUrl: URL,
-        signal: @escaping SignalEnumerator,
-        transfers: Transfers,
         pollInterval: Duration?,
         initialBackoff: Duration = .seconds(1),
         maxBackoff: Duration = .seconds(60),
+        connect: @escaping SessionProvider,
         xpc: XPCBroker? = nil,
         ext: ExtensionController? = nil
     ) {
         self.config = config
-        self.domainDbConfig = domainDbConfig
-        self.sharedUrl = sharedUrl
-        self.signal = signal
-        self.transfers = transfers
 
         self.pollInterval = pollInterval
         self.initialBackoff = initialBackoff
         self.maxBackoff = maxBackoff
+
+        self.connect = connect
         self.xpc = xpc ?? DomainXPCBroker(domain: config.domain)
         self.ext = ext ?? config.domain
     }
@@ -72,13 +63,8 @@ actor SessionSupervisor {
         logger.info("Supervisor disabled: \(config)")
     }
 
-    func connectForTests() async throws {
-        let session = try await connectSsh()
-        state = .online(session)
-    }
-
-    private func connect() async throws {
-        let session = try await connectSsh()
+    func goOnline() async throws {
+        let session = try await connect(config)
         stopConnecting()
         await ext.resume()
         await xpc.broker(exporting: service)
@@ -87,7 +73,7 @@ actor SessionSupervisor {
         logger.info("Session online: \(config)")
     }
 
-    private func reconnect() async {
+    func goOffline() async {
         stopPolling()
         await xpc.teardown()
         await ext.suspend(
@@ -109,7 +95,7 @@ actor SessionSupervisor {
             var backoff = initialBackoff
             while !Task.isCancelled {
                 do {
-                    try await connect()
+                    try await goOnline()
                     return
                 } catch is CancellationError {
                     return
@@ -167,24 +153,8 @@ actor SessionSupervisor {
             || error.sftpError == .noConnection
         {
             logger.error("SSH connection lost: \(error)")
-            await reconnect()
+            await goOffline()
             throw CoreError.serverUnreachable
         }
-    }
-
-    @discardableResult
-    private func connectSsh() async throws -> Session {
-        let ssh = try await SSHClient.connect(config: config)
-        let sftp = try await ssh.sftp()
-        let db = try await DomainDB.open(config: domainDbConfig)
-        return Session(
-            config: config,
-            ssh: ssh,
-            sftp: sftp,
-            db: db,
-            sharedUrl: sharedUrl,
-            signal: signal,
-            transfers: transfers
-        )
     }
 }
