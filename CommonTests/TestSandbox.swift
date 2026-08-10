@@ -14,6 +14,20 @@ enum RelativeTo {
     case shared
 }
 
+struct NoopXPCBroker: XPCBroker {
+    func broker(exporting service: CoreService) async {}
+    func teardown() async {}
+}
+
+struct NoopExtensionController: ExtensionController {
+    func resume() async {}
+    func suspend(
+        reason: String,
+        options: NSFileProviderManager.DisconnectionOptions
+    ) async {}
+    func remove() async {}
+}
+
 class TestSandbox {
     let id: UUID
     let name: String
@@ -105,15 +119,18 @@ class TestSandbox {
             let config = try config
             let supervisor = SessionSupervisor(
                 config: config,
-                domainDbConfig: memoryOnlyConfig,
-                sharedUrl: shared,
-                signal: { _ in },
-                transfers: Transfers(),
                 pollInterval: nil,
-                ext: config.domain
+                connect: Session.provider(
+                    domainDbConfig: memoryOnlyConfig,
+                    sharedUrl: shared,
+                    signal: { _ in },
+                    transfers: Transfers()
+                ),
+                xpc: NoopXPCBroker(),
+                ext: NoopExtensionController()
             )
 
-            try await supervisor.connectForTests()
+            try await supervisor.goOnline()
             self._supervisor = supervisor
             return supervisor
         }

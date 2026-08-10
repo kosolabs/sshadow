@@ -48,11 +48,13 @@ public actor DomainRegistry {
 
         let supervisor = SessionSupervisor(
             config: config,
-            domainDbConfig: DomainDB.model(for: id),
-            sharedUrl: sharedUrl,
-            signal: signal,
-            transfers: transfers,
-            pollInterval: pollInterval
+            pollInterval: pollInterval,
+            connect: Session.provider(
+                domainDbConfig: DomainDB.model(for: id),
+                sharedUrl: sharedUrl,
+                signal: signal,
+                transfers: transfers
+            )
         )
         supervisors[id] = supervisor
         return supervisor
