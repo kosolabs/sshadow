@@ -1,0 +1,241 @@
+import Common
+import FileProvider
+import Foundation
+import SwiftData
+import Testing
+
+@testable import CoreKit
+
+private actor SpyXPCBroker: XPCBroker {
+    enum Call: Equatable {
+        case broker
+        case teardown
+    }
+
+    private(set) var calls: [Call] = []
+
+    func broker(exporting service: CoreService) async {
+        calls.append(.broker)
+    }
+
+    func teardown() async {
+        calls.append(.teardown)
+    }
+}
+
+private actor SpyExtensionController: ExtensionController {
+    enum Call: Equatable {
+        case resume
+        case suspend
+        case remove
+    }
+
+    private(set) var calls: [Call] = []
+    private(set) var suspendReason: String?
+    private(set) var suspendOptions: NSFileProviderManager.DisconnectionOptions?
+
+    func resume() async {
+        calls.append(.resume)
+    }
+
+    func suspend(
+        reason: String,
+        options: NSFileProviderManager.DisconnectionOptions
+    ) async {
+        calls.append(.suspend)
+        suspendReason = reason
+        suspendOptions = options
+    }
+
+    func remove() async {
+        calls.append(.remove)
+    }
+}
+
+private struct FakeConnectError: Error {}
+
+private actor SpySessionProvider {
+    private let base: SessionProvider
+    private var failuresRemaining: Int
+
+    private(set) var callCount = 0
+    private(set) var capturedHandler: ConnectionLostHandler?
+
+    init(base: @escaping SessionProvider, failuresBeforeSuccess: Int = 0) {
+        self.base = base
+        self.failuresRemaining = failuresBeforeSuccess
+    }
+
+    nonisolated func provider() -> SessionProvider {
+        { config, handler in
+            try await self.connect(config, handler)
+        }
+    }
+
+    private func connect(
+        _ config: ConnectionConfig,
+        _ handler: @escaping ConnectionLostHandler
+    ) async throws -> Session {
+        callCount += 1
+        capturedHandler = handler
+        if failuresRemaining > 0 {
+            failuresRemaining -= 1
+            throw FakeConnectError()
+        }
+        return try await base(config, handler)
+    }
+}
+
+extension TestSandbox {
+    fileprivate func sessionProvider() -> SessionProvider {
+        Session.provider(
+            domainDbConfig: ModelConfiguration(isStoredInMemoryOnly: true),
+            sharedUrl: shared,
+            signalEnumerator: { _ in },
+            transfers: Transfers()
+        )
+    }
+}
+
+private func waitUntilOnline(
+    _ supervisor: SessionSupervisor,
+    timeout: Duration = .seconds(5)
+) async throws {
+    let deadline = ContinuousClock.now + timeout
+    while ContinuousClock.now < deadline {
+        if (try? await supervisor.withSession { _ in true }) == true {
+            return
+        }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    Issue.record("Supervisor did not come online within \(timeout)")
+}
+
+struct SessionSupervisorTests {
+    @Test func withSessionThrowsWhenOffline() async throws {
+        let sandbox = TestSandbox()
+        let supervisor = SessionSupervisor(
+            config: try sandbox.config,
+            pollInterval: nil,
+            connect: sandbox.sessionProvider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController()
+        )
+
+        await #expect(throws: CoreError.serverUnreachable) {
+            try await supervisor.withSession { _ in }
+        }
+    }
+
+    @Test func enableResumesBrokersAndServesSession() async throws {
+        let sandbox = TestSandbox()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = SpySessionProvider(base: sandbox.sessionProvider())
+        let supervisor = SessionSupervisor(
+            config: try sandbox.config,
+            pollInterval: nil,
+            connect: provider.provider(),
+            xpc: xpc,
+            ext: ext
+        )
+
+        await supervisor.enable()
+        try await waitUntilOnline(supervisor)
+
+        #expect(await provider.callCount == 1)
+        #expect(await ext.calls == [.resume])
+        #expect(await xpc.calls == [.broker])
+
+        let online = try await supervisor.withSession { _ in true }
+        #expect(online)
+
+        await supervisor.disable()
+    }
+
+    @Test func enableRetriesUntilConnectSucceeds() async throws {
+        let sandbox = TestSandbox()
+        let provider = SpySessionProvider(
+            base: sandbox.sessionProvider(),
+            failuresBeforeSuccess: 2
+        )
+        let supervisor = SessionSupervisor(
+            config: try sandbox.config,
+            pollInterval: nil,
+            initialBackoff: .milliseconds(1),
+            maxBackoff: .milliseconds(5),
+            connect: provider.provider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController()
+        )
+
+        await supervisor.enable()
+        try await waitUntilOnline(supervisor)
+
+        // Two failures followed by one successful connect.
+        #expect(await provider.callCount == 3)
+
+        await supervisor.disable()
+    }
+
+    @Test func connectionLostSuspendsThenReconnects() async throws {
+        let sandbox = TestSandbox()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = SpySessionProvider(base: sandbox.sessionProvider())
+        let supervisor = SessionSupervisor(
+            config: try sandbox.config,
+            pollInterval: nil,
+            initialBackoff: .milliseconds(1),
+            maxBackoff: .milliseconds(5),
+            connect: provider.provider(),
+            xpc: xpc,
+            ext: ext
+        )
+
+        await supervisor.enable()
+        try await waitUntilOnline(supervisor)
+        #expect(await provider.callCount == 1)
+
+        // Simulate the session reporting a lost connection.
+        let handler = try #require(await provider.capturedHandler)
+        await handler()
+
+        // Going offline suspends the domain temporarily and tears down XPC.
+        #expect(await ext.calls.contains(.suspend))
+        #expect(await ext.suspendOptions?.contains(.temporary) == true)
+        #expect(await xpc.calls.contains(.teardown))
+
+        // The supervisor should automatically reconnect.
+        try await waitUntilOnline(supervisor)
+        #expect(await provider.callCount == 2)
+
+        await supervisor.disable()
+    }
+
+    @Test func disableRemovesRatherThanSuspends() async throws {
+        let sandbox = TestSandbox()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = SpySessionProvider(base: sandbox.sessionProvider())
+        let supervisor = SessionSupervisor(
+            config: try sandbox.config,
+            pollInterval: nil,
+            connect: provider.provider(),
+            xpc: xpc,
+            ext: ext
+        )
+
+        await supervisor.enable()
+        try await waitUntilOnline(supervisor)
+        await supervisor.disable()
+
+        // disable() removes the domain; it must not suspend it.
+        #expect(await ext.calls == [.resume, .remove])
+        #expect(await xpc.calls == [.broker, .teardown])
+
+        await #expect(throws: CoreError.serverUnreachable) {
+            try await supervisor.withSession { _ in }
+        }
+    }
+}
