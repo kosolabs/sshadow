@@ -274,8 +274,8 @@
 		7309810F2F318825009F7AA2 /* CommonTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				73D94BC82F41216200CF7891 /* Exceptions for "CommonTests" folder in "ExtensionKitTests" target */,
 				73EC8FBD2F996C53008A08C9 /* Exceptions for "CommonTests" folder in "CoreKitTests" target */,
+				73D94BC82F41216200CF7891 /* Exceptions for "CommonTests" folder in "ExtensionKitTests" target */,
 			);
 			path = CommonTests;
 			sourceTree = "<group>";
@@ -319,6 +319,11 @@
 		73AD67942FFEC25100733D75 /* ci_scripts */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ci_scripts;
+			sourceTree = "<group>";
+		};
+		73C9771E302B9F2B008AADDC /* docs */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = docs;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -420,11 +425,12 @@
 				7381F0C32F22B3C5005F4099 /* Frameworks */,
 				7334708A2F22037100B8181D /* Products */,
 				73AD67942FFEC25100733D75 /* ci_scripts */,
+				73C9771E302B9F2B008AADDC /* docs */,
+				739BF6982FEDB73800C60205 /* Justfile */,
 				7322A9212F2857C700D8117D /* SSHadow.icon */,
 				7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */,
-				73781BC9300029A600EEA1F4 /* logfilter.jq */,
-				739BF6982FEDB73800C60205 /* Justfile */,
 				733F85DDB3C4A1DAB7067F02 /* Version.xcconfig */,
+				73781BC9300029A600EEA1F4 /* logfilter.jq */,
 			);
 			sourceTree = "<group>";
 		};
@@ -766,11 +772,11 @@
 				7322A9102F28212400D8117D /* UITests */,
 				730980FE2F318825009F7AA2 /* Common */,
 				730981082F318825009F7AA2 /* CommonTests */,
+				73799A3D2F9811DD00A15109 /* CoreKit */,
+				73799A472F9811DD00A15109 /* CoreKitTests */,
 				7393A9BF2F3134FB00213730 /* Extension */,
 				738D63A12F3FD1F100FED311 /* ExtensionKit */,
 				738D63AB2F3FD1F100FED311 /* ExtensionKitTests */,
-				73799A3D2F9811DD00A15109 /* CoreKit */,
-				73799A472F9811DD00A15109 /* CoreKitTests */,
 			);
 		};
 /* End PBXProject section */
