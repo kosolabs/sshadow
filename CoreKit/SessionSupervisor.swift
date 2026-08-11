@@ -64,7 +64,7 @@ actor SessionSupervisor {
         logger.info("Supervisor disabled: \(config)")
     }
 
-    func goOnline() async throws {
+    private func goOnline() async throws {
         let session = try await connect(config) { [weak self] in
             guard let self else { return }
             await self.goOffline()
@@ -77,7 +77,7 @@ actor SessionSupervisor {
         logger.info("Session online: \(config)")
     }
 
-    func goOffline() async {
+    private func goOffline() async {
         await session?.stopPolling()
         await xpc.teardown()
         await ext.suspend(
