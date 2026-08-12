@@ -126,6 +126,19 @@ public class ConnectionConfigModel: CustomStringConvertible {
         self.enabled = false
         logger.info("Profile disabled: \(self)")
     }
+    
+    public func pause() async throws {
+        try await DomainRegistry.shared.pause(id: id)
+        logger.info("Profile paused: \(self)")
+    }
+    
+    public func reconfigure() async throws {
+        let config = try ConnectionConfig(from: self)
+        try await SSHClient.test(config: config)
+        
+        try await DomainRegistry.shared.reconfigure(config: config)
+        logger.info("Profile reconfigured: \(self)")
+    }
 
     public func poll() async throws {
         try await DomainRegistry.shared.poll(id: id)

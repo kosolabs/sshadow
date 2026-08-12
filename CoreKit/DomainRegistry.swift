@@ -70,6 +70,15 @@ public actor DomainRegistry {
         try await supervisor(for: config.id).enable()
     }
 
+    public func pause(id: UUID) async throws {
+        try await supervisor(for: id).pause()
+    }
+
+    public func reconfigure(config: ConnectionConfig) async throws {
+        configs[config.id] = config
+        try await supervisor(for: config.id).reconfigure(config: config)
+    }
+
     public func disable(id: UUID) async throws {
         if let supervisor = supervisors.removeValue(forKey: id) {
             await supervisor.disable()

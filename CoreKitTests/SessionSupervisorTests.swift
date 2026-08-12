@@ -60,6 +60,7 @@ private actor SpySessionProvider {
 
     private(set) var callCount = 0
     private(set) var capturedHandler: ConnectionLostHandler?
+    private(set) var capturedConfig: ConnectionConfig?
 
     init(base: @escaping SessionProvider, failuresBeforeSuccess: Int = 0) {
         self.base = base
@@ -78,6 +79,7 @@ private actor SpySessionProvider {
     ) async throws -> Session {
         callCount += 1
         capturedHandler = handler
+        capturedConfig = config
         if failuresRemaining > 0 {
             failuresRemaining -= 1
             throw FakeConnectError()
@@ -237,5 +239,81 @@ struct SessionSupervisorTests {
         await #expect(throws: CoreError.serverUnreachable) {
             try await supervisor.withSession { _ in }
         }
+    }
+
+    @Test func pauseSuspendsAndClosesRatherThanRemoves() async throws {
+        let sandbox = TestSandbox()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = SpySessionProvider(base: sandbox.sessionProvider())
+        let supervisor = SessionSupervisor(
+            config: try sandbox.config,
+            pollInterval: nil,
+            connect: provider.provider(),
+            xpc: xpc,
+            ext: ext
+        )
+
+        await supervisor.enable()
+        try await waitUntilOnline(supervisor)
+        await supervisor.pause()
+
+        // pause() suspends the domain (preserving the cache); it must not
+        // remove it the way disable() does.
+        #expect(await ext.calls == [.resume, .suspend])
+        #expect(await ext.suspendOptions?.contains(.temporary) == true)
+        #expect(
+            await ext.suspendReason
+                == "The connection is paused. Reconnect it in Settings."
+        )
+        #expect(await xpc.calls == [.broker, .teardown])
+
+        // The session is closed, so the supervisor is offline.
+        await #expect(throws: CoreError.serverUnreachable) {
+            try await supervisor.withSession { _ in }
+        }
+    }
+
+    @Test func reconfigureFromPausedReconnectsWithNewConfig() async throws {
+        let sandbox = TestSandbox()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = SpySessionProvider(base: sandbox.sessionProvider())
+        let supervisor = SessionSupervisor(
+            config: try sandbox.config,
+            pollInterval: nil,
+            connect: provider.provider(),
+            xpc: xpc,
+            ext: ext
+        )
+
+        await supervisor.enable()
+        try await waitUntilOnline(supervisor)
+        #expect(await provider.callCount == 1)
+        #expect(await provider.capturedConfig?.name == sandbox.name)
+
+        await supervisor.pause()
+
+        // Edit the profile in place (a new display name) and reconnect.
+        let original = try sandbox.config
+        let edited = ConnectionConfig(
+            id: original.id,
+            name: "reconfigured",
+            host: original.host,
+            port: original.port,
+            user: original.user,
+            path: original.path,
+            authMethod: original.authMethod
+        )
+        await supervisor.reconfigure(config: edited)
+        try await waitUntilOnline(supervisor)
+
+        // Reconnected with the edited config, and the domain was never
+        // removed, so the cache survives.
+        #expect(await provider.callCount == 2)
+        #expect(await provider.capturedConfig?.name == "reconfigured")
+        #expect(await ext.calls.contains(.remove) == false)
+
+        await supervisor.disable()
     }
 }
