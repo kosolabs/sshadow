@@ -6,7 +6,7 @@ import SwiftLibSSH
 private let logger = Logger(category: "SessionSupervisor")
 
 actor SessionSupervisor {
-    private let config: ConnectionConfig
+    private var config: ConnectionConfig
 
     private let pollInterval: Duration?
     private let initialBackoff: Duration
@@ -18,13 +18,17 @@ actor SessionSupervisor {
 
     private lazy var service = CoreService(supervisor: self)
 
+    private enum OfflineReason {
+        case user
+    }
+
     private enum SSHState {
-        case offline
+        case offline(OfflineReason)
+        case connecting(Task<Void, Never>)
         case online(Session)
     }
 
-    private var state: SSHState = .offline
-    private var connectTask: Task<Void, Never>?
+    private var state: SSHState = .offline(.user)
 
     private var session: Session? {
         if case .online(let session) = state { session } else { nil }
@@ -50,34 +54,80 @@ actor SessionSupervisor {
         self.ext = ext ?? config.domain
     }
 
-    func enable() async {
-        startConnecting()
+    func enable() {
+        if case .connecting = state { return }
+        state = .connecting(
+            Task { [weak self] in
+                guard let self else { return }
+                await enableLoop()
+            }
+        )
     }
 
     func disable() async {
-        stopConnecting()
+        stopEnabling()
         await session?.stopPolling()
         await xpc.teardown()
         await ext.remove()
         await session?.close()
-        state = .offline
+        state = .offline(.user)
         logger.info("Supervisor disabled: \(config)")
     }
 
-    private func goOnline() async throws {
+    func pause() async {
+        stopEnabling()
+        await session?.stopPolling()
+        await xpc.teardown()
+        await ext.suspend(
+            reason: "The connection is paused. Reconnect it in Settings.",
+            options: .temporary
+        )
+        await session?.close()
+        state = .offline(.user)
+        logger.info("Supervisor paused: \(config)")
+    }
+    
+    func reconfigure(config: ConnectionConfig) async {
+        guard case .offline = state else {
+            logger.fatal("reconfigure called while not offline: \(config)")
+        }
+        self.config = config
+        enable()
+    }
+
+    private func enableLoop() async {
+        var backoff = initialBackoff
+        while !Task.isCancelled {
+            do {
+                try await enableSession()
+                return
+            } catch is CancellationError {
+                return
+            } catch {
+                logger.error("Connect failed; retrying in \(backoff): \(error)")
+                do { try await Task.sleep(for: backoff) } catch { return }
+                backoff = min(backoff * 2, maxBackoff)
+            }
+        }
+    }
+
+    private func enableSession() async throws {
         let session = try await connect(config) { [weak self] in
             guard let self else { return }
-            await self.goOffline()
+            await self.reenableSession()
         }
-        stopConnecting()
+        guard case .connecting = state else {
+            await session.close()
+            return
+        }
         await ext.resume()
         await xpc.broker(exporting: service)
         state = .online(session)
         await session.startPolling(every: pollInterval)
-        logger.info("Session online: \(config)")
+        logger.info("Session enabled: \(config)")
     }
 
-    private func goOffline() async {
+    private func reenableSession() async {
         await session?.stopPolling()
         await xpc.teardown()
         await ext.suspend(
@@ -85,36 +135,12 @@ actor SessionSupervisor {
             options: .temporary
         )
         await session?.close()
-        startConnecting()
-        state = .offline
-        logger.info("Session offline: \(config)")
+        enable()
+        logger.info("Session re-enabled: \(config)")
     }
 
-    private func startConnecting() {
-        guard connectTask == nil else { return }
-        connectTask = Task { [weak self] in
-            guard let self else { return }
-            var backoff = initialBackoff
-            while !Task.isCancelled {
-                do {
-                    try await goOnline()
-                    return
-                } catch is CancellationError {
-                    return
-                } catch {
-                    logger.error(
-                        "Connect failed; retrying in \(backoff): \(error)"
-                    )
-                    do { try await Task.sleep(for: backoff) } catch { return }
-                    backoff = min(backoff * 2, maxBackoff)
-                }
-            }
-        }
-    }
-
-    private func stopConnecting() {
-        connectTask?.cancel()
-        connectTask = nil
+    private func stopEnabling() {
+        if case .connecting(let task) = state { task.cancel() }
     }
 
     @discardableResult

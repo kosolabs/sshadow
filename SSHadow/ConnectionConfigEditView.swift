@@ -6,8 +6,6 @@ import UniformTypeIdentifiers
 
 private let logger = Logger(category: "ConnectionConfigEditView")
 
-private let disabledHelp = "Disable this connection to edit its settings."
-
 struct ConnectionConfigEditView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(ConnectionCoordinator.self) private var coordinator
@@ -27,6 +25,10 @@ struct ConnectionConfigEditView: View {
             get: { config.isEnabled() },
             set: { coordinator.setEnabled($0, on: config) }
         )
+    }
+
+    private var locked: Bool {
+        config.enabled && !coordinator.isPaused(config)
     }
 
     private var host: Binding<String> {
@@ -106,29 +108,37 @@ struct ConnectionConfigEditView: View {
                         text: name,
                         prompt: Text(config.displayName)
                     )
-                    .disabled(enabled.wrappedValue)
+                    .disabled(locked)
                     .accessibilityIdentifier("nameField")
-                    HStack {
-                        Toggle(isOn: enabled) {
-                            HStack {
-                                Text("Enabled")
-                                Spacer()
-                                ConnectionTestStatusView(
-                                    testing: coordinator.isBusy(config),
-                                    error: coordinator.error(config)
-                                )
-                            }
-                        }
+                    Toggle("Enabled", isOn: enabled)
                         .disabled(coordinator.isBusy(config))
                         .accessibilityIdentifier("enabledToggle")
+                    HStack {
+                        Text("Status")
+                        Spacer()
+                        ConnectionTestStatusView(
+                            testing: coordinator.isBusy(config),
+                            error: coordinator.error(config)
+                        )
+                        if enabled.wrappedValue {
+                            if coordinator.isPaused(config) {
+                                Button("Reconnect") {
+                                    coordinator.reconnect(config)
+                                }
+                            } else {
+                                Button("Pause") {
+                                    coordinator.pause(config)
+                                }
+                            }
+                        }
                     }
                 } footer: {
-                    if enabled.wrappedValue {
+                    if locked {
                         HStack {
                             Spacer()
                             Image(systemName: "info.circle")
                             Text(
-                                "Disable this connection to edit its settings."
+                                "Disable / pause this connection to edit its settings."
                             )
                         }
                     }
@@ -139,21 +149,21 @@ struct ConnectionConfigEditView: View {
                         text: host,
                         prompt: Text("example.com")
                     )
-                    .disabled(enabled.wrappedValue)
+                    .disabled(locked)
                     .accessibilityIdentifier("hostField")
                     TextField(
                         "Port",
                         text: port,
                         prompt: Text("22 (default)")
                     )
-                    .disabled(enabled.wrappedValue)
+                    .disabled(locked)
                     .accessibilityIdentifier("portField")
                     TextField(
                         "Remote Path",
                         text: path,
                         prompt: Text("~")
                     )
-                    .disabled(enabled.wrappedValue)
+                    .disabled(locked)
                     .accessibilityIdentifier("pathField")
                 }
                 Section("Authentication") {
@@ -162,10 +172,10 @@ struct ConnectionConfigEditView: View {
                         text: user,
                         prompt: Text(NSUserName())
                     )
-                    .disabled(enabled.wrappedValue)
+                    .disabled(locked)
                     .accessibilityIdentifier("userField")
                     Toggle("Use Private Key", isOn: usePrivateKey)
-                        .disabled(enabled.wrappedValue)
+                        .disabled(locked)
                         .accessibilityIdentifier("usePrivateKeyToggle")
                     if usePrivateKey.wrappedValue {
                         LabeledContent("Private Key") {
@@ -185,7 +195,7 @@ struct ConnectionConfigEditView: View {
                                 }
                                 .buttonStyle(.borderless)
                                 .help("Clear private key selection")
-                                .disabled(enabled.wrappedValue)
+                                .disabled(locked)
                             } else {
                                 Button(
                                     "Select Private Key…",
@@ -194,7 +204,7 @@ struct ConnectionConfigEditView: View {
                                     isImportingKey = true
                                 }
                                 .buttonStyle(.link)
-                                .disabled(enabled.wrappedValue)
+                                .disabled(locked)
                             }
                         }
                         SecureField(
@@ -202,10 +212,10 @@ struct ConnectionConfigEditView: View {
                             text: privateKeyPassphrase,
                             prompt: Text("(optional)")
                         )
-                        .disabled(enabled.wrappedValue)
+                        .disabled(locked)
                     } else {
                         SecureField("Password", text: password)
-                            .disabled(enabled.wrappedValue)
+                            .disabled(locked)
                             .accessibilityIdentifier("passwordField")
                     }
                 }
