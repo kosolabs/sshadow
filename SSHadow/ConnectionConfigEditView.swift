@@ -116,7 +116,7 @@ struct ConnectionConfigEditView: View {
                     HStack {
                         Text("Status")
                         Spacer()
-                        ConnectionTestStatusView(
+                        ConnectionStatusView(
                             testing: coordinator.isBusy(config),
                             error: coordinator.error(config)
                         )
