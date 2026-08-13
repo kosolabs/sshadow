@@ -49,7 +49,7 @@ public actor DomainRegistry {
         let supervisor = SessionSupervisor(
             config: config,
             pollInterval: pollInterval,
-            connect: Session.provider(
+            open: Session.provider(
                 domainDbConfig: DomainDB.model(for: id),
                 sharedUrl: sharedUrl,
                 signalEnumerator: signalEnumerator,
@@ -67,7 +67,7 @@ public actor DomainRegistry {
     public func enable(config: ConnectionConfig) async throws {
         try await DomainDB.open(config: DomainDB.model(for: config.id))
         configs[config.id] = config
-        try await supervisor(for: config.id).enable()
+        try await supervisor(for: config.id).connect()
     }
 
     public func pause(id: UUID) async throws {
