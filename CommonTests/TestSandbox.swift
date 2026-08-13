@@ -120,7 +120,7 @@ class TestSandbox {
             let supervisor = SessionSupervisor(
                 config: config,
                 pollInterval: nil,
-                connect: Session.provider(
+                open: Session.provider(
                     domainDbConfig: memoryOnlyConfig,
                     sharedUrl: shared,
                     signalEnumerator: { _ in },
@@ -130,18 +130,7 @@ class TestSandbox {
                 ext: NoopExtensionController()
             )
 
-            await supervisor.enable()
-
-            // Wait for the connect loop to bring the session online before
-            // handing the supervisor to callers that expect a live session.
-            let deadline = ContinuousClock.now + .seconds(10)
-            while ContinuousClock.now < deadline {
-                if (try? await supervisor.withSession { _ in true }) == true {
-                    break
-                }
-                try await Task.sleep(for: .milliseconds(10))
-            }
-            try await supervisor.withSession { _ in }
+            try await supervisor.connect()
 
             self._supervisor = supervisor
             return supervisor
