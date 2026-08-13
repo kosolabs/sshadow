@@ -3,7 +3,7 @@ import CoreKit
 import SwiftLibSSH
 import SwiftUI
 
-struct ConnectionTestStatusView: View {
+struct ConnectionStatusView: View {
     let testing: Bool
     let error: Error?
 

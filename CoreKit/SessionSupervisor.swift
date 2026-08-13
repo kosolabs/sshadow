@@ -22,13 +22,13 @@ actor SessionSupervisor {
         case user
     }
 
-    private enum SSHState {
+    private enum State {
         case offline(OfflineReason)
         case connecting(Task<Void, Never>)
         case online(Session)
     }
 
-    private var state: SSHState = .offline(.user)
+    private var state: State = .offline(.user)
 
     private var session: Session? {
         if case .online(let session) = state { session } else { nil }
