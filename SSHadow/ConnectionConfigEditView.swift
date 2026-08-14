@@ -8,7 +8,7 @@ private let logger = Logger(category: "ConnectionConfigEditView")
 
 struct ConnectionConfigEditView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(ConnectionCoordinator.self) private var coordinator
+    @Environment(Connections.self) private var connections
 
     var config = ConnectionConfigModel()
     @State private var isImportingKey: Bool = false
@@ -23,12 +23,12 @@ struct ConnectionConfigEditView: View {
     private var enabled: Binding<Bool> {
         Binding<Bool>(
             get: { config.isEnabled() },
-            set: { coordinator.setEnabled($0, on: config) }
+            set: { connections.setEnabled($0, on: config) }
         )
     }
 
     private var locked: Bool {
-        config.enabled && !coordinator.isPaused(config)
+        config.enabled && !connections.isPaused(config)
     }
 
     private var host: Binding<String> {
@@ -111,23 +111,23 @@ struct ConnectionConfigEditView: View {
                     .disabled(locked)
                     .accessibilityIdentifier("nameField")
                     Toggle("Enabled", isOn: enabled)
-                        .disabled(coordinator.isBusy(config))
+                        .disabled(connections.isBusy(config))
                         .accessibilityIdentifier("enabledToggle")
                     HStack {
                         Text("Status")
                         Spacer()
                         ConnectionStatusView(
-                            testing: coordinator.isBusy(config),
-                            error: coordinator.error(config)
+                            testing: connections.isBusy(config),
+                            error: connections.error(config)
                         )
                         if enabled.wrappedValue {
-                            if coordinator.isPaused(config) {
+                            if connections.isPaused(config) {
                                 Button("Reconnect") {
-                                    coordinator.reconnect(config)
+                                    connections.reconnect(config)
                                 }
                             } else {
                                 Button("Pause") {
-                                    coordinator.pause(config)
+                                    connections.pause(config)
                                 }
                             }
                         }

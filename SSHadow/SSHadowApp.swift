@@ -22,7 +22,6 @@ private func reconnectAllDomains() {
 struct SSHadowApp: App {
     private let modelContainer: ModelContainer
     @State private var activation = WindowActivationTracker()
-    @State private var coordinator = ConnectionCoordinator()
 
     init() {
         reconnectAllDomains()
@@ -40,12 +39,13 @@ struct SSHadowApp: App {
             RichMenuMainView()
         } label: {
             MenuBarIcon(
-                isLoading: coordinator.isAnyBusy || !Transfers.shared.isEmpty
+                isLoading: Connections.shared.isAnyBusy
+                    || !Transfers.shared.isEmpty
             )
         }
         .menuBarExtraStyle(.window)
         .modelContainer(modelContainer)
-        .environment(coordinator)
+        .environment(Connections.shared)
         .environment(Transfers.shared)
 
         Window("Settings", id: "settings") {
@@ -53,7 +53,7 @@ struct SSHadowApp: App {
         }
         .modelContainer(modelContainer)
         .environment(activation)
-        .environment(coordinator)
+        .environment(Connections.shared)
         .environment(Transfers.shared)
 
         Window("About SSHadow", id: "about") {

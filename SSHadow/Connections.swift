@@ -4,7 +4,9 @@ import Foundation
 
 @MainActor
 @Observable
-final class ConnectionCoordinator {
+final class Connections {
+    public static let shared: Connections = Connections()
+
     private var tasks: [UUID: Task<Void, Never>] = [:]
     private var errors: [UUID: Error] = [:]
     private var paused: Set<UUID> = Set()

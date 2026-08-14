@@ -5,7 +5,7 @@ import SwiftData
 import SwiftUI
 
 struct RichMenuMainView: View {
-    @Environment(ConnectionCoordinator.self) private var coordinator
+    @Environment(Connections.self) private var connections
     @Environment(Transfers.self) private var transfers
     @Environment(\.openWindow) private var openWindow
 

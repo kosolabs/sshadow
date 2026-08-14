@@ -126,16 +126,16 @@ public class ConnectionConfigModel: CustomStringConvertible {
         self.enabled = false
         logger.info("Profile disabled: \(self)")
     }
-    
+
     public func pause() async throws {
         try await DomainRegistry.shared.pause(id: id)
         logger.info("Profile paused: \(self)")
     }
-    
+
     public func reconfigure() async throws {
         let config = try ConnectionConfig(from: self)
         try await SSHClient.test(config: config)
-        
+
         try await DomainRegistry.shared.reconfigure(config: config)
         logger.info("Profile reconfigured: \(self)")
     }
@@ -162,11 +162,11 @@ public class ConnectionConfigModel: CustomStringConvertible {
         Keychain.shared.delete(passwordKey)
     }
 
-    public func privateKeyUrl() throws -> URL {
+    public func privateKeyUrl() throws(ValidationError) -> URL {
         try resolveBookmark()
     }
 
-    public func getBase64PrivateKey() throws -> String {
+    public func getBase64PrivateKey() throws(ValidationError) -> String {
         let url = try resolveBookmark()
         guard url.startAccessingSecurityScopedResource() else {
             throw ValidationError.privateKeyReadFailed
@@ -183,27 +183,36 @@ public class ConnectionConfigModel: CustomStringConvertible {
         return base64PrivateKey
     }
 
-    private func resolveBookmark() throws -> URL {
+    private func resolveBookmark() throws(ValidationError) -> URL {
         guard let bookmark = bookmark else {
-            throw ValidationError.privateKeyUrlNil
+            throw ValidationError.privateKeyReadFailed
         }
         var isStale = false
-        let url = try URL(
-            resolvingBookmarkData: bookmark,
-            options: .withSecurityScope,
-            relativeTo: nil,
-            bookmarkDataIsStale: &isStale
-        )
+        guard
+            let url = try? URL(
+                resolvingBookmarkData: bookmark,
+                options: .withSecurityScope,
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+        else {
+            throw ValidationError.privateKeyReadFailed
+        }
         if isStale {
             guard url.startAccessingSecurityScopedResource() else {
                 return url
             }
             defer { url.stopAccessingSecurityScopedResource() }
-            self.bookmark = try url.bookmarkData(
-                options: .withSecurityScope,
-                includingResourceValuesForKeys: nil,
-                relativeTo: nil
-            )
+            guard
+                let bookmark = try? url.bookmarkData(
+                    options: .withSecurityScope,
+                    includingResourceValuesForKeys: nil,
+                    relativeTo: nil
+                )
+            else {
+                throw ValidationError.privateKeyReadFailed
+            }
+            self.bookmark = bookmark
         }
         return url
     }
@@ -226,8 +235,8 @@ public class ConnectionConfigModel: CustomStringConvertible {
         Keychain.shared.delete(privateKeyPassphraseKey)
     }
 
-    fileprivate func resolveConfigAuthMethod() throws
-        -> ConnectionConfig.AuthMethod
+    fileprivate func resolveConfigAuthMethod()
+        throws(ValidationError) -> ConnectionConfig.AuthMethod
     {
         switch authMethod {
         case .password:
@@ -260,7 +269,9 @@ extension ModelContext {
 }
 
 extension ConnectionConfig {
-    public init(from profile: ConnectionConfigModel) throws {
+    public init(from profile: ConnectionConfigModel)
+        throws(ConnectionConfigModel.ValidationError)
+    {
         try self.init(
             id: profile.id,
             name: profile.displayName,
