@@ -4,7 +4,7 @@ import FileProvider
 import SwiftUI
 
 struct RichMenuProfileToggle: View {
-    @Environment(ConnectionCoordinator.self) private var coordinator
+    @Environment(Connections.self) private var coordinator
 
     let config: ConnectionConfigModel
 
