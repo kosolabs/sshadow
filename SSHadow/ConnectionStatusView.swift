@@ -4,98 +4,83 @@ import SwiftLibSSH
 import SwiftUI
 
 struct ConnectionStatusView: View {
-    let testing: Bool
-    let error: Error?
+    let status: ConnectionStatus
 
     var body: some View {
-        if testing {
+        switch status {
+        case .offline(let reason):
+            switch reason {
+            case .disabled:
+                EmptyView()
+            case .paused:
+                Label("Paused", systemImage: "pause.circle.fill")
+                    .foregroundStyle(.secondary)
+            case .failed(let error):
+                Label(error.message, systemImage: error.systemImage)
+                    .foregroundStyle(.red)
+            }
+        case .connecting:
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text("Verifying…")
+                Text("Connecting…").foregroundStyle(.secondary)
+            }
+        case .reconnecting(let error, let nextAttempt):
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                ReconnectingLabel(error: error, nextAttempt: nextAttempt)
                     .foregroundStyle(.secondary)
             }
-        } else if let validationError = error
-            as? ConnectionConfigModel.ValidationError
-        {
-            switch validationError {
-            case .passwordNil:
-                Label(
-                    "Password is required",
-                    systemImage: "lock.circle"
+        case .online:
+            Label("Connected", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        }
+    }
+}
+
+private struct ReconnectingLabel: View {
+    let error: ConnectionError?
+    let nextAttempt: Date?
+
+    var body: some View {
+        let prefix = error?.message ?? "Connection lost"
+        if let nextAttempt {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let remaining = max(
+                    0,
+                    Int(nextAttempt.timeIntervalSince(context.date).rounded(.up))
                 )
-                .foregroundStyle(.red)
-            case .privateKeyUrlNil:
-                Label(
-                    "Private key is required",
-                    systemImage: "lock.circle"
-                )
-                .foregroundStyle(.red)
-            default:
-                Label(
-                    "Other: \(validationError.localizedDescription)",
-                    systemImage: "bolt.slash"
-                )
-                .foregroundStyle(.red)
+                Text("\(prefix). Reconnecting in \(remaining)s…")
             }
-        } else if let testError = error as? SSHClient.TestError {
-            switch testError {
-            case .unknownHost:
-                Label(
-                    "Unknown host",
-                    systemImage: "network.slash"
-                )
-                .foregroundStyle(.red)
-            case .connectionRefused:
-                Label(
-                    "Connection refused",
-                    systemImage: "network.slash"
-                )
-                .foregroundStyle(.red)
-            case .connectionTimedOut:
-                Label(
-                    "Connection timed out",
-                    systemImage: "network.slash"
-                )
-                .foregroundStyle(.red)
-            case .invalidPrivateKey:
-                Label(
-                    "Invalid private key",
-                    systemImage: "lock.circle"
-                )
-                .foregroundStyle(.red)
-            case .authenticationFailed:
-                Label(
-                    "Authentication failed",
-                    systemImage: "lock.circle"
-                )
-                .foregroundStyle(.red)
-            case .remotePathNotDirectory:
-                Label(
-                    "Remote path is not a directory",
-                    systemImage: "questionmark.folder"
-                )
-                .foregroundStyle(.red)
-            case .remotePathNotFound:
-                Label(
-                    "Remote path does not exist",
-                    systemImage: "questionmark.folder"
-                )
-                .foregroundStyle(.red)
-            default:
-                Label(
-                    "Other: \(testError.localizedDescription)",
-                    systemImage: "bolt.slash"
-                )
-                .foregroundStyle(.red)
-            }
-        } else if let error {
-            Label(
-                "Other: \(error.localizedDescription)",
-                systemImage: "bolt.slash"
-            )
-            .foregroundStyle(.red)
         } else {
-            EmptyView()
+            Text("\(prefix). Reconnecting…")
+        }
+    }
+}
+
+extension ConnectionError {
+    fileprivate var message: String {
+        switch self {
+        case .unknownHost: "Unknown host"
+        case .connectionRefused: "Connection refused"
+        case .connectionTimedOut: "Connection timed out"
+        case .invalidPrivateKey: "Invalid private key"
+        case .authenticationFailed: "Authentication failed"
+        case .remotePathNotFound: "Remote path does not exist"
+        case .remotePathNotDirectory: "Remote path is not a directory"
+        case .unknown(_, _, let message): "Other: \(message)"
+        }
+    }
+
+    fileprivate var systemImage: String {
+        switch self {
+        case .invalidPrivateKey, .authenticationFailed:
+            "lock.circle"
+        case .unknownHost, .connectionRefused, .connectionTimedOut:
+            "network.slash"
+        case .remotePathNotFound, .remotePathNotDirectory:
+            "questionmark.folder"
+        case .unknown:
+            "bolt.slash"
         }
     }
 }

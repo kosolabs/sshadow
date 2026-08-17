@@ -5,120 +5,46 @@ import SwiftLibSSH
 private let logger = Logger(category: "SSHClient")
 
 extension SSHClient {
-    public enum TestError: Message, Error {
-        case unknownHost
-        case connectionRefused
-        case connectionTimedOut
-        case invalidPrivateKey
-        case authenticationFailed
-        case remotePathNotFound
-        case remotePathNotDirectory
-        case unknown(domain: String, code: Int, message: String)
-
-        public init(from error: any Error) {
-            if let testError = error as? TestError {
-                self = testError
-                return
-            }
-            if let sshError = error as? SSHError {
-                switch sshError {
-                case .connectionFailed(let message)
-                where message.contains("Failed to resolve hostname"):
-                    self = .unknownHost
-                    return
-                case .connectionFailed(let message)
-                where message.contains("Connection refused")
-                    || message.contains("Socket error")
-                    || message.contains("Bad file descriptor"):
-                    self = .connectionRefused
-                    return
-                case .connectionFailed(let message)
-                where message.contains("Timeout"):
-                    self = .connectionTimedOut
-                    return
-                case .authenticationFailed(let message)
-                where message.contains("Failed to import private key"):
-                    self = .invalidPrivateKey
-                    return
-                case .authenticationFailed:
-                    self = .authenticationFailed
-                    return
-                case .sftpError(.noSuchFile, _):
-                    self = .remotePathNotFound
-                    return
-                default:
-                    break
-                }
-            }
-            let nsError = error as NSError
-            self = .unknown(
-                domain: nsError.domain,
-                code: nsError.code,
-                message: nsError.localizedDescription
-            )
-        }
-    }
-
-    public static func test(config: ConnectionConfig) async throws(TestError) {
-        do {
-            try await SSHClient.withSession(config: config) { _, sftp in
-                let attrs = try await sftp.attributes(at: config.path())
-                if attrs.type != .directory {
-                    throw TestError.remotePathNotDirectory
-                }
-            }
-            logger.info("SSH config validated: \(config)")
-        } catch {
-            logger.error("Failed to validate SSH config \(config): \(error)")
-            throw TestError(from: error)
-        }
-    }
-
     public static func connect(
         config: ConnectionConfig
-    ) async throws -> SSHClient {
-        switch config.authMethod {
-        case .none:
-            return try await SSHClient.connect(
-                host: config.host,
-                port: config.port,
-                user: config.user
-            )
-        case .password(let password):
-            return try await SSHClient.connect(
-                host: config.host,
-                port: config.port,
-                user: config.user,
-                auth: .password(password)
-            )
-        case .privateKey(let base64PrivateKey, let passphrase):
-            return try await SSHClient.connect(
-                host: config.host,
-                port: config.port,
-                user: config.user,
-                auth: .privateKeyData(
-                    base64: base64PrivateKey,
-                    passphrase: passphrase
-                )
-            )
-        }
-    }
-
-    @discardableResult
-    public static func withSession<T: Sendable>(
-        config: ConnectionConfig,
-        perform: @Sendable (SSHClient, SFTPClient) async throws -> T
-    ) async throws -> T {
-        let sshClient = try await connect(config: config)
+    ) async throws(ConnectionError) -> (SSHClient, SFTPClient) {
         do {
-            let result = try await sshClient.withSftp { sftpClient in
-                try await perform(sshClient, sftpClient)
+            let ssh =
+                switch config.authMethod {
+                case .none:
+                    try await SSHClient.connect(
+                        host: config.host,
+                        port: config.port,
+                        user: config.user
+                    )
+                case .password(let password):
+                    try await SSHClient.connect(
+                        host: config.host,
+                        port: config.port,
+                        user: config.user,
+                        auth: .password(password)
+                    )
+                case .privateKey(let base64PrivateKey, let passphrase):
+                    try await SSHClient.connect(
+                        host: config.host,
+                        port: config.port,
+                        user: config.user,
+                        auth: .privateKeyData(
+                            base64: base64PrivateKey,
+                            passphrase: passphrase
+                        )
+                    )
+                }
+            let sftp = try await ssh.sftp()
+            let attrs = try await sftp.attributes(at: config.path())
+            if attrs.type != .directory {
+                throw ConnectionError.remotePathNotDirectory
             }
-            await sshClient.close()
-            return result
+            logger.info("SSH config connected: \(config)")
+            return (ssh, sftp)
         } catch {
-            await sshClient.close()
-            throw error
+            logger.error("Failed to connect SSH config \(config): \(error)")
+            throw ConnectionError(from: error)
         }
     }
 }

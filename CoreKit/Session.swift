@@ -26,6 +26,27 @@ actor Session {
     private var changes: [(UInt64, [Change])] = []
     private var anchor: UInt64 = 0
 
+    static func provider(
+        domainDb: DomainDB,
+        sharedUrl: URL,
+        signalEnumerator: @escaping EnumeratorSignal,
+        transfers: Transfers
+    ) -> SessionProvider {
+        { config, handler in
+            let (ssh, sftp) = try await SSHClient.connect(config: config)
+            return Session(
+                config: config,
+                ssh: ssh,
+                sftp: sftp,
+                db: domainDb,
+                sharedUrl: sharedUrl,
+                changesDetectedHandler: { try await signalEnumerator(config) },
+                connectionLostHandler: handler,
+                transfers: transfers
+            )
+        }
+    }
+
     init(
         config: ConnectionConfig,
         ssh: SSHClient,

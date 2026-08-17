@@ -38,10 +38,7 @@ struct SSHadowApp: App {
         MenuBarExtra {
             RichMenuMainView()
         } label: {
-            MenuBarIcon(
-                isLoading: Connections.shared.isAnyBusy
-                    || !Transfers.shared.isEmpty
-            )
+            MenuBarIcon(isLoading: !Transfers.shared.isEmpty)
         }
         .menuBarExtraStyle(.window)
         .modelContainer(modelContainer)
