@@ -6,6 +6,9 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "DomainRegistry")
 
+typealias EnumeratorSignal =
+    @Sendable (ConnectionConfig) async throws -> Void
+
 public actor DomainRegistry {
     public static let shared: DomainRegistry = DomainRegistry(
         signalEnumerator: { config in
@@ -13,61 +16,63 @@ public actor DomainRegistry {
                 for: .workingSet
             )
         },
+        connections: Connections.shared,
         transfers: Transfers.shared,
         pollInterval: .seconds(30),
     )
 
     private let sharedUrl: URL
     private let signalEnumerator: EnumeratorSignal
+    private let connections: Connections
     private let transfers: Transfers
     private let pollInterval: Duration?
 
-    private var configs: [UUID: ConnectionConfig] = [:]
     private var supervisors: [UUID: SessionSupervisor] = [:]
 
     init(
         sharedUrl: URL = SSHadow.groupUrl,
         signalEnumerator: @escaping EnumeratorSignal,
+        connections: Connections,
         transfers: Transfers,
         pollInterval: Duration? = nil
     ) {
         self.sharedUrl = sharedUrl
         self.signalEnumerator = signalEnumerator
+        self.connections = connections
         self.transfers = transfers
         self.pollInterval = pollInterval
     }
 
-    func supervisor(for id: UUID) throws -> SessionSupervisor {
-        if let supervisor = supervisors[id] {
-            return supervisor
-        }
-
-        guard let config = configs[id] else {
+    private func supervisor(for id: UUID) throws -> SessionSupervisor {
+        guard let supervisor = supervisors[id] else {
             throw CoreError.profileNotFound
         }
+        return supervisor
+    }
+
+    public func enable(config: ConnectionConfig) async throws {
+        let domainDb = try await DomainDB.open(config: DomainDB.model(for: config.id))
 
         let supervisor = SessionSupervisor(
             config: config,
             pollInterval: pollInterval,
-            open: Session.provider(
-                domainDbConfig: DomainDB.model(for: id),
+            openSession: Session.provider(
+                domainDb: domainDb,
                 sharedUrl: sharedUrl,
                 signalEnumerator: signalEnumerator,
                 transfers: transfers
-            )
+            ),
+            onStatusChange: { status in
+                self.connections.update(status, for: config.id)
+            }
         )
-        supervisors[id] = supervisor
-        return supervisor
+        supervisors[config.id] = supervisor
+
+        try await supervisor.connect()
     }
 
-    func poll(id: UUID) async throws {
+    public func poll(id: UUID) async throws {
         try await supervisor(for: id).withSession { try await $0.poll() }
-    }
-
-    public func enable(config: ConnectionConfig) async throws {
-        try await DomainDB.open(config: DomainDB.model(for: config.id))
-        configs[config.id] = config
-        try await supervisor(for: config.id).connect()
     }
 
     public func pause(id: UUID) async throws {
@@ -75,7 +80,6 @@ public actor DomainRegistry {
     }
 
     public func reconfigure(config: ConnectionConfig) async throws {
-        configs[config.id] = config
         try await supervisor(for: config.id).reconfigure(config: config)
     }
 
@@ -83,6 +87,5 @@ public actor DomainRegistry {
         if let supervisor = supervisors.removeValue(forKey: id) {
             await supervisor.disable()
         }
-        configs[id] = nil
     }
 }

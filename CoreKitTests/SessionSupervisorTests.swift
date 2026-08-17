@@ -52,8 +52,6 @@ private actor SpyExtensionController: ExtensionController {
     }
 }
 
-private struct FakeConnectError: Error {}
-
 private actor SpySessionProvider {
     private let base: SessionProvider
     private var failuresRemaining: Int
@@ -81,22 +79,39 @@ private actor SpySessionProvider {
     private func connect(
         _ config: ConnectionConfig,
         _ handler: @escaping ConnectionLostHandler
-    ) async throws -> Session {
+    ) async throws(ConnectionError) -> Session {
         callCount += 1
         capturedHandler = handler
         capturedConfig = config
         if failuresRemaining > 0 {
             failuresRemaining -= 1
-            throw FakeConnectError()
+            throw ConnectionError.connectionRefused
         }
         return try await base(config, handler)
     }
 }
 
+private final class StatusSpy: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _statuses: [ConnectionStatus] = []
+
+    var statuses: [ConnectionStatus] {
+        lock.withLock { _statuses }
+    }
+
+    func handler() -> StatusChangeHandler {
+        { status in
+            self.lock.withLock { self._statuses.append(status) }
+        }
+    }
+}
+
 extension TestSandbox {
-    fileprivate func sessionProvider() -> SessionProvider {
-        Session.provider(
-            domainDbConfig: ModelConfiguration(isStoredInMemoryOnly: true),
+    fileprivate func sessionProvider() async throws -> SessionProvider {
+        try await Session.provider(
+            domainDb: DomainDB.open(
+                config: ModelConfiguration(isStoredInMemoryOnly: true)
+            ),
             sharedUrl: shared,
             signalEnumerator: { _ in },
             transfers: Transfers()
@@ -121,12 +136,13 @@ private func waitUntilOnline(
 struct SessionSupervisorTests {
     @Test func withSessionThrowsWhenOffline() async throws {
         let sandbox = TestSandbox()
-        let supervisor = SessionSupervisor(
+        let supervisor = try await SessionSupervisor(
             config: try sandbox.config,
             pollInterval: nil,
-            open: sandbox.sessionProvider(),
+            openSession: sandbox.sessionProvider(),
             xpc: SpyXPCBroker(),
-            ext: SpyExtensionController()
+            ext: SpyExtensionController(),
+            onStatusChange: { _ in }
         )
 
         await #expect(throws: CoreError.serverUnreachable) {
@@ -138,13 +154,16 @@ struct SessionSupervisorTests {
         let sandbox = TestSandbox()
         let xpc = SpyXPCBroker()
         let ext = SpyExtensionController()
-        let provider = SpySessionProvider(base: sandbox.sessionProvider())
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
         let supervisor = SessionSupervisor(
             config: try sandbox.config,
             pollInterval: nil,
-            open: provider.provider(),
+            openSession: provider.provider(),
             xpc: xpc,
-            ext: ext
+            ext: ext,
+            onStatusChange: { _ in }
         )
 
         try await supervisor.connect()
@@ -163,21 +182,22 @@ struct SessionSupervisorTests {
         let sandbox = TestSandbox()
         let xpc = SpyXPCBroker()
         let ext = SpyExtensionController()
-        let provider = SpySessionProvider(
+        let provider = try await SpySessionProvider(
             base: sandbox.sessionProvider(),
             failuresBeforeSuccess: 1
         )
         let supervisor = SessionSupervisor(
             config: try sandbox.config,
             pollInterval: nil,
-            open: provider.provider(),
+            openSession: provider.provider(),
             xpc: xpc,
-            ext: ext
+            ext: ext,
+            onStatusChange: { _ in }
         )
 
         // connect() surfaces the failure rather than retrying, and the
         // supervisor stays offline without brokering or resuming.
-        await #expect(throws: FakeConnectError.self) {
+        await #expect(throws: ConnectionError.connectionRefused) {
             try await supervisor.connect()
         }
         #expect(await provider.callCount == 1)
@@ -191,15 +211,18 @@ struct SessionSupervisorTests {
 
     @Test func reconnectRetriesUntilConnectSucceeds() async throws {
         let sandbox = TestSandbox()
-        let provider = SpySessionProvider(base: sandbox.sessionProvider())
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
         let supervisor = SessionSupervisor(
             config: try sandbox.config,
             pollInterval: nil,
             initialBackoff: .milliseconds(1),
             maxBackoff: .milliseconds(5),
-            open: provider.provider(),
+            openSession: provider.provider(),
             xpc: SpyXPCBroker(),
-            ext: SpyExtensionController()
+            ext: SpyExtensionController(),
+            onStatusChange: { _ in }
         )
 
         // First connect succeeds, then arm two failures for the reconnects
@@ -223,15 +246,18 @@ struct SessionSupervisorTests {
         let sandbox = TestSandbox()
         let xpc = SpyXPCBroker()
         let ext = SpyExtensionController()
-        let provider = SpySessionProvider(base: sandbox.sessionProvider())
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
         let supervisor = SessionSupervisor(
             config: try sandbox.config,
             pollInterval: nil,
             initialBackoff: .milliseconds(1),
             maxBackoff: .milliseconds(5),
-            open: provider.provider(),
+            openSession: provider.provider(),
             xpc: xpc,
-            ext: ext
+            ext: ext,
+            onStatusChange: { _ in }
         )
 
         try await supervisor.connect()
@@ -257,13 +283,16 @@ struct SessionSupervisorTests {
         let sandbox = TestSandbox()
         let xpc = SpyXPCBroker()
         let ext = SpyExtensionController()
-        let provider = SpySessionProvider(base: sandbox.sessionProvider())
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
         let supervisor = SessionSupervisor(
             config: try sandbox.config,
             pollInterval: nil,
-            open: provider.provider(),
+            openSession: provider.provider(),
             xpc: xpc,
-            ext: ext
+            ext: ext,
+            onStatusChange: { _ in }
         )
 
         try await supervisor.connect()
@@ -282,13 +311,16 @@ struct SessionSupervisorTests {
         let sandbox = TestSandbox()
         let xpc = SpyXPCBroker()
         let ext = SpyExtensionController()
-        let provider = SpySessionProvider(base: sandbox.sessionProvider())
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
         let supervisor = SessionSupervisor(
             config: try sandbox.config,
             pollInterval: nil,
-            open: provider.provider(),
+            openSession: provider.provider(),
             xpc: xpc,
-            ext: ext
+            ext: ext,
+            onStatusChange: { _ in }
         )
 
         try await supervisor.connect()
@@ -314,13 +346,16 @@ struct SessionSupervisorTests {
         let sandbox = TestSandbox()
         let xpc = SpyXPCBroker()
         let ext = SpyExtensionController()
-        let provider = SpySessionProvider(base: sandbox.sessionProvider())
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
         let supervisor = SessionSupervisor(
             config: try sandbox.config,
             pollInterval: nil,
-            open: provider.provider(),
+            openSession: provider.provider(),
             xpc: xpc,
-            ext: ext
+            ext: ext,
+            onStatusChange: { _ in }
         )
 
         try await supervisor.connect()
@@ -348,6 +383,144 @@ struct SessionSupervisorTests {
         #expect(await provider.callCount == 2)
         #expect(await provider.capturedConfig?.name == "reconfigured")
         #expect(await ext.calls.contains(.remove) == false)
+
+        await supervisor.disable()
+    }
+
+    @Test func connectEmitsConnectingThenOnline() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            config: try sandbox.config,
+            pollInterval: nil,
+            openSession: provider.provider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController(),
+            onStatusChange: spy.handler()
+        )
+
+        try await supervisor.connect()
+
+        #expect(spy.statuses == [.connecting, .online])
+
+        await supervisor.disable()
+    }
+
+    @Test func connectFailureEmitsFailedOfflineWithoutReconnecting()
+        async throws
+    {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider(),
+            failuresBeforeSuccess: 1
+        )
+        let supervisor = SessionSupervisor(
+            config: try sandbox.config,
+            pollInterval: nil,
+            openSession: provider.provider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController(),
+            onStatusChange: spy.handler()
+        )
+
+        // An initial connect failure surfaces as .offline(.failed) and does
+        // not enter the reconnect loop; only a lost connection retries.
+        await #expect(throws: ConnectionError.connectionRefused) {
+            try await supervisor.connect()
+        }
+
+        #expect(
+            spy.statuses == [.connecting, .offline(.failed(.connectionRefused))]
+        )
+    }
+
+    @Test func pauseEmitsPausedOffline() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            config: try sandbox.config,
+            pollInterval: nil,
+            openSession: provider.provider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController(),
+            onStatusChange: spy.handler()
+        )
+
+        try await supervisor.connect()
+        await supervisor.pause()
+
+        #expect(spy.statuses == [.connecting, .online, .offline(.paused)])
+    }
+
+    @Test func disableEmitsDisabledOffline() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            config: try sandbox.config,
+            pollInterval: nil,
+            openSession: provider.provider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController(),
+            onStatusChange: spy.handler()
+        )
+
+        try await supervisor.connect()
+        await supervisor.disable()
+
+        #expect(spy.statuses == [.connecting, .online, .offline(.disabled)])
+    }
+
+    @Test func connectionLostEmitsReconnectingWithErrorThenOnline()
+        async throws
+    {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            config: try sandbox.config,
+            pollInterval: nil,
+            initialBackoff: .milliseconds(1),
+            maxBackoff: .milliseconds(5),
+            openSession: provider.provider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController(),
+            onStatusChange: spy.handler()
+        )
+
+        try await supervisor.connect()
+
+        // Arm one failure so the first reconnect attempt fails, surfacing the
+        // error and a scheduled next attempt before the retry succeeds.
+        await provider.failNextConnects(1)
+        let handler = try #require(await provider.capturedHandler)
+        await handler()
+
+        try await waitUntilOnline(supervisor)
+
+        // The reconnect surfaced the underlying error and a countdown target.
+        let sawReconnectingWithError = spy.statuses.contains { status in
+            if case .reconnecting(.connectionRefused, let nextAttempt) = status
+            {
+                return nextAttempt != nil
+            }
+            return false
+        }
+        #expect(sawReconnectingWithError)
+
+        // ...and the supervisor ends up back online.
+        #expect(spy.statuses.last == .online)
 
         await supervisor.disable()
     }

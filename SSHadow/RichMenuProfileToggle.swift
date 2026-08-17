@@ -4,7 +4,7 @@ import FileProvider
 import SwiftUI
 
 struct RichMenuProfileToggle: View {
-    @Environment(Connections.self) private var coordinator
+    @Environment(Connections.self) private var connections
 
     let config: ConnectionConfigModel
 
@@ -13,10 +13,10 @@ struct RichMenuProfileToggle: View {
     private var enabled: Binding<Bool> {
         Binding<Bool>(
             get: { config.isEnabled() },
-            set: { coordinator.setEnabled($0, on: config) }
+            set: { config.setEnabled($0) }
         )
     }
-
+    
     var body: some View {
         Button {
             openInFinder()
@@ -38,7 +38,7 @@ struct RichMenuProfileToggle: View {
 
                 Toggle(isOn: enabled) {}
                     .toggleStyle(.switch)
-                    .disabled(coordinator.isBusy(config))
+                    .disabled(connections.isBusy(id: config.id))
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
