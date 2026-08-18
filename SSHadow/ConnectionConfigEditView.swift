@@ -12,6 +12,7 @@ struct ConnectionConfigEditView: View {
 
     var config = ConnectionConfigModel()
     @State private var isImportingKey: Bool = false
+    @State private var passwordText: String = ""
 
     private var name: Binding<String> {
         Binding<String>(
@@ -23,12 +24,12 @@ struct ConnectionConfigEditView: View {
     private var enabled: Binding<Bool> {
         Binding<Bool>(
             get: { config.isEnabled() },
-            set: { connections.setEnabled($0, on: config) }
+            set: { config.setEnabled($0) }
         )
     }
 
     private var locked: Bool {
-        config.enabled && !connections.isPaused(config)
+        config.enabled && !connections.isOffline(id: config.id)
     }
 
     private var host: Binding<String> {
@@ -66,19 +67,6 @@ struct ConnectionConfigEditView: View {
         )
     }
 
-    private var password: Binding<String> {
-        Binding<String>(
-            get: { config.getPassword() ?? "" },
-            set: {
-                if $0.isEmpty {
-                    config.deletePassword()
-                } else {
-                    config.setPassword($0)
-                }
-            }
-        )
-    }
-
     private var privateKeyPassphrase: Binding<String> {
         Binding<String>(
             get: { config.getPrivateKeyPassphrase() ?? "" },
@@ -99,6 +87,26 @@ struct ConnectionConfigEditView: View {
         )
     }
 
+    // MARK: Validation
+
+    private var isPasswordMissing: Bool {
+        if case .password = config.authMethod {
+            return passwordText.isEmpty
+        }
+        return false
+    }
+
+    private var isPrivateKeyMissing: Bool {
+        if case .privateKey = config.authMethod {
+            return (try? config.privateKeyUrl()) == nil
+        }
+        return false
+    }
+
+    private var isInvalid: Bool {
+        isPasswordMissing || isPrivateKeyMissing
+    }
+
     var body: some View {
         VStack {
             Form {
@@ -110,24 +118,42 @@ struct ConnectionConfigEditView: View {
                     )
                     .disabled(locked)
                     .accessibilityIdentifier("nameField")
-                    Toggle("Enabled", isOn: enabled)
-                        .disabled(connections.isBusy(config))
-                        .accessibilityIdentifier("enabledToggle")
+                    Toggle(isOn: enabled) {
+                        HStack {
+                            Text("Enabled")
+                            if isInvalid {
+                                Spacer()
+                                HStack {
+                                    Image(systemName: "lock.circle")
+                                    if isPasswordMissing {
+                                        Text("Password is required.")
+                                    } else if isPrivateKeyMissing {
+                                        Text("Private key is required.")
+                                    }
+                                }
+                                .foregroundStyle(.red)
+                            }
+                        }
+                    }
+                    .disabled(
+                        connections.isBusy(id: config.id)
+                            || (!enabled.wrappedValue && isInvalid)
+                    )
+                    .accessibilityIdentifier("enabledToggle")
                     HStack {
                         Text("Status")
                         Spacer()
                         ConnectionStatusView(
-                            testing: connections.isBusy(config),
-                            error: connections.error(config)
+                            status: connections.status(for: config.id)
                         )
                         if enabled.wrappedValue {
-                            if connections.isPaused(config) {
+                            if connections.isOffline(id: config.id) {
                                 Button("Reconnect") {
-                                    connections.reconnect(config)
+                                    Task { try await config.reconfigure() }
                                 }
                             } else {
                                 Button("Pause") {
-                                    connections.pause(config)
+                                    Task { try await config.pause() }
                                 }
                             }
                         }
@@ -214,13 +240,27 @@ struct ConnectionConfigEditView: View {
                         )
                         .disabled(locked)
                     } else {
-                        SecureField("Password", text: password)
-                            .disabled(locked)
-                            .accessibilityIdentifier("passwordField")
+                        SecureField(
+                            "Password",
+                            text: $passwordText,
+                            prompt: Text("Required").foregroundColor(.red)
+                        )
+                        .disabled(locked)
+                        .accessibilityIdentifier("passwordField")
+                        .onChange(of: passwordText) { _, newValue in
+                            if newValue.isEmpty {
+                                config.deletePassword()
+                            } else {
+                                config.setPassword(newValue)
+                            }
+                        }
                     }
                 }
             }
             .formStyle(.grouped)
+            .onAppear {
+                passwordText = config.getPassword() ?? ""
+            }
             .fileImporter(
                 isPresented: $isImportingKey,
                 allowedContentTypes: [.item],

@@ -5,6 +5,12 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "SessionSupervisor")
 
+typealias SessionProvider =
+    @Sendable (ConnectionConfig, @escaping ConnectionLostHandler)
+    async throws(ConnectionError) -> Session
+
+typealias StatusChangeHandler = @Sendable (ConnectionStatus) -> Void
+
 actor SessionSupervisor {
     private var config: ConnectionConfig
 
@@ -12,23 +18,58 @@ actor SessionSupervisor {
     private let initialBackoff: Duration
     private let maxBackoff: Duration
 
-    private let open: SessionProvider
+    private let openSession: SessionProvider
     private let xpc: XPCBroker
     private let ext: ExtensionController
+    private let onStatusChange: StatusChangeHandler
 
     private lazy var service = CoreService(supervisor: self)
 
-    private enum OfflineReason {
-        case user
-    }
-
     private enum State {
         case offline(OfflineReason)
-        case connecting(Task<Void, Never>)
+        case connecting
+        case reconnecting(
+            Task<Void, Never>,
+            ConnectionError?,
+            nextAttempt: Date?
+        )
         case online(Session)
     }
 
-    private var state: State = .offline(.user)
+    private var _state: State = .offline(.disabled)
+
+    private var state: State {
+        get {
+            return _state
+        }
+
+        set {
+            logger.debug("State changed: \(_state) -> \(newValue)")
+
+            if case .reconnecting(let task, _, _) = _state {
+                if case .reconnecting = newValue {
+                } else {
+                    task.cancel()
+                }
+            }
+
+            _state = newValue
+            onStatusChange(status(of: newValue))
+        }
+    }
+
+    private func status(of state: State) -> ConnectionStatus {
+        switch state {
+        case .offline(let reason):
+            .offline(reason)
+        case .connecting:
+            .connecting
+        case .reconnecting(_, let error, let nextAttempt):
+            .reconnecting(error, nextAttempt: nextAttempt)
+        case .online:
+            .online
+        }
+    }
 
     private var session: Session? {
         if case .online(let session) = state { session } else { nil }
@@ -39,9 +80,10 @@ actor SessionSupervisor {
         pollInterval: Duration?,
         initialBackoff: Duration = .seconds(1),
         maxBackoff: Duration = .seconds(60),
-        open: @escaping SessionProvider,
+        openSession: @escaping SessionProvider,
         xpc: XPCBroker? = nil,
-        ext: ExtensionController? = nil
+        ext: ExtensionController? = nil,
+        onStatusChange: @escaping StatusChangeHandler
     ) {
         self.config = config
 
@@ -49,20 +91,31 @@ actor SessionSupervisor {
         self.initialBackoff = initialBackoff
         self.maxBackoff = maxBackoff
 
-        self.open = open
+        self.openSession = openSession
         self.xpc = xpc ?? DomainXPCBroker(domain: config.domain)
         self.ext = ext ?? config.domain
+        self.onStatusChange = onStatusChange
     }
 
-    func connect() async throws {
-        let session = try await open(config) { [weak self] in
+    func connect() async throws(ConnectionError) {
+        state = .connecting
+        do {
+            try await open()
+        } catch {
+            state = .offline(.failed(error))
+            throw error
+        }
+    }
+
+    private func open() async throws(ConnectionError) {
+        let session = try await openSession(config) { [weak self] in
             guard let self else { return }
             await self.handleFailedSession()
         }
         await ext.resume()
         await xpc.broker(exporting: service)
-        state = .online(session)
         await session.startPolling(every: pollInterval)
+        state = .online(session)
         logger.info("Session connected: \(config)")
     }
 
@@ -72,7 +125,7 @@ actor SessionSupervisor {
         await xpc.teardown()
         await ext.remove()
         await session?.close()
-        state = .offline(.user)
+        state = .offline(.disabled)
         logger.info("Supervisor disabled: \(config)")
     }
 
@@ -85,25 +138,24 @@ actor SessionSupervisor {
             options: .temporary
         )
         await session?.close()
-        state = .offline(.user)
+        state = .offline(.paused)
         logger.info("Supervisor paused: \(config)")
     }
 
-    func reconfigure(config: ConnectionConfig) async throws {
-        guard case .offline = state else {
-            logger.fatal("reconfigure called while not offline: \(config)")
-        }
+    func reconfigure(config: ConnectionConfig) async throws(ConnectionError) {
         self.config = config
         try await connect()
     }
-    
+
     private func reconnect() {
-        if case .connecting = state { return }
-        state = .connecting(
+        if case .reconnecting = state { return }
+        state = .reconnecting(
             Task { [weak self] in
                 guard let self else { return }
                 await reconnectLoop()
-            }
+            },
+            nil,
+            nextAttempt: nil
         )
         logger.info("Session reconnecting: \(config)")
     }
@@ -112,16 +164,18 @@ actor SessionSupervisor {
         var backoff = initialBackoff
         while !Task.isCancelled {
             do {
-                try await connect()
-                return
-            } catch is CancellationError {
+                try await open()
                 return
             } catch {
+                let nextAttempt = Date.now.addingTimeInterval(backoff.seconds)
+                setReconnecting(error: error, nextAttempt: nextAttempt)
                 logger.error("Connect failed; retrying in \(backoff): \(error)")
                 do { try await Task.sleep(for: backoff) } catch { return }
+                setReconnecting(error: error, nextAttempt: nil)
                 backoff = min(backoff * 2, maxBackoff)
             }
         }
+        logger.info("Reconnect cancelled: \(config)")
     }
 
     private func handleFailedSession() async {
@@ -132,12 +186,17 @@ actor SessionSupervisor {
             options: .temporary
         )
         await session?.close()
-        state = .offline(.user)
         reconnect()
     }
 
+    private func setReconnecting(error: ConnectionError?, nextAttempt: Date?) {
+        if case .reconnecting(let task, _, _) = state {
+            state = .reconnecting(task, error, nextAttempt: nextAttempt)
+        }
+    }
+
     private func stopReconnecting() {
-        if case .connecting(let task) = state { task.cancel() }
+        if case .reconnecting(let task, _, _) = state { task.cancel() }
     }
 
     @discardableResult
@@ -148,5 +207,12 @@ actor SessionSupervisor {
             throw CoreError.serverUnreachable
         }
         return try await operation(session)
+    }
+}
+
+extension Duration {
+    fileprivate var seconds: TimeInterval {
+        let (seconds, attoseconds) = components
+        return TimeInterval(seconds) + TimeInterval(attoseconds) / 1e18
     }
 }

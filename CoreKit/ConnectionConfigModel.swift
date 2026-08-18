@@ -9,7 +9,6 @@ private let logger = Logger(category: "ConnectionConfigModel")
 public class ConnectionConfigModel: CustomStringConvertible {
     public enum ValidationError: Error {
         case passwordNil
-        case privateKeyUrlNil
         case privateKeyReadFailed
     }
 
@@ -112,10 +111,12 @@ public class ConnectionConfigModel: CustomStringConvertible {
         return enabled
     }
 
+    public func setEnabled(_ enabled: Bool) {
+        Task { try await enabled ? enable() : disable() }
+    }
+
     public func enable() async throws {
         let config = try ConnectionConfig(from: self)
-        try await SSHClient.test(config: config)
-
         try await DomainRegistry.shared.enable(config: config)
         self.enabled = true
         logger.info("Profile enabled: \(self)")
@@ -134,8 +135,6 @@ public class ConnectionConfigModel: CustomStringConvertible {
 
     public func reconfigure() async throws {
         let config = try ConnectionConfig(from: self)
-        try await SSHClient.test(config: config)
-
         try await DomainRegistry.shared.reconfigure(config: config)
         logger.info("Profile reconfigured: \(self)")
     }
@@ -162,11 +161,11 @@ public class ConnectionConfigModel: CustomStringConvertible {
         Keychain.shared.delete(passwordKey)
     }
 
-    public func privateKeyUrl() throws(ValidationError) -> URL {
+    public func privateKeyUrl() throws -> URL {
         try resolveBookmark()
     }
 
-    public func getBase64PrivateKey() throws(ValidationError) -> String {
+    public func getBase64PrivateKey() throws -> String {
         let url = try resolveBookmark()
         guard url.startAccessingSecurityScopedResource() else {
             throw ValidationError.privateKeyReadFailed
@@ -183,36 +182,27 @@ public class ConnectionConfigModel: CustomStringConvertible {
         return base64PrivateKey
     }
 
-    private func resolveBookmark() throws(ValidationError) -> URL {
+    private func resolveBookmark() throws -> URL {
         guard let bookmark = bookmark else {
             throw ValidationError.privateKeyReadFailed
         }
         var isStale = false
-        guard
-            let url = try? URL(
-                resolvingBookmarkData: bookmark,
-                options: .withSecurityScope,
-                relativeTo: nil,
-                bookmarkDataIsStale: &isStale
-            )
-        else {
-            throw ValidationError.privateKeyReadFailed
-        }
+        let url = try URL(
+            resolvingBookmarkData: bookmark,
+            options: .withSecurityScope,
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        )
         if isStale {
             guard url.startAccessingSecurityScopedResource() else {
                 return url
             }
             defer { url.stopAccessingSecurityScopedResource() }
-            guard
-                let bookmark = try? url.bookmarkData(
-                    options: .withSecurityScope,
-                    includingResourceValuesForKeys: nil,
-                    relativeTo: nil
-                )
-            else {
-                throw ValidationError.privateKeyReadFailed
-            }
-            self.bookmark = bookmark
+            self.bookmark = try url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
         }
         return url
     }
@@ -236,7 +226,7 @@ public class ConnectionConfigModel: CustomStringConvertible {
     }
 
     fileprivate func resolveConfigAuthMethod()
-        throws(ValidationError) -> ConnectionConfig.AuthMethod
+        throws -> ConnectionConfig.AuthMethod
     {
         switch authMethod {
         case .password:
@@ -269,9 +259,7 @@ extension ModelContext {
 }
 
 extension ConnectionConfig {
-    public init(from profile: ConnectionConfigModel)
-        throws(ConnectionConfigModel.ValidationError)
-    {
+    public init(from profile: ConnectionConfigModel) throws {
         try self.init(
             id: profile.id,
             name: profile.displayName,

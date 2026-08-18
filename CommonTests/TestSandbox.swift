@@ -112,22 +112,26 @@ class TestSandbox {
                 return _supervisor
             }
 
-            let memoryOnlyConfig = ModelConfiguration(
-                isStoredInMemoryOnly: true
+            let config = try config
+
+            let domainDb = try await DomainDB.open(
+                config: ModelConfiguration(
+                    isStoredInMemoryOnly: true
+                )
             )
 
-            let config = try config
             let supervisor = SessionSupervisor(
                 config: config,
                 pollInterval: nil,
-                open: Session.provider(
-                    domainDbConfig: memoryOnlyConfig,
+                openSession: Session.provider(
+                    domainDb: domainDb,
                     sharedUrl: shared,
                     signalEnumerator: { _ in },
                     transfers: Transfers()
                 ),
                 xpc: NoopXPCBroker(),
-                ext: NoopExtensionController()
+                ext: NoopExtensionController(),
+                onStatusChange: { _ in }
             )
 
             try await supervisor.connect()

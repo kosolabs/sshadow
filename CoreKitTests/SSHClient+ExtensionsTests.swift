@@ -19,8 +19,8 @@ import XPC
             authMethod: .none,
         )
 
-        await #expect(throws: SSHClient.TestError.unknownHost) {
-            try await SSHClient.test(config: config)
+        await #expect(throws: ConnectionError.unknownHost) {
+            try await SSHClient.connect(config: config)
         }
     }
 
@@ -35,8 +35,8 @@ import XPC
             authMethod: .none,
         )
 
-        await #expect(throws: SSHClient.TestError.connectionRefused) {
-            try await SSHClient.test(config: config)
+        await #expect(throws: ConnectionError.connectionRefused) {
+            try await SSHClient.connect(config: config)
         }
     }
 }
