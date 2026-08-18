@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/kosolabs/sshadow/compare/v0.5.1...v0.6.0) (2026-08-18)
+
+
+### Features
+
+* pause a connection without destroying the domain ([#290](https://github.com/kosolabs/sshadow/issues/290)) ([4884903](https://github.com/kosolabs/sshadow/commit/488490376bff51c64c753012fd0f0c2293607317))
+* surface live connection status in the UI ([#295](https://github.com/kosolabs/sshadow/issues/295)) ([bd95dfe](https://github.com/kosolabs/sshadow/commit/bd95dfe249ad696e1f28190aed66d6d86a811072))
+
+
+### Bug Fixes
+
+* reconnect only after a lost connection ([#291](https://github.com/kosolabs/sshadow/issues/291)) ([4dc0518](https://github.com/kosolabs/sshadow/commit/4dc05183c0ce9dfd145df29aa72e83830b4dc36b))
+* session state transitions between offline and online ([#281](https://github.com/kosolabs/sshadow/issues/281)) ([4c055aa](https://github.com/kosolabs/sshadow/commit/4c055aa0d40d03a5e8dc342e34bf52cb9b3517f9))
+
 ## [0.5.1](https://github.com/kosolabs/sshadow/compare/v0.5.0...v0.5.1) (2026-08-06)
 
 
