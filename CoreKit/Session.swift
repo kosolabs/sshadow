@@ -6,11 +6,13 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Session")
 
-public typealias ChangesDetectedHandler = @Sendable () async throws -> Void
-
-public typealias ConnectionLostHandler = @Sendable () async -> Void
-
 actor Session {
+    typealias Provider =
+        @Sendable (ConnectionConfig, @escaping ConnectionLostHandler)
+        async throws(ConnectionError) -> Session
+    typealias ChangesDetectedHandler = @Sendable () async throws -> Void
+    typealias ConnectionLostHandler = @Sendable () async -> Void
+
     private let config: ConnectionConfig
     private let ssh: SSHClient
     private let sftp: SFTPClient
@@ -29,9 +31,9 @@ actor Session {
     static func provider(
         domainDb: DomainDB,
         sharedUrl: URL,
-        signalEnumerator: @escaping EnumeratorSignal,
+        signalEnumerator: @escaping DomainRegistry.EnumeratorSignal,
         transfers: Transfers
-    ) -> SessionProvider {
+    ) -> Provider {
         { config, handler in
             let (ssh, sftp) = try await SSHClient.connect(config: config)
             return Session(

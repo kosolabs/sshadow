@@ -6,10 +6,10 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "DomainRegistry")
 
-typealias EnumeratorSignal =
-    @Sendable (ConnectionConfig) async throws -> Void
-
 public actor DomainRegistry {
+    typealias EnumeratorSignal =
+        @Sendable (ConnectionConfig) async throws -> Void
+
     public static let shared: DomainRegistry = DomainRegistry(
         signalEnumerator: { config in
             try await config.domain.manager.signalEnumerator(

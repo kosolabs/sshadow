@@ -53,24 +53,30 @@ private actor SpyExtensionController: ExtensionController {
 }
 
 private actor SpySessionProvider {
-    private let base: SessionProvider
+    private let base: Session.Provider
     private var failuresRemaining: Int
+    private var failureError: ConnectionError = .connectionRefused
 
     private(set) var callCount = 0
-    private(set) var capturedHandler: ConnectionLostHandler?
+    private(set) var capturedHandler: Session.ConnectionLostHandler?
     private(set) var capturedConfig: ConnectionConfig?
 
-    init(base: @escaping SessionProvider, failuresBeforeSuccess: Int = 0) {
+    init(base: @escaping Session.Provider, failuresBeforeSuccess: Int = 0) {
         self.base = base
         self.failuresRemaining = failuresBeforeSuccess
     }
 
-    /// Arm the provider to fail its next `count` connects before succeeding.
-    func failNextConnects(_ count: Int) {
+    /// Arm the provider to fail its next `count` connects with `error` before
+    /// succeeding.
+    func failNextConnects(
+        _ count: Int,
+        with error: ConnectionError = .connectionRefused
+    ) {
         failuresRemaining = count
+        failureError = error
     }
 
-    nonisolated func provider() -> SessionProvider {
+    nonisolated func provider() -> Session.Provider {
         { config, handler in
             try await self.connect(config, handler)
         }
@@ -78,14 +84,14 @@ private actor SpySessionProvider {
 
     private func connect(
         _ config: ConnectionConfig,
-        _ handler: @escaping ConnectionLostHandler
+        _ handler: @escaping Session.ConnectionLostHandler
     ) async throws(ConnectionError) -> Session {
         callCount += 1
         capturedHandler = handler
         capturedConfig = config
         if failuresRemaining > 0 {
             failuresRemaining -= 1
-            throw ConnectionError.connectionRefused
+            throw failureError
         }
         return try await base(config, handler)
     }
@@ -99,7 +105,7 @@ private final class StatusSpy: @unchecked Sendable {
         lock.withLock { _statuses }
     }
 
-    func handler() -> StatusChangeHandler {
+    func handler() -> SessionSupervisor.StatusChangeHandler {
         { status in
             self.lock.withLock { self._statuses.append(status) }
         }
@@ -107,7 +113,7 @@ private final class StatusSpy: @unchecked Sendable {
 }
 
 extension TestSandbox {
-    fileprivate func sessionProvider() async throws -> SessionProvider {
+    fileprivate func sessionProvider() async throws -> Session.Provider {
         try await Session.provider(
             domainDb: DomainDB.open(
                 config: ModelConfiguration(isStoredInMemoryOnly: true)
@@ -340,6 +346,58 @@ struct SessionSupervisorTests {
         await #expect(throws: CoreError.serverUnreachable) {
             try await supervisor.withSession { _ in }
         }
+    }
+
+    @Test func reconnectGoesOfflineOnPermanentFailure() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            config: try sandbox.config,
+            pollInterval: nil,
+            initialBackoff: .milliseconds(1),
+            maxBackoff: .milliseconds(5),
+            openSession: provider.provider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController(),
+            onStatusChange: spy.handler()
+        )
+
+        try await supervisor.connect()
+        #expect(await provider.callCount == 1)
+
+        // Arm a permanent failure (bad credentials) for the reconnect that
+        // follows a lost connection.
+        await provider.failNextConnects(1, with: .authenticationFailed)
+        let handler = try #require(await provider.capturedHandler)
+        await handler()
+
+        // The supervisor settles into offline(.failed) rather than retrying.
+        let deadline = ContinuousClock.now + .seconds(5)
+        while ContinuousClock.now < deadline {
+            if spy.statuses.last == .offline(.failed(.authenticationFailed)) {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(spy.statuses.last == .offline(.failed(.authenticationFailed)))
+
+        // Only the single reconnect attempt ran; the permanent failure short
+        // circuits the backoff loop instead of retrying.
+        #expect(await provider.callCount == 2)
+
+        // Give any errant retry a chance to fire, then confirm none did.
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(await provider.callCount == 2)
+
+        // The supervisor stays offline.
+        await #expect(throws: CoreError.serverUnreachable) {
+            try await supervisor.withSession { _ in }
+        }
+
+        await supervisor.disable()
     }
 
     @Test func reconfigureFromPausedReconnectsWithNewConfig() async throws {
