@@ -5,20 +5,16 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "SessionSupervisor")
 
-typealias SessionProvider =
-    @Sendable (ConnectionConfig, @escaping ConnectionLostHandler)
-    async throws(ConnectionError) -> Session
-
-typealias StatusChangeHandler = @Sendable (ConnectionStatus) -> Void
-
 actor SessionSupervisor {
+    typealias StatusChangeHandler = @Sendable (ConnectionStatus) -> Void
+
     private var config: ConnectionConfig
 
     private let pollInterval: Duration?
     private let initialBackoff: Duration
     private let maxBackoff: Duration
 
-    private let openSession: SessionProvider
+    private let openSession: Session.Provider
     private let xpc: XPCBroker
     private let ext: ExtensionController
     private let onStatusChange: StatusChangeHandler
@@ -44,7 +40,7 @@ actor SessionSupervisor {
         }
 
         set {
-            logger.debug("State changed: \(_state) -> \(newValue)")
+            logger.info("State changed: \(_state) -> \(newValue)")
 
             if case .reconnecting(let task, _, _) = _state {
                 if case .reconnecting = newValue {
@@ -80,7 +76,7 @@ actor SessionSupervisor {
         pollInterval: Duration?,
         initialBackoff: Duration = .seconds(1),
         maxBackoff: Duration = .seconds(60),
-        openSession: @escaping SessionProvider,
+        openSession: @escaping Session.Provider,
         xpc: XPCBroker? = nil,
         ext: ExtensionController? = nil,
         onStatusChange: @escaping StatusChangeHandler
@@ -165,12 +161,20 @@ actor SessionSupervisor {
         while !Task.isCancelled {
             do {
                 try await open()
-                return
+                break
+            } catch let error
+                where error == .invalidPrivateKey
+                || error == .authenticationFailed
+                || error == .remotePathNotFound
+                || error == .remotePathNotDirectory
+            {
+                state = .offline(.failed(error))
+                break
             } catch {
                 let nextAttempt = Date.now.addingTimeInterval(backoff.seconds)
                 setReconnecting(error: error, nextAttempt: nextAttempt)
                 logger.error("Connect failed; retrying in \(backoff): \(error)")
-                do { try await Task.sleep(for: backoff) } catch { return }
+                do { try await Task.sleep(for: backoff) } catch { break }
                 setReconnecting(error: error, nextAttempt: nil)
                 backoff = min(backoff * 2, maxBackoff)
             }
