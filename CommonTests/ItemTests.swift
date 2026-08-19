@@ -3,6 +3,32 @@ import Testing
 
 @testable import Common
 
+private func makeItem(
+    id: String = "id",
+    parentId: String? = "parent",
+    name: String = "file.txt",
+    kind: Item.Kind = .file,
+    size: UInt64? = 1024,
+    flags: Item.Flags? = .rw,
+    accessTime: Date? = Date(timeIntervalSince1970: 100),
+    modifyTime: Date? = Date(timeIntervalSince1970: 200),
+    createTime: Date? = Date(timeIntervalSince1970: 300),
+    enumeratedAt: Date? = nil
+) -> Item {
+    Item(
+        id: id,
+        parentId: parentId,
+        name: name,
+        kind: kind,
+        size: size,
+        flags: flags,
+        accessTime: accessTime,
+        modifyTime: modifyTime,
+        createTime: createTime,
+        enumeratedAt: enumeratedAt
+    )
+}
+
 struct ItemFlagsTests {
     @Test func readableWritableModeIs600() {
         let flags: Item.Flags = .rw
@@ -57,5 +83,103 @@ struct ItemFlagsTests {
     @Test func fromMode755IgnoresGroupAndOtherBits() {
         let flags = Item.Flags(from: 0o755)
         #expect(flags == .all)
+    }
+}
+
+struct ContentVersionTests {
+    @Test func contentVersionIsStableForEqualContent() {
+        #expect(makeItem().contentVersion == makeItem().contentVersion)
+    }
+
+    @Test func contentVersionChangesWithSize() {
+        #expect(
+            makeItem(size: 1024).contentVersion
+                != makeItem(size: 2048).contentVersion
+        )
+    }
+
+    @Test func contentVersionChangesWithModifyTime() {
+        let a = makeItem(modifyTime: Date(timeIntervalSince1970: 200))
+        let b = makeItem(modifyTime: Date(timeIntervalSince1970: 201))
+        #expect(a.contentVersion != b.contentVersion)
+    }
+
+    @Test func contentVersionIgnoresMetadataOnlyFields() {
+        let a = makeItem(
+            name: "a.txt",
+            flags: .rw,
+            createTime: Date(timeIntervalSince1970: 300)
+        )
+        let b = makeItem(
+            name: "b.txt",
+            flags: .all,
+            createTime: Date(timeIntervalSince1970: 999)
+        )
+        #expect(a.contentVersion == b.contentVersion)
+    }
+
+    @Test func contentVersionChangesWhenSizeBecomesNil() {
+        #expect(
+            makeItem(size: 1024).contentVersion
+                != makeItem(size: nil).contentVersion
+        )
+    }
+}
+
+struct MetadataVersionTests {
+    @Test func metadataVersionIsStableForEqualMetadata() {
+        #expect(makeItem().metadataVersion == makeItem().metadataVersion)
+    }
+
+    @Test func metadataVersionChangesWithName() {
+        #expect(
+            makeItem(name: "a.txt").metadataVersion
+                != makeItem(name: "b.txt").metadataVersion
+        )
+    }
+
+    @Test func metadataVersionChangesWithParentId() {
+        #expect(
+            makeItem(parentId: "a").metadataVersion
+                != makeItem(parentId: "b").metadataVersion
+        )
+    }
+
+    @Test func metadataVersionChangesWithFlags() {
+        #expect(
+            makeItem(flags: .rw).metadataVersion
+                != makeItem(flags: .all).metadataVersion
+        )
+    }
+
+    @Test func metadataVersionChangesWithModifyTime() {
+        let a = makeItem(modifyTime: Date(timeIntervalSince1970: 200))
+        let b = makeItem(modifyTime: Date(timeIntervalSince1970: 201))
+        #expect(a.metadataVersion != b.metadataVersion)
+    }
+
+    @Test func metadataVersionChangesWithCreateTime() {
+        let a = makeItem(createTime: Date(timeIntervalSince1970: 300))
+        let b = makeItem(createTime: Date(timeIntervalSince1970: 301))
+        #expect(a.metadataVersion != b.metadataVersion)
+    }
+
+    @Test func metadataVersionIgnoresContentOnlyFields() {
+        let a = makeItem(
+            size: 1024,
+            accessTime: Date(timeIntervalSince1970: 100)
+        )
+        let b = makeItem(
+            size: 2048,
+            accessTime: Date(timeIntervalSince1970: 999)
+        )
+        #expect(a.metadataVersion == b.metadataVersion)
+    }
+
+    @Test func metadataVersionChangesWhenParentIdBecomesNil() {
+        #expect(
+            makeItem(parentId: "parent").metadataVersion
+                != makeItem(parentId: nil).metadataVersion
+        )
     }
 }
