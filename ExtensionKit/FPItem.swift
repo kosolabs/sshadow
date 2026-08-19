@@ -40,6 +40,10 @@ public class FPItem: NSObject, NSFileProviderItem {
         ]
     }
 
+    public var contentPolicy: NSFileProviderContentPolicy {
+        .downloadLazily
+    }
+
     public var fileSystemFlags: NSFileProviderFileSystemFlags {
         NSFileProviderFileSystemFlags(from: item.flags ?? [])
     }
