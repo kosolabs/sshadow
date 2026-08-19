@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.0](https://github.com/kosolabs/sshadow/compare/v0.7.0...v0.8.0) (2026-08-19)
+
+
+### Features
+
+* add interactive connection status controls to profile UI ([#299](https://github.com/kosolabs/sshadow/issues/299)) ([1e332a8](https://github.com/kosolabs/sshadow/commit/1e332a83ba2a4e80c6cb2b5e2fe8a0935262bfe8))
+* allow evicting downloaded items ([#301](https://github.com/kosolabs/sshadow/issues/301)) ([cfbca6d](https://github.com/kosolabs/sshadow/commit/cfbca6d240cbe4cad0227022dbee52aa504f2814))
+
+
+### Bug Fixes
+
+* refresh stale content on remote updates via real itemVersion ([#302](https://github.com/kosolabs/sshadow/issues/302)) ([f88037f](https://github.com/kosolabs/sshadow/commit/f88037f499d24fc9d4af03cdd0c98a4529cf3973))
+
 ## [0.7.0](https://github.com/kosolabs/sshadow/compare/v0.6.0...v0.7.0) (2026-08-19)
 
 
