@@ -131,6 +131,25 @@ public struct Item: Message, CustomStringConvertible {
     public var isEnumerated: Bool {
         kind == .folder && enumeratedAt != nil
     }
+    
+    public var contentVersion: Data {
+        let fields = [
+            String(modifyTime?.timeIntervalSince1970 ?? 0),
+            String(size ?? 0)
+        ]
+        return Data(fields.joined(separator: "-").utf8)
+    }
+
+    public var metadataVersion: Data {
+        let fields = [
+            name,
+            parentId?.rawValue ?? "",
+            String(flags?.rawValue ?? 0),
+            String(modifyTime?.timeIntervalSince1970 ?? 0),
+            String(createTime?.timeIntervalSince1970 ?? 0),
+        ]
+        return Data(fields.joined(separator: "-").utf8)
+    }
 
     public init(
         id: String,
