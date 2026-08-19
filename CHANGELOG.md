@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0](https://github.com/kosolabs/sshadow/compare/v0.6.0...v0.7.0) (2026-08-19)
+
+
+### Features
+
+* go offline on permanent reconnect failures ([#296](https://github.com/kosolabs/sshadow/issues/296)) ([6f24faa](https://github.com/kosolabs/sshadow/commit/6f24faacc5992a1416d7dec282efa3c5167f9df5))
+* validate private keys and unify connection validation errors ([#298](https://github.com/kosolabs/sshadow/issues/298)) ([8d4d241](https://github.com/kosolabs/sshadow/commit/8d4d2413104e5419d24c990d388956e33bebb594))
+
 ## [0.6.0](https://github.com/kosolabs/sshadow/compare/v0.5.1...v0.6.0) (2026-08-18)
 
 
