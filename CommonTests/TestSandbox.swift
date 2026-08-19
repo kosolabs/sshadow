@@ -81,14 +81,14 @@ class TestSandbox {
                 user: user,
                 path: mount.path(),
                 authMethod: .privateKey(
-                    base64PrivateKey: base64PrivateKey,
+                    contents: privateKeyContents,
                     passphrase: nil
                 ),
             )
         }
     }
 
-    var base64PrivateKey: String {
+    var privateKeyContents: String {
         get throws {
             try String(contentsOf: privateKeyUrl, encoding: .utf8)
         }
@@ -121,7 +121,7 @@ class TestSandbox {
             )
 
             let supervisor = SessionSupervisor(
-                config: config,
+                domain: domain,
                 pollInterval: nil,
                 openSession: Session.provider(
                     domainDb: domainDb,
@@ -134,7 +134,7 @@ class TestSandbox {
                 onStatusChange: { _ in }
             )
 
-            try await supervisor.connect()
+            try await supervisor.connect(config: config)
 
             self._supervisor = supervisor
             return supervisor

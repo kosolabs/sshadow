@@ -24,13 +24,13 @@ extension SSHClient {
                         user: config.user,
                         auth: .password(password)
                     )
-                case .privateKey(let base64PrivateKey, let passphrase):
+                case .privateKey(let contents, let passphrase):
                     try await SSHClient.connect(
                         host: config.host,
                         port: config.port,
                         user: config.user,
-                        auth: .privateKeyData(
-                            base64: base64PrivateKey,
+                        auth: .privateKey(
+                            contents: contents,
                             passphrase: passphrase
                         )
                     )
