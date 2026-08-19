@@ -89,13 +89,12 @@ struct ConnectionConfigEditView: View {
         )
     }
 
+    private var status: ConnectionStatus {
+        connections.status(for: config.id)
+    }
+
     // MARK: Validation
 
-    /// Re-derives the current validation error by attempting to build a
-    /// `ConnectionConfig` from the profile. Driven by `onChange`/`onAppear`
-    /// rather than a computed property so the key is only parsed when an input
-    /// actually changes (and because password/passphrase live in the Keychain,
-    /// which does not trigger SwiftData observation).
     private func validate() {
         do {
             _ = try ConnectionConfig(from: config)
@@ -105,7 +104,8 @@ struct ConnectionConfigEditView: View {
         }
     }
 
-    private func message(for error: ConnectionConfig.ValidationError) -> String {
+    private func message(for error: ConnectionConfig.ValidationError) -> String
+    {
         switch error {
         case .passwordMissing:
             "Password is required."
@@ -149,9 +149,13 @@ struct ConnectionConfigEditView: View {
                             )
                             .foregroundStyle(.red)
                         } else {
-                            ConnectionStatusView(
-                                status: connections.status(for: config.id)
-                            )
+                            HStack(spacing: 6) {
+                                ConnectionStatusIcon(
+                                    status: status,
+                                    variant: .checkmark
+                                )
+                                ConnectionStatusText(status: status)
+                            }
                         }
                         if enabled.wrappedValue {
                             if connections.isOffline(id: config.id) {

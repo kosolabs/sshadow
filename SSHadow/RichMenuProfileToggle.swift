@@ -16,41 +16,54 @@ struct RichMenuProfileToggle: View {
             set: { config.setEnabled($0) }
         )
     }
-    
+
+    private var status: ConnectionStatus {
+        connections.status(for: config.id)
+    }
+
     var body: some View {
-        Button {
-            openInFinder()
-        } label: {
+        VStack(alignment: .leading) {
             HStack(spacing: 8) {
-                Image(systemName: "externaldrive.badge.icloud")
-                    .frame(width: 20, alignment: .center)
-
-                VStack(alignment: .leading) {
-                    if let name = config.name {
-                        Text(name)
-                        Text(config.displayUrl).font(.caption)
-                    } else {
-                        Text(config.displayUrl)
+                ConnectionStatusButton(config: config, status: status)
+                
+                HStack {
+                    VStack(alignment: .leading) {
+                        if let name = config.name {
+                            Text(name)
+                            Text(config.displayUrl).font(.caption)
+                        } else {
+                            Text(config.displayUrl)
+                        }
                     }
+                    
+                    Spacer()
                 }
-
-                Spacer()
-
+                .contentShape(Rectangle())
+                .onTapGesture { openInFinder() }
+                
                 Toggle(isOn: enabled) {}
                     .toggleStyle(.switch)
                     .disabled(connections.isBusy(id: config.id))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
-            .background(
-                RoundedRectangle(cornerRadius: 8).fill(
-                    isHovered && config.isEnabled()
-                        ? Color.primary : Color.clear
-                )
-            )
+            
+            switch status {
+            case .reconnecting, .offline(.failed):
+                ConnectionStatusText(status: status)
+                    .font(.caption)
+                    .padding(.leading, 28)
+            default:
+                EmptyView()
+            }
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .background(
+            RoundedRectangle(cornerRadius: 8).fill(
+                isHovered && config.isEnabled()
+                    ? Color.primary : Color.clear
+            )
+        )
         .onHover { isHovered = $0 }
     }
 
