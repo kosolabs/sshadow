@@ -6,6 +6,7 @@ import SwiftUI
 
 struct ConnectionConfigListView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(Connections.self) private var connections
     @Query(sort: \ConnectionConfigModel.host) private var configs:
         [ConnectionConfigModel]
 
@@ -15,11 +16,13 @@ struct ConnectionConfigListView: View {
         List(selection: $selection) {
             ForEach(configs) { config in
                 HStack {
-                    Image(systemName: "externaldrive.badge.icloud")
-                        .font(.system(size: 18))
-                        .foregroundColor(
-                            config.isEnabled() ? .green : .secondary
-                        )
+                    ConnectionStatusButton(
+                        config: config,
+                        status: connections.status(for: config.id)
+                    )
+                    .font(.system(size: 18))
+                    .padding(.horizontal, 4)
+
                     VStack(alignment: .leading) {
                         if let name = config.name {
                             Text(name)
@@ -29,6 +32,7 @@ struct ConnectionConfigListView: View {
                         }
                     }
                 }
+                .padding(.horizontal, 4)
                 .tag(config)
             }
         }
