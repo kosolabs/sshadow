@@ -4,10 +4,18 @@ import SwiftData
 private let logger = Logger(category: "ConnectionConfig")
 
 public struct ConnectionConfig: Message, CustomStringConvertible {
+    public enum ValidationError: Error, Equatable {
+        case passwordMissing
+        case privateKeyMissing
+        case privateKeyUnreadable
+        case passphraseRequired
+        case privateKeyInvalid
+    }
+
     public enum AuthMethod: Message, CustomStringConvertible {
         case none
         case password(String)
-        case privateKey(base64PrivateKey: String, passphrase: String?)
+        case privateKey(contents: String, passphrase: String?)
 
         public var description: String {
             switch self {

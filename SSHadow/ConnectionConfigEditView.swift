@@ -13,6 +13,7 @@ struct ConnectionConfigEditView: View {
     var config = ConnectionConfigModel()
     @State private var isImportingKey: Bool = false
     @State private var passwordText: String = ""
+    @State private var validationError: ConnectionConfig.ValidationError?
 
     private var name: Binding<String> {
         Binding<String>(
@@ -76,6 +77,7 @@ struct ConnectionConfigEditView: View {
                 } else {
                     config.setPrivateKeyPassphrase($0)
                 }
+                validate()
             }
         )
     }
@@ -89,22 +91,33 @@ struct ConnectionConfigEditView: View {
 
     // MARK: Validation
 
-    private var isPasswordMissing: Bool {
-        if case .password = config.authMethod {
-            return passwordText.isEmpty
+    /// Re-derives the current validation error by attempting to build a
+    /// `ConnectionConfig` from the profile. Driven by `onChange`/`onAppear`
+    /// rather than a computed property so the key is only parsed when an input
+    /// actually changes (and because password/passphrase live in the Keychain,
+    /// which does not trigger SwiftData observation).
+    private func validate() {
+        do {
+            _ = try ConnectionConfig(from: config)
+            validationError = nil
+        } catch {
+            validationError = error
         }
-        return false
     }
 
-    private var isPrivateKeyMissing: Bool {
-        if case .privateKey = config.authMethod {
-            return (try? config.privateKeyUrl()) == nil
+    private func message(for error: ConnectionConfig.ValidationError) -> String {
+        switch error {
+        case .passwordMissing:
+            "Password is required."
+        case .privateKeyMissing:
+            "Private key is required."
+        case .privateKeyUnreadable:
+            "The selected file isn't a readable private key."
+        case .passphraseRequired:
+            "This private key requires a passphrase."
+        case .privateKeyInvalid:
+            "Private key is invalid or the passphrase is incorrect."
         }
-        return false
-    }
-
-    private var isInvalid: Bool {
-        isPasswordMissing || isPrivateKeyMissing
     }
 
     var body: some View {
@@ -119,38 +132,33 @@ struct ConnectionConfigEditView: View {
                     .disabled(locked)
                     .accessibilityIdentifier("nameField")
                     Toggle(isOn: enabled) {
-                        HStack {
-                            Text("Enabled")
-                            if isInvalid {
-                                Spacer()
-                                HStack {
-                                    Image(systemName: "lock.circle")
-                                    if isPasswordMissing {
-                                        Text("Password is required.")
-                                    } else if isPrivateKeyMissing {
-                                        Text("Private key is required.")
-                                    }
-                                }
-                                .foregroundStyle(.red)
-                            }
-                        }
+                        Text("Enabled")
                     }
                     .disabled(
                         connections.isBusy(id: config.id)
-                            || (!enabled.wrappedValue && isInvalid)
+                            || (!enabled.wrappedValue && validationError != nil)
                     )
                     .accessibilityIdentifier("enabledToggle")
                     HStack {
                         Text("Status")
                         Spacer()
-                        ConnectionStatusView(
-                            status: connections.status(for: config.id)
-                        )
+                        if let validationError {
+                            Label(
+                                message(for: validationError),
+                                systemImage: "lock.circle"
+                            )
+                            .foregroundStyle(.red)
+                        } else {
+                            ConnectionStatusView(
+                                status: connections.status(for: config.id)
+                            )
+                        }
                         if enabled.wrappedValue {
                             if connections.isOffline(id: config.id) {
                                 Button("Reconnect") {
-                                    Task { try await config.reconfigure() }
+                                    Task { try await config.enable() }
                                 }
+                                .disabled(validationError != nil)
                             } else {
                                 Button("Pause") {
                                     Task { try await config.pause() }
@@ -253,6 +261,7 @@ struct ConnectionConfigEditView: View {
                             } else {
                                 config.setPassword(newValue)
                             }
+                            validate()
                         }
                     }
                 }
@@ -260,7 +269,10 @@ struct ConnectionConfigEditView: View {
             .formStyle(.grouped)
             .onAppear {
                 passwordText = config.getPassword() ?? ""
+                validate()
             }
+            .onChange(of: config.authMethod) { validate() }
+            .onChange(of: config.bookmark) { validate() }
             .fileImporter(
                 isPresented: $isImportingKey,
                 allowedContentTypes: [.item],

@@ -8,7 +8,7 @@ private let logger = Logger(category: "SessionSupervisor")
 actor SessionSupervisor {
     typealias StatusChangeHandler = @Sendable (ConnectionStatus) -> Void
 
-    private var config: ConnectionConfig
+    private let domain: NSFileProviderDomain
 
     private let pollInterval: Duration?
     private let initialBackoff: Duration
@@ -72,7 +72,7 @@ actor SessionSupervisor {
     }
 
     init(
-        config: ConnectionConfig,
+        domain: NSFileProviderDomain,
         pollInterval: Duration?,
         initialBackoff: Duration = .seconds(1),
         maxBackoff: Duration = .seconds(60),
@@ -81,32 +81,32 @@ actor SessionSupervisor {
         ext: ExtensionController? = nil,
         onStatusChange: @escaping StatusChangeHandler
     ) {
-        self.config = config
+        self.domain = domain
 
         self.pollInterval = pollInterval
         self.initialBackoff = initialBackoff
         self.maxBackoff = maxBackoff
 
         self.openSession = openSession
-        self.xpc = xpc ?? DomainXPCBroker(domain: config.domain)
-        self.ext = ext ?? config.domain
+        self.xpc = xpc ?? DomainXPCBroker(domain: domain)
+        self.ext = ext ?? domain
         self.onStatusChange = onStatusChange
     }
 
-    func connect() async throws(ConnectionError) {
+    func connect(config: ConnectionConfig) async throws(ConnectionError) {
         state = .connecting
         do {
-            try await open()
+            try await open(config: config)
         } catch {
             state = .offline(.failed(error))
             throw error
         }
     }
 
-    private func open() async throws(ConnectionError) {
+    private func open(config: ConnectionConfig) async throws(ConnectionError) {
         let session = try await openSession(config) { [weak self] in
             guard let self else { return }
-            await self.handleFailedSession()
+            await self.handleFailedSession(config: config)
         }
         await ext.resume()
         await xpc.broker(exporting: service)
@@ -122,7 +122,7 @@ actor SessionSupervisor {
         await ext.remove()
         await session?.close()
         state = .offline(.disabled)
-        logger.info("Supervisor disabled: \(config)")
+        logger.info("Supervisor disabled: \(domain)")
     }
 
     func pause() async {
@@ -135,20 +135,15 @@ actor SessionSupervisor {
         )
         await session?.close()
         state = .offline(.paused)
-        logger.info("Supervisor paused: \(config)")
+        logger.info("Supervisor paused: \(domain)")
     }
 
-    func reconfigure(config: ConnectionConfig) async throws(ConnectionError) {
-        self.config = config
-        try await connect()
-    }
-
-    private func reconnect() {
+    private func reconnect(config: ConnectionConfig) {
         if case .reconnecting = state { return }
         state = .reconnecting(
             Task { [weak self] in
                 guard let self else { return }
-                await reconnectLoop()
+                await reconnectLoop(config: config)
             },
             nil,
             nextAttempt: nil
@@ -156,11 +151,11 @@ actor SessionSupervisor {
         logger.info("Session reconnecting: \(config)")
     }
 
-    private func reconnectLoop() async {
+    private func reconnectLoop(config: ConnectionConfig) async {
         var backoff = initialBackoff
         while !Task.isCancelled {
             do {
-                try await open()
+                try await open(config: config)
                 break
             } catch let error
                 where error == .invalidPrivateKey
@@ -182,7 +177,7 @@ actor SessionSupervisor {
         logger.info("Reconnect cancelled: \(config)")
     }
 
-    private func handleFailedSession() async {
+    private func handleFailedSession(config: ConnectionConfig) async {
         await session?.stopPolling()
         await xpc.teardown()
         await ext.suspend(
@@ -190,7 +185,7 @@ actor SessionSupervisor {
             options: .temporary
         )
         await session?.close()
-        reconnect()
+        reconnect(config: config)
     }
 
     private func setReconnecting(error: ConnectionError?, nextAttempt: Date?) {

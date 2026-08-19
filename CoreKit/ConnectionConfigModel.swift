@@ -7,11 +7,6 @@ private let logger = Logger(category: "ConnectionConfigModel")
 
 @Model
 public class ConnectionConfigModel: CustomStringConvertible {
-    public enum ValidationError: Error {
-        case passwordNil
-        case privateKeyReadFailed
-    }
-
     public enum AuthMethod: Codable, CustomStringConvertible, Sendable {
         case password
         case privateKey
@@ -117,30 +112,24 @@ public class ConnectionConfigModel: CustomStringConvertible {
 
     public func enable() async throws {
         let config = try ConnectionConfig(from: self)
-        try await DomainRegistry.shared.enable(config: config)
+        try await DomainRegistry.shared.connect(config: config)
         self.enabled = true
         logger.info("Profile enabled: \(self)")
     }
 
     public func disable() async throws {
-        try await DomainRegistry.shared.disable(id: id)
+        try await DomainRegistry.shared.disable(domain: domain)
         self.enabled = false
         logger.info("Profile disabled: \(self)")
     }
 
     public func pause() async throws {
-        try await DomainRegistry.shared.pause(id: id)
+        try await DomainRegistry.shared.pause(domain: domain)
         logger.info("Profile paused: \(self)")
     }
 
-    public func reconfigure() async throws {
-        let config = try ConnectionConfig(from: self)
-        try await DomainRegistry.shared.reconfigure(config: config)
-        logger.info("Profile reconfigured: \(self)")
-    }
-
     public func poll() async throws {
-        try await DomainRegistry.shared.poll(id: id)
+        try await DomainRegistry.shared.poll(domain: domain)
     }
 
     // MARK: - Password Management
@@ -165,10 +154,14 @@ public class ConnectionConfigModel: CustomStringConvertible {
         try resolveBookmark()
     }
 
-    public func getBase64PrivateKey() throws -> String {
-        let url = try resolveBookmark()
-        guard url.startAccessingSecurityScopedResource() else {
-            throw ValidationError.privateKeyReadFailed
+    public func getPrivateKeyContents()
+        throws(ConnectionConfig.ValidationError) -> String
+    {
+        guard
+            let url = try? resolveBookmark(),
+            url.startAccessingSecurityScopedResource()
+        else {
+            throw .privateKeyMissing
         }
         defer { url.stopAccessingSecurityScopedResource() }
         guard
@@ -177,14 +170,14 @@ public class ConnectionConfigModel: CustomStringConvertible {
                 encoding: .utf8
             )
         else {
-            throw ValidationError.privateKeyReadFailed
+            throw .privateKeyMissing
         }
         return base64PrivateKey
     }
 
     private func resolveBookmark() throws -> URL {
         guard let bookmark = bookmark else {
-            throw ValidationError.privateKeyReadFailed
+            throw ConnectionConfig.ValidationError.privateKeyMissing
         }
         var isStale = false
         let url = try URL(
@@ -226,21 +219,45 @@ public class ConnectionConfigModel: CustomStringConvertible {
     }
 
     fileprivate func resolveConfigAuthMethod()
-        throws -> ConnectionConfig.AuthMethod
+        throws(ConnectionConfig.ValidationError) -> ConnectionConfig.AuthMethod
     {
         switch authMethod {
         case .password:
-            guard let password = getPassword() else {
-                throw ValidationError.passwordNil
+            guard let password = getPassword(), !password.isEmpty else {
+                throw .passwordMissing
             }
             return .password(password)
         case .privateKey:
-            let base64PrivateKey = try getBase64PrivateKey()
+            let contents = try getPrivateKeyContents()
             let passphrase = getPrivateKeyPassphrase()
+            do {
+                _ = try SSHPrivateKey(
+                    contents: contents,
+                    passphrase: passphrase
+                )
+            } catch {
+                guard case .keyError(let keyError, _) = error else {
+                    throw .privateKeyInvalid
+                }
+                throw ConnectionConfig.ValidationError(keyError)
+            }
             return .privateKey(
-                base64PrivateKey: base64PrivateKey,
+                contents: contents,
                 passphrase: passphrase
             )
+        }
+    }
+}
+
+extension ConnectionConfig.ValidationError {
+    init(_ keyError: SSHKeyError) {
+        switch keyError {
+        case .unreadable:
+            self = .privateKeyUnreadable
+        case .passphraseRequired:
+            self = .passphraseRequired
+        case .invalid:
+            self = .privateKeyInvalid
         }
     }
 }
@@ -259,7 +276,7 @@ extension ModelContext {
 }
 
 extension ConnectionConfig {
-    public init(from profile: ConnectionConfigModel) throws {
+    public init(from profile: ConnectionConfigModel) throws(ValidationError) {
         try self.init(
             id: profile.id,
             name: profile.displayName,

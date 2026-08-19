@@ -43,18 +43,19 @@ public actor DomainRegistry {
         self.pollInterval = pollInterval
     }
 
-    private func supervisor(for id: UUID) throws -> SessionSupervisor {
-        guard let supervisor = supervisors[id] else {
-            throw CoreError.profileNotFound
+    private func supervisor(
+        for domain: NSFileProviderDomain
+    ) async throws -> SessionSupervisor {
+        if let supervisor = supervisors[domain.id] {
+            return supervisor
         }
-        return supervisor
-    }
 
-    public func enable(config: ConnectionConfig) async throws {
-        let domainDb = try await DomainDB.open(config: DomainDB.model(for: config.id))
+        let domainDb = try await DomainDB.open(
+            config: DomainDB.model(for: domain.id)
+        )
 
         let supervisor = SessionSupervisor(
-            config: config,
+            domain: domain,
             pollInterval: pollInterval,
             openSession: Session.provider(
                 domainDb: domainDb,
@@ -63,28 +64,27 @@ public actor DomainRegistry {
                 transfers: transfers
             ),
             onStatusChange: { status in
-                self.connections.update(status, for: config.id)
+                self.connections.update(status, for: domain.id)
             }
         )
-        supervisors[config.id] = supervisor
-
-        try await supervisor.connect()
+        supervisors[domain.id] = supervisor
+        return supervisor
     }
 
-    public func poll(id: UUID) async throws {
-        try await supervisor(for: id).withSession { try await $0.poll() }
+    public func connect(config: ConnectionConfig) async throws {
+        try await supervisor(for: config.domain).connect(config: config)
     }
 
-    public func pause(id: UUID) async throws {
-        try await supervisor(for: id).pause()
+    public func poll(domain: NSFileProviderDomain) async throws {
+        try await supervisor(for: domain).withSession { try await $0.poll() }
     }
 
-    public func reconfigure(config: ConnectionConfig) async throws {
-        try await supervisor(for: config.id).reconfigure(config: config)
+    public func pause(domain: NSFileProviderDomain) async throws {
+        try await supervisor(for: domain).pause()
     }
 
-    public func disable(id: UUID) async throws {
-        if let supervisor = supervisors.removeValue(forKey: id) {
+    public func disable(domain: NSFileProviderDomain) async throws {
+        if let supervisor = supervisors.removeValue(forKey: domain.id) {
             await supervisor.disable()
         }
     }
