@@ -66,8 +66,8 @@ public class FPItem: NSObject, NSFileProviderItem {
 
     public var itemVersion: NSFileProviderItemVersion {
         NSFileProviderItemVersion(
-            contentVersion: "a content version".data(using: .utf8)!,
-            metadataVersion: "a metadata version".data(using: .utf8)!
+            contentVersion: item.contentVersion,
+            metadataVersion: item.metadataVersion
         )
     }
 
