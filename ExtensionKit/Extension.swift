@@ -317,8 +317,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             remaining.subtract([.fileSystemFlags, .contents])
 
             steps.add(weight: fileTransferUnits) { subprogress in
-                // Upload to the file's current parent/name; rename/move
-                // happens in a later step if .nameFields is present.
                 let currentParent = try await self.client.parent(
                     of: item.itemIdentifier
                 )

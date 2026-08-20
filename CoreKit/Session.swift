@@ -73,37 +73,34 @@ actor Session {
         logger.info("SSH connected: \(config), DB: \(dbPath)")
     }
 
-    func stopPolling() {
-        pollTask?.cancel()
-        pollTask = nil
-    }
-
     func close() async {
-        stopPolling()
-
         await sftp.close()
         await ssh.close()
 
         logger.info("SSH disconnected: \(config)")
     }
 
-    func startPolling(every interval: Duration?) {
-        guard pollTask == nil, let interval else { return }
+    func start(pollInterval: Duration?) {
+        guard pollTask == nil, let pollInterval else { return }
         pollTask = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
                 do {
-                    try await Task.sleep(for: interval)
                     try await poll()
-                } catch is CancellationError {
-                    return
                 } catch CoreError.serverUnreachable {
-                    return
+                    break
                 } catch {
                     logger.error("Poll error: \(error)")
                 }
+                do { try await Task.sleep(for: pollInterval) } catch { break }
             }
+            logger.info("Poll cancelled: \(config)")
         }
+    }
+
+    func stop() {
+        pollTask?.cancel()
+        pollTask = nil
     }
 
     var url: String {
@@ -206,6 +203,7 @@ actor Session {
             if let dbItem, dbItem.kind != sshItem.kind {
                 logger.info("Reconcile replaced: \(dbItem) -> \(sshItem)")
                 try await db.remove(dbItem.id)
+                await cache.invalidate(dbItem.id)
                 changes.append(.delete(itemId: dbItem.rawId))
             }
 
@@ -228,6 +226,7 @@ actor Session {
                     || dbItem.modifyTime != sshItem.modifyTime
                 {
                     logger.info("Reconcile file: \(dbItem) -> \(sshItem)")
+                    await cache.invalidate(dbItem.id)
                     changes.append(.update(item: newItem))
                 }
             case .folder:
@@ -256,6 +255,7 @@ actor Session {
             if sshItems[name] == nil {
                 logger.info("Reconcile deleted: \(dbItem)")
                 try await db.remove(dbItem.id)
+                await cache.invalidate(dbItem.id)
                 changes.append(.delete(itemId: dbItem.rawId))
             }
         }
@@ -701,7 +701,7 @@ actor Session {
         }
     }
 
-    func withEntries<T: Sendable>(
+    private func withEntries<T: Sendable>(
         of itemId: NSFileProviderItemIdentifier,
         perform: @Sendable (any SSHItem.Stream) async throws -> T
     ) async throws -> T {
@@ -768,7 +768,7 @@ actor Session {
         }
     }
 
-    func transferProgressReporter(
+    private func transferProgressReporter(
         for transfer: Transfer
     ) -> ThrottledProgressReporter {
         ThrottledProgressReporter(
@@ -777,7 +777,7 @@ actor Session {
         )
     }
 
-    func loggingProgressReporter(
+    private func loggingProgressReporter(
         for operation: String,
         detail: any CustomStringConvertible
     ) -> ThrottledProgressReporter {

@@ -110,14 +110,14 @@ actor SessionSupervisor {
         }
         await ext.resume()
         await xpc.broker(exporting: service)
-        await session.startPolling(every: pollInterval)
+        await session.start(pollInterval: pollInterval)
         state = .online(session)
         logger.info("Session connected: \(config)")
     }
 
     func disable() async {
         stopReconnecting()
-        await session?.stopPolling()
+        await session?.stop()
         await xpc.teardown()
         await ext.remove()
         await session?.close()
@@ -127,7 +127,7 @@ actor SessionSupervisor {
 
     func pause() async {
         stopReconnecting()
-        await session?.stopPolling()
+        await session?.stop()
         await xpc.teardown()
         await ext.suspend(
             reason: "The connection is paused. Reconnect it in Settings.",
@@ -178,7 +178,7 @@ actor SessionSupervisor {
     }
 
     private func handleFailedSession(config: ConnectionConfig) async {
-        await session?.stopPolling()
+        await session?.stop()
         await xpc.teardown()
         await ext.suspend(
             reason: "The server is unreachable. Check your network connection.",

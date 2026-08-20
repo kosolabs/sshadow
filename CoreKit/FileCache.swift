@@ -32,30 +32,26 @@ actor FileCache {
     func prefetch(_ chunk: File.Chunk) -> FetchTask {
         if let task = cache.removeValue(forKey: chunk.key) {
             cache[chunk.key] = task
-            return task
-        }
-        logger.debug("Prefetch \(chunk)")
-        let task = FetchTask {
-            let data = try await read(chunk.file.id, chunk.byteRange)
-            logger.debug("Prefetched \(chunk)")
-            return data
-        }
-        insert(chunk, task: task)
-        return task
-    }
-
-    func fetch(_ chunk: File.Chunk) async throws -> Data {
-        if let task = cache.removeValue(forKey: chunk.key) {
-            cache[chunk.key] = task
             logger.debug("Cache hit \(chunk)")
-            return try await task.value
+            return task
         }
         logger.debug("Cache miss \(chunk)")
         let task = FetchTask {
             try await read(chunk.file.id, chunk.byteRange)
         }
         insert(chunk, task: task)
-        return try await task.value
+        return task
+    }
+
+    func fetch(_ chunk: File.Chunk) async throws -> Data {
+        try await prefetch(chunk).value
+    }
+
+    func invalidate(_ item: NSFileProviderItemIdentifier) {
+        for key in Array(cache.keys) where key.fileId == item {
+            let task = cache.removeValue(forKey: key)
+            task?.cancel()
+        }
     }
 
     private func insert(_ chunk: File.Chunk, task: FetchTask) {
