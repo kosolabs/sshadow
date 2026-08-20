@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/kosolabs/sshadow/compare/v0.8.0...v0.8.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* invalidate cached file content when reconcile detects remote changes ([#304](https://github.com/kosolabs/sshadow/issues/304)) ([ea56ee7](https://github.com/kosolabs/sshadow/commit/ea56ee7f298d9ae88d98a4a72fbcbade9f29240f))
+
 ## [0.8.0](https://github.com/kosolabs/sshadow/compare/v0.7.0...v0.8.0) (2026-08-19)
 
 
