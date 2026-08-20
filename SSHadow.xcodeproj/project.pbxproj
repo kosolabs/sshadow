@@ -760,7 +760,7 @@
 			mainGroup = 733470802F22037100B8181D;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */,
+				7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */,
 				737720C72FBD039600FC5390 /* XCRemoteSwiftPackageReference "swift-collections" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -1782,12 +1782,12 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */ = {
+		7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/kosolabs/swift-lib-ssh.git";
+			repositoryURL = "https://github.com/kosolabs/swift-libssh.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.21.0;
+				minimumVersion = 1.21.1;
 			};
 		};
 		737720C72FBD039600FC5390 /* XCRemoteSwiftPackageReference "swift-collections" */ = {
@@ -1803,7 +1803,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		7322A9272F294D5400D8117D /* SwiftLibSSH */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
+			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */;
 			productName = SwiftLibSSH;
 		};
 		737720C82FBD039600FC5390 /* OrderedCollections */ = {
@@ -1813,22 +1813,22 @@
 		};
 		73799A692F9812A200A15109 /* SwiftLibSSH */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
+			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */;
 			productName = SwiftLibSSH;
 		};
 		73799A6B2F9812D100A15109 /* SwiftLibSSH */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
+			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */;
 			productName = SwiftLibSSH;
 		};
 		738C97B82FDA03CC007EC380 /* SwiftLibSSH */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
+			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */;
 			productName = SwiftLibSSH;
 		};
 		738C97BA2FDA03D2007EC380 /* SwiftLibSSH */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-lib-ssh" */;
+			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */;
 			productName = SwiftLibSSH;
 		};
 /* End XCSwiftPackageProductDependency section */

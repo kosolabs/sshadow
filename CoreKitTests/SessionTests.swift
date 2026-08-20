@@ -704,6 +704,40 @@ struct SessionTests {
             #expect(item.name == "link.txt")
             #expect(deletedIds == [linkId])
         }
+
+        @Test func reconcileInvalidatesCachedFileContent() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: "dir/item.txt",
+                contents: "old",
+                modifyDate: start
+            )
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.id(of: "dir/item.txt")
+            let (warmUrl, _) = try await session.stream(
+                itemId: itemId,
+                range: 0..<1,
+                progress: Progress()
+            )
+            #expect(try String(contentsOf: warmUrl, encoding: .utf8) == "old")
+
+            try sandbox.createFile(
+                at: "dir/item.txt",
+                contents: "new",
+                modifyDate: end
+            )
+            try sandbox.touch("dir", modifyDate: start)
+            _ = try await session.reconcile()
+
+            let (freshUrl, _) = try await session.stream(
+                itemId: itemId,
+                range: 0..<1,
+                progress: Progress()
+            )
+            #expect(try String(contentsOf: freshUrl, encoding: .utf8) == "new")
+        }
     }
 
     struct PollChangesTests {

@@ -108,4 +108,51 @@ struct FileCacheTests {
         #expect(await log.count(for: f1.id, 0) == 1)
         #expect(await log.count(for: f2.id, 0) == 1)
     }
+
+    @Test func invalidateForcesRefetch() async throws {
+        let log = CallLog()
+        let cache = makeCache(log: log, capacity: 4)
+        let f = file()
+        _ = try await cache.fetch(f.chunk(at: 0))
+        await cache.invalidate(f.id)
+        _ = try await cache.fetch(f.chunk(at: 0))
+        #expect(await log.count(for: f.id, 0) == 2)
+    }
+
+    @Test func invalidateRemovesAllChunksForFile() async throws {
+        let log = CallLog()
+        let cache = makeCache(log: log, capacity: 4)
+        let f = file()
+        _ = try await cache.fetch(f.chunk(at: 0))
+        _ = try await cache.fetch(f.chunk(at: 1))
+        await cache.invalidate(f.id)
+        _ = try await cache.fetch(f.chunk(at: 0))
+        _ = try await cache.fetch(f.chunk(at: 1))
+        #expect(await log.count(for: f.id, 0) == 2)
+        #expect(await log.count(for: f.id, 1) == 2)
+    }
+
+    @Test func invalidateOnlyAffectsTargetFile() async throws {
+        let log = CallLog()
+        let cache = makeCache(log: log, capacity: 4)
+        let f0 = file()
+        let f1 = file()
+        _ = try await cache.fetch(f0.chunk(at: 0))
+        _ = try await cache.fetch(f1.chunk(at: 0))
+        await cache.invalidate(f0.id)
+        _ = try await cache.fetch(f0.chunk(at: 0))
+        _ = try await cache.fetch(f1.chunk(at: 0))
+        #expect(await log.count(for: f0.id, 0) == 2)
+        #expect(await log.count(for: f1.id, 0) == 1)
+    }
+
+    @Test func invalidateUnknownFileIsNoop() async throws {
+        let log = CallLog()
+        let cache = makeCache(log: log, capacity: 4)
+        let f = file()
+        _ = try await cache.fetch(f.chunk(at: 0))
+        await cache.invalidate(file().id)
+        _ = try await cache.fetch(f.chunk(at: 0))
+        #expect(await log.count(for: f.id, 0) == 1)
+    }
 }
