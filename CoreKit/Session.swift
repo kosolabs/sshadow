@@ -24,6 +24,7 @@ actor Session {
 
     private lazy var cache = FileCache(read: read)
 
+    private var watched: [NSFileProviderItemIdentifier: Int] = [:]
     private var pollTask: Task<Void, Never>?
     private var changes: [(UInt64, [Change])] = []
     private var anchor: UInt64 = 0
@@ -84,15 +85,21 @@ actor Session {
         guard pollTask == nil, let pollInterval else { return }
         pollTask = Task { [weak self] in
             guard let self else { return }
+            var lastPollAll = ContinuousClock.now
             while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(1)) } catch { break }
                 do {
-                    try await poll()
+                    if ContinuousClock.now - lastPollAll >= pollInterval {
+                        try await pollAll()
+                        lastPollAll = .now
+                    } else {
+                        try await pollWatched()
+                    }
                 } catch CoreError.serverUnreachable {
                     break
                 } catch {
                     logger.error("Poll error: \(error)")
                 }
-                do { try await Task.sleep(for: pollInterval) } catch { break }
             }
             logger.info("Poll cancelled: \(config)")
         }
@@ -179,7 +186,96 @@ actor Session {
         )
     }
 
-    func reconcile(folder: Item) async throws -> ([Change], [Item]) {
+    func pollAll() async throws {
+        logger.debug("Polling: \(config.url), anchor: \(anchor)")
+
+        let newChanges = try await reconcileAll()
+        guard !newChanges.isEmpty else {
+            return
+        }
+
+        changes.append((anchor, newChanges))
+        anchor += 1
+
+        logger.info("Polled: \(newChanges.count) change(s), anchor: \(anchor)")
+        try await changesDetectedHandler()
+    }
+
+    func reconcileAll() async throws -> [Change] {
+        var allChanges: [Change] = []
+        var folders: [Item] = try await [
+            db.item(for: .rootContainer),
+            db.item(for: .trashContainer),
+        ]
+
+        while !folders.isEmpty {
+            let nextFolder = folders.removeFirst()
+            let (changes, remainder) = try await reconcile(
+                folder: nextFolder
+            )
+            allChanges.append(contentsOf: changes)
+            folders.append(contentsOf: remainder)
+        }
+
+        return allChanges
+    }
+
+    func watch(itemId: NSFileProviderItemIdentifier) {
+        guard itemId != .workingSet, itemId != .trashContainer else { return }
+        watched[itemId, default: 0] += 1
+        if watched[itemId] == 1 {
+            logger.info("Started watching: \(itemId)")
+        }
+    }
+
+    func unwatch(itemId: NSFileProviderItemIdentifier) {
+        guard itemId != .workingSet, itemId != .trashContainer else { return }
+        guard let count = watched[itemId] else { return }
+        if count <= 1 {
+            watched.removeValue(forKey: itemId)
+            logger.info("Stopped watching: \(itemId)")
+        } else {
+            watched[itemId] = count - 1
+        }
+    }
+
+    func pollWatched() async throws {
+        let newChanges = try await reconcileWatched()
+        guard !newChanges.isEmpty else {
+            return
+        }
+
+        changes.append((anchor, newChanges))
+        anchor += 1
+
+        logger.info(
+            "Polled: \(newChanges.count) change(s), anchor: \(anchor), items: \(watched.keys)"
+        )
+        try await changesDetectedHandler()
+    }
+
+    func reconcileWatched() async throws -> [Change] {
+        var allChanges: [Change] = []
+
+        for itemId in watched.keys {
+            do {
+                let folder = try await db.item(for: itemId)
+                let (changes, _) = try await reconcile(folder: folder)
+                allChanges.append(contentsOf: changes)
+            } catch CoreError.serverUnreachable {
+                throw CoreError.serverUnreachable
+            } catch {
+                // A watched folder can vanish out from under us (deleted
+                // remotely, or removed by a full poll). Skip it so one dead
+                // folder doesn't starve the others every tick.
+                logger.error("Reconcile watched \(itemId) failed: \(error)")
+            }
+        }
+
+        return allChanges
+    }
+
+    private func reconcile(folder: Item) async throws -> ([Change], [Item]) {
         var changes: [Change] = []
         var remainder: [Item] = []
 
@@ -261,40 +357,6 @@ actor Session {
         }
 
         return (changes, remainder)
-    }
-
-    func reconcile() async throws -> [Change] {
-        var allChanges: [Change] = []
-        var folders: [Item] = try await [
-            db.item(for: .rootContainer),
-            db.item(for: .trashContainer),
-        ]
-
-        while !folders.isEmpty {
-            let nextFolder = folders.removeFirst()
-            let (changes, remainder) = try await reconcile(
-                folder: nextFolder
-            )
-            allChanges.append(contentsOf: changes)
-            folders.append(contentsOf: remainder)
-        }
-
-        return allChanges
-    }
-
-    func poll() async throws {
-        logger.debug("Polling: \(config.url), anchor: \(anchor)")
-
-        let newChanges = try await reconcile()
-        guard !newChanges.isEmpty else {
-            return
-        }
-
-        changes.append((anchor, newChanges))
-        anchor += 1
-
-        logger.info("Polled: \(newChanges.count) change(s), anchor: \(anchor)")
-        try await changesDetectedHandler()
     }
 
     var currentAnchor: UInt64 {

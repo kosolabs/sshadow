@@ -478,7 +478,7 @@ struct SessionTests {
         }
     }
 
-    struct ReconcileTests {
+    struct ReconcileAllTests {
         let start: Date = Date(timeIntervalSince1970: 1_750_000_000)
         let end: Date = Date(timeIntervalSince1970: 1_760_000_000)
 
@@ -488,7 +488,7 @@ struct SessionTests {
             try sandbox.createSymlink(at: "other/link.txt", target: "file.txt")
             let session = try await sandbox.getSession()
 
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
 
             let (updates, deletedIds) = changes.split()
             #expect(updates == [])
@@ -503,7 +503,7 @@ struct SessionTests {
 
             try sandbox.createFile(at: "dir/item.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
 
             let (updates, deletedIds) = changes.split()
             let item = try #require(updates.only)
@@ -525,7 +525,7 @@ struct SessionTests {
                 modifyDate: end
             )
             try sandbox.touch("dir", modifyDate: start)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
 
             let (updates, deletedIds) = changes.split()
             let item = try #require(updates.only)
@@ -541,7 +541,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             try sandbox.touch("dir/item.txt", permissions: 0o444)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
 
             let (updates, deletedIds) = changes.split()
             let item = try #require(updates.only)
@@ -558,7 +558,7 @@ struct SessionTests {
 
             try sandbox.createFile(at: "dir/item.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
 
             let (updates, deletedIds) = changes.split()
             let item = try #require(updates.only)
@@ -576,7 +576,7 @@ struct SessionTests {
             let fileId = try await session.id(of: "dir/item.txt")
             try sandbox.removeItem(at: "dir/item.txt")
             try sandbox.touch("dir", modifyDate: start)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
 
             let (updates, deletedIds) = changes.split()
             #expect(updates == [])
@@ -592,7 +592,7 @@ struct SessionTests {
             let oldId = try await session.id(of: "dir/old.txt")
             try sandbox.move(from: "dir/old.txt", to: "dir/new.txt")
             try sandbox.touch("dir", modifyDate: start)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
 
             let (updates, deletedIds) = changes.split()
             let item = try #require(updates.only)
@@ -608,7 +608,7 @@ struct SessionTests {
 
             try sandbox.createFolder(at: "dir/subdir", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
 
             let (updates, deletedIds) = changes.split()
             let item = try #require(updates.only)
@@ -626,7 +626,7 @@ struct SessionTests {
             let fileId = try await session.id(of: "dir/subdir")
             try sandbox.removeItem(at: "dir/subdir")
             try sandbox.touch("dir", modifyDate: start)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
 
             let (updates, deletedIds) = changes.split()
             #expect(updates == [])
@@ -643,7 +643,7 @@ struct SessionTests {
             try sandbox.removeItem(at: "dir/thing")
             try sandbox.createFile(at: "dir/thing", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
 
             let (updates, deletedIds) = changes.split()
             let item = try #require(updates.only)
@@ -660,7 +660,7 @@ struct SessionTests {
 
             try sandbox.createSymlink(at: "dir/link.txt", target: "target.txt")
             try sandbox.touch("dir", modifyDate: start)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
 
             let (updates, deletedIds) = changes.split()
             let item = try #require(updates.only)
@@ -678,7 +678,7 @@ struct SessionTests {
             let linkId = try await session.id(of: "dir/target.txt")
             try sandbox.removeItem(at: "dir/target.txt")
             try sandbox.touch("dir", modifyDate: start)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
 
             let (updates, deletedIds) = changes.split()
             #expect(updates == [])
@@ -697,7 +697,7 @@ struct SessionTests {
             let linkId = try await session.id(of: "dir/link.txt")
             try sandbox.createSymlink(at: "dir/link.txt", target: "new.txt")
             try sandbox.touch("dir", modifyDate: start)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
 
             let (updates, deletedIds) = changes.split()
             let item = try #require(updates.only)
@@ -729,7 +729,7 @@ struct SessionTests {
                 modifyDate: end
             )
             try sandbox.touch("dir", modifyDate: start)
-            _ = try await session.reconcile()
+            _ = try await session.reconcileAll()
 
             let (freshUrl, _) = try await session.stream(
                 itemId: itemId,
@@ -740,7 +740,7 @@ struct SessionTests {
         }
     }
 
-    struct PollChangesTests {
+    struct PollAllChangesTests {
         let start: Date = Date(timeIntervalSince1970: 1_750_000_000)
         let end: Date = Date(timeIntervalSince1970: 1_760_000_000)
 
@@ -749,7 +749,7 @@ struct SessionTests {
             try sandbox.createFile(at: "file.txt", modifyDate: start)
             let session = try await sandbox.getSession()
 
-            try await session.poll()
+            try await session.pollAll()
 
             let (_, changes) = await session.changes(since: 0)
             #expect(changes == [])
@@ -762,7 +762,7 @@ struct SessionTests {
 
             try sandbox.createFile(at: "dir/new.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
-            try await session.poll()
+            try await session.pollAll()
 
             let (_, changes) = await session.changes(since: 0)
             let (updates, deletedIds) = changes.split()
@@ -787,11 +787,11 @@ struct SessionTests {
 
             try sandbox.createFile(at: "dir/first.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
-            try await session.poll()
+            try await session.pollAll()
 
             try sandbox.createFile(at: "dir/second.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
-            try await session.poll()
+            try await session.pollAll()
 
             let (_, changes) = await session.changes(since: 0)
             let (updates, _) = changes.split()
@@ -806,11 +806,11 @@ struct SessionTests {
 
             try sandbox.createFile(at: "dir/first.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
-            try await session.poll()
+            try await session.pollAll()
 
             try sandbox.createFile(at: "dir/second.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
-            try await session.poll()
+            try await session.pollAll()
 
             let (_, changes) = await session.changes(since: 1)
             let (updates, _) = changes.split()
@@ -832,12 +832,12 @@ struct SessionTests {
 
             try sandbox.createFile(at: "dir/first.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
-            try await session.poll()
+            try await session.pollAll()
             #expect(await session.currentAnchor == 1)
 
             try sandbox.createFile(at: "dir/second.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
-            try await session.poll()
+            try await session.pollAll()
             #expect(await session.currentAnchor == 2)
         }
 
@@ -846,10 +846,10 @@ struct SessionTests {
             try sandbox.createFile(at: "file.txt", modifyDate: start)
             let session = try await sandbox.getSession()
 
-            try await session.poll()
+            try await session.pollAll()
             #expect(await session.currentAnchor == 0)
 
-            try await session.poll()
+            try await session.pollAll()
             #expect(await session.currentAnchor == 0)
         }
 
@@ -860,14 +860,245 @@ struct SessionTests {
 
             try sandbox.createFile(at: "dir/first.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
-            try await session.poll()
+            try await session.pollAll()
 
             try sandbox.createFile(at: "dir/second.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
-            try await session.poll()
+            try await session.pollAll()
 
             let (anchor, _) = await session.changes(since: 0)
             #expect(anchor == 2)
+        }
+    }
+
+    struct ReconcileWatchedTests {
+        let start: Date = Date(timeIntervalSince1970: 1_750_000_000)
+        let end: Date = Date(timeIntervalSince1970: 1_760_000_000)
+
+        @Test func reconcileWatchedWithNothingWatchedReturnsEmpty()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try sandbox.createFile(at: "dir/new.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            let changes = try await session.reconcileWatched()
+
+            #expect(changes == [])
+        }
+
+        @Test func reconcileWatchedSurfacesChangeInWatchedFolder()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let dirId = try await session.child(name: "dir")
+            await session.watch(itemId: dirId)
+
+            try sandbox.createFile(at: "dir/new.txt", modifyDate: end)
+            let changes = try await session.reconcileWatched()
+
+            let (updates, deletedIds) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.name == "new.txt")
+            #expect(deletedIds == [])
+        }
+
+        @Test func reconcileWatchedSurfacesDeletionInWatchedFolder()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "dir/item.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let dirId = try await session.child(name: "dir")
+            await session.watch(itemId: dirId)
+
+            let fileId = try await session.id(of: "dir/item.txt")
+            try sandbox.removeItem(at: "dir/item.txt")
+            let changes = try await session.reconcileWatched()
+
+            let (updates, deletedIds) = changes.split()
+            #expect(updates == [])
+            #expect(deletedIds == [fileId])
+        }
+
+        @Test func reconcileWatchedIgnoresChangesInUnwatchedFolder()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "watched", modifyDate: start)
+            try sandbox.createFolder(at: "other", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let watchedId = try await session.child(name: "watched")
+            await session.watch(itemId: watchedId)
+
+            try sandbox.createFile(at: "other/new.txt", modifyDate: end)
+            try sandbox.touch("other", modifyDate: start)
+            let changes = try await session.reconcileWatched()
+
+            #expect(changes == [])
+        }
+
+        @Test func reconcileWatchedDoesNotRecurseIntoSubfolder()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir/subdir", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let dirId = try await session.child(name: "dir")
+            await session.watch(itemId: dirId)
+
+            try sandbox.createFile(at: "dir/subdir/deep.txt", modifyDate: end)
+            // Reset the subfolder's mtime so the only detectable change lives
+            // one level below the watched folder.
+            try sandbox.touch("dir/subdir", modifyDate: start)
+            let changes = try await session.reconcileWatched()
+
+            #expect(changes == [])
+        }
+
+        @Test func reconcileWatchedStopsAfterUnwatch() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let dirId = try await session.child(name: "dir")
+            await session.watch(itemId: dirId)
+            await session.unwatch(itemId: dirId)
+
+            try sandbox.createFile(at: "dir/new.txt", modifyDate: end)
+            let changes = try await session.reconcileWatched()
+
+            #expect(changes == [])
+        }
+
+        @Test func reconcileWatchedRespectsWatchRefCount() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let dirId = try await session.child(name: "dir")
+            await session.watch(itemId: dirId)
+            await session.watch(itemId: dirId)
+            await session.unwatch(itemId: dirId)
+
+            try sandbox.createFile(at: "dir/new.txt", modifyDate: end)
+            let changes = try await session.reconcileWatched()
+
+            let (updates, _) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.name == "new.txt")
+        }
+
+        @Test func reconcileWatchedIgnoresTrashContainer() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: ".sshadow/trash/file.txt",
+                modifyDate: start
+            )
+            let session = try await sandbox.getSession()
+
+            await session.watch(itemId: .trashContainer)
+
+            try sandbox.createFile(
+                at: ".sshadow/trash/new.txt",
+                modifyDate: end
+            )
+            let changes = try await session.reconcileWatched()
+
+            #expect(changes == [])
+        }
+
+        @Test func reconcileWatchedSurvivesVanishedWatchedFolder()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "gone", modifyDate: start)
+            try sandbox.createFolder(at: "live", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let goneId = try await session.child(name: "gone")
+            let liveId = try await session.child(name: "live")
+            await session.watch(itemId: goneId)
+            await session.watch(itemId: liveId)
+
+            // "gone" disappears remotely while still watched, and a change
+            // lands in "live". One dead watched folder must not starve the
+            // others.
+            try sandbox.removeItem(at: "gone")
+            try sandbox.createFile(at: "live/new.txt", modifyDate: end)
+
+            let changes = try await session.reconcileWatched()
+
+            let (updates, deletedIds) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.name == "new.txt")
+            #expect(deletedIds == [])
+        }
+    }
+
+    struct PollWatchedChangesTests {
+        let start: Date = Date(timeIntervalSince1970: 1_750_000_000)
+        let end: Date = Date(timeIntervalSince1970: 1_760_000_000)
+
+        @Test func pollWatchedWithNoChangesAccumulatesEmpty() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let dirId = try await session.child(name: "dir")
+            await session.watch(itemId: dirId)
+
+            try await session.pollWatched()
+
+            let (_, changes) = await session.changes(since: 0)
+            #expect(changes == [])
+            #expect(await session.currentAnchor == 0)
+        }
+
+        @Test func pollWatchedSurfacesChangeAndAdvancesAnchor() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let dirId = try await session.child(name: "dir")
+            await session.watch(itemId: dirId)
+
+            try sandbox.createFile(at: "dir/new.txt", modifyDate: end)
+            try await session.pollWatched()
+
+            let (_, changes) = await session.changes(since: 0)
+            let (updates, _) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.name == "new.txt")
+            #expect(await session.currentAnchor == 1)
+        }
+
+        @Test func pollWatchedIgnoresUnwatchedFolderLeavesAnchor()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "watched", modifyDate: start)
+            try sandbox.createFolder(at: "other", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let watchedId = try await session.child(name: "watched")
+            await session.watch(itemId: watchedId)
+
+            try sandbox.createFile(at: "other/new.txt", modifyDate: end)
+            try sandbox.touch("other", modifyDate: start)
+            try await session.pollWatched()
+
+            let (_, changes) = await session.changes(since: 0)
+            #expect(changes == [])
+            #expect(await session.currentAnchor == 0)
         }
     }
 
@@ -881,7 +1112,7 @@ struct SessionTests {
             try await session.setAttributes(for: itemId, flags: .rw)
 
             #expect(try sandbox.permissions(of: "perms.txt") == 0o600)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -895,7 +1126,7 @@ struct SessionTests {
             try await session.setAttributes(for: itemId, modifyTime: date)
 
             #expect(try sandbox.modifyDate(of: "modify-time.txt") == date)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -909,7 +1140,7 @@ struct SessionTests {
             try await session.setAttributes(for: itemId, accessTime: date)
 
             #expect(try sandbox.accessDate(of: "access-time.txt") == date)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -941,7 +1172,7 @@ struct SessionTests {
             #expect(item.name == "new-dir")
             #expect(item.kind == .folder)
             #expect(try sandbox.permissions(of: "new-dir") == 0o755)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -958,7 +1189,7 @@ struct SessionTests {
 
             #expect(item.name == "existing-dir")
             #expect(item.kind == .folder)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -978,7 +1209,7 @@ struct SessionTests {
                 }
                 return true
             }
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -993,7 +1224,7 @@ struct SessionTests {
 
             let lookedUpId = try await session.child(name: "row-match-dir")
             #expect(lookedUpId == item.id)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -1008,7 +1239,7 @@ struct SessionTests {
                     name: "collide-dir"
                 )
             }
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
     }
@@ -1026,7 +1257,7 @@ struct SessionTests {
 
             #expect(item.name == "link")
             #expect(item.kind == .symlink(target: "/etc/hosts"))
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -1042,7 +1273,7 @@ struct SessionTests {
 
             let lookedUpId = try await session.child(name: "link")
             #expect(lookedUpId == item.id)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -1058,7 +1289,7 @@ struct SessionTests {
                     target: "/dev/null"
                 )
             }
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
     }
@@ -1080,7 +1311,7 @@ struct SessionTests {
             let newId = try await session.child(name: "renamed.txt")
             #expect(itemId == newId)
             #expect(sandbox.exists(at: "renamed.txt"))
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -1098,7 +1329,7 @@ struct SessionTests {
             let movedId = try await session.child(of: destId, name: "file.txt")
             #expect(itemId == movedId)
             #expect(sandbox.exists(at: "dest/file.txt"))
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -1118,7 +1349,7 @@ struct SessionTests {
 
             let name = try await session.name(of: itemId)
             #expect(name == "new.txt")
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -1155,7 +1386,7 @@ struct SessionTests {
             try await session.removeFile(for: itemId)
 
             #expect(!sandbox.exists(at: "delete.txt"))
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -1172,7 +1403,7 @@ struct SessionTests {
             try await session.removeFile(for: itemId)
 
             #expect(!sandbox.exists(at: "folder/delete.txt"))
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -1187,7 +1418,7 @@ struct SessionTests {
             await #expect(throws: CoreError.itemNotFound(itemId)) {
                 try await session.removeFile(for: itemId)
             }
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
     }
@@ -1202,7 +1433,7 @@ struct SessionTests {
             try await session.removeDirectory(for: itemId)
 
             #expect(!sandbox.exists(at: "delete"))
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -1215,7 +1446,7 @@ struct SessionTests {
             try await session.removeDirectory(for: itemId)
 
             #expect(!sandbox.exists(at: "non-empty"))
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
     }
@@ -1248,7 +1479,7 @@ struct SessionTests {
             #expect(progress.isFinished)
             #expect(try FileManager.default.permissions(of: url) == 0o600)
             #expect(currId == item.id)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -1279,7 +1510,7 @@ struct SessionTests {
             #expect(progress.isFinished)
             #expect(try FileManager.default.permissions(of: url) == 0o600)
             #expect(currId == item.id)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -1302,7 +1533,7 @@ struct SessionTests {
                     progress: Progress()
                 )
             }
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
 
@@ -1355,7 +1586,7 @@ struct SessionTests {
             #expect(progress.isFinished)
             #expect(try FileManager.default.permissions(of: url) == 0o600)
             #expect(currId == item.id)
-            let changes = try await session.reconcile()
+            let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
     }

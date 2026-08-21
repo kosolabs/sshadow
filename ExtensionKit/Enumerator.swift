@@ -11,14 +11,22 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         client: CoreClient,
         itemIdentifier: NSFileProviderItemIdentifier
     ) {
-        logger.debug("Init \(itemIdentifier.desc)")
         self.client = client
         self.itemIdentifier = itemIdentifier
         super.init()
+        observe()
     }
 
     public func invalidate() {
-        logger.debug("Invalidate \(itemIdentifier.desc)")
+        unobserve()
+    }
+
+    func observe() {
+        Task { try await client.watch(itemId: itemIdentifier) }
+    }
+
+    func unobserve() {
+        Task { try await client.unwatch(itemId: itemIdentifier) }
     }
 
     public func enumerateItems(
@@ -44,7 +52,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         startingAt page: NSFileProviderPage,
         yield: @Sendable ([any NSFileProviderItemProtocol]) -> Void,
     ) async throws(CoreError) -> NSFileProviderPage? {
-        logger.debug("Enumerate \(itemIdentifier.desc)")
+        logger.debug("Enumerate \(itemIdentifier)")
 
         if itemIdentifier == .workingSet {
             return nil
@@ -63,7 +71,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         for observer: NSFileProviderChangeObserver,
         from anchor: NSFileProviderSyncAnchor
     ) {
-        logger.debug("Enumerating changes for \(itemIdentifier.desc)")
+        logger.debug("Enumerating changes for \(itemIdentifier)")
         let trace = StackTrace.capture()
 
         Task {
@@ -112,7 +120,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
     public func currentSyncAnchor(
         completionHandler: @escaping (NSFileProviderSyncAnchor?) -> Void
     ) {
-        logger.debug("Current sync anchor for \(itemIdentifier.desc)")
+        logger.debug("Current sync anchor for \(itemIdentifier)")
         let trace = StackTrace.capture()
 
         Task {

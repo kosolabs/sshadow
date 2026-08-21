@@ -141,8 +141,8 @@ class TestSandbox {
         }
     }
 
-    func poll() async throws {
-        try await supervisor.withSession { try await $0.poll() }
+    func pollAll() async throws {
+        try await supervisor.withSession { try await $0.pollAll() }
     }
 
     var client: CoreClient {

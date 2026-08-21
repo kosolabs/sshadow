@@ -52,7 +52,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> NSFileProviderItem {
-        logger.debug("Item \(itemIdentifier.desc)")
+        logger.debug("Item \(itemIdentifier)")
 
         return try await progress.withChild {
             if itemIdentifier == .rootContainer || itemIdentifier == .workingSet
@@ -394,7 +394,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws {
-        logger.debug("Delete \(identifier.desc)")
+        logger.debug("Delete \(identifier)")
         return try await progress.withChild {
             let item = try await client.item(for: identifier)
             if item.kind == .folder {
@@ -409,7 +409,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         for containerItemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest
     ) throws -> NSFileProviderEnumerator {
-        logger.debug("Create enumerator for \(containerItemIdentifier.desc)")
+        logger.debug("Create enumerator for \(containerItemIdentifier)")
         return Enumerator(
             client: client,
             itemIdentifier: containerItemIdentifier

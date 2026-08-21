@@ -140,7 +140,7 @@ struct EnumeratorTests {
 
         // touch new.txt
         try sandbox.createFolder(at: "new.txt")
-        try await sandbox.poll()
+        try await sandbox.pollAll()
 
         let advanced = try #require(await enumerator.currentSyncAnchor())
         #expect(advanced.value == 1)

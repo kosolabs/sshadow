@@ -182,6 +182,28 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         return response.fileInfos
     }
 
+    public func watch(
+        itemId: NSFileProviderItemIdentifier
+    ) async throws(CoreError) {
+        let reply = try await perform(
+            .watch(WatchRequest(itemId: itemId.rawValue))
+        )
+        guard case .watch = reply else {
+            throw CoreError.unexpectedResponse
+        }
+    }
+
+    public func unwatch(
+        itemId: NSFileProviderItemIdentifier
+    ) async throws(CoreError) {
+        let reply = try await perform(
+            .unwatch(UnwatchRequest(itemId: itemId.rawValue))
+        )
+        guard case .unwatch = reply else {
+            throw CoreError.unexpectedResponse
+        }
+    }
+
     public func currentAnchor() async throws(CoreError) -> UInt64 {
         let reply = try await perform(
             .currentAnchor(CurrentAnchorRequest())

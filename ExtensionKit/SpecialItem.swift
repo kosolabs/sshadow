@@ -8,7 +8,7 @@ public class SpecialItem: NSObject, NSFileProviderItem {
     public let itemIdentifier: NSFileProviderItemIdentifier
 
     init(itemIdentifier: NSFileProviderItemIdentifier) {
-        logger.debug("Init \(itemIdentifier.desc)")
+        logger.debug("Init \(itemIdentifier)")
         self.itemIdentifier = itemIdentifier
     }
 
