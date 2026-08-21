@@ -18,7 +18,7 @@ public actor DomainRegistry {
         },
         connections: Connections.shared,
         transfers: Transfers.shared,
-        pollInterval: .seconds(30),
+        pollInterval: .seconds(300),
     )
 
     private let sharedUrl: URL
