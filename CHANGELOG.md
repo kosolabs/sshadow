@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.0](https://github.com/kosolabs/sshadow/compare/v0.8.1...v0.9.0) (2026-08-21)
+
+
+### Features
+
+* optimize polling frequency with idle detection ([#308](https://github.com/kosolabs/sshadow/issues/308)) ([ca06b97](https://github.com/kosolabs/sshadow/commit/ca06b979c685bc364888a5391385e1f84adc6370))
+* poll watched folders every second between full polls ([#306](https://github.com/kosolabs/sshadow/issues/306)) ([00a9d82](https://github.com/kosolabs/sshadow/commit/00a9d820ef5f8d9eff051273e0df9dc8bef405b9))
+
 ## [0.8.1](https://github.com/kosolabs/sshadow/compare/v0.8.0...v0.8.1) (2026-08-20)
 
 
