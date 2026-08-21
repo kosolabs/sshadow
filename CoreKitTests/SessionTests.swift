@@ -1591,6 +1591,92 @@ struct SessionTests {
         }
     }
 
+    struct UploadConflictTests {
+        @Test func uploadDetectsConflictWhenRemoteDiverged() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: "conflict.txt",
+                contents: "original remote contents\n"
+            )
+            let session = try await sandbox.getSession()
+            let base = try await session.item(at: "conflict.txt").contentVersion
+
+            // The remote changes out from under us after the local edit was
+            // based on `base`.
+            try sandbox.createFile(
+                at: "conflict.txt",
+                contents: "changed remotely by someone else\n"
+            )
+
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            try "local edit\n".write(
+                to: uploadUrl, atomically: false, encoding: .utf8
+            )
+
+            await #expect(throws: CoreError.localVersionConflictingWithServer) {
+                _ = try await session.upload(
+                    parentId: .rootContainer,
+                    name: "conflict.txt",
+                    file: uploadUrl,
+                    flags: .rw,
+                    baseContentVersion: base,
+                    progress: Progress()
+                )
+            }
+            // The remote copy is left untouched.
+            #expect(
+                try sandbox.contents(of: "conflict.txt")
+                    == "changed remotely by someone else\n"
+            )
+        }
+
+        @Test func uploadSucceedsWhenBaseVersionMatchesRemote() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "match.txt", contents: "original\n")
+            let session = try await sandbox.getSession()
+            let base = try await session.item(at: "match.txt").contentVersion
+
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let data = "updated by us\n"
+            try data.write(to: uploadUrl, atomically: false, encoding: .utf8)
+
+            let item = try await session.upload(
+                parentId: .rootContainer,
+                name: "match.txt",
+                file: uploadUrl,
+                flags: .rw,
+                baseContentVersion: base,
+                progress: Progress()
+            )
+
+            #expect(item.size == UInt64(data.utf8.count))
+            #expect(try sandbox.contents(of: "match.txt") == data)
+        }
+
+        @Test func uploadSucceedsWhenRemoteFileAbsent() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let data = "brand new file\n"
+            try data.write(to: uploadUrl, atomically: false, encoding: .utf8)
+
+            // A base version is supplied but nothing exists remotely yet, so
+            // there is nothing to conflict with.
+            let item = try await session.upload(
+                parentId: .rootContainer,
+                name: "new.txt",
+                file: uploadUrl,
+                flags: .rw,
+                baseContentVersion: Data("stale".utf8),
+                progress: Progress()
+            )
+
+            #expect(item.name == "new.txt")
+            #expect(try sandbox.contents(of: "new.txt") == data)
+        }
+    }
+
     struct DownloadTests {
         @Test func downloadSmallFileSucceeds() async throws {
             let sandbox = TestSandbox()

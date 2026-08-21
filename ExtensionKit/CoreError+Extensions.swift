@@ -23,6 +23,8 @@ extension CoreError {
             NSFileProviderError(.noSuchItem)
         case .filenameCollision:
             NSFileProviderError(.filenameCollision)
+        case .localVersionConflictingWithServer:
+            NSFileProviderError(.localVersionConflictingWithServer)
         case .unknown(let domain, let code, let message):
             NSError(
                 domain: domain,

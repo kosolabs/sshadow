@@ -111,6 +111,7 @@ public enum CoreError: Message, PrettyDescribable, Error {
     case permissionDenied
     case itemNotFound(String?)
     case filenameCollision
+    case localVersionConflictingWithServer
     case serverUnreachable
     case notAuthenticated
     case remotePathNotFound
@@ -435,19 +436,22 @@ public struct UploadRequest: Message, PrettyDescribable {
     public let file: URL
     public let flags: Item.Flags
     public let chunkSize: UInt64
+    public let baseContentVersion: Data?
 
     public init(
         parentId: String,
         name: String,
         file: URL,
         flags: Item.Flags,
-        chunkSize: UInt64
+        chunkSize: UInt64,
+        baseContentVersion: Data? = nil
     ) {
         self.parentId = parentId
         self.name = name
         self.file = file
         self.flags = flags
         self.chunkSize = chunkSize
+        self.baseContentVersion = baseContentVersion
     }
 }
 

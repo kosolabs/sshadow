@@ -499,6 +499,26 @@ actor Session {
         )
     }
 
+    /// The content version of the file currently on the remote, or `nil` if
+    /// no file exists there. Comparable to `Item.contentVersion` and to the
+    /// base version the File Provider supplies when modifying an item.
+    private func remoteContentVersion(
+        at path: String,
+        parentId: NSFileProviderItemIdentifier
+    ) async throws -> Data? {
+        do {
+            let attrs = try await mapError(with: parentId) {
+                try await sftp.attributes(at: path, followSymlinks: false)
+            }
+            return Item.contentVersion(
+                modifyTime: attrs.modifyTime,
+                size: attrs.size
+            )
+        } catch CoreError.itemNotFound {
+            return nil
+        }
+    }
+
     private func refresh(id: NSFileProviderItemIdentifier) async throws {
         let attrs = try await mapError(with: id) {
             try await sftp.attributes(
@@ -593,9 +613,25 @@ actor Session {
         file url: URL,
         flags: Item.Flags,
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
+        baseContentVersion: Data? = nil,
         progress: Progress
     ) async throws -> Item {
         let path = try await self.path(for: name, parentId: parentId)
+
+        // Detect a conflict before overwriting: if the local edit was based on
+        // a version that no longer matches the remote, the file changed both
+        // locally and remotely since the last sync.
+        if let baseContentVersion,
+            let remoteVersion = try await remoteContentVersion(
+                at: path,
+                parentId: parentId
+            ),
+            remoteVersion != baseContentVersion
+        {
+            logger.info("Upload conflict: \(path) diverged from base version")
+            throw CoreError.localVersionConflictingWithServer
+        }
+
         let fp = try FileHandle(forReadingFrom: url)
         defer { try? fp.close() }
 

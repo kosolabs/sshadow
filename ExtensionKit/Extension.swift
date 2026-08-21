@@ -316,6 +316,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 ? item.fileSystemFlags ?? [] : []
             remaining.subtract([.fileSystemFlags, .contents])
 
+            // When the system asks us to fail on conflict, pass the version the
+            // local edit was based on so the core can detect a remote change.
+            let baseContentVersion =
+                options.contains(.failOnConflict) ? version.contentVersion : nil
+
             steps.add(weight: fileTransferUnits) { subprogress in
                 let currentParent = try await self.client.parent(
                     of: item.itemIdentifier
@@ -328,6 +333,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     name: currentName,
                     file: newContents,
                     flags: .init(from: fileSystemFlags),
+                    baseContentVersion: baseContentVersion,
                     progress: subprogress
                 )
             }

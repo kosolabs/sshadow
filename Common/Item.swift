@@ -133,6 +133,13 @@ public struct Item: Message, CustomStringConvertible {
     }
     
     public var contentVersion: Data {
+        Self.contentVersion(modifyTime: modifyTime, size: size)
+    }
+
+    public static func contentVersion(
+        modifyTime: Date?,
+        size: UInt64?
+    ) -> Data {
         let fields = [
             String(modifyTime?.timeIntervalSince1970 ?? 0),
             String(size ?? 0)

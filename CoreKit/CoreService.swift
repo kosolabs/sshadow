@@ -324,6 +324,7 @@ final class CoreService: Sendable, CoreXPC {
                 name: request.name,
                 file: request.file,
                 flags: request.flags,
+                baseContentVersion: request.baseContentVersion,
                 progress: sync.progress
             )
             return UploadResponse(item: item)

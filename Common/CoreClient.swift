@@ -349,6 +349,7 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         file: URL,
         flags: Item.Flags,
         chunkSize: UInt64 = Limits.defaultBufferSize,
+        baseContentVersion: Data? = nil,
         progress: Progress
     ) async throws(CoreError) -> Item {
         let stagedUrl = sharedUrl.appending(path: UUID().uuidString)
@@ -370,7 +371,8 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
                     name: name,
                     file: stagedUrl,
                     flags: flags,
-                    chunkSize: chunkSize
+                    chunkSize: chunkSize,
+                    baseContentVersion: baseContentVersion
                 )
             ),
             progressEndpoint: sync.endpoint

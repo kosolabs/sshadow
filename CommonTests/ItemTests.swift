@@ -124,6 +124,20 @@ struct ContentVersionTests {
                 != makeItem(size: nil).contentVersion
         )
     }
+
+    @Test func staticContentVersionMatchesInstance() {
+        let item = makeItem(
+            size: 4096,
+            modifyTime: Date(timeIntervalSince1970: 200)
+        )
+        #expect(
+            item.contentVersion
+                == Item.contentVersion(
+                    modifyTime: item.modifyTime,
+                    size: item.size
+                )
+        )
+    }
 }
 
 struct MetadataVersionTests {
