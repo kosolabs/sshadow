@@ -25,6 +25,7 @@ actor Session {
     private lazy var cache = FileCache(read: read)
 
     private var watched: [NSFileProviderItemIdentifier: Int] = [:]
+    private var schedule: PollSchedule?
     private var pollTask: Task<Void, Never>?
     private var changes: [(UInt64, [Change])] = []
     private var anchor: UInt64 = 0
@@ -83,18 +84,16 @@ actor Session {
 
     func start(pollInterval: Duration?) {
         guard pollTask == nil, let pollInterval else { return }
+        schedule = PollSchedule(
+            begin: ContinuousClock.now,
+            allInterval: pollInterval
+        )
         pollTask = Task { [weak self] in
             guard let self else { return }
-            var lastPollAll = ContinuousClock.now
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(1)) } catch { break }
                 do {
-                    if ContinuousClock.now - lastPollAll >= pollInterval {
-                        try await pollAll()
-                        lastPollAll = .now
-                    } else {
-                        try await pollWatched()
-                    }
+                    try await tick()
                 } catch CoreError.serverUnreachable {
                     break
                 } catch {
@@ -102,6 +101,23 @@ actor Session {
                 }
             }
             logger.info("Poll cancelled: \(config)")
+        }
+    }
+
+    private func tick() async throws {
+        guard let schedule else { return }
+        switch schedule.next(
+            now: ContinuousClock.now,
+            userIdle: SystemIdle.duration()
+        ) {
+        case .pollAll:
+            try await pollAll()
+            schedule.recordPollAll(at: ContinuousClock.now)
+        case .pollWatched:
+            try await pollWatched()
+            schedule.recordPollWatched(at: ContinuousClock.now)
+        case .wait:
+            break
         }
     }
 
@@ -187,7 +203,9 @@ actor Session {
     }
 
     func pollAll() async throws {
-        logger.debug("Polling: \(config.url), anchor: \(anchor)")
+        logger.debug(
+            "Poll all: \(config.url), anchor: \(anchor)"
+        )
 
         let newChanges = try await reconcileAll()
         guard !newChanges.isEmpty else {
@@ -197,7 +215,9 @@ actor Session {
         changes.append((anchor, newChanges))
         anchor += 1
 
-        logger.info("Polled: \(newChanges.count) change(s), anchor: \(anchor)")
+        logger.info(
+            "Polled all: \(newChanges.count) change(s), anchor: \(anchor)"
+        )
         try await changesDetectedHandler()
     }
 
@@ -223,6 +243,7 @@ actor Session {
     func watch(itemId: NSFileProviderItemIdentifier) {
         guard itemId != .workingSet, itemId != .trashContainer else { return }
         watched[itemId, default: 0] += 1
+        schedule?.recordWatchStarted()
         if watched[itemId] == 1 {
             logger.info("Started watching: \(itemId)")
         }
@@ -240,6 +261,11 @@ actor Session {
     }
 
     func pollWatched() async throws {
+        guard !watched.isEmpty else { return }
+
+        logger.debug(
+            "Poll watched: \(config.url), anchor: \(anchor), items: \(watched.keys)"
+        )
         let newChanges = try await reconcileWatched()
         guard !newChanges.isEmpty else {
             return
@@ -249,7 +275,7 @@ actor Session {
         anchor += 1
 
         logger.info(
-            "Polled: \(newChanges.count) change(s), anchor: \(anchor), items: \(watched.keys)"
+            "Polled watched: \(newChanges.count) change(s), anchor: \(anchor), items: \(watched.keys)"
         )
         try await changesDetectedHandler()
     }
@@ -265,9 +291,6 @@ actor Session {
             } catch CoreError.serverUnreachable {
                 throw CoreError.serverUnreachable
             } catch {
-                // A watched folder can vanish out from under us (deleted
-                // remotely, or removed by a full poll). Skip it so one dead
-                // folder doesn't starve the others every tick.
                 logger.error("Reconcile watched \(itemId) failed: \(error)")
             }
         }
