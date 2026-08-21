@@ -4,7 +4,7 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-XCCONFIG="Version.xcconfig"
+XCCONFIG="Config.xcconfig"
 PBXPROJ="SSHadow.xcodeproj/project.pbxproj"
 CONFIG="release-please-config.json"
 MANIFEST=".release-please-manifest.json"
@@ -54,3 +54,26 @@ for target in "${TARGETS[@]}"; do
 done
 
 echo "✅ MARKETING_VERSION is $expected — annotated for release-please, in sync with $MANIFEST, and resolved by ${TARGETS[*]}"
+
+if grep -q 'MACOSX_DEPLOYMENT_TARGET' "$PBXPROJ"; then
+  fail "$PBXPROJ sets MACOSX_DEPLOYMENT_TARGET, which overrides $XCCONFIG. Remove it:
+$(grep -n 'MACOSX_DEPLOYMENT_TARGET' "$PBXPROJ")"
+fi
+
+deployment_lines="$(grep -n 'MACOSX_DEPLOYMENT_TARGET' "$XCCONFIG" || true)"
+[[ "$(grep -c . <<<"$deployment_lines")" -eq 1 ]] ||
+  fail "expected exactly one MACOSX_DEPLOYMENT_TARGET assignment in $XCCONFIG, found:
+${deployment_lines:-<none>}"
+
+deployment="$(sed -E 's/^[^=]*= *([^ /]+).*/\1/' <<<"${deployment_lines#*:}")"
+
+for target in "${TARGETS[@]}"; do
+  resolved="$(xcodebuild -project SSHadow.xcodeproj -target "$target" -configuration Release -showBuildSettings 2>/dev/null |
+    awk -F' = ' '/^ *MACOSX_DEPLOYMENT_TARGET = /{print $2; exit}')"
+  [[ -n "$resolved" ]] ||
+    fail "target $target resolves no MACOSX_DEPLOYMENT_TARGET at all; is $XCCONFIG wired up as its baseConfigurationReference?"
+  [[ "$resolved" == "$deployment" ]] ||
+    fail "target $target builds as $resolved but $XCCONFIG declares $deployment; $XCCONFIG is probably not its base configuration"
+done
+
+echo "✅ MACOSX_DEPLOYMENT_TARGET is $deployment — set only in $XCCONFIG and resolved by ${TARGETS[*]}"

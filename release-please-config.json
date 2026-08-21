@@ -5,7 +5,7 @@
   "extra-files": [
     {
       "type": "generic",
-      "path": "Version.xcconfig"
+      "path": "Config.xcconfig"
     }
   ],
   "packages": {
