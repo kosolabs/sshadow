@@ -76,7 +76,7 @@ public actor DomainRegistry {
     }
 
     public func poll(domain: NSFileProviderDomain) async throws {
-        try await supervisor(for: domain).withSession { try await $0.poll() }
+        try await supervisor(for: domain).withSession { try await $0.pollAll() }
     }
 
     public func pause(domain: NSFileProviderDomain) async throws {

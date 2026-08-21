@@ -27,6 +27,8 @@ public enum CoreRequest: Message, PrettyDescribable {
     case parent(ParentRequest)
     case item(ItemRequest)
     case list(ListRequest)
+    case watch(WatchRequest)
+    case unwatch(UnwatchRequest)
     case currentAnchor(CurrentAnchorRequest)
     case changes(ChangesRequest)
     case setAttributes(SetAttributesRequest)
@@ -86,6 +88,8 @@ public enum CoreResponse: Message, PrettyDescribable {
     case parent(ParentResponse)
     case item(ItemResponse)
     case list(ListResponse)
+    case watch(WatchResponse)
+    case unwatch(UnwatchResponse)
     case currentAnchor(CurrentAnchorResponse)
     case changes(ChangesResponse)
     case setAttributes(SetAttributesResponse)
@@ -223,6 +227,30 @@ public struct ListResponse: Message, PrettyDescribable {
     public init(fileInfos: [Item]) {
         self.fileInfos = fileInfos
     }
+}
+
+public struct WatchRequest: Message, PrettyDescribable {
+    public let itemId: String
+
+    public init(itemId: String) {
+        self.itemId = itemId
+    }
+}
+
+public struct WatchResponse: Message, PrettyDescribable {
+    public init() {}
+}
+
+public struct UnwatchRequest: Message, PrettyDescribable {
+    public let itemId: String
+
+    public init(itemId: String) {
+        self.itemId = itemId
+    }
+}
+
+public struct UnwatchResponse: Message, PrettyDescribable {
+    public init() {}
 }
 
 public struct CurrentAnchorRequest: Message, PrettyDescribable {

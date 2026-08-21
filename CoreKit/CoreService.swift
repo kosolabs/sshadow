@@ -33,33 +33,37 @@ final class CoreService: Sendable, CoreXPC {
         await mapError {
             switch request {
             case .name(let request):
-                try await .name(self.name(request))
+                try await .name(name(request))
             case .child(let request):
-                try await .child(self.child(request))
+                try await .child(child(request))
             case .parent(let request):
-                try await .parent(self.parent(request))
+                try await .parent(parent(request))
             case .item(let request):
-                try await .item(self.item(request))
+                try await .item(item(request))
             case .list(let request):
-                try await .list(self.list(request))
+                try await .list(list(request))
+            case .watch(let request):
+                try await .watch(watch(request))
+            case .unwatch(let request):
+                try await .unwatch(unwatch(request))
             case .currentAnchor(let request):
-                try await .currentAnchor(self.currentAnchor(request))
+                try await .currentAnchor(currentAnchor(request))
             case .changes(let request):
-                try await .changes(self.changes(request))
+                try await .changes(changes(request))
             case .setAttributes(let request):
-                try await .setAttributes(self.setAttributes(request))
+                try await .setAttributes(setAttributes(request))
             case .createSymlink(let request):
-                try await .createSymlink(self.createSymlink(request))
+                try await .createSymlink(createSymlink(request))
             case .createDirectory(let request):
-                try await .createDirectory(self.createDirectory(request))
+                try await .createDirectory(createDirectory(request))
             case .move(let request):
-                try await .move(self.move(request))
+                try await .move(move(request))
             case .removeFile(let request):
-                try await .removeFile(self.removeFile(request))
+                try await .removeFile(removeFile(request))
             case .removeDirectory(let request):
-                try await .removeDirectory(self.removeDirectory(request))
+                try await .removeDirectory(removeDirectory(request))
             case .limits(let request):
-                try await .limits(self.limits(request))
+                try await .limits(limits(request))
             }
         }
     }
@@ -174,6 +178,28 @@ final class CoreService: Sendable, CoreXPC {
                 for: NSFileProviderItemIdentifier(request.itemId)
             )
             return ListResponse(fileInfos: entries)
+        }
+    }
+
+    func watch(
+        _ request: WatchRequest
+    ) async throws -> WatchResponse {
+        try await supervisor.withSession { session in
+            await session.watch(
+                itemId: NSFileProviderItemIdentifier(request.itemId)
+            )
+            return WatchResponse()
+        }
+    }
+
+    func unwatch(
+        _ request: UnwatchRequest
+    ) async throws -> UnwatchResponse {
+        try await supervisor.withSession { session in
+            await session.unwatch(
+                itemId: NSFileProviderItemIdentifier(request.itemId)
+            )
+            return UnwatchResponse()
         }
     }
 

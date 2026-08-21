@@ -12,8 +12,8 @@ extension NSFileProviderItem {
 
     public var desc: String {
         var components: [String] = []
-        components.append("id: \(id.desc)")
-        components.append("parentId: \(parentId.desc)")
+        components.append("id: \(id)")
+        components.append("parentId: \(parentId)")
         components.append("filename: \(filename)")
 
         if let contentType = contentType {
