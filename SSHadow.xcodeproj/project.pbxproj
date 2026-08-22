@@ -426,10 +426,10 @@
 				7334708A2F22037100B8181D /* Products */,
 				73AD67942FFEC25100733D75 /* ci_scripts */,
 				73C9771E302B9F2B008AADDC /* docs */,
+				733F85DDB3C4A1DAB7067F02 /* Config.xcconfig */,
 				739BF6982FEDB73800C60205 /* Justfile */,
 				7322A9212F2857C700D8117D /* SSHadow.icon */,
 				7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */,
-				733F85DDB3C4A1DAB7067F02 /* Config.xcconfig */,
 				73781BC9300029A600EEA1F4 /* logfilter.jq */,
 			);
 			sourceTree = "<group>";

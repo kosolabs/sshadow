@@ -242,8 +242,8 @@ final class CoreService: Sendable, CoreXPC {
     ) async throws -> CreateSymlinkResponse {
         try await supervisor.withSession { session in
             let item = try await session.createSymlink(
-                parentId: NSFileProviderItemIdentifier(request.parentId),
-                name: request.name,
+                request.name,
+                in: NSFileProviderItemIdentifier(request.parentId),
                 target: request.target
             )
             return CreateSymlinkResponse(item: item)
@@ -255,8 +255,8 @@ final class CoreService: Sendable, CoreXPC {
     ) async throws -> CreateDirectoryResponse {
         try await supervisor.withSession { session in
             let item = try await session.createDirectory(
-                parentId: NSFileProviderItemIdentifier(request.parentId),
-                name: request.name,
+                request.name,
+                in: NSFileProviderItemIdentifier(request.parentId),
                 mode: request.mode,
                 ifExists: request.ifExists
             )
@@ -270,7 +270,7 @@ final class CoreService: Sendable, CoreXPC {
         try await supervisor.withSession { session in
             try await session.move(
                 NSFileProviderItemIdentifier(request.itemId),
-                toParent: NSFileProviderItemIdentifier(request.newParentId),
+                to: NSFileProviderItemIdentifier(request.newParentId),
                 name: request.newName
             )
             return MoveResponse()
@@ -320,8 +320,8 @@ final class CoreService: Sendable, CoreXPC {
         try await supervisor.withSession { session in
             let sync = XPCProgressPublisher(endpoint: progressEndpoint)
             let item = try await session.upload(
-                parentId: NSFileProviderItemIdentifier(request.parentId),
-                name: request.name,
+                request.name,
+                to: NSFileProviderItemIdentifier(request.parentId),
                 file: request.file,
                 flags: request.flags,
                 progress: sync.progress
