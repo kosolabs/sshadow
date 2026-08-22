@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.0](https://github.com/kosolabs/sshadow/compare/v0.9.0...v0.10.0) (2026-08-22)
+
+
+### Features
+
+* require macOS 26 and centralize deployment target in Config.xcconfig ([#309](https://github.com/kosolabs/sshadow/issues/309)) ([15de875](https://github.com/kosolabs/sshadow/commit/15de8755d5e8d4c41fb9cb39cbd8a92e5108b86e))
+
+
+### Bug Fixes
+
+* watching and reconciling an individual file ([#311](https://github.com/kosolabs/sshadow/issues/311)) ([7b3ad98](https://github.com/kosolabs/sshadow/commit/7b3ad98fda4fe260e96ff994968ce63541b33395))
+
 ## [0.9.0](https://github.com/kosolabs/sshadow/compare/v0.8.1...v0.9.0) (2026-08-21)
 
 
