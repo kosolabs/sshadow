@@ -283,13 +283,20 @@ actor Session {
     func reconcileWatched() async throws -> [Change] {
         var allChanges: [Change] = []
 
-        for itemId in watched.keys {
+        for itemId in Array(watched.keys) {
             do {
-                let folder = try await db.item(for: itemId)
-                let (changes, _) = try await reconcile(folder: folder)
+                let item = try await db.item(for: itemId)
+                let changes: [Change]
+                if item.kind == .folder {
+                    (changes, _) = try await reconcile(folder: item)
+                } else {
+                    changes = try await reconcile(file: item)
+                }
                 allChanges.append(contentsOf: changes)
             } catch CoreError.serverUnreachable {
                 throw CoreError.serverUnreachable
+            } catch CoreError.itemNotFound {
+                watched.removeValue(forKey: itemId)
             } catch {
                 logger.error("Reconcile watched \(itemId) failed: \(error)")
             }
@@ -318,68 +325,107 @@ actor Session {
 
         for (name, sshItem) in sshItems {
             let dbItem = dbItems[name]
-
-            if let dbItem, dbItem.kind != sshItem.kind {
-                logger.info("Reconcile replaced: \(dbItem) -> \(sshItem)")
-                try await db.remove(dbItem.id)
-                await cache.invalidate(dbItem.id)
-                changes.append(.delete(itemId: dbItem.rawId))
-            }
-
-            let newItem = try await upsert(
-                parentId: folder.id,
-                sshItem: sshItem
+            changes.append(
+                contentsOf: try await reconcile(
+                    dbItem,
+                    against: sshItem,
+                    parentId: folder.id
+                )
             )
 
-            guard let dbItem, dbItem.kind == sshItem.kind else {
-                logger.info("Reconcile new: \(sshItem)")
-                changes.append(.update(item: newItem))
-                continue
-            }
-
-            switch dbItem.kind {
-            case .file:
-                if dbItem.size != sshItem.size
-                    || dbItem.flags != sshItem.flags
-                    || dbItem.createTime != sshItem.createTime
-                    || dbItem.modifyTime != sshItem.modifyTime
-                {
-                    logger.info("Reconcile file: \(dbItem) -> \(sshItem)")
-                    await cache.invalidate(dbItem.id)
-                    changes.append(.update(item: newItem))
-                }
-            case .folder:
-                if dbItem.flags != sshItem.flags
-                    || dbItem.createTime != sshItem.createTime
-                    || dbItem.modifyTime != sshItem.modifyTime
-                {
-                    logger.info("Reconcile folder: \(dbItem) -> \(sshItem)")
-                    changes.append(.update(item: newItem))
-                }
-
-                if dbItem.enumeratedAt != nil {
-                    remainder.append(dbItem)
-                }
-            case .symlink:
-                if dbItem.createTime != sshItem.createTime
-                    || dbItem.modifyTime != sshItem.modifyTime
-                {
-                    logger.info("Reconcile symlink: \(dbItem) -> \(sshItem)")
-                    changes.append(.update(item: newItem))
-                }
+            if let dbItem,
+                dbItem.kind == sshItem.kind,
+                dbItem.kind == .folder,
+                dbItem.enumeratedAt != nil
+            {
+                remainder.append(dbItem)
             }
         }
 
-        for (name, dbItem) in dbItems {
-            if sshItems[name] == nil {
-                logger.info("Reconcile deleted: \(dbItem)")
-                try await db.remove(dbItem.id)
-                await cache.invalidate(dbItem.id)
-                changes.append(.delete(itemId: dbItem.rawId))
-            }
+        for (name, dbItem) in dbItems where sshItems[name] == nil {
+            logger.info("Reconcile deleted: \(dbItem)")
+            try await db.remove(dbItem.id)
+            await cache.invalidate(dbItem.id)
+            changes.append(.delete(itemId: dbItem.rawId))
         }
 
         return (changes, remainder)
+    }
+
+    private func reconcile(file dbItem: Item) async throws -> [Change] {
+        let attrs: SFTPAttributes
+        do {
+            attrs = try await mapError(with: dbItem.id) {
+                try await sftp.attributes(
+                    at: path(for: dbItem.id),
+                    followSymlinks: false
+                )
+            }
+        } catch CoreError.itemNotFound {
+            logger.info("Reconcile deleted: \(dbItem)")
+            try await db.remove(dbItem.id)
+            await cache.invalidate(dbItem.id)
+            watched.removeValue(forKey: dbItem.id)
+            return [.delete(itemId: dbItem.rawId)]
+        }
+
+        guard let parentId = dbItem.parentId else { return [] }
+        let sshItem = try await sshItem(
+            for: dbItem.name,
+            in: parentId,
+            from: attrs
+        )
+        return try await reconcile(dbItem, against: sshItem, parentId: parentId)
+    }
+
+    private func reconcile(
+        _ dbItem: Item?,
+        against sshItem: SSHItem,
+        parentId: NSFileProviderItemIdentifier
+    ) async throws -> [Change] {
+        var changes: [Change] = []
+
+        if let dbItem, dbItem.kind != sshItem.kind {
+            logger.info("Reconcile replaced: \(dbItem) -> \(sshItem)")
+            try await db.remove(dbItem.id)
+            await cache.invalidate(dbItem.id)
+            changes.append(.delete(itemId: dbItem.rawId))
+        }
+
+        let newItem = try await upsert(parentId: parentId, sshItem: sshItem)
+
+        guard let dbItem, dbItem.kind == sshItem.kind else {
+            logger.info("Reconcile new: \(sshItem)")
+            changes.append(.update(item: newItem))
+            return changes
+        }
+
+        if changed(dbItem, versus: sshItem) {
+            logger.info("Reconcile changed: \(dbItem) -> \(sshItem)")
+            if dbItem.kind == .file {
+                await cache.invalidate(dbItem.id)
+            }
+            changes.append(.update(item: newItem))
+        }
+
+        return changes
+    }
+
+    private func changed(_ dbItem: Item, versus sshItem: SSHItem) -> Bool {
+        switch dbItem.kind {
+        case .file:
+            dbItem.size != sshItem.size
+                || dbItem.flags != sshItem.flags
+                || dbItem.createTime != sshItem.createTime
+                || dbItem.modifyTime != sshItem.modifyTime
+        case .folder:
+            dbItem.flags != sshItem.flags
+                || dbItem.createTime != sshItem.createTime
+                || dbItem.modifyTime != sshItem.modifyTime
+        case .symlink:
+            dbItem.createTime != sshItem.createTime
+                || dbItem.modifyTime != sshItem.modifyTime
+        }
     }
 
     var currentAnchor: UInt64 {
@@ -797,30 +843,10 @@ actor Session {
                     if itemId == .rootContainer, name == ".sshadow" {
                         return nil
                     }
-
-                    let kind: Item.Kind =
-                        switch attrs.type {
-                        case .directory:
-                            .folder
-                        case .symlink:
-                            .symlink(
-                                target: try await self.symlinkTarget(
-                                    for: name,
-                                    parentId: itemId
-                                )
-                            )
-                        default:
-                            .file
-                        }
-
-                    return SSHItem(
-                        name: name,
-                        kind: kind,
-                        size: attrs.size,
-                        flags: .from(attrs.permissions),
-                        accessTime: attrs.accessTime,
-                        modifyTime: attrs.modifyTime,
-                        createTime: attrs.createTime
+                    return try await self.sshItem(
+                        for: name,
+                        in: itemId,
+                        from: attrs
                     )
                 }
                 return try await perform(entries)
@@ -828,6 +854,37 @@ actor Session {
         } catch CoreError.itemNotFound where itemId == .trashContainer {
             return try await perform(SSHItem.EmptyStream())
         }
+    }
+
+    private func sshItem(
+        for name: String,
+        in parentId: NSFileProviderItemIdentifier,
+        from attrs: SFTPAttributes
+    ) async throws -> SSHItem {
+        let kind: Item.Kind =
+            switch attrs.type {
+            case .directory:
+                .folder
+            case .symlink:
+                .symlink(
+                    target: try await symlinkTarget(
+                        for: name,
+                        parentId: parentId
+                    )
+                )
+            default:
+                .file
+            }
+
+        return SSHItem(
+            name: name,
+            kind: kind,
+            size: attrs.size,
+            flags: .from(attrs.permissions),
+            accessTime: attrs.accessTime,
+            modifyTime: attrs.modifyTime,
+            createTime: attrs.createTime
+        )
     }
 
     private func mapError<T>(
