@@ -1044,6 +1044,164 @@ struct SessionTests {
         }
     }
 
+    struct ReconcileWatchedFileTests {
+        let start: Date = Date(timeIntervalSince1970: 1_750_000_000)
+        let end: Date = Date(timeIntervalSince1970: 1_760_000_000)
+
+        @Test func reconcileWatchedFileWithNoChangeReturnsEmpty()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "file.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let fileId = try await session.child(name: "file.txt")
+            await session.watch(itemId: fileId)
+
+            let changes = try await session.reconcileWatched()
+
+            #expect(changes == [])
+        }
+
+        @Test func reconcileWatchedFileSurfacesContentChange() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: "file.txt",
+                contents: "old",
+                modifyDate: start
+            )
+            let session = try await sandbox.getSession()
+
+            let fileId = try await session.child(name: "file.txt")
+            await session.watch(itemId: fileId)
+
+            let updated = "updated"
+            try sandbox.createFile(
+                at: "file.txt",
+                contents: updated,
+                modifyDate: end
+            )
+            let changes = try await session.reconcileWatched()
+
+            let (updates, deletedIds) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.id == fileId)
+            #expect(item.name == "file.txt")
+            #expect(item.size == UInt64(updated.utf8.count))
+            #expect(item.modifyTime == end)
+            #expect(deletedIds == [])
+        }
+
+        @Test func reconcileWatchedFileSurfacesPermissionChange()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "file.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let fileId = try await session.child(name: "file.txt")
+            await session.watch(itemId: fileId)
+
+            try sandbox.touch("file.txt", permissions: 0o444)
+            let changes = try await session.reconcileWatched()
+
+            let (updates, deletedIds) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.id == fileId)
+            #expect(item.flags == [.readable])
+            #expect(deletedIds == [])
+        }
+
+        @Test func reconcileWatchedFileSurfacesDeletion() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "file.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let fileId = try await session.child(name: "file.txt")
+            await session.watch(itemId: fileId)
+
+            try sandbox.removeItem(at: "file.txt")
+            let changes = try await session.reconcileWatched()
+
+            let (updates, deletedIds) = changes.split()
+            #expect(updates == [])
+            #expect(deletedIds == [fileId])
+        }
+
+        @Test func reconcileWatchedFileStopsWatchingAfterDeletion()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "file.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let fileId = try await session.child(name: "file.txt")
+            await session.watch(itemId: fileId)
+
+            try sandbox.removeItem(at: "file.txt")
+            _ = try await session.reconcileWatched()
+
+            // The vanished file was dropped from the watch set, so a second
+            // pass produces no further changes and logs no errors.
+            let changes = try await session.reconcileWatched()
+            #expect(changes == [])
+        }
+
+        @Test func reconcileWatchedSymlinkSurfacesRetarget() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "old.txt", modifyDate: start)
+            try sandbox.createFile(at: "new.txt", modifyDate: start)
+            try sandbox.createSymlink(at: "link.txt", target: "old.txt")
+            let session = try await sandbox.getSession()
+
+            let linkId = try await session.id(of: "link.txt")
+            await session.watch(itemId: linkId)
+
+            try sandbox.createSymlink(at: "link.txt", target: "new.txt")
+            let changes = try await session.reconcileWatched()
+
+            let (updates, deletedIds) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.name == "link.txt")
+            #expect(item.kind == .symlink(target: "new.txt"))
+            #expect(deletedIds == [linkId])
+        }
+
+        @Test func reconcileWatchedFileInvalidatesCachedContent() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: "file.txt",
+                contents: "old",
+                modifyDate: start
+            )
+            let session = try await sandbox.getSession()
+
+            let fileId = try await session.child(name: "file.txt")
+            await session.watch(itemId: fileId)
+
+            let (warmUrl, _) = try await session.stream(
+                itemId: fileId,
+                range: 0..<1,
+                progress: Progress()
+            )
+            #expect(try String(contentsOf: warmUrl, encoding: .utf8) == "old")
+
+            try sandbox.createFile(
+                at: "file.txt",
+                contents: "new",
+                modifyDate: end
+            )
+            _ = try await session.reconcileWatched()
+
+            let (freshUrl, _) = try await session.stream(
+                itemId: fileId,
+                range: 0..<1,
+                progress: Progress()
+            )
+            #expect(try String(contentsOf: freshUrl, encoding: .utf8) == "new")
+        }
+    }
+
     struct PollWatchedChangesTests {
         let start: Date = Date(timeIntervalSince1970: 1_750_000_000)
         let end: Date = Date(timeIntervalSince1970: 1_760_000_000)
