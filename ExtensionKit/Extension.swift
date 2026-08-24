@@ -209,10 +209,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         }
 
         if item.contentType == .folder {
+            let flags = Item.Flags.from(item.fileSystemFlags) ?? .all
+            remaining.subtract([.fileSystemFlags])
             steps.add {
                 createdItem = try await self.client.createDirectory(
                     parentId: parentId,
-                    name: filename
+                    name: filename,
+                    flags: flags
                 )
             }
         }
@@ -241,9 +244,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         }
 
         if remaining.intersects(with: .attrFields) {
+            let attrs = remaining
             remaining.subtract(.attrFields)
             steps.add {
-                try await self.setAttributes(item, fields: fields)
+                try await self.setAttributes(item, fields: attrs)
             }
         }
 

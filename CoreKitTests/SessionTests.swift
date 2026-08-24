@@ -1269,7 +1269,7 @@ struct SessionTests {
             let itemId = try await session.child(name: "perms.txt")
             try await session.setAttributes(for: itemId, flags: .rw)
 
-            #expect(try sandbox.permissions(of: "perms.txt") == 0o600)
+            #expect(try sandbox.permissions(of: "perms.txt") == 0o644)
             let changes = try await session.reconcileAll()
             #expect(changes == [])
         }
@@ -1323,8 +1323,7 @@ struct SessionTests {
 
             let item = try await session.createDirectory(
                 "new-dir",
-                in: .rootContainer,
-                mode: 0o755
+                in: .rootContainer
             )
 
             #expect(item.name == "new-dir")
@@ -1635,7 +1634,7 @@ struct SessionTests {
             #expect(FileManager.default.fileExists(at: url))
             #expect(try String(contentsOf: url, encoding: .utf8) == data)
             #expect(progress.isFinished)
-            #expect(try FileManager.default.permissions(of: url) == 0o600)
+            #expect(try FileManager.default.permissions(of: url) == 0o644)
             #expect(currId == item.id)
             let changes = try await session.reconcileAll()
             #expect(changes == [])
@@ -1666,7 +1665,7 @@ struct SessionTests {
             #expect(FileManager.default.fileExists(at: url))
             #expect(try Data(contentsOf: url) == data)
             #expect(progress.isFinished)
-            #expect(try FileManager.default.permissions(of: url) == 0o600)
+            #expect(try FileManager.default.permissions(of: url) == 0o644)
             #expect(currId == item.id)
             let changes = try await session.reconcileAll()
             #expect(changes == [])
@@ -1742,7 +1741,7 @@ struct SessionTests {
             #expect(FileManager.default.fileExists(at: url))
             #expect(try Data(contentsOf: url).isEmpty)
             #expect(progress.isFinished)
-            #expect(try FileManager.default.permissions(of: url) == 0o600)
+            #expect(try FileManager.default.permissions(of: url) == 0o644)
             #expect(currId == item.id)
             let changes = try await session.reconcileAll()
             #expect(changes == [])
@@ -1932,5 +1931,4 @@ struct SessionTests {
             #expect(actual == expected)
         }
     }
-
 }

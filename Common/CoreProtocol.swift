@@ -338,18 +338,18 @@ public struct CreateSymlinkResponse: Message, PrettyDescribable {
 public struct CreateDirectoryRequest: Message, PrettyDescribable {
     public let parentId: String
     public let name: String
-    public let mode: mode_t
+    public let flags: Item.Flags
     public let ifExists: OnExists
 
     public init(
         parentId: String,
         name: String,
-        mode: mode_t,
+        flags: Item.Flags,
         ifExists: OnExists
     ) {
         self.parentId = parentId
         self.name = name
-        self.mode = mode
+        self.flags = flags
         self.ifExists = ifExists
     }
 }

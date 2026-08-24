@@ -270,7 +270,7 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
     public func createDirectory(
         parentId: NSFileProviderItemIdentifier,
         name: String,
-        mode: mode_t = 0o700,
+        flags: Item.Flags,
         ifExists: OnExists = .fail
     ) async throws(CoreError) -> Item {
         let reply = try await perform(
@@ -278,7 +278,7 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
                 CreateDirectoryRequest(
                     parentId: parentId.rawValue,
                     name: name,
-                    mode: mode,
+                    flags: flags,
                     ifExists: ifExists
                 )
             )
