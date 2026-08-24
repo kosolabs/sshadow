@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/kosolabs/sshadow/compare/v0.10.0...v0.10.1) (2026-08-24)
+
+
+### Bug Fixes
+
+* respect the server umask when creating files and directories, fixes [#165](https://github.com/kosolabs/sshadow/issues/165) ([#314](https://github.com/kosolabs/sshadow/issues/314)) ([2c8d084](https://github.com/kosolabs/sshadow/commit/2c8d084ac531bf2eed4ea893bb6cd81bc73bd294))
+
 ## [0.10.0](https://github.com/kosolabs/sshadow/compare/v0.9.0...v0.10.0) (2026-08-22)
 
 
