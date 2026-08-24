@@ -337,10 +337,7 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         guard case .limits(let response) = reply else {
             throw CoreError.unexpectedResponse
         }
-        return Limits(
-            maxReadLength: response.maxReadLength,
-            maxWriteLength: response.maxWriteLength
-        )
+        return response.limits
     }
 
     public func upload(

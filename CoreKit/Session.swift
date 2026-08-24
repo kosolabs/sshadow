@@ -32,7 +32,7 @@ actor Session {
     private(set) var reconcileTask: Task<[Change], any Error>?
     private(set) var outstanding = 0
     private var changes: [(UInt64, [Change])] = []
-    private var anchor: UInt64 = 0
+    private(set) var anchor: UInt64 = 0
 
     static func provider(
         domainDb: DomainDB,
@@ -82,12 +82,11 @@ actor Session {
         logger.info("SSH connected: \(config), DB: \(dbPath)")
     }
 
-    var limits: SFTPLimits {
-        sftp.limits
-    }
-
-    var currentAnchor: UInt64 {
-        anchor
+    var limits: Limits {
+        Limits(
+            maxReadLength: sftp.limits.maxReadLength,
+            maxWriteLength: sftp.limits.maxWriteLength
+        )
     }
 
     func close() async {
@@ -547,25 +546,6 @@ actor Session {
         return try await record(name, in: parentId, kind: .folder)
     }
 
-    func record(
-        _ name: String,
-        in parentId: NSFileProviderItemIdentifier,
-        kind: Item.Kind
-    ) async throws -> Item {
-        let attrs = try await attributes(for: name, in: parentId)
-        try await refresh(parentId)
-        return try await db.upsert(
-            parentId: parentId,
-            name: name,
-            kind: kind,
-            size: attrs.size,
-            flags: .from(attrs.permissions),
-            accessTime: attrs.accessTime,
-            modifyTime: attrs.modifyTime,
-            createTime: attrs.createTime
-        )
-    }
-
     func move(
         _ itemId: NSFileProviderItemIdentifier,
         to newParentId: NSFileProviderItemIdentifier,
@@ -624,18 +604,6 @@ actor Session {
         }
         try await refresh(db.parent(of: itemId).id)
         try await db.remove(itemId)
-    }
-
-    func refresh(_ itemId: NSFileProviderItemIdentifier) async throws {
-        let attrs = try await attributes(for: itemId)
-        try await db.refresh(
-            itemId,
-            size: attrs.size,
-            flags: .from(attrs.permissions),
-            accessTime: attrs.accessTime,
-            modifyTime: attrs.modifyTime,
-            createTime: attrs.createTime
-        )
     }
 
     func upload(
@@ -798,6 +766,37 @@ actor Session {
 
         estimator.finalize()
         return (url, slice.byteRange)
+    }
+
+    private func record(
+        _ name: String,
+        in parentId: NSFileProviderItemIdentifier,
+        kind: Item.Kind
+    ) async throws -> Item {
+        let attrs = try await attributes(for: name, in: parentId)
+        try await refresh(parentId)
+        return try await db.upsert(
+            parentId: parentId,
+            name: name,
+            kind: kind,
+            size: attrs.size,
+            flags: .from(attrs.permissions),
+            accessTime: attrs.accessTime,
+            modifyTime: attrs.modifyTime,
+            createTime: attrs.createTime
+        )
+    }
+
+    private func refresh(_ itemId: NSFileProviderItemIdentifier) async throws {
+        let attrs = try await attributes(for: itemId)
+        try await db.refresh(
+            itemId,
+            size: attrs.size,
+            flags: .from(attrs.permissions),
+            accessTime: attrs.accessTime,
+            modifyTime: attrs.modifyTime,
+            createTime: attrs.createTime
+        )
     }
 
     private func create(file url: URL) throws {

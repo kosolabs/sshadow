@@ -826,7 +826,7 @@ struct SessionTests {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
 
-            #expect(await session.currentAnchor == 0)
+            #expect(await session.anchor == 0)
         }
 
         @Test func currentAnchorAdvancesOnPoll() async throws {
@@ -837,12 +837,12 @@ struct SessionTests {
             try sandbox.createFile(at: "dir/first.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
             try await session.pollAll()
-            #expect(await session.currentAnchor == 1)
+            #expect(await session.anchor == 1)
 
             try sandbox.createFile(at: "dir/second.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
             try await session.pollAll()
-            #expect(await session.currentAnchor == 2)
+            #expect(await session.anchor == 2)
         }
 
         @Test func currentAnchorDoesNotAdvanceWithoutChanges() async throws {
@@ -851,10 +851,10 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             try await session.pollAll()
-            #expect(await session.currentAnchor == 0)
+            #expect(await session.anchor == 0)
 
             try await session.pollAll()
-            #expect(await session.currentAnchor == 0)
+            #expect(await session.anchor == 0)
         }
 
         @Test func changesReturnsCurrentAnchor() async throws {
@@ -1222,7 +1222,7 @@ struct SessionTests {
 
             let (_, changes) = await session.changes(since: 0)
             #expect(changes == [])
-            #expect(await session.currentAnchor == 0)
+            #expect(await session.anchor == 0)
         }
 
         @Test func pollWatchedSurfacesChangeAndAdvancesAnchor() async throws {
@@ -1240,7 +1240,7 @@ struct SessionTests {
             let (updates, _) = changes.split()
             let item = try #require(updates.only)
             #expect(item.name == "new.txt")
-            #expect(await session.currentAnchor == 1)
+            #expect(await session.anchor == 1)
         }
 
         @Test func pollWatchedIgnoresUnwatchedFolderLeavesAnchor()
@@ -1260,7 +1260,7 @@ struct SessionTests {
 
             let (_, changes) = await session.changes(since: 0)
             #expect(changes == [])
-            #expect(await session.currentAnchor == 0)
+            #expect(await session.anchor == 0)
         }
     }
 
@@ -1990,7 +1990,7 @@ struct SessionTests {
                 try await poll.value
             }
             // A cancelled poll emits no changes.
-            #expect(await session.currentAnchor == 0)
+            #expect(await session.anchor == 0)
         }
 
         @Test func operationTracksAndReleasesOutstandingCount() async throws {
@@ -2042,7 +2042,7 @@ struct SessionTests {
 
             try await session.tick()
 
-            #expect(await session.currentAnchor == 1)
+            #expect(await session.anchor == 1)
         }
 
         @Test func tickSkipsPollWhileOperationOutstanding() async throws {
@@ -2076,7 +2076,7 @@ struct SessionTests {
 
             // The poll is due, but must be skipped while the upload runs.
             try await session.tick()
-            #expect(await session.currentAnchor == 0)
+            #expect(await session.anchor == 0)
 
             progress.cancel()
             _ = try? await upload.value

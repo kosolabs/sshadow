@@ -411,21 +411,10 @@ public struct LimitsRequest: Message, PrettyDescribable {
 }
 
 public struct LimitsResponse: Message, PrettyDescribable {
-    public let maxOpenHandles: UInt64
-    public let maxPacketLength: UInt64
-    public let maxReadLength: UInt64
-    public let maxWriteLength: UInt64
+    public let limits: Limits
 
-    public init(
-        maxOpenHandles: UInt64,
-        maxPacketLength: UInt64,
-        maxReadLength: UInt64,
-        maxWriteLength: UInt64
-    ) {
-        self.maxOpenHandles = maxOpenHandles
-        self.maxPacketLength = maxPacketLength
-        self.maxReadLength = maxReadLength
-        self.maxWriteLength = maxWriteLength
+    public init(limits: Limits) {
+        self.limits = limits
     }
 }
 
