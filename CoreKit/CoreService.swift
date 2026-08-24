@@ -2,7 +2,6 @@ import Common
 import FileProvider
 import Foundation
 import SwiftData
-import SwiftLibSSH
 
 private let logger = Logger(category: "CoreService")
 
@@ -30,40 +29,40 @@ final class CoreService: Sendable, CoreXPC {
     }
 
     func handle(_ request: CoreRequest) async -> CoreResult {
-        await mapError {
+        await respond { session in
             switch request {
             case .name(let request):
-                try await .name(name(request))
+                try await .name(name(session, request))
             case .child(let request):
-                try await .child(child(request))
+                try await .child(child(session, request))
             case .parent(let request):
-                try await .parent(parent(request))
+                try await .parent(parent(session, request))
             case .item(let request):
-                try await .item(item(request))
+                try await .item(item(session, request))
             case .list(let request):
-                try await .list(list(request))
+                try await .list(list(session, request))
             case .watch(let request):
-                try await .watch(watch(request))
+                try await .watch(watch(session, request))
             case .unwatch(let request):
-                try await .unwatch(unwatch(request))
+                try await .unwatch(unwatch(session, request))
             case .currentAnchor(let request):
-                try await .currentAnchor(currentAnchor(request))
+                try await .currentAnchor(currentAnchor(session, request))
             case .changes(let request):
-                try await .changes(changes(request))
+                try await .changes(changes(session, request))
             case .setAttributes(let request):
-                try await .setAttributes(setAttributes(request))
+                try await .setAttributes(setAttributes(session, request))
             case .createSymlink(let request):
-                try await .createSymlink(createSymlink(request))
+                try await .createSymlink(createSymlink(session, request))
             case .createDirectory(let request):
-                try await .createDirectory(createDirectory(request))
+                try await .createDirectory(createDirectory(session, request))
             case .move(let request):
-                try await .move(move(request))
+                try await .move(move(session, request))
             case .removeFile(let request):
-                try await .removeFile(removeFile(request))
+                try await .removeFile(removeFile(session, request))
             case .removeDirectory(let request):
-                try await .removeDirectory(removeDirectory(request))
+                try await .removeDirectory(removeDirectory(session, request))
             case .limits(let request):
-                try await .limits(limits(request))
+                try await .limits(limits(session, request))
             }
         }
     }
@@ -91,271 +90,251 @@ final class CoreService: Sendable, CoreXPC {
         _ request: CoreProgressRequest,
         progressEndpoint: NSXPCListenerEndpoint
     ) async -> CoreResult {
-        await mapError {
+        await respond { session in
             switch request {
             case .upload(let request):
                 try await .upload(
-                    self.upload(request, progressEndpoint: progressEndpoint)
+                    self.upload(
+                        session,
+                        request,
+                        progressEndpoint: progressEndpoint
+                    )
                 )
             case .download(let request):
                 try await .download(
-                    self.download(request, progressEndpoint: progressEndpoint)
+                    self.download(
+                        session,
+                        request,
+                        progressEndpoint: progressEndpoint
+                    )
                 )
             case .stream(let request):
                 try await .stream(
-                    self.stream(request, progressEndpoint: progressEndpoint)
+                    self.stream(
+                        session,
+                        request,
+                        progressEndpoint: progressEndpoint
+                    )
                 )
             }
         }
     }
 
-    private func mapError(
-        _ operation: () async throws -> CoreResponse
+    private func respond(
+        _ operation: @Sendable (Session) async throws -> CoreResponse
     ) async -> CoreResult {
         do {
-            return .success(try await operation())
-        } catch SSHError.connectionFailed {
-            return .failure(.serverUnreachable)
-        } catch SSHError.authenticationFailed {
-            return .failure(.notAuthenticated)
-        } catch SSHError.sftpError(.noSuchFile, _) {
-            return .failure(.remotePathNotFound)
+            return .success(try await supervisor.withSession(operation))
         } catch {
             return .failure(CoreError(from: error))
         }
     }
 
     func name(
+        _ session: Session,
         _ request: NameRequest
     ) async throws -> NameResponse {
-        try await supervisor.withSession { session in
-            let name = try await session.name(
-                of: NSFileProviderItemIdentifier(request.itemId)
-            )
-            return NameResponse(name: name)
-        }
+        let name = try await session.name(
+            of: NSFileProviderItemIdentifier(request.itemId)
+        )
+        return NameResponse(name: name)
     }
 
     func child(
+        _ session: Session,
         _ request: ChildRequest
     ) async throws -> ChildResponse {
-        try await supervisor.withSession { session in
-            let childId = try await session.child(
-                of: NSFileProviderItemIdentifier(request.parentId),
-                name: request.name
-            )
-            return ChildResponse(itemId: childId.rawValue)
-        }
+        let childId = try await session.child(
+            of: NSFileProviderItemIdentifier(request.parentId),
+            name: request.name
+        )
+        return ChildResponse(itemId: childId.rawValue)
     }
 
     func parent(
+        _ session: Session,
         _ request: ParentRequest
     ) async throws -> ParentResponse {
-        try await supervisor.withSession { session in
-            let parentId = try await session.parent(
-                of: NSFileProviderItemIdentifier(request.itemId)
-            )
-            return ParentResponse(itemId: parentId.rawValue)
-        }
+        let parentId = try await session.parent(
+            of: NSFileProviderItemIdentifier(request.itemId)
+        )
+        return ParentResponse(itemId: parentId.rawValue)
     }
 
     func item(
+        _ session: Session,
         _ request: ItemRequest
     ) async throws -> ItemResponse {
-        try await supervisor.withSession { session in
-            let item = try await session.item(
-                for: NSFileProviderItemIdentifier(request.itemId)
-            )
-            return ItemResponse(item: item)
-        }
+        let item = try await session.item(
+            for: NSFileProviderItemIdentifier(request.itemId)
+        )
+        return ItemResponse(item: item)
     }
 
     func list(
+        _ session: Session,
         _ request: ListRequest
     ) async throws -> ListResponse {
-        try await supervisor.withSession { session in
-            let entries = try await session.list(
-                for: NSFileProviderItemIdentifier(request.itemId)
-            )
-            return ListResponse(fileInfos: entries)
-        }
+        let entries = try await session.list(
+            for: NSFileProviderItemIdentifier(request.itemId)
+        )
+        return ListResponse(fileInfos: entries)
     }
 
     func watch(
+        _ session: Session,
         _ request: WatchRequest
     ) async throws -> WatchResponse {
-        try await supervisor.withSession { session in
-            await session.watch(
-                itemId: NSFileProviderItemIdentifier(request.itemId)
-            )
-            return WatchResponse()
-        }
+        await session.watch(
+            itemId: NSFileProviderItemIdentifier(request.itemId)
+        )
+        return WatchResponse()
     }
 
     func unwatch(
+        _ session: Session,
         _ request: UnwatchRequest
     ) async throws -> UnwatchResponse {
-        try await supervisor.withSession { session in
-            await session.unwatch(
-                itemId: NSFileProviderItemIdentifier(request.itemId)
-            )
-            return UnwatchResponse()
-        }
+        await session.unwatch(
+            itemId: NSFileProviderItemIdentifier(request.itemId)
+        )
+        return UnwatchResponse()
     }
 
     func currentAnchor(
+        _ session: Session,
         _ request: CurrentAnchorRequest
     ) async throws -> CurrentAnchorResponse {
-        try await supervisor.withSession { session in
-            let anchor = await session.currentAnchor
-            return CurrentAnchorResponse(anchor: anchor)
-        }
+        await CurrentAnchorResponse(anchor: session.anchor)
     }
 
     func changes(
+        _ session: Session,
         _ request: ChangesRequest
     ) async throws -> ChangesResponse {
-        try await supervisor.withSession { session in
-            let (anchor, changes) = await session.changes(
-                since: request.anchor
-            )
-            return ChangesResponse(anchor: anchor, changes: changes)
-        }
+        let (anchor, changes) = await session.changes(
+            since: request.anchor
+        )
+        return ChangesResponse(anchor: anchor, changes: changes)
     }
 
     func setAttributes(
+        _ session: Session,
         _ request: SetAttributesRequest
     ) async throws -> SetAttributesResponse {
-        try await supervisor.withSession { session in
-            try await session.setAttributes(
-                for: NSFileProviderItemIdentifier(request.itemId),
-                flags: request.flags,
-                accessTime: request.accessTime,
-                modifyTime: request.modifyTime
-            )
-            return SetAttributesResponse()
-        }
+        try await session.setAttributes(
+            for: NSFileProviderItemIdentifier(request.itemId),
+            flags: request.flags,
+            accessTime: request.accessTime,
+            modifyTime: request.modifyTime
+        )
+        return SetAttributesResponse()
     }
 
     func createSymlink(
+        _ session: Session,
         _ request: CreateSymlinkRequest
     ) async throws -> CreateSymlinkResponse {
-        try await supervisor.withSession { session in
-            let item = try await session.createSymlink(
-                request.name,
-                in: NSFileProviderItemIdentifier(request.parentId),
-                target: request.target
-            )
-            return CreateSymlinkResponse(item: item)
-        }
+        let item = try await session.createSymlink(
+            request.name,
+            in: NSFileProviderItemIdentifier(request.parentId),
+            target: request.target
+        )
+        return CreateSymlinkResponse(item: item)
     }
 
     func createDirectory(
+        _ session: Session,
         _ request: CreateDirectoryRequest
     ) async throws -> CreateDirectoryResponse {
-        try await supervisor.withSession { session in
-            let item = try await session.createDirectory(
-                request.name,
-                in: NSFileProviderItemIdentifier(request.parentId),
-                flags: request.flags,
-                ifExists: request.ifExists
-            )
-            return CreateDirectoryResponse(item: item)
-        }
+        let item = try await session.createDirectory(
+            request.name,
+            in: NSFileProviderItemIdentifier(request.parentId),
+            flags: request.flags,
+            ifExists: request.ifExists
+        )
+        return CreateDirectoryResponse(item: item)
     }
 
     func move(
+        _ session: Session,
         _ request: MoveRequest
     ) async throws -> MoveResponse {
-        try await supervisor.withSession { session in
-            try await session.move(
-                NSFileProviderItemIdentifier(request.itemId),
-                to: NSFileProviderItemIdentifier(request.newParentId),
-                name: request.newName
-            )
-            return MoveResponse()
-        }
+        try await session.move(
+            NSFileProviderItemIdentifier(request.itemId),
+            to: NSFileProviderItemIdentifier(request.newParentId),
+            name: request.newName
+        )
+        return MoveResponse()
     }
 
     func removeFile(
+        _ session: Session,
         _ request: RemoveFileRequest
     ) async throws -> RemoveFileResponse {
-        try await supervisor.withSession { session in
-            try await session.removeFile(
-                for: NSFileProviderItemIdentifier(request.itemId)
-            )
-            return RemoveFileResponse()
-        }
+        try await session.removeFile(
+            for: NSFileProviderItemIdentifier(request.itemId)
+        )
+        return RemoveFileResponse()
     }
 
     func removeDirectory(
+        _ session: Session,
         _ request: RemoveDirectoryRequest
     ) async throws -> RemoveDirectoryResponse {
-        try await supervisor.withSession { session in
-            try await session.removeDirectory(
-                for: NSFileProviderItemIdentifier(request.itemId)
-            )
-            return RemoveDirectoryResponse()
-        }
+        try await session.removeDirectory(
+            for: NSFileProviderItemIdentifier(request.itemId)
+        )
+        return RemoveDirectoryResponse()
     }
 
     func limits(
+        _ session: Session,
         _ request: LimitsRequest
     ) async throws -> LimitsResponse {
-        try await supervisor.withSession { session in
-            let limits = await session.limits
-            return LimitsResponse(
-                maxOpenHandles: limits.maxOpenHandles,
-                maxPacketLength: limits.maxPacketLength,
-                maxReadLength: limits.maxReadLength,
-                maxWriteLength: limits.maxWriteLength
-            )
-        }
+        await LimitsResponse(limits: session.limits)
     }
 
     func upload(
+        _ session: Session,
         _ request: UploadRequest,
         progressEndpoint: NSXPCListenerEndpoint
     ) async throws -> UploadResponse {
-        try await supervisor.withSession { session in
-            let sync = XPCProgressPublisher(endpoint: progressEndpoint)
-            let item = try await session.upload(
-                request.name,
-                to: NSFileProviderItemIdentifier(request.parentId),
-                file: request.file,
-                flags: request.flags,
-                progress: sync.progress
-            )
-            return UploadResponse(item: item)
-        }
+        let sync = XPCProgressPublisher(endpoint: progressEndpoint)
+        let item = try await session.upload(
+            request.name,
+            to: NSFileProviderItemIdentifier(request.parentId),
+            file: request.file,
+            flags: request.flags,
+            progress: sync.progress
+        )
+        return UploadResponse(item: item)
     }
 
     func download(
+        _ session: Session,
         _ request: DownloadRequest,
         progressEndpoint: NSXPCListenerEndpoint
     ) async throws -> DownloadResponse {
-        try await supervisor.withSession { session in
-            let sync = XPCProgressPublisher(endpoint: progressEndpoint)
-            let (url, item) = try await session.download(
-                itemId: NSFileProviderItemIdentifier(request.itemId),
-                progress: sync.progress
-            )
-            return DownloadResponse(url: url, item: item)
-        }
+        let sync = XPCProgressPublisher(endpoint: progressEndpoint)
+        let (url, item) = try await session.download(
+            itemId: NSFileProviderItemIdentifier(request.itemId),
+            progress: sync.progress
+        )
+        return DownloadResponse(url: url, item: item)
     }
 
     func stream(
+        _ session: Session,
         _ request: StreamRequest,
         progressEndpoint: NSXPCListenerEndpoint
     ) async throws -> StreamResponse {
-        try await supervisor.withSession { session in
-            let sync = XPCProgressPublisher(endpoint: progressEndpoint)
-            let (url, range) = try await session.stream(
-                itemId: NSFileProviderItemIdentifier(request.itemId),
-                range: request.range,
-                progress: sync.progress
-            )
-            return StreamResponse(url: url, range: range)
-        }
+        let sync = XPCProgressPublisher(endpoint: progressEndpoint)
+        let (url, range) = try await session.stream(
+            itemId: NSFileProviderItemIdentifier(request.itemId),
+            range: request.range,
+            progress: sync.progress
+        )
+        return StreamResponse(url: url, range: range)
     }
 }
