@@ -12,6 +12,7 @@ actor Session {
         async throws(ConnectionError) -> Session
     typealias ChangesDetectedHandler = @Sendable () async throws -> Void
     typealias ConnectionLostHandler = @Sendable () async -> Void
+    typealias IdleTimeProvider = @Sendable () -> Duration
 
     private let config: ConnectionConfig
     private let ssh: SSHClient
@@ -20,6 +21,7 @@ actor Session {
     private let sharedUrl: URL
     private let changesDetectedHandler: ChangesDetectedHandler
     private let connectionLostHandler: ConnectionLostHandler
+    private let idleTimeProvider: IdleTimeProvider
     private let transfers: Transfers
 
     private lazy var cache = FileCache(read: read)
@@ -27,6 +29,8 @@ actor Session {
     private var watched: [NSFileProviderItemIdentifier: Int] = [:]
     private var schedule: PollSchedule?
     private var pollTask: Task<Void, Never>?
+    private(set) var reconcileTask: Task<[Change], any Error>?
+    private(set) var outstanding = 0
     private var changes: [(UInt64, [Change])] = []
     private var anchor: UInt64 = 0
 
@@ -46,6 +50,7 @@ actor Session {
                 sharedUrl: sharedUrl,
                 changesDetectedHandler: { try await signalEnumerator(config) },
                 connectionLostHandler: handler,
+                idleTimeProvider: SystemIdle.duration,
                 transfers: transfers
             )
         }
@@ -59,7 +64,8 @@ actor Session {
         sharedUrl: URL = SSHadow.groupUrl,
         changesDetectedHandler: @escaping ChangesDetectedHandler,
         connectionLostHandler: @escaping ConnectionLostHandler,
-        transfers: Transfers
+        idleTimeProvider: @escaping IdleTimeProvider,
+        transfers: Transfers,
     ) {
         self.config = config
         self.ssh = ssh
@@ -68,15 +74,12 @@ actor Session {
         self.sharedUrl = sharedUrl
         self.changesDetectedHandler = changesDetectedHandler
         self.connectionLostHandler = connectionLostHandler
+        self.idleTimeProvider = idleTimeProvider
         self.transfers = transfers
 
         let dbConfig = db.modelContainer.configurations.first
         let dbPath = dbConfig?.url.path ?? "in-memory"
         logger.info("SSH connected: \(config), DB: \(dbPath)")
-    }
-
-    var url: String {
-        config.url
     }
 
     var limits: SFTPLimits {
@@ -108,6 +111,8 @@ actor Session {
                     try await tick()
                 } catch CoreError.serverUnreachable {
                     break
+                } catch is CancellationError {
+                    logger.debug("Poll interrupted by operation")
                 } catch {
                     logger.error("Poll error: \(error)")
                 }
@@ -116,11 +121,12 @@ actor Session {
         }
     }
 
-    private func tick() async throws {
+    func tick() async throws {
         guard let schedule else { return }
+        guard outstanding == 0 else { return }
         switch schedule.next(
             now: ContinuousClock.now,
-            userIdle: SystemIdle.duration()
+            userIdle: idleTimeProvider()
         ) {
         case .pollAll:
             try await pollAll()
@@ -134,6 +140,7 @@ actor Session {
     }
 
     func stop() {
+        reconcileTask?.cancel()
         pollTask?.cancel()
         pollTask = nil
     }
@@ -143,7 +150,10 @@ actor Session {
             "Poll all: \(config.url), anchor: \(anchor)"
         )
 
-        let newChanges = try await reconcileAll()
+        let reconcileTask = Task { try await reconcileAll() }
+        self.reconcileTask = reconcileTask
+        defer { self.reconcileTask = nil }
+        let newChanges = try await reconcileTask.value
         guard !newChanges.isEmpty else {
             return
         }
@@ -165,6 +175,7 @@ actor Session {
         ]
 
         while !folders.isEmpty {
+            try Task.checkCancellation()
             let nextFolder = folders.removeFirst()
             let (changes, remainder) = try await reconcile(
                 folder: nextFolder
@@ -202,7 +213,11 @@ actor Session {
         logger.debug(
             "Poll watched: \(config.url), anchor: \(anchor), items: \(watched.keys)"
         )
-        let newChanges = try await reconcileWatched()
+
+        let reconcileTask = Task { try await reconcileWatched() }
+        self.reconcileTask = reconcileTask
+        defer { self.reconcileTask = nil }
+        let newChanges = try await reconcileTask.value
         guard !newChanges.isEmpty else {
             return
         }
@@ -220,6 +235,7 @@ actor Session {
         var allChanges: [Change] = []
 
         for itemId in Array(watched.keys) {
+            try Task.checkCancellation()
             do {
                 let item = try await db.item(for: itemId)
                 let changes: [Change]
@@ -233,6 +249,8 @@ actor Session {
                 throw CoreError.serverUnreachable
             } catch CoreError.itemNotFound {
                 watched.removeValue(forKey: itemId)
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 logger.error("Reconcile watched \(itemId) failed: \(error)")
             }
@@ -412,6 +430,10 @@ actor Session {
     func list(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> [Item] {
+        outstanding += 1
+        reconcileTask?.cancel()
+        defer { outstanding -= 1 }
+
         if try await !db.isEnumerated(itemId) {
             try await enumerate(itemId: itemId)
         }
@@ -444,31 +466,16 @@ actor Session {
         try await db.markEnumerated(itemId)
     }
 
-    func symlinkTarget(
-        for itemId: NSFileProviderItemIdentifier
-    ) async throws -> String {
-        try await mapError(with: itemId) {
-            try await sftp.symlinkTarget(at: path(for: itemId))
-        }
-    }
-
-    func symlinkTarget(
-        for name: String,
-        in parentId: NSFileProviderItemIdentifier
-    ) async throws -> String {
-        try await mapError(with: parentId) {
-            try await sftp.symlinkTarget(
-                at: path(for: name, in: parentId)
-            )
-        }
-    }
-
     func setAttributes(
         for itemId: NSFileProviderItemIdentifier,
         flags: Item.Flags? = nil,
         accessTime: Date? = nil,
         modifyTime: Date? = nil
     ) async throws {
+        outstanding += 1
+        reconcileTask?.cancel()
+        defer { outstanding -= 1 }
+
         var changes: [String] = []
         if let accessTime { changes.append("accessTime: \(accessTime)") }
         if let modifyTime { changes.append("modifyTime: \(modifyTime)") }
@@ -497,6 +504,10 @@ actor Session {
         in parentId: NSFileProviderItemIdentifier,
         target: String
     ) async throws -> Item {
+        outstanding += 1
+        reconcileTask?.cancel()
+        defer { outstanding -= 1 }
+
         let path = try await path(for: name, in: parentId)
         logger.info("Create symlink \(path) -> \(target)")
         try await mapError(with: parentId) {
@@ -515,6 +526,10 @@ actor Session {
         flags: Item.Flags = .all,
         ifExists: OnExists = .fail
     ) async throws -> Item {
+        outstanding += 1
+        reconcileTask?.cancel()
+        defer { outstanding -= 1 }
+
         let path = try await path(for: name, in: parentId)
         logger.info("Create directory \(path)")
         try await mapError(with: parentId) {
@@ -532,19 +547,7 @@ actor Session {
         return try await record(name, in: parentId, kind: .folder)
     }
 
-    private func refresh(_ itemId: NSFileProviderItemIdentifier) async throws {
-        let attrs = try await attributes(for: itemId)
-        try await db.refresh(
-            itemId,
-            size: attrs.size,
-            flags: .from(attrs.permissions),
-            accessTime: attrs.accessTime,
-            modifyTime: attrs.modifyTime,
-            createTime: attrs.createTime
-        )
-    }
-
-    private func record(
+    func record(
         _ name: String,
         in parentId: NSFileProviderItemIdentifier,
         kind: Item.Kind
@@ -568,6 +571,10 @@ actor Session {
         to newParentId: NSFileProviderItemIdentifier,
         name newName: String
     ) async throws {
+        outstanding += 1
+        reconcileTask?.cancel()
+        defer { outstanding -= 1 }
+
         let oldPath = try await path(for: itemId)
         let newPath = try await path(for: newName, in: newParentId)
 
@@ -592,6 +599,10 @@ actor Session {
     func removeFile(
         for itemId: NSFileProviderItemIdentifier
     ) async throws {
+        outstanding += 1
+        reconcileTask?.cancel()
+        defer { outstanding -= 1 }
+
         try await logger.info("Remove \(id(of: itemId))")
         try await mapError(with: itemId) {
             try await sftp.removeFile(at: path(for: itemId))
@@ -603,12 +614,28 @@ actor Session {
     func removeDirectory(
         for itemId: NSFileProviderItemIdentifier
     ) async throws {
+        outstanding += 1
+        reconcileTask?.cancel()
+        defer { outstanding -= 1 }
+
         try await logger.info("Remove directory \(id(of: itemId))")
         try await mapError(with: itemId) {
             try await sftp.removeDirectoryRecursively(at: path(for: itemId))
         }
         try await refresh(db.parent(of: itemId).id)
         try await db.remove(itemId)
+    }
+
+    func refresh(_ itemId: NSFileProviderItemIdentifier) async throws {
+        let attrs = try await attributes(for: itemId)
+        try await db.refresh(
+            itemId,
+            size: attrs.size,
+            flags: .from(attrs.permissions),
+            accessTime: attrs.accessTime,
+            modifyTime: attrs.modifyTime,
+            createTime: attrs.createTime
+        )
     }
 
     func upload(
@@ -619,6 +646,10 @@ actor Session {
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
         progress: Progress
     ) async throws -> Item {
+        outstanding += 1
+        reconcileTask?.cancel()
+        defer { outstanding -= 1 }
+
         let path = try await path(for: name, in: parentId)
         let fp = try FileHandle(forReadingFrom: url)
         defer { try? fp.close() }
@@ -673,6 +704,10 @@ actor Session {
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
         progress: Progress
     ) async throws -> (URL, Item) {
+        outstanding += 1
+        reconcileTask?.cancel()
+        defer { outstanding -= 1 }
+
         let item = try await item(for: itemId)
         let url = sharedUrl.appending(path: itemId.rawValue)
         logger.info("Download \(item) into \(url)")
@@ -720,6 +755,10 @@ actor Session {
         range: Range<UInt64>,
         progress: Progress
     ) async throws -> (URL, Range<UInt64>) {
+        outstanding += 1
+        reconcileTask?.cancel()
+        defer { outstanding -= 1 }
+
         let item = try await item(for: itemId)
         let file = File(item: item)
         let url = sharedUrl.appending(path: "\(itemId.rawValue)")
@@ -883,6 +922,17 @@ actor Session {
             modifyTime: attrs.modifyTime,
             createTime: attrs.createTime
         )
+    }
+
+    private func symlinkTarget(
+        for name: String,
+        in parentId: NSFileProviderItemIdentifier
+    ) async throws -> String {
+        try await mapError(with: parentId) {
+            try await sftp.symlinkTarget(
+                at: path(for: name, in: parentId)
+            )
+        }
     }
 
     private func mapError<T>(
