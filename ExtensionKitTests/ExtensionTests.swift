@@ -193,7 +193,7 @@ struct ExtensionTests {
         #expect(!shouldFetch)
         #expect(sandbox.exists(at: "parent/folder"))
         #expect(try sandbox.modifyDate(of: "parent/folder") == newDate)
-        #expect(try sandbox.permissions(of: "parent/folder") == 0o700)
+        #expect(try sandbox.permissions(of: "parent/folder") == 0o755)
 
         // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID.rootContainer, filename: extension-create-folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
@@ -275,7 +275,7 @@ struct ExtensionTests {
         #expect(try sandbox.modifyDate(of: "parent/file.txt") == newDate)
         #expect(try sandbox.contents(of: "parent/file.txt") == contents)
         #expect(uploadProgress.isFinished)
-        #expect(try sandbox.permissions(of: "parent/file.txt") == 0o600)
+        #expect(try sandbox.permissions(of: "parent/file.txt") == 0o644)
 
         // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID.rootContainer, filename: extension-create-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 21:51:16 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
@@ -355,7 +355,7 @@ struct ExtensionTests {
         #expect(try sandbox.modifyDate(of: "parent/file.dat") == newDate)
         #expect(try sandbox.data(at: "parent/file.dat") == data)
         #expect(uploadProgress.isFinished)
-        #expect(try sandbox.permissions(of: "parent/file.dat") == 0o600)
+        #expect(try sandbox.permissions(of: "parent/file.dat") == 0o644)
 
         // Modify FPItem(id: FPItemID(<pid>), parentId: .rootContainer, filename: extension-create-large-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 22:15:29 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
@@ -853,7 +853,7 @@ struct ExtensionTests {
 
         let item = try #require(maybeItem)
         #expect(item.fileSystemFlags == [.userReadable, .userWritable])
-        #expect(try sandbox.permissions(of: "file.txt") == 0o600)
+        #expect(try sandbox.permissions(of: "file.txt") == 0o644)
         #expect(modifyProgress.isFinished)
     }
 
@@ -890,7 +890,7 @@ struct ExtensionTests {
                 .userReadable, .userWritable, .userExecutable,
             ]
         )
-        #expect(try sandbox.permissions(of: "folder") == 0o700)
+        #expect(try sandbox.permissions(of: "folder") == 0o755)
         #expect(modifyProgress.isFinished)
     }
 

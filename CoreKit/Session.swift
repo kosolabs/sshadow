@@ -443,7 +443,7 @@ actor Session {
         }
         try await db.markEnumerated(itemId)
     }
-    
+
     func symlinkTarget(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> String {
@@ -479,7 +479,7 @@ actor Session {
         try await mapError(with: itemId) {
             try await sftp.setAttributes(
                 at: path(for: itemId),
-                permissions: flags?.mode,
+                permissions: flags?.mode(umask: 0o022),
                 accessTime: accessTime,
                 modifyTime: modifyTime
             )
@@ -512,16 +512,14 @@ actor Session {
     func createDirectory(
         _ name: String,
         in parentId: NSFileProviderItemIdentifier,
-        mode: mode_t = 0o700,
+        flags: Item.Flags = .all,
         ifExists: OnExists = .fail
     ) async throws -> Item {
         let path = try await path(for: name, in: parentId)
-        logger.info(
-            "Create directory \(path) with permissions \(String(mode, radix: 8))"
-        )
+        logger.info("Create directory \(path)")
         try await mapError(with: parentId) {
             do {
-                try await sftp.createDirectory(at: path, mode: mode)
+                try await sftp.createDirectory(at: path, mode: flags.mode)
             } catch SSHError.sftpError(.fileAlreadyExists, _) {
                 switch ifExists {
                 case .succeed:
@@ -582,8 +580,7 @@ actor Session {
             {
                 logger.info("Trash doesn't exist, creating")
                 try await sftp.createDirectoryRecursively(
-                    at: path(for: newParentId),
-                    mode: 0o700
+                    at: path(for: newParentId)
                 )
                 try await sftp.move(from: oldPath, to: newPath)
             }
@@ -785,7 +782,7 @@ actor Session {
     private func withFile<T: Sendable>(
         for itemId: NSFileProviderItemIdentifier,
         accessType: AccessType,
-        mode: mode_t = 0o600,
+        mode: mode_t = 0o666,
         perform: @Sendable (SFTPFile) async throws -> T
     ) async throws -> T {
         try await mapError(with: itemId) {

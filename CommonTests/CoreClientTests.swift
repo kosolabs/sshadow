@@ -117,7 +117,7 @@ struct CoreClientTests {
         let item = try await client.createDirectory(
             parentId: .rootContainer,
             name: "new-dir",
-            mode: 0o755
+            flags: .all
         )
 
         #expect(item.name == "new-dir")

@@ -16,8 +16,8 @@ cp "$SERVER_DIR/id_ed25519" /tmp/id_ed25519
     -p "$PORT" \
     -o "PidFile $SERVER_DIR/sshd.pid" \
     -o "AuthorizedKeysFile $SERVER_DIR/id_ed25519.pub" \
-    -o "Subsystem sftp internal-sftp -d $SERVER_DIR/mount" \
-    -o "ForceCommand internal-sftp -d $SERVER_DIR/mount"
+    -o "Subsystem sftp internal-sftp -u 022 -d $SERVER_DIR/mount" \
+    -o "ForceCommand internal-sftp -u 022 -d $SERVER_DIR/mount"
 
 retries=50
 while [[ ! -f "$SERVER_DIR/sshd.pid" ]]; do

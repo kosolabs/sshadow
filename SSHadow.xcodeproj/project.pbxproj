@@ -1767,7 +1767,7 @@
 			repositoryURL = "https://github.com/kosolabs/swift-libssh.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.21.1;
+				minimumVersion = 1.21.2;
 			};
 		};
 		737720C72FBD039600FC5390 /* XCRemoteSwiftPackageReference "swift-collections" */ = {

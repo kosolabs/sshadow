@@ -30,29 +30,54 @@ private func makeItem(
 }
 
 struct ItemFlagsTests {
-    @Test func readableWritableModeIs600() {
+    @Test func readableWritableModeIs666() {
         let flags: Item.Flags = .rw
-        #expect(flags.mode == 0o600)
+        #expect(flags.mode == 0o666)
     }
 
-    @Test func readableModeIs400() {
+    @Test func readableModeIs444() {
         let flags: Item.Flags = [.readable]
-        #expect(flags.mode == 0o400)
+        #expect(flags.mode == 0o444)
     }
 
-    @Test func writableModeIs200() {
+    @Test func writableModeIs222() {
         let flags: Item.Flags = [.writable]
-        #expect(flags.mode == 0o200)
+        #expect(flags.mode == 0o222)
     }
 
-    @Test func executableModeIs100() {
+    @Test func executableModeIs111() {
         let flags: Item.Flags = [.executable]
-        #expect(flags.mode == 0o100)
+        #expect(flags.mode == 0o111)
     }
 
     @Test func emptyModeIs000() {
         let flags: Item.Flags = []
         #expect(flags.mode == 0o000)
+    }
+
+    @Test func modeWithUmask022MasksGroupAndOtherWriteBits() {
+        let flags: Item.Flags = .rw
+        #expect(flags.mode(umask: 0o022) == 0o644)
+    }
+
+    @Test func modeWithUmask022OnAllYields755() {
+        let flags: Item.Flags = .all
+        #expect(flags.mode(umask: 0o022) == 0o755)
+    }
+
+    @Test func modeWithUmask077RestrictsToOwner() {
+        let flags: Item.Flags = .all
+        #expect(flags.mode(umask: 0o077) == 0o700)
+    }
+
+    @Test func modeWithZeroUmaskIsUnchanged() {
+        let flags: Item.Flags = .rw
+        #expect(flags.mode(umask: 0o000) == flags.mode)
+    }
+
+    @Test func modeWithUmask777MasksAllBits() {
+        let flags: Item.Flags = .all
+        #expect(flags.mode(umask: 0o777) == 0o000)
     }
 
     @Test func fromMode600IsReadableWritable() {

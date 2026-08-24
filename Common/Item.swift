@@ -43,21 +43,23 @@ public struct Item: Message, CustomStringConvertible {
         public static let executable = Flags(rawValue: 1 << 0)
         public static let readable = Flags(rawValue: 1 << 1)
         public static let writable = Flags(rawValue: 1 << 2)
-        
+
         public static let all: Flags = [.executable, .readable, .writable]
         public static let rw: Flags = [.readable, .writable]
 
         public init(rawValue: UInt8) {
             self.rawValue = rawValue
         }
-        
-        public static func from(_ value: NSFileProviderFileSystemFlags?) -> Flags? {
+
+        public static func from(
+            _ value: NSFileProviderFileSystemFlags?
+        ) -> Flags? {
             guard let fpFlags = value else {
                 return nil
             }
             return Flags(from: fpFlags)
         }
-        
+
         public init(from fpFlags: NSFileProviderFileSystemFlags) {
             self = []
             if fpFlags.contains(.userExecutable) {
@@ -77,7 +79,7 @@ public struct Item: Message, CustomStringConvertible {
             }
             return Flags(from: mode_t(mode))
         }
-        
+
         public init(from mode: mode_t) {
             self = []
             if mode & S_IRUSR != 0 {
@@ -94,15 +96,19 @@ public struct Item: Message, CustomStringConvertible {
         public var mode: mode_t {
             var mode: mode_t = 0
             if contains(.readable) {
-                mode |= S_IRUSR
+                mode |= S_IRUSR | S_IRGRP | S_IROTH
             }
             if contains(.writable) {
-                mode |= S_IWUSR
+                mode |= S_IWUSR | S_IWGRP | S_IWOTH
             }
             if contains(.executable) {
-                mode |= S_IXUSR
+                mode |= S_IXUSR | S_IXGRP | S_IXOTH
             }
             return mode
+        }
+
+        public func mode(umask: mode_t) -> mode_t {
+            mode & ~umask
         }
     }
 
@@ -131,11 +137,11 @@ public struct Item: Message, CustomStringConvertible {
     public var isEnumerated: Bool {
         kind == .folder && enumeratedAt != nil
     }
-    
+
     public var contentVersion: Data {
         let fields = [
             String(modifyTime?.timeIntervalSince1970 ?? 0),
-            String(size ?? 0)
+            String(size ?? 0),
         ]
         return Data(fields.joined(separator: "-").utf8)
     }

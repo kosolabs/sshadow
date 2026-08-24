@@ -257,7 +257,7 @@ final class CoreService: Sendable, CoreXPC {
             let item = try await session.createDirectory(
                 request.name,
                 in: NSFileProviderItemIdentifier(request.parentId),
-                mode: request.mode,
+                flags: request.flags,
                 ifExists: request.ifExists
             )
             return CreateDirectoryResponse(item: item)
