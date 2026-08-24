@@ -8,7 +8,10 @@ import Testing
 @testable import CoreKit
 
 extension TestSandbox {
-    fileprivate func getSession() async throws -> Session {
+    fileprivate func getSession(
+        idleTimeProvider: @escaping Session.IdleTimeProvider =
+            SystemIdle.duration
+    ) async throws -> Session {
         let config = try config
         let (ssh, sftp) = try await SSHClient.connect(config: config)
         let db = try await DomainDB.open(
@@ -23,6 +26,7 @@ extension TestSandbox {
             sharedUrl: shared,
             changesDetectedHandler: {},
             connectionLostHandler: {},
+            idleTimeProvider: idleTimeProvider,
             transfers: Transfers()
         )
 
@@ -1929,6 +1933,153 @@ struct SessionTests {
             let expected = Data(repeating: 0xBB, count: count)
 
             #expect(actual == expected)
+        }
+    }
+
+    struct PollInterruptionTests {
+        @Test func reconcileAllThrowsWhenItsTaskIsCancelled() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "dir/file.txt")
+            let session = try await sandbox.getSession()
+
+            let task = Task { try await session.reconcileAll() }
+            task.cancel()
+
+            await #expect(throws: CancellationError.self) {
+                _ = try await task.value
+            }
+        }
+
+        @Test func reconcileWatchedThrowsWhenItsTaskIsCancelled()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir")
+            let session = try await sandbox.getSession()
+
+            let dirId = try await session.child(name: "dir")
+            await session.watch(itemId: dirId)
+
+            let task = Task { try await session.reconcileWatched() }
+            task.cancel()
+
+            await #expect(throws: CancellationError.self) {
+                _ = try await task.value
+            }
+        }
+
+        @Test func operationInterruptsRunningPoll() async throws {
+            let sandbox = TestSandbox()
+            // A tree large enough that reconcileAll is still walking the
+            // server when the operation arrives to cancel it.
+            for i in 0..<60 {
+                try sandbox.createFile(at: "dir/file\(i).txt")
+            }
+            let session = try await sandbox.getSession()
+
+            let poll = Task { try await session.pollAll() }
+            // Wait until the poll's reconcile is actually in flight.
+            while await session.reconcileTask == nil {
+                await Task.yield()
+            }
+
+            // An incoming operation cancels the in-flight poll.
+            _ = try await session.createDirectory("newdir", in: .rootContainer)
+
+            await #expect(throws: CancellationError.self) {
+                try await poll.value
+            }
+            // A cancelled poll emits no changes.
+            #expect(await session.currentAnchor == 0)
+        }
+
+        @Test func operationTracksAndReleasesOutstandingCount() async throws {
+            let sandbox = TestSandbox()
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            try Data(count: 10_485_760).write(to: uploadUrl)
+            let session = try await sandbox.getSession()
+
+            #expect(await session.outstanding == 0)
+
+            let progress = Progress()
+            let upload = Task {
+                try await session.upload(
+                    "large.dat",
+                    to: .rootContainer,
+                    file: uploadUrl,
+                    flags: .rw,
+                    progress: progress
+                )
+            }
+
+            // The operation marks the session busy while it runs.
+            while await session.outstanding == 0 {
+                await Task.yield()
+            }
+            #expect(await session.outstanding == 1)
+
+            // ... and releases the count once it finishes.
+            progress.cancel()
+            _ = try? await upload.value
+            #expect(await session.outstanding == 0)
+        }
+    }
+
+    struct TickGatingTests {
+        @Test func tickPollsWhenIdleAndUnblocked() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir")
+            let session = try await sandbox.getSession(idleTimeProvider: {
+                .zero
+            })
+
+            // A change a due poll should surface.
+            try sandbox.createFile(at: "dir/new.txt")
+
+            // A zero interval plus zero idle makes pollAll due immediately.
+            await session.start(pollInterval: .zero)
+            await session.stop()  // stop the loop; the schedule remains
+
+            try await session.tick()
+
+            #expect(await session.currentAnchor == 1)
+        }
+
+        @Test func tickSkipsPollWhileOperationOutstanding() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir")
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            try Data(count: 10_485_760).write(to: uploadUrl)
+            let session = try await sandbox.getSession(idleTimeProvider: {
+                .zero
+            })
+
+            // A change a due poll would otherwise surface.
+            try sandbox.createFile(at: "dir/new.txt")
+
+            await session.start(pollInterval: .zero)
+            await session.stop()
+
+            let progress = Progress()
+            let upload = Task {
+                try await session.upload(
+                    "large.dat",
+                    to: .rootContainer,
+                    file: uploadUrl,
+                    flags: .rw,
+                    progress: progress
+                )
+            }
+            while await session.outstanding == 0 {
+                await Task.yield()
+            }
+
+            // The poll is due, but must be skipped while the upload runs.
+            try await session.tick()
+            #expect(await session.currentAnchor == 0)
+
+            progress.cancel()
+            _ = try? await upload.value
         }
     }
 }
