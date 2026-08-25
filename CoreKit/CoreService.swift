@@ -222,13 +222,13 @@ final class CoreService: Sendable, CoreXPC {
         _ session: Session,
         _ request: SetAttributesRequest
     ) async throws -> SetAttributesResponse {
-        try await session.setAttributes(
+        let item = try await session.setAttributes(
             for: NSFileProviderItemIdentifier(request.itemId),
             flags: request.flags,
             accessTime: request.accessTime,
             modifyTime: request.modifyTime
         )
-        return SetAttributesResponse()
+        return SetAttributesResponse(item: item)
     }
 
     func createSymlink(
@@ -260,12 +260,12 @@ final class CoreService: Sendable, CoreXPC {
         _ session: Session,
         _ request: MoveRequest
     ) async throws -> MoveResponse {
-        try await session.move(
+        let item = try await session.move(
             NSFileProviderItemIdentifier(request.itemId),
             to: NSFileProviderItemIdentifier(request.newParentId),
             name: request.newName
         )
-        return MoveResponse()
+        return MoveResponse(item: item)
     }
 
     func removeFile(

@@ -226,12 +226,13 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         return (response.anchor, response.changes)
     }
 
+    @discardableResult
     public func setAttributes(
         for itemId: NSFileProviderItemIdentifier,
         flags: Item.Flags? = nil,
         accessTime: Date? = nil,
         modifyTime: Date? = nil
-    ) async throws(CoreError) {
+    ) async throws(CoreError) -> Item {
         let reply = try await perform(
             .setAttributes(
                 SetAttributesRequest(
@@ -242,9 +243,10 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
                 )
             )
         )
-        guard case .setAttributes = reply else {
+        guard case .setAttributes(let response) = reply else {
             throw CoreError.unexpectedResponse
         }
+        return response.item
     }
 
     public func createSymlink(
@@ -289,11 +291,12 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         return response.item
     }
 
+    @discardableResult
     public func move(
         _ itemId: NSFileProviderItemIdentifier,
         toParent newParentId: NSFileProviderItemIdentifier,
         name newName: String
-    ) async throws(CoreError) {
+    ) async throws(CoreError) -> Item {
         let reply = try await perform(
             .move(
                 MoveRequest(
@@ -303,9 +306,10 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
                 )
             )
         )
-        guard case .move = reply else {
+        guard case .move(let response) = reply else {
             throw CoreError.unexpectedResponse
         }
+        return response.item
     }
 
     public func removeFile(

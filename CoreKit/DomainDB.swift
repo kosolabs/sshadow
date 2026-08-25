@@ -131,10 +131,10 @@ actor DomainDB {
             item.flags = flags
         }
         if let accessTime = accessTime {
-            item.accessTime = accessTime
+            item.accessTime = accessTime.truncate()
         }
         if let modifyTime = modifyTime {
-            item.modifyTime = modifyTime
+            item.modifyTime = modifyTime.truncate()
         }
         try modelContext.save()
     }
@@ -163,9 +163,9 @@ actor DomainDB {
         let item = try model(for: id)
         item.size = size
         item.flags = flags
-        item.accessTime = accessTime
-        item.modifyTime = modifyTime
-        item.createTime = createTime
+        item.accessTime = accessTime?.truncate()
+        item.modifyTime = modifyTime?.truncate()
+        item.createTime = createTime?.truncate()
         try modelContext.save()
     }
 
@@ -187,9 +187,9 @@ actor DomainDB {
                 kind: kind,
                 size: size,
                 flags: flags,
-                accessTime: accessTime,
-                modifyTime: modifyTime,
-                createTime: createTime
+                accessTime: accessTime?.truncate(),
+                modifyTime: modifyTime?.truncate(),
+                createTime: createTime?.truncate()
             )
         )
     }
@@ -230,9 +230,9 @@ actor DomainDB {
         item.kind = kind
         item.size = size
         item.flags = flags
-        item.accessTime = accessTime
-        item.modifyTime = modifyTime
-        item.createTime = createTime
+        item.accessTime = accessTime?.truncate()
+        item.modifyTime = modifyTime?.truncate()
+        item.createTime = createTime?.truncate()
         try modelContext.save()
         return item
     }
@@ -242,5 +242,14 @@ actor DomainDB {
         modelContext.insert(item)
         try modelContext.save()
         return item
+    }
+}
+
+extension Date {
+    fileprivate func truncate() -> Date {
+        Date(
+            timeIntervalSince1970:
+                self.timeIntervalSince1970.rounded(.towardZero)
+        )
     }
 }

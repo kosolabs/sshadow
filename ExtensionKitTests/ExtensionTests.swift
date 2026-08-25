@@ -189,6 +189,8 @@ struct ExtensionTests {
                 .userReadable, .userWritable, .userExecutable,
             ]
         )
+        #expect(item.creationDate == newDate)
+        #expect(item.contentModificationDate == newDate)
         #expect(pendingFields.isEmpty)
         #expect(!shouldFetch)
         #expect(sandbox.exists(at: "parent/folder"))
@@ -269,6 +271,8 @@ struct ExtensionTests {
         #expect(item.filename == "file.txt")
         #expect(item.contentType == .text)
         #expect(item.fileSystemFlags == [.userReadable, .userWritable])
+        #expect(item.creationDate == newDate)
+        #expect(item.contentModificationDate == newDate)
         #expect(pendingFields.isEmpty)
         #expect(!shouldFetch)
         #expect(sandbox.exists(at: "parent/file.txt"))
@@ -349,6 +353,8 @@ struct ExtensionTests {
         #expect(item.filename == "file.dat")
         #expect(item.contentType == .text)
         #expect(item.fileSystemFlags == [.userReadable, .userWritable])
+        #expect(item.creationDate == newDate)
+        #expect(item.contentModificationDate == newDate)
         #expect(pendingFields.isEmpty)
         #expect(!shouldFetch)
         #expect(sandbox.exists(at: "parent/file.dat"))
@@ -431,6 +437,8 @@ struct ExtensionTests {
                 .userReadable, .userWritable, .userExecutable,
             ]
         )
+        #expect(item.creationDate == newDate)
+        #expect(item.contentModificationDate == newDate)
         #expect(pendingFields.isEmpty)
         #expect(!shouldFetch)
         #expect(try sandbox.target(of: "parent/symlink.txt") == "target.txt")
