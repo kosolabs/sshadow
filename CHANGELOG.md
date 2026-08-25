@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.2](https://github.com/kosolabs/sshadow/compare/v0.10.1...v0.10.2) (2026-08-25)
+
+
+### Bug Fixes
+
+* ensure remote poll doesn't run while other operations are outstanding ([#317](https://github.com/kosolabs/sshadow/issues/317)) ([8b5ec4e](https://github.com/kosolabs/sshadow/commit/8b5ec4e57c297fa998a63e7007283a8e2507d9aa))
+* mismatched timestamps causing spurious reconcile after uploads ([#320](https://github.com/kosolabs/sshadow/issues/320)) ([43bce49](https://github.com/kosolabs/sshadow/commit/43bce497692d32263630b98806e82612b42d46f6))
+
 ## [0.10.1](https://github.com/kosolabs/sshadow/compare/v0.10.0...v0.10.1) (2026-08-24)
 
 
