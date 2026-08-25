@@ -308,7 +308,11 @@ public struct SetAttributesRequest: Message, PrettyDescribable {
 }
 
 public struct SetAttributesResponse: Message, PrettyDescribable {
-    public init() {}
+    let item: Item
+
+    public init(item: Item) {
+        self.item = item
+    }
 }
 
 public struct CreateSymlinkRequest: Message, PrettyDescribable {
@@ -379,7 +383,11 @@ public struct MoveRequest: Message, PrettyDescribable {
 }
 
 public struct MoveResponse: Message, PrettyDescribable {
-    public init() {}
+    let item: Item
+
+    public init(item: Item) {
+        self.item = item
+    }
 }
 
 public struct RemoveFileRequest: Message, PrettyDescribable {

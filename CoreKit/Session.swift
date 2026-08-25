@@ -465,12 +465,13 @@ actor Session {
         try await db.markEnumerated(itemId)
     }
 
+    @discardableResult
     func setAttributes(
         for itemId: NSFileProviderItemIdentifier,
         flags: Item.Flags? = nil,
         accessTime: Date? = nil,
         modifyTime: Date? = nil
-    ) async throws {
+    ) async throws -> Item {
         outstanding += 1
         reconcileTask?.cancel()
         defer { outstanding -= 1 }
@@ -496,6 +497,7 @@ actor Session {
             accessTime: accessTime,
             modifyTime: modifyTime
         )
+        return try await item(for: itemId)
     }
 
     func createSymlink(
@@ -546,11 +548,12 @@ actor Session {
         return try await record(name, in: parentId, kind: .folder)
     }
 
+    @discardableResult
     func move(
         _ itemId: NSFileProviderItemIdentifier,
         to newParentId: NSFileProviderItemIdentifier,
         name newName: String
-    ) async throws {
+    ) async throws -> Item {
         outstanding += 1
         reconcileTask?.cancel()
         defer { outstanding -= 1 }
@@ -574,6 +577,7 @@ actor Session {
         }
         try await refresh(newParentId)
         try await db.move(itemId, toParent: newParentId, name: newName)
+        return try await item(for: itemId)
     }
 
     func removeFile(
@@ -798,6 +802,29 @@ actor Session {
             createTime: attrs.createTime
         )
     }
+    
+    private func attributes(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> SFTPAttributes {
+        try await mapError(with: itemId) {
+            try await sftp.attributes(
+                at: path(for: itemId),
+                followSymlinks: false
+            )
+        }
+    }
+
+    private func attributes(
+        for name: String,
+        in parentId: NSFileProviderItemIdentifier
+    ) async throws -> SFTPAttributes {
+        try await mapError(with: parentId) {
+            try await sftp.attributes(
+                at: path(for: name, in: parentId),
+                followSymlinks: false
+            )
+        }
+    }
 
     private func create(file url: URL) throws {
         if !FileManager.default.fileExists(atPath: url.path()) {
@@ -866,29 +893,6 @@ actor Session {
             }
         } catch CoreError.itemNotFound where itemId == .trashContainer {
             return try await perform(SSHItem.EmptyStream())
-        }
-    }
-
-    private func attributes(
-        for itemId: NSFileProviderItemIdentifier
-    ) async throws -> SFTPAttributes {
-        try await mapError(with: itemId) {
-            try await sftp.attributes(
-                at: path(for: itemId),
-                followSymlinks: false
-            )
-        }
-    }
-
-    private func attributes(
-        for name: String,
-        in parentId: NSFileProviderItemIdentifier
-    ) async throws -> SFTPAttributes {
-        try await mapError(with: parentId) {
-            try await sftp.attributes(
-                at: path(for: name, in: parentId),
-                followSymlinks: false
-            )
         }
     }
 

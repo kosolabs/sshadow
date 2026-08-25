@@ -191,7 +191,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         let filename = item.filename
         var remaining = fields.subtracting(.nameFields)
         let steps = progress.steps()
-        var createdItem: Item?
+        var itemId = item.itemIdentifier
 
         if item.contentType == .symbolicLink,
             remaining.intersects(with: .writeFields),
@@ -200,23 +200,28 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             remaining.subtract([.contents])
 
             steps.add {
-                createdItem = try await self.client.createSymlink(
+                let item = try await self.client.createSymlink(
                     parentId: parentId,
                     name: filename,
                     target: target
                 )
+                itemId = item.id
             }
         }
 
         if item.contentType == .folder {
-            let flags = Item.Flags.from(item.fileSystemFlags) ?? .all
+            let fileSystemFlags =
+                remaining.contains(.fileSystemFlags)
+                ? item.fileSystemFlags ?? [] : []
             remaining.subtract([.fileSystemFlags])
+
             steps.add {
-                createdItem = try await self.client.createDirectory(
+                let item = try await self.client.createDirectory(
                     parentId: parentId,
                     name: filename,
-                    flags: flags
+                    flags: .init(from: fileSystemFlags)
                 )
+                itemId = item.id
             }
         }
 
@@ -233,13 +238,14 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             remaining.subtract([.fileSystemFlags, .contents])
 
             steps.add(weight: fileTransferUnits) { subprogress in
-                createdItem = try await self.client.upload(
+                let item = try await self.client.upload(
                     parentId: parentId,
                     name: filename,
                     file: url,
                     flags: .init(from: fileSystemFlags),
                     progress: subprogress
                 )
+                itemId = item.id
             }
         }
 
@@ -247,7 +253,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             let attrs = remaining
             remaining.subtract(.attrFields)
             steps.add {
-                try await self.setAttributes(item, fields: attrs)
+                let item = try await self.setAttributes(item, fields: attrs)
+                itemId = item.id
             }
         }
 
@@ -256,7 +263,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         }
 
         try await steps.execute()
-        return (FPItem(item: createdItem!), [], false)
+
+        let item = try await self.item(for: itemId)
+        return (item, [], false)
     }
 
     public func modifyItem(
@@ -340,7 +349,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         if remaining.intersects(with: .nameFields) {
             remaining.subtract(.nameFields)
             steps.add {
-                try await self.client.move(
+                _ = try await self.client.move(
                     item.itemIdentifier,
                     toParent: item.parentId,
                     name: item.filename
@@ -351,7 +360,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         if remaining.intersects(with: .attrFields) {
             remaining.subtract(.attrFields)
             steps.add {
-                try await self.setAttributes(item, fields: changedFields)
+                _ = try await self.setAttributes(
+                    item,
+                    fields: changedFields
+                )
             }
         }
 
@@ -359,13 +371,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             logger.fault("Unhandled fields: \(remaining.desc)")
         }
 
-        var modifiedItem: NSFileProviderItem?
-        steps.add {
-            modifiedItem = try await self.item(for: item.itemIdentifier)
-        }
-
         try await steps.execute()
-        return (modifiedItem, [], false)
+
+        let item = try await self.item(for: item.itemIdentifier)
+        return (item, [], false)
     }
 
     public func deleteItem(
@@ -423,7 +432,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     private func setAttributes(
         _ item: NSFileProviderItem,
         fields: NSFileProviderItemFields
-    ) async throws {
+    ) async throws -> Item {
         try await client.setAttributes(
             for: client.child(of: item.parentId, name: item.filename),
             flags: fields.contains(.fileSystemFlags)
