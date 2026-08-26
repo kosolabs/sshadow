@@ -6,5 +6,3 @@ xcuserdata/
 .env
 
 # Temp
-sshd.pid
-sshd.log

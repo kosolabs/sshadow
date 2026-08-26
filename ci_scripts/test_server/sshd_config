@@ -1,6 +1,16 @@
+Port 2222
+
+ListenAddress 127.0.0.1
+ListenAddress ::1
+
 StrictModes no
-UsePAM no
-PasswordAuthentication no
+
+UsePAM yes
+PasswordAuthentication yes
 PubkeyAuthentication yes
-LogLevel DEBUG
-Match User *
+KbdInteractiveAuthentication no
+GSSAPIAuthentication no
+
+Subsystem sftp internal-sftp -u 022
+
+LogLevel VERBOSE
