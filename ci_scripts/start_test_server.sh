@@ -16,8 +16,8 @@ PORT=$(awk '/^Port /{print $2}' "$SERVER_DIR/sshd_config")
 mkdir -p "$RUNTIME_DIR"
 chmod 700 "$RUNTIME_DIR"
 
-if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-    echo "✅ Reusing SSH Server on port $PORT with PID $(cat "$PID_FILE")"
+if nc -z 127.0.0.1 "$PORT" 2>/dev/null; then
+    echo "✅ Reusing SSH Server already listening on port $PORT"
     exit 0
 fi
 
