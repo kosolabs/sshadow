@@ -139,6 +139,7 @@ private func waitUntilOnline(
     Issue.record("Supervisor did not come online within \(timeout)")
 }
 
+@Suite(.serialized)
 struct SessionSupervisorTests {
     @Test func withSessionThrowsWhenOffline() async throws {
         let sandbox = TestSandbox()
