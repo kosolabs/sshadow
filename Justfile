@@ -1,6 +1,6 @@
 set dotenv-load
 
-start-test-server: stop-test-server
+start-test-server:
     ./ci_scripts/start_test_server.sh
 
 stop-test-server:

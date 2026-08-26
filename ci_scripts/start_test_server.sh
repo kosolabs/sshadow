@@ -1,34 +1,47 @@
 #!/bin/zsh
+#
+# Keep byte for byte identical to the copy in the other repo -- swift-libssh and
+# sshadow share one server.
 
 set -e
 
-PORT="${PORT:-2248}"
 SERVER_DIR="${0:a:h}/test_server"
+USER_NAME=$(id -un)
+RUNTIME_DIR="/tmp/ssh-test-server-$USER_NAME"
+HOST_KEY="$RUNTIME_DIR/host_key_ed25519"
+PID_FILE="$RUNTIME_DIR/sshd.pid"
+LOG_FILE="$RUNTIME_DIR/sshd.log"
+PORT=$(awk '/^Port /{print $2}' "$SERVER_DIR/sshd_config")
 
-chmod 600 "$SERVER_DIR/host_key_ed25519"
-chmod 600 "$SERVER_DIR/id_ed25519"
-cp "$SERVER_DIR/id_ed25519" /tmp/id_ed25519
+mkdir -p "$RUNTIME_DIR"
+chmod 700 "$RUNTIME_DIR"
+
+if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+    echo "✅ Reusing SSH Server on port $PORT with PID $(cat "$PID_FILE")"
+    exit 0
+fi
+
+if [[ ! -f "$HOST_KEY" ]]; then
+    ssh-keygen -q -t ed25519 -N '' -C 'test server' -f "$HOST_KEY"
+fi
+
+rm -f "$LOG_FILE" "$PID_FILE"
 
 /usr/sbin/sshd \
     -f "$SERVER_DIR/sshd_config" \
-    -E "$SERVER_DIR/sshd.log" \
-    -h "$SERVER_DIR/host_key_ed25519" \
-    -p "$PORT" \
-    -o "PidFile $SERVER_DIR/sshd.pid" \
-    -o "AuthorizedKeysFile $SERVER_DIR/id_ed25519.pub" \
-    -o "Subsystem sftp internal-sftp -u 022 -d $SERVER_DIR/mount" \
-    -o "ForceCommand internal-sftp -u 022 -d $SERVER_DIR/mount"
+    -E "$LOG_FILE" \
+    -h "$HOST_KEY" \
+    -o "PidFile $PID_FILE" \
+    -o "AuthorizedKeysFile $SERVER_DIR/authorized_keys"
 
 retries=50
-while [[ ! -f "$SERVER_DIR/sshd.pid" ]]; do
+while [[ ! -f "$PID_FILE" ]]; do
     if (( retries-- == 0 )); then
         echo "❌ Failed to start SSH server: PID file not found after waiting."
-        cat "$SERVER_DIR/sshd.log"
+        cat "$LOG_FILE"
         exit 1
     fi
     sleep 0.1
 done
 
-PID=$(cat "$SERVER_DIR/sshd.pid")
-
-echo "✅ SSH Server started on port $PORT with PID $PID"
+echo "✅ SSH Server started on port $PORT as $USER_NAME with PID $(cat "$PID_FILE")"

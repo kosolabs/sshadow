@@ -19,6 +19,9 @@ jobs:
     - name: Check MARKETING_VERSION wiring
       run: ./ci_scripts/check_config.sh
 
+    - name: Allow the runner account to log in over SSH
+      run: sudo dseditgroup -o edit -a "$USER" -t user com.apple.access_ssh
+
     - name: Start SSH test server
       run: ./ci_scripts/start_test_server.sh
 

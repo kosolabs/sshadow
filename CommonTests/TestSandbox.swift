@@ -47,7 +47,7 @@ class TestSandbox {
         self.id = UUID()
         self.name = "test"
         self.host = "localhost"
-        self.port = 2248
+        self.port = 2222
         self.user = NSUserName()
 
         self.root = FileManager.default.temporaryDirectory
