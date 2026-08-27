@@ -46,7 +46,6 @@ extension Enumerator {
     }
 }
 
-@Suite(.serialized)
 struct EnumeratorTests {
     @Test func enumerateFolderReturnsChildren() async throws {
         // ls enumerator-list
