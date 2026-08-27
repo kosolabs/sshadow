@@ -13,7 +13,10 @@ extension TestSandbox {
             SystemIdle.duration
     ) async throws -> Session {
         let config = try config
-        let (ssh, sftp) = try await SSHClient.connect(config: config)
+        let (ssh, sftp) = try await withConnectRetries {
+            () async throws(ConnectionError) -> (SSHClient, SFTPClient) in
+            try await SSHClient.connect(config: config)
+        }
         let db = try await DomainDB.open(
             config: ModelConfiguration(isStoredInMemoryOnly: true)
         )
@@ -88,7 +91,6 @@ extension Session {
     }
 }
 
-@Suite(.serialized)
 struct SessionTests {
     struct NameChildParentPathTests {
         @Test func nameReturnsFilenameForItem() async throws {

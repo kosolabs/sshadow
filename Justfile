@@ -7,7 +7,7 @@ stop-test-server:
     ./ci_scripts/stop_test_server.sh
 
 test: start-test-server
-    xcodebuild test -scheme SSHadow -testPlan UnitTests -destination 'platform=macOS' -retry-tests-on-failure -test-iterations 3
+    xcodebuild test -scheme SSHadow -testPlan UnitTests -destination 'platform=macOS'
 
 log:
     log stream --predicate 'subsystem beginswith "com.kosolabs.SSHadow"' --style ndjson --level debug | jq -R -r --unbuffered -f logfilter.jq

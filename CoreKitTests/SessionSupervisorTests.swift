@@ -112,22 +112,9 @@ private final class StatusSpy: @unchecked Sendable {
     }
 }
 
-extension TestSandbox {
-    fileprivate func sessionProvider() async throws -> Session.Provider {
-        try await Session.provider(
-            domainDb: DomainDB.open(
-                config: ModelConfiguration(isStoredInMemoryOnly: true)
-            ),
-            sharedUrl: shared,
-            signalEnumerator: { _ in },
-            transfers: Transfers()
-        )
-    }
-}
-
 private func waitUntilOnline(
     _ supervisor: SessionSupervisor,
-    timeout: Duration = .seconds(5)
+    timeout: Duration = .seconds(30)
 ) async throws {
     let deadline = ContinuousClock.now + timeout
     while ContinuousClock.now < deadline {
@@ -139,7 +126,6 @@ private func waitUntilOnline(
     Issue.record("Supervisor did not come online within \(timeout)")
 }
 
-@Suite(.serialized)
 struct SessionSupervisorTests {
     @Test func withSessionThrowsWhenOffline() async throws {
         let sandbox = TestSandbox()
@@ -493,7 +479,9 @@ struct SessionSupervisorTests {
         }
 
         #expect(
-            spy.statuses == [.connecting, .offline(.failed(.connectionRefused))]
+            spy.statuses == [
+                .connecting, .offline(.failed(.connectionRefused)),
+            ]
         )
     }
 

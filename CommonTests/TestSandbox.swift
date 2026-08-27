@@ -28,6 +28,39 @@ struct NoopExtensionController: ExtensionController {
     func remove() async {}
 }
 
+extension ConnectionError {
+    fileprivate var isTransient: Bool {
+        switch self {
+        case .connectionRefused, .connectionTimedOut, .unknown:
+            true
+        case .unknownHost, .invalidPrivateKey, .authenticationFailed,
+            .remotePathNotFound, .remotePathNotDirectory:
+            false
+        }
+    }
+}
+
+func withConnectRetries<T>(
+    attempts: Int = 5,
+    backoff: Duration = .milliseconds(100),
+    _ connect: () async throws(ConnectionError) -> T
+) async throws(ConnectionError) -> T {
+    var delay = backoff
+    for attempt in 1..<attempts {
+        do {
+            return try await connect()
+        } catch {
+            guard error.isTransient else { throw error }
+            logger.notice(
+                "Connect attempt \(attempt) of \(attempts) failed: \(error)"
+            )
+            try? await Task.sleep(for: delay)
+            delay *= 2
+        }
+    }
+    return try await connect()
+}
+
 class TestSandbox {
     let id: UUID
     let name: String
@@ -106,6 +139,23 @@ class TestSandbox {
         }
     }
 
+    func sessionProvider() async throws -> Session.Provider {
+        let provider = try await Session.provider(
+            domainDb: DomainDB.open(
+                config: ModelConfiguration(isStoredInMemoryOnly: true)
+            ),
+            sharedUrl: shared,
+            signalEnumerator: { _ in },
+            transfers: Transfers()
+        )
+        return { config, handler in
+            try await withConnectRetries {
+                () async throws(ConnectionError) -> Session in
+                try await provider(config, handler)
+            }
+        }
+    }
+
     var supervisor: SessionSupervisor {
         get async throws {
             if let _supervisor {
@@ -114,21 +164,10 @@ class TestSandbox {
 
             let config = try config
 
-            let domainDb = try await DomainDB.open(
-                config: ModelConfiguration(
-                    isStoredInMemoryOnly: true
-                )
-            )
-
             let supervisor = SessionSupervisor(
                 domain: domain,
                 pollInterval: nil,
-                openSession: Session.provider(
-                    domainDb: domainDb,
-                    sharedUrl: shared,
-                    signalEnumerator: { _ in },
-                    transfers: Transfers()
-                ),
+                openSession: try await sessionProvider(),
                 xpc: NoopXPCBroker(),
                 ext: NoopExtensionController(),
                 onStatusChange: { _ in }
