@@ -17,14 +17,14 @@ public actor DomainRegistry {
             )
         },
         connections: Connections.shared,
-        transfers: Transfers.shared,
+        activities: Activities.shared,
         pollInterval: .seconds(300),
     )
 
     private let sharedUrl: URL
     private let signalEnumerator: EnumeratorSignal
     private let connections: Connections
-    private let transfers: Transfers
+    private let activities: Activities
     private let pollInterval: Duration?
 
     private var supervisors: [UUID: SessionSupervisor] = [:]
@@ -33,13 +33,13 @@ public actor DomainRegistry {
         sharedUrl: URL = SSHadow.groupUrl,
         signalEnumerator: @escaping EnumeratorSignal,
         connections: Connections,
-        transfers: Transfers,
+        activities: Activities,
         pollInterval: Duration? = nil
     ) {
         self.sharedUrl = sharedUrl
         self.signalEnumerator = signalEnumerator
         self.connections = connections
-        self.transfers = transfers
+        self.activities = activities
         self.pollInterval = pollInterval
     }
 
@@ -59,7 +59,7 @@ public actor DomainRegistry {
                 domainDb: domainDb,
                 sharedUrl: sharedUrl,
                 signalEnumerator: signalEnumerator,
-                transfers: transfers
+                activities: activities
             ),
             onStatusChange: { status in
                 self.connections.update(status, for: domain.id)

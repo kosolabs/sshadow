@@ -22,7 +22,7 @@ actor Session {
     private let changesDetectedHandler: ChangesDetectedHandler
     private let connectionLostHandler: ConnectionLostHandler
     private let idleTimeProvider: IdleTimeProvider
-    private let transfers: Transfers
+    private let activities: Activities
 
     private lazy var cache = FileCache(read: read)
 
@@ -38,7 +38,7 @@ actor Session {
         domainDb: DomainDB,
         sharedUrl: URL,
         signalEnumerator: @escaping DomainRegistry.EnumeratorSignal,
-        transfers: Transfers
+        activities: Activities
     ) -> Provider {
         { config, handler in
             let (ssh, sftp) = try await SSHClient.connect(config: config)
@@ -51,7 +51,7 @@ actor Session {
                 changesDetectedHandler: { try await signalEnumerator(config) },
                 connectionLostHandler: handler,
                 idleTimeProvider: SystemIdle.duration,
-                transfers: transfers
+                activities: activities
             )
         }
     }
@@ -65,7 +65,7 @@ actor Session {
         changesDetectedHandler: @escaping ChangesDetectedHandler,
         connectionLostHandler: @escaping ConnectionLostHandler,
         idleTimeProvider: @escaping IdleTimeProvider,
-        transfers: Transfers,
+        activities: Activities,
     ) {
         self.config = config
         self.ssh = ssh
@@ -75,7 +75,7 @@ actor Session {
         self.changesDetectedHandler = changesDetectedHandler
         self.connectionLostHandler = connectionLostHandler
         self.idleTimeProvider = idleTimeProvider
-        self.transfers = transfers
+        self.activities = activities
 
         let dbConfig = db.modelContainer.configurations.first
         let dbPath = dbConfig?.url.path ?? "in-memory"
@@ -632,11 +632,11 @@ actor Session {
         progress.kind = .file
         progress.fileOperationKind = .uploading
 
-        let transfer = await transfers.begin(
+        let transfer = await activities.begin(
             name: name,
             progress: progress
         )
-        defer { transfers.end(transfer: transfer) }
+        defer { activities.end(transfer: transfer) }
 
         let estimator = ThroughputEstimator(
             progress: progress,
@@ -691,11 +691,11 @@ actor Session {
         progress.kind = .file
         progress.fileOperationKind = .downloading
 
-        let transfer = await transfers.begin(
+        let transfer = await activities.begin(
             name: item.name,
             progress: progress
         )
-        defer { transfers.end(transfer: transfer) }
+        defer { activities.end(transfer: transfer) }
 
         let estimator = ThroughputEstimator(
             progress: progress,

@@ -2,19 +2,15 @@ import Foundation
 
 @MainActor
 @Observable
-public final class Transfers {
-    nonisolated public static let shared: Transfers = Transfers()
+public final class Activities {
+    nonisolated public static let shared: Activities = Activities()
 
-    private var transfers: [Transfer] = []
+    public private(set) var transfers: [Transfer] = []
 
     nonisolated public init() {}
     
-    public var value: [Transfer] {
-        transfers
-    }
-
-    public var isEmpty: Bool {
-        transfers.isEmpty
+    public var isBusy: Bool {
+        !transfers.isEmpty
     }
 
     public func begin(name: String, progress: Progress) -> Transfer {
