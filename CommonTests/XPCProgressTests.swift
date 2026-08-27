@@ -66,6 +66,28 @@ struct XPCProgressTests {
         withExtendedLifetime((source, sink)) {}
     }
 
+    @Test func flushDeliversTerminalCounts() async throws {
+        let sinkProgress = Progress()
+        let sink = XPCProgressSubscriber(progress: sinkProgress)
+
+        let sourceProgress = Progress()
+        let source = XPCProgressPublisher(
+            progress: sourceProgress,
+            endpoint: sink.endpoint
+        )
+
+        sourceProgress.totalUnitCount = 100
+        sourceProgress.completedUnitCount = 100
+
+        await source.confirmDelivery()
+
+        #expect(sinkProgress.totalUnitCount == 100)
+        #expect(sinkProgress.completedUnitCount == 100)
+        #expect(sinkProgress.isFinished)
+
+        withExtendedLifetime((source, sink)) {}
+    }
+
     @Test func sinkCancellationCancelsSourceProgress() async throws {
         let sinkProgress = Progress()
         let sink = XPCProgressSubscriber(progress: sinkProgress)
@@ -86,5 +108,19 @@ struct XPCProgressTests {
         #expect(sourceProgress.isCancelled)
 
         withExtendedLifetime((source, sink)) {}
+    }
+}
+
+private func poll(
+    timeout: Duration = .seconds(2),
+    condition: @escaping () -> Bool
+) async throws {
+    let deadline = ContinuousClock.now + timeout
+    while !condition() {
+        guard ContinuousClock.now < deadline else {
+            #expect(Bool(false), "Timed out waiting for condition")
+            return
+        }
+        try await Task.sleep(for: .milliseconds(10))
     }
 }

@@ -4,7 +4,6 @@ import Testing
 
 @testable import Common
 
-@Suite(.serialized)
 struct CoreClientTests {
     @Test func nameAndChildAndParentSucceed() async throws {
         let sandbox = TestSandbox()

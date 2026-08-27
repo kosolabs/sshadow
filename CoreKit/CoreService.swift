@@ -308,6 +308,7 @@ final class CoreService: Sendable, CoreXPC {
             flags: request.flags,
             progress: sync.progress
         )
+        await sync.confirmDelivery()
         return UploadResponse(item: item)
     }
 
@@ -321,6 +322,7 @@ final class CoreService: Sendable, CoreXPC {
             itemId: NSFileProviderItemIdentifier(request.itemId),
             progress: sync.progress
         )
+        await sync.confirmDelivery()
         return DownloadResponse(url: url, item: item)
     }
 
@@ -335,6 +337,7 @@ final class CoreService: Sendable, CoreXPC {
             range: request.range,
             progress: sync.progress
         )
+        await sync.confirmDelivery()
         return StreamResponse(url: url, range: range)
     }
 }

@@ -16,7 +16,6 @@ extension TestSandbox {
     }
 }
 
-@Suite(.serialized)
 struct ExtensionTests {
     @Test(arguments: [
         CoreError.serviceUnreachable,
@@ -60,7 +59,6 @@ struct ExtensionTests {
         #expect(item.documentSize??.intValue == contents.count)
         #expect(item.fileSystemFlags == [.userReadable, .userWritable])
         #expect(try String(contentsOf: url, encoding: .utf8) == contents)
-        try await poll { readProgress.isFinished }
         #expect(readProgress.isFinished)
     }
 
@@ -83,7 +81,6 @@ struct ExtensionTests {
         #expect(item.filename == "large-file.dat")
         #expect(item.documentSize??.intValue == data.count)
         #expect(try Data(contentsOf: url) == data)
-        try await poll { readProgress.isFinished }
         #expect(readProgress.isFinished)
     }
 
@@ -122,7 +119,6 @@ struct ExtensionTests {
         }
 
         #expect(actual == expected)
-        try await poll { readProgress.isFinished }
         #expect(readProgress.isFinished)
     }
 

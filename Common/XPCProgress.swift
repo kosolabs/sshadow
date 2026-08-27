@@ -5,6 +5,11 @@ private let logger = Logger(category: "XPCProgress")
 @objc private protocol XPCProgressProtocol {
     func setTotalUnitCount(_ count: Int64)
     func setCompletedUnitCount(_ count: Int64)
+    func setFinalCounts(
+        total: Int64,
+        completed: Int64,
+        confirmed: @escaping () -> Void
+    )
 }
 
 public final class XPCProgressPublisher {
@@ -27,24 +32,19 @@ public final class XPCProgressPublisher {
         }
         connection.resume()
 
-        var observers: [NSKeyValueObservation] = []
+        let proxy = proxy(for: connection, operation: "update")
 
-        if let sink = connection.remoteObjectProxyWithErrorHandler({ error in
-            logger.error("Progress update failed: \(error)")
-        }) as? XPCProgressProtocol {
-            observers.append(
-                progress.observe(\.totalUnitCount) { p, _ in
-                    sink.setTotalUnitCount(p.totalUnitCount)
-                }
-            )
-            observers.append(
-                progress.observe(\.completedUnitCount) { p, _ in
-                    sink.setCompletedUnitCount(p.completedUnitCount)
-                }
-            )
-        } else {
-            logger.error("Progress proxy has unexpected type")
-        }
+        var observers: [NSKeyValueObservation] = []
+        observers.append(
+            progress.observe(\.totalUnitCount) { p, _ in
+                proxy.setTotalUnitCount(p.totalUnitCount)
+            }
+        )
+        observers.append(
+            progress.observe(\.completedUnitCount) { p, _ in
+                proxy.setCompletedUnitCount(p.completedUnitCount)
+            }
+        )
 
         self.progress = progress
         self.connection = connection
@@ -57,6 +57,36 @@ public final class XPCProgressPublisher {
         }
         connection.invalidate()
     }
+
+    public func confirmDelivery() async {
+        await withCheckedContinuation { continuation in
+            let proxy = proxy(
+                for: connection,
+                operation: "delivery confirmation",
+                onError: { _ in continuation.resume() }
+            )
+
+            proxy.setFinalCounts(
+                total: progress.totalUnitCount,
+                completed: progress.completedUnitCount,
+                confirmed: { continuation.resume() }
+            )
+        }
+    }
+}
+
+private func proxy(
+    for connection: NSXPCConnection,
+    operation: String,
+    onError handler: @escaping @Sendable (any Error) -> Void = { _ in }
+) -> XPCProgressProtocol {
+    if let proxy = connection.remoteObjectProxyWithErrorHandler({ error in
+        logger.error("Progress \(operation) failed: \(error)")
+        handler(error)
+    }) as? XPCProgressProtocol {
+        return proxy
+    }
+    logger.fatal("Progress proxy has unexpected type")
 }
 
 public final class XPCProgressSubscriber: NSObject, NSXPCListenerDelegate,
@@ -105,5 +135,15 @@ public final class XPCProgressSubscriber: NSObject, NSXPCListenerDelegate,
 
     public func setCompletedUnitCount(_ count: Int64) {
         progress.completedUnitCount = count
+    }
+
+    public func setFinalCounts(
+        total: Int64,
+        completed: Int64,
+        confirmed: @escaping () -> Void
+    ) {
+        progress.totalUnitCount = total
+        progress.completedUnitCount = completed
+        confirmed()
     }
 }
