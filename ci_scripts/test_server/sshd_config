@@ -13,4 +13,7 @@ GSSAPIAuthentication no
 
 Subsystem sftp internal-sftp -u 022
 
+MaxStartups 200
+PerSourcePenalties no
+
 LogLevel VERBOSE
