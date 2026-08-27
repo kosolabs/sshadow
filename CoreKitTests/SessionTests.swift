@@ -88,6 +88,7 @@ extension Session {
     }
 }
 
+@Suite(.serialized)
 struct SessionTests {
     struct NameChildParentPathTests {
         @Test func nameReturnsFilenameForItem() async throws {
