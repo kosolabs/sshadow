@@ -50,9 +50,7 @@ public actor DomainRegistry {
             return supervisor
         }
 
-        let domainDb = try await DomainDB.open(
-            config: DomainDB.model(for: domain.id)
-        )
+        let domainDb = try await DomainDB.open(domainId: domain.id)
 
         let supervisor = SessionSupervisor(
             domain: domain,
