@@ -7,29 +7,33 @@ private let logger = Logger(category: "DomainDB")
 
 @ModelActor
 actor DomainDB {
+    private static let factory = Factory()
+
+    private actor Factory {
+        func open(config: ModelConfiguration) async throws -> DomainDB {
+            let db = try DomainDB(
+                modelContainer: ModelContainer(
+                    for: Schema([ItemModel.self]),
+                    configurations: config
+                )
+            )
+            try await db.configure()
+            return db
+        }
+    }
+
+    static func open(domainId: UUID) async throws -> DomainDB {
+        try await open(config: ModelConfiguration(url: url(for: domainId)))
+    }
+
+    static func open(config: ModelConfiguration) async throws -> DomainDB {
+        try await factory.open(config: config)
+    }
+
     private static func url(for id: UUID) -> URL {
         SSHadow.groupUrl.appendingPathComponent(
             "DomainDB-\(id.uuidString).store"
         )
-    }
-
-    static func model(for id: UUID) -> ModelConfiguration {
-        ModelConfiguration(url: url(for: id))
-    }
-
-    @discardableResult
-    static func open(
-        config: ModelConfiguration
-    ) async throws -> DomainDB {
-        let schema = Schema([ItemModel.self])
-        let db = try DomainDB(
-            modelContainer: ModelContainer(
-                for: schema,
-                configurations: config
-            )
-        )
-        try await db.configure()
-        return db
     }
 
     private func configure() throws {

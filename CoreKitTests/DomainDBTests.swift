@@ -431,4 +431,18 @@ struct DomainDBTests {
         #expect(firstRow.name == "a.txt")
         #expect(secondRow.name == "b.txt")
     }
+
+    @Test func concurrentOpensDoNotCrash() async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<64 {
+                group.addTask {
+                    let db = try await DomainDB.open(
+                        config: ModelConfiguration(isStoredInMemoryOnly: true)
+                    )
+                    #expect(try await db.exists(id: .rootContainer))
+                }
+            }
+            try await group.waitForAll()
+        }
+    }
 }
