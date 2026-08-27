@@ -753,6 +753,10 @@ actor Session {
         )
 
         for chunk in slice {
+            if progress.isCancelled {
+                logger.info("Stream \(slice) cancelled")
+                throw CoreError.userCancelled
+            }
             let data = try await cache.fetch(chunk)
             try handle.seek(toOffset: chunk.byteRange.lowerBound)
             try handle.write(contentsOf: data)

@@ -1937,6 +1937,25 @@ struct SessionTests {
 
             #expect(actual == expected)
         }
+
+        @Test func streamCancelledThrowsUserCancelled() async throws {
+            let sandbox = TestSandbox()
+            let data = Data(repeating: 0xAB, count: Int(chunkSize))
+            try sandbox.createFile(at: "cancel.dat", data: data)
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.child(name: "cancel.dat")
+            let progress = Progress()
+            progress.cancel()
+
+            await #expect(throws: CoreError.userCancelled) {
+                _ = try await session.stream(
+                    itemId: itemId,
+                    range: 0..<1,
+                    progress: progress
+                )
+            }
+        }
     }
 
     struct PollInterruptionTests {
