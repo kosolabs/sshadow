@@ -20,23 +20,34 @@ public final class XPCProgressPublisher {
         connection.remoteObjectInterface = NSXPCInterface(
             with: XPCProgressProtocol.self
         )
-        connection.invalidationHandler = { progress.cancel() }
-        connection.interruptionHandler = { progress.cancel() }
+        connection.invalidationHandler = {
+            logger.info("Progress XPC invalidated")
+            progress.cancel()
+        }
+        connection.interruptionHandler = {
+            logger.info("Progress XPC interrupted")
+            progress.cancel()
+        }
         connection.resume()
 
-        let sink = connection.remoteObjectProxy as? XPCProgressProtocol
-
         var observers: [NSKeyValueObservation] = []
-        observers.append(
-            progress.observe(\.totalUnitCount) { p, _ in
-                sink?.setTotalUnitCount(p.totalUnitCount)
-            }
-        )
-        observers.append(
-            progress.observe(\.completedUnitCount) { p, _ in
-                sink?.setCompletedUnitCount(p.completedUnitCount)
-            }
-        )
+
+        if let sink = connection.remoteObjectProxyWithErrorHandler({ error in
+            logger.error("Progress update failed: \(error)")
+        }) as? XPCProgressProtocol {
+            observers.append(
+                progress.observe(\.totalUnitCount) { p, _ in
+                    sink.setTotalUnitCount(p.totalUnitCount)
+                }
+            )
+            observers.append(
+                progress.observe(\.completedUnitCount) { p, _ in
+                    sink.setCompletedUnitCount(p.completedUnitCount)
+                }
+            )
+        } else {
+            logger.error("Progress proxy has unexpected type")
+        }
 
         self.progress = progress
         self.connection = connection
@@ -63,6 +74,7 @@ public final class XPCProgressSubscriber: NSObject, NSXPCListenerDelegate,
         super.init()
 
         progress.cancellationHandler = {
+            logger.info("Progress cancelled; tearing down listener")
             self.listener.invalidate()
         }
 
@@ -86,6 +98,10 @@ public final class XPCProgressSubscriber: NSObject, NSXPCListenerDelegate,
             with: XPCProgressProtocol.self
         )
         connection.exportedObject = self
+        connection.invalidationHandler = {
+            logger.info("Progress publisher disconnected")
+        }
+        connection.interruptionHandler = { connection.invalidate() }
         connection.resume()
         return true
     }
