@@ -20,10 +20,7 @@ public final class XPCProgressPublisher {
         connection.remoteObjectInterface = NSXPCInterface(
             with: XPCProgressProtocol.self
         )
-        connection.invalidationHandler = {
-            logger.info("Progress XPC invalidated")
-            progress.cancel()
-        }
+        connection.invalidationHandler = { progress.cancel() }
         connection.interruptionHandler = {
             logger.info("Progress XPC interrupted")
             progress.cancel()
@@ -98,10 +95,6 @@ public final class XPCProgressSubscriber: NSObject, NSXPCListenerDelegate,
             with: XPCProgressProtocol.self
         )
         connection.exportedObject = self
-        connection.invalidationHandler = {
-            logger.info("Progress publisher disconnected")
-        }
-        connection.interruptionHandler = { connection.invalidate() }
         connection.resume()
         return true
     }
