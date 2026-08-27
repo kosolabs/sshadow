@@ -6,7 +6,7 @@ import SwiftUI
 
 struct RichMenuMainView: View {
     @Environment(Connections.self) private var connections
-    @Environment(Transfers.self) private var transfers
+    @Environment(Activities.self) private var activities
     @Environment(\.openWindow) private var openWindow
 
     @Query(sort: \ConnectionConfigModel.host) private var configs:
@@ -18,10 +18,10 @@ struct RichMenuMainView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            if !transfers.isEmpty {
+            if !activities.transfers.isEmpty {
                 RichMenuHeading(title: "Transfers")
 
-                ForEach(transfers.value) { transfer in
+                ForEach(activities.transfers) { transfer in
                     RichMenuTransfer(transfer: transfer)
                 }
 
