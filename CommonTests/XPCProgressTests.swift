@@ -88,17 +88,3 @@ struct XPCProgressTests {
         withExtendedLifetime((source, sink)) {}
     }
 }
-
-private func poll(
-    timeout: Duration = .seconds(2),
-    condition: @escaping () -> Bool
-) async throws {
-    let deadline = ContinuousClock.now + timeout
-    while !condition() {
-        guard ContinuousClock.now < deadline else {
-            #expect(Bool(false), "Timed out waiting for condition")
-            return
-        }
-        try await Task.sleep(for: .milliseconds(10))
-    }
-}
