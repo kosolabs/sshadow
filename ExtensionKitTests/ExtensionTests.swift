@@ -124,7 +124,7 @@ struct ExtensionTests {
 
     @Test func readFileWithCancellation() async throws {
         let sandbox = TestSandbox()
-        let data = Data(count: 10_485_760)
+        let data = Data(count: 50_485_760)
         try sandbox.createFile(at: "cancellable.dat", data: data)
         let (ext, client) = try await sandbox.getExtensionAndClient()
 

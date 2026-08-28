@@ -806,7 +806,7 @@ actor Session {
             createTime: attrs.createTime
         )
     }
-    
+
     private func attributes(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> SFTPAttributes {
@@ -949,7 +949,7 @@ actor Session {
         do {
             return try await operation()
         } catch let error as SSHError
-            where error.isConnectionFailed || error.sftpError == .failure
+            where error.isConnectionFailed
             || error.sftpError == .connectionLost
             || error.sftpError == .noConnection
         {
@@ -962,6 +962,9 @@ actor Session {
             throw CoreError.permissionDenied
         } catch SSHError.sftpError(.fileAlreadyExists, _) {
             throw CoreError.filenameCollision
+        } catch SSHError.sftpError(.failure, let message) {
+            logger.error("SFTP operation failed: \(message)")
+            throw CoreError.unknown(domain: "SFTP", code: 0, message: message)
         }
     }
 
