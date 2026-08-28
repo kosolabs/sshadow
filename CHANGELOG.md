@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.3](https://github.com/kosolabs/sshadow/compare/v0.10.2...v0.10.3) (2026-08-28)
+
+
+### Bug Fixes
+
+* crash when opening domain databases concurrently ([#327](https://github.com/kosolabs/sshadow/issues/327)) ([d91eb85](https://github.com/kosolabs/sshadow/commit/d91eb85fc8ac7e05394bfb3dde8fc55d4019c5f7))
+* dropped final progress counts when the XPC connection tears down ([#334](https://github.com/kosolabs/sshadow/issues/334)) ([af6328c](https://github.com/kosolabs/sshadow/commit/af6328c66be6a8edc7d93af3002911c74b84ca1f))
+* handle progress cancellation in Session.stream ([#329](https://github.com/kosolabs/sshadow/issues/329)) ([bea1213](https://github.com/kosolabs/sshadow/commit/bea1213315b64e9676f93c9a623433a683b289b0))
+* handling of creating a symlink that already exists remotely ([#335](https://github.com/kosolabs/sshadow/issues/335)) ([a466bbc](https://github.com/kosolabs/sshadow/commit/a466bbcf9d295b871a409da1d0ac706486d0b90d))
+* improve observability of progress cancellation in XPCProgress ([#330](https://github.com/kosolabs/sshadow/issues/330)) ([3e055cb](https://github.com/kosolabs/sshadow/commit/3e055cbf6f395decf81f1875721c244addea388b))
+* leaks caused by failing to init sessions and channels ([#331](https://github.com/kosolabs/sshadow/issues/331)) ([cb4dec6](https://github.com/kosolabs/sshadow/commit/cb4dec6edd4406470f0119e26beeacfcd49b10fe))
+* reduce logging of Progress XPC ([#332](https://github.com/kosolabs/sshadow/issues/332)) ([298325a](https://github.com/kosolabs/sshadow/commit/298325a2d80fe1b26f9f200f85fa08b63b28ad87))
+
 ## [0.10.2](https://github.com/kosolabs/sshadow/compare/v0.10.1...v0.10.2) (2026-08-25)
 
 
