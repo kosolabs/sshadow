@@ -476,16 +476,18 @@ actor Session {
         reconcileTask?.cancel()
         defer { outstanding -= 1 }
 
-        var changes: [String] = []
-        if let accessTime { changes.append("accessTime: \(accessTime)") }
-        if let modifyTime { changes.append("modifyTime: \(modifyTime)") }
-        if let flags { changes.append("permissions: \(flags)") }
-        try await logger.info(
-            "Set attributes of \(id(of: itemId)): \(changes.joined(separator: ", "))"
-        )
-        try await mapError(with: itemId) {
+        let path = try await path(for: itemId)
+        try await perform(
+            with: itemId,
+            recording: .setAttributes(
+                path: path,
+                flags: flags,
+                accessTime: accessTime,
+                modifyTime: modifyTime
+            )
+        ) {
             try await sftp.setAttributes(
-                at: path(for: itemId),
+                at: path,
                 permissions: flags?.mode(umask: 0o022),
                 accessTime: accessTime,
                 modifyTime: modifyTime
@@ -510,8 +512,10 @@ actor Session {
         defer { outstanding -= 1 }
 
         let path = try await path(for: name, in: parentId)
-        logger.info("Create symlink \(path) -> \(target)")
-        try await mapError(with: parentId) {
+        try await perform(
+            with: parentId,
+            recording: .createSymlink(path: path, target: target)
+        ) {
             try await sftp.createSymlink(to: target, at: path)
         }
         return try await record(
@@ -532,8 +536,10 @@ actor Session {
         defer { outstanding -= 1 }
 
         let path = try await path(for: name, in: parentId)
-        logger.info("Create directory \(path)")
-        try await mapError(with: parentId) {
+        try await perform(
+            with: parentId,
+            recording: .createDirectory(path: path)
+        ) {
             do {
                 try await sftp.createDirectory(at: path, mode: flags.mode)
             } catch SSHError.sftpError(.fileAlreadyExists, _) {
@@ -561,8 +567,10 @@ actor Session {
         let oldPath = try await path(for: itemId)
         let newPath = try await path(for: newName, in: newParentId)
 
-        try await logger.info("Move \(id(of: itemId)) to \(newPath)")
-        try await mapError(with: itemId) {
+        try await perform(
+            with: itemId,
+            recording: .move(from: oldPath, to: newPath)
+        ) {
             do {
                 try await sftp.move(from: oldPath, to: newPath)
             } catch SSHError.sftpError(.noSuchFile, _)
@@ -587,9 +595,12 @@ actor Session {
         reconcileTask?.cancel()
         defer { outstanding -= 1 }
 
-        try await logger.info("Remove \(id(of: itemId))")
-        try await mapError(with: itemId) {
-            try await sftp.removeFile(at: path(for: itemId))
+        let path = try await path(for: itemId)
+        try await perform(
+            with: itemId,
+            recording: .remove(path: path, kind: .file)
+        ) {
+            try await sftp.removeFile(at: path)
         }
         try await refresh(db.parent(of: itemId).id)
         try await db.remove(itemId)
@@ -602,9 +613,12 @@ actor Session {
         reconcileTask?.cancel()
         defer { outstanding -= 1 }
 
-        try await logger.info("Remove directory \(id(of: itemId))")
-        try await mapError(with: itemId) {
-            try await sftp.removeDirectoryRecursively(at: path(for: itemId))
+        let path = try await path(for: itemId)
+        try await perform(
+            with: itemId,
+            recording: .remove(path: path, kind: .folder)
+        ) {
+            try await sftp.removeDirectoryRecursively(at: path)
         }
         try await refresh(db.parent(of: itemId).id)
         try await db.remove(itemId)
@@ -626,29 +640,37 @@ actor Session {
         let fp = try FileHandle(forReadingFrom: url)
         defer { try? fp.close() }
 
-        logger.info("Upload \(path) from \(url.path)")
         let size = try FileManager.default.size(of: url)
 
         progress.kind = .file
         progress.fileOperationKind = .uploading
 
-        let transfer = await activities.begin(
+        let transfer = await activities.transfers.begin(
             name: name,
             progress: progress
         )
-        defer { activities.end(transfer: transfer) }
+        defer { activities.transfers.end(transfer: transfer) }
 
         let estimator = ThroughputEstimator(
             progress: progress,
             totalUnitCount: Int64(size),
             reporters: [
                 transferProgressReporter(for: transfer),
-                loggingProgressReporter(for: "Upload", detail: path),
+                loggingProgressReporter(
+                    for: "Upload",
+                    detail: path,
+                    logCompletion: false
+                ),
             ]
         )
 
         let bufferSize = sftp.limits.writeLength(for: chunkSize)
-        try await mapError(with: parentId) {
+        try await performTransfer(
+            with: parentId,
+            recording: .upload(path: path),
+            estimator: estimator,
+            progress: progress
+        ) {
             try await sftp.withSftpFile(
                 at: path,
                 accessType: .writeOnly,
@@ -657,7 +679,6 @@ actor Session {
                 try await file.withAsyncWriter { writer in
                     while let data = try fp.read(upToCount: Int(bufferSize)) {
                         if progress.isCancelled {
-                            logger.info("Upload \(path) cancelled")
                             throw CoreError.userCancelled
                         }
                         try await writer.write(data: data)
@@ -667,7 +688,6 @@ actor Session {
             }
         }
 
-        estimator.finalize()
         return try await record(name, in: parentId, kind: .file)
     }
 
@@ -681,8 +701,8 @@ actor Session {
         defer { outstanding -= 1 }
 
         let item = try await item(for: itemId)
+        let path = try await path(for: itemId)
         let url = sharedUrl.appending(path: itemId.rawValue)
-        logger.info("Download \(item) into \(url)")
 
         try create(file: url)
         let handle = try FileHandle(forWritingTo: url)
@@ -691,34 +711,47 @@ actor Session {
         progress.kind = .file
         progress.fileOperationKind = .downloading
 
-        let transfer = await activities.begin(
+        let transfer = await activities.transfers.begin(
             name: item.name,
             progress: progress
         )
-        defer { activities.end(transfer: transfer) }
+        defer { activities.transfers.end(transfer: transfer) }
 
         let estimator = ThroughputEstimator(
             progress: progress,
             totalUnitCount: Int64(item.size ?? 0),
             reporters: [
                 transferProgressReporter(for: transfer),
-                loggingProgressReporter(for: "Download", detail: item),
+                loggingProgressReporter(
+                    for: "Download",
+                    detail: item,
+                    logCompletion: false
+                ),
             ]
         )
 
         let bufferSize = sftp.limits.readLength(for: chunkSize)
-        try await withFile(for: itemId, accessType: .readOnly) { fp in
-            for try await data in fp.stream(bufferSize: bufferSize) {
-                if progress.isCancelled {
-                    logger.info("Download \(item) cancelled")
-                    throw CoreError.userCancelled
+        try await performTransfer(
+            with: itemId,
+            recording: .download(path: path),
+            estimator: estimator,
+            progress: progress
+        ) {
+            try await sftp.withSftpFile(
+                at: path,
+                accessType: .readOnly
+            ) { fp in
+                for try await data in fp.stream(bufferSize: bufferSize) {
+                    if progress.isCancelled {
+                        logger.info("Download \(item) cancelled")
+                        throw CoreError.userCancelled
+                    }
+                    try handle.write(contentsOf: data)
+                    estimator.update(delta: data.count)
                 }
-                try handle.write(contentsOf: data)
-                estimator.update(delta: data.count)
             }
         }
 
-        estimator.finalize()
         return (url, item)
     }
 
@@ -810,7 +843,7 @@ actor Session {
     private func attributes(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> SFTPAttributes {
-        try await mapError(with: itemId) {
+        try await perform(with: itemId) {
             try await sftp.attributes(
                 at: path(for: itemId),
                 followSymlinks: false
@@ -822,7 +855,7 @@ actor Session {
         for name: String,
         in parentId: NSFileProviderItemIdentifier
     ) async throws -> SFTPAttributes {
-        try await mapError(with: parentId) {
+        try await perform(with: parentId) {
             try await sftp.attributes(
                 at: path(for: name, in: parentId),
                 followSymlinks: false
@@ -852,33 +885,33 @@ actor Session {
         for itemId: NSFileProviderItemIdentifier,
         accessType: AccessType,
         mode: mode_t = 0o666,
-        perform: @Sendable (SFTPFile) async throws -> T
+        _ work: @Sendable (SFTPFile) async throws -> T
     ) async throws -> T {
-        try await mapError(with: itemId) {
+        try await perform(with: itemId) {
             try await sftp.withSftpFile(
                 at: path(for: itemId),
                 accessType: accessType,
                 mode: mode,
-                perform: perform
+                perform: work
             )
         }
     }
 
     private func withDirectory<T: Sendable>(
         for itemId: NSFileProviderItemIdentifier,
-        perform: @Sendable (SFTPDirectory) async throws -> T
+        _ work: @Sendable (SFTPDirectory) async throws -> T
     ) async throws -> T {
-        try await mapError(with: itemId) {
+        try await perform(with: itemId) {
             try await sftp.withDirectory(
                 at: path(for: itemId),
-                perform: perform
+                perform: work
             )
         }
     }
 
     private func withEntries<T: Sendable>(
         of itemId: NSFileProviderItemIdentifier,
-        perform: @Sendable (any SSHItem.Stream) async throws -> T
+        _ work: @Sendable (any SSHItem.Stream) async throws -> T
     ) async throws -> T {
         do {
             return try await withDirectory(for: itemId) { dir in
@@ -893,10 +926,10 @@ actor Session {
                         from: attrs
                     )
                 }
-                return try await perform(entries)
+                return try await work(entries)
             }
         } catch CoreError.itemNotFound where itemId == .trashContainer {
-            return try await perform(SSHItem.EmptyStream())
+            return try await work(SSHItem.EmptyStream())
         }
     }
 
@@ -935,36 +968,93 @@ actor Session {
         for name: String,
         in parentId: NSFileProviderItemIdentifier
     ) async throws -> String {
-        try await mapError(with: parentId) {
+        try await perform(with: parentId) {
             try await sftp.symlinkTarget(
                 at: path(for: name, in: parentId)
             )
         }
     }
 
-    private func mapError<T>(
+    private func perform<T>(
         with itemId: NSFileProviderItemIdentifier,
-        _ operation: () async throws -> T
+        recording operation: Event.Operation? = nil,
+        _ work: () async throws -> T
     ) async throws -> T {
         do {
-            return try await operation()
-        } catch let error as SSHError
-            where error.isConnectionFailed
+            let result = try await work()
+            if let operation {
+                activities.events.add(operation, outcome: .succeeded())
+            }
+            return result
+        } catch {
+            let mapped = coreError(from: error, itemId: itemId)
+            if case CoreError.serverUnreachable = mapped {
+                await connectionLostHandler()
+            }
+            if let operation {
+                activities.events.add(
+                    operation,
+                    outcome: .failed(reason: mapped.localizedDescription)
+                )
+            }
+            throw mapped
+        }
+    }
+
+    private func performTransfer(
+        with itemId: NSFileProviderItemIdentifier,
+        recording operation: Event.Operation,
+        estimator: ThroughputEstimator,
+        progress: Progress,
+        _ work: () async throws -> Void
+    ) async throws {
+        do {
+            try await perform(with: itemId, work)
+            estimator.finalize()
+            activities.events.add(
+                operation,
+                outcome: .succeeded(
+                    detail: progress.localizedAdditionalDescription
+                )
+            )
+        } catch CoreError.userCancelled {
+            activities.events.add(operation, outcome: .cancelled)
+            throw CoreError.userCancelled
+        } catch {
+            activities.events.add(
+                operation,
+                outcome: .failed(reason: error.localizedDescription)
+            )
+            throw error
+        }
+    }
+
+    private func coreError(
+        from error: any Error,
+        itemId: NSFileProviderItemIdentifier
+    ) -> any Error {
+        guard let error = error as? SSHError else { return error }
+
+        if error.isConnectionFailed
             || error.sftpError == .connectionLost
             || error.sftpError == .noConnection
         {
             logger.error("SSH connection lost: \(error)")
-            await connectionLostHandler()
-            throw CoreError.serverUnreachable
-        } catch SSHError.sftpError(.noSuchFile, _) {
-            throw CoreError.itemNotFound(itemId.rawValue)
-        } catch SSHError.sftpError(.permissionDenied, _) {
-            throw CoreError.permissionDenied
-        } catch SSHError.sftpError(.fileAlreadyExists, _) {
-            throw CoreError.filenameCollision
-        } catch SSHError.sftpError(.failure, let message) {
+            return CoreError.serverUnreachable
+        }
+
+        switch error {
+        case .sftpError(.noSuchFile, _):
+            return CoreError.itemNotFound(itemId.rawValue)
+        case .sftpError(.permissionDenied, _):
+            return CoreError.permissionDenied
+        case .sftpError(.fileAlreadyExists, _):
+            return CoreError.filenameCollision
+        case .sftpError(.failure, let message):
             logger.error("SFTP operation failed: \(message)")
-            throw CoreError.unknown(domain: "SFTP", code: 0, message: message)
+            return CoreError.unknown(domain: "SFTP", code: 0, message: message)
+        default:
+            return error
         }
     }
 
@@ -979,7 +1069,8 @@ actor Session {
 
     private func loggingProgressReporter(
         for operation: String,
-        detail: any CustomStringConvertible
+        detail: any CustomStringConvertible,
+        logCompletion: Bool = true
     ) -> ThrottledProgressReporter {
         ThrottledProgressReporter(
             frequency: TimeInterval(1.0),
@@ -988,6 +1079,7 @@ actor Session {
                 logger.debug("\(operation)ing \(detail): \(desc)")
             },
             onFinalize: {
+                guard logCompletion else { return }
                 let desc = $0.localizedAdditionalDescription!
                 logger.info("\(operation)ed \(detail): \(desc)")
             }
