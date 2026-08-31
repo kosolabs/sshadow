@@ -1,3 +1,4 @@
+import Common
 import Foundation
 
 @MainActor
@@ -5,26 +6,15 @@ import Foundation
 public final class Activities {
     nonisolated public static let shared: Activities = Activities()
 
-    public private(set) var transfers: [Transfer] = []
+    nonisolated public let events: Events<ContinuousClock>
+    nonisolated public let transfers: Transfers<ContinuousClock>
 
-    nonisolated public init() {}
-    
-    public var isBusy: Bool {
-        !transfers.isEmpty
+    nonisolated init(clock: ContinuousClock = ContinuousClock()) {
+        self.events = Events(clock: clock)
+        self.transfers = Transfers(clock: clock)
     }
 
-    public func begin(name: String, progress: Progress) -> Transfer {
-        let transfer = Transfer(
-            name: name,
-            progress: progress
-        )
-        transfers.append(transfer)
-        return transfer
-    }
-
-    nonisolated public func end(transfer: Transfer) {
-        Task { @MainActor in
-            self.transfers.removeAll { $0 === transfer }
-        }
+    public var isActive: Bool {
+        events.isActive || transfers.isActive
     }
 }

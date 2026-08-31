@@ -10,8 +10,22 @@ import Testing
 extension TestSandbox {
     fileprivate func getSession(
         idleTimeProvider: @escaping Session.IdleTimeProvider =
-            SystemIdle.duration
+            SystemIdle.duration,
+        connectionLostHandler: @escaping Session.ConnectionLostHandler = {}
     ) async throws -> Session {
+        try await makeSession(
+            idleTimeProvider: idleTimeProvider,
+            connectionLostHandler: connectionLostHandler
+        ).session
+    }
+
+    // Like `getSession`, but also hands back the underlying `SSHClient` so a
+    // test can drop the transport out from under the session.
+    fileprivate func makeSession(
+        idleTimeProvider: @escaping Session.IdleTimeProvider =
+            SystemIdle.duration,
+        connectionLostHandler: @escaping Session.ConnectionLostHandler = {}
+    ) async throws -> (session: Session, ssh: SSHClient) {
         let config = try config
         let (ssh, sftp) = try await withConnectRetries {
             () async throws(ConnectionError) -> (SSHClient, SFTPClient) in
@@ -28,7 +42,7 @@ extension TestSandbox {
             db: db,
             sharedUrl: shared,
             changesDetectedHandler: {},
-            connectionLostHandler: {},
+            connectionLostHandler: connectionLostHandler,
             idleTimeProvider: idleTimeProvider,
             activities: Activities()
         )
@@ -49,7 +63,7 @@ extension TestSandbox {
             }
         }
 
-        return session
+        return (session, ssh)
     }
 }
 
@@ -1319,6 +1333,41 @@ struct SessionTests {
 
             await #expect(throws: CoreError.itemNotFound(itemId.rawValue)) {
                 try await session.setAttributes(for: itemId, flags: .rw)
+            }
+        }
+
+        @Test func setAttributesWhenPermissionDeniedThrows() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "locked")
+            try sandbox.createFile(at: "locked/file.txt", contents: "Hello!")
+            let session = try await sandbox.getSession()
+
+            let folderId = try await session.child(name: "locked")
+            let itemId = try await session.child(of: folderId, name: "file.txt")
+
+            try sandbox.touch("locked", permissions: 0o000)
+            defer { try? sandbox.touch("locked", permissions: 0o755) }
+
+            await #expect(throws: CoreError.permissionDenied) {
+                try await session.setAttributes(for: itemId, flags: .rw)
+            }
+        }
+
+        @Test func setAttributesWhenConnectionLostThrows() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "unreachable.txt", contents: "Hello!")
+
+            try await confirmation("connection lost handler fires") { fired in
+                let (session, ssh) = try await sandbox.makeSession(
+                    connectionLostHandler: { fired() }
+                )
+                let itemId = try await session.child(name: "unreachable.txt")
+
+                await ssh.close()
+
+                await #expect(throws: CoreError.serverUnreachable) {
+                    try await session.setAttributes(for: itemId, flags: .rw)
+                }
             }
         }
     }

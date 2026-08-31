@@ -1,4 +1,3 @@
-import Common
 import Foundation
 
 @MainActor
@@ -16,12 +15,12 @@ public final class Transfer: Identifiable {
         withMutation(keyPath: \.progress) {}
     }
 
-    public init(name: String, progress: Progress) {
+    init(name: String, progress: Progress) {
         self.name = name
         self._progress = progress
     }
 
-    nonisolated public func update() {
+    nonisolated func update() {
         Task { @MainActor in
             signalProgressChanged()
         }

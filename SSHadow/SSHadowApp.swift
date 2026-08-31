@@ -38,7 +38,7 @@ struct SSHadowApp: App {
         MenuBarExtra {
             RichMenuMainView()
         } label: {
-            MenuBarIcon(isLoading: Activities.shared.isBusy)
+            MenuBarIcon(isLoading: Activities.shared.isActive)
         }
         .menuBarExtraStyle(.window)
         .modelContainer(modelContainer)

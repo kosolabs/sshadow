@@ -18,10 +18,10 @@ struct RichMenuMainView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            if !activities.transfers.isEmpty {
+            if activities.transfers.isActive {
                 RichMenuHeading(title: "Transfers")
 
-                ForEach(activities.transfers) { transfer in
+                ForEach(activities.transfers.value) { transfer in
                     RichMenuTransfer(transfer: transfer)
                 }
 
