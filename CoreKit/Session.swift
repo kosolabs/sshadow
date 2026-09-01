@@ -1043,6 +1043,7 @@ actor Session {
         guard let error = error as? SSHError else { return error }
 
         if error.isConnectionFailed
+            || error.isClosed
             || error.sftpError == .connectionLost
             || error.sftpError == .noConnection
         {

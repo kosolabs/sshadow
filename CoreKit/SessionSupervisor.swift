@@ -138,6 +138,18 @@ actor SessionSupervisor {
         logger.info("Supervisor paused: \(domain)")
     }
 
+    private func handleFailedSession(config: ConnectionConfig) async {
+        guard case .online = state else { return }
+        await session?.stop()
+        await xpc.teardown()
+        await ext.suspend(
+            reason: "The server is unreachable. Check your network connection.",
+            options: .temporary
+        )
+        await session?.close()
+        reconnect(config: config)
+    }
+
     private func reconnect(config: ConnectionConfig) {
         if case .reconnecting = state { return }
         state = .reconnecting(
@@ -175,17 +187,6 @@ actor SessionSupervisor {
             }
         }
         logger.info("Reconnect cancelled: \(config)")
-    }
-
-    private func handleFailedSession(config: ConnectionConfig) async {
-        await session?.stop()
-        await xpc.teardown()
-        await ext.suspend(
-            reason: "The server is unreachable. Check your network connection.",
-            options: .temporary
-        )
-        await session?.close()
-        reconnect(config: config)
     }
 
     private func setReconnecting(error: ConnectionError?, nextAttempt: Date?) {
