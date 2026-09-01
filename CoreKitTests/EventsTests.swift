@@ -41,6 +41,18 @@ struct EventsTests {
         ])
     }
 
+    @Test func clearRemovesAllRecords() async {
+        let events = Events(clock: TestClock())
+
+        events.add(.upload(path: "/a"), outcome: .succeeded())
+        events.add(.download(path: "/b"), outcome: .succeeded())
+        await waitUntil { events.value.count == 2 }
+
+        events.clear()
+
+        #expect(events.value.isEmpty)
+    }
+
     @Test func rapidAddsCoalesceIntoASingleSignalUpdate() async {
         let clock = TestClock()
         let events = Events(clock: clock)

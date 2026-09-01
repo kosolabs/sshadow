@@ -68,6 +68,15 @@ struct RichMenuMainView: View {
             }
 
             RichMenuButton {
+                openWindowInFront(id: "events")
+            } label: {
+                RichMenuLabel(
+                    "Open Event Log...",
+                    systemImage: "list.bullet.rectangle"
+                )
+            }
+
+            RichMenuButton {
                 openWindowInFront(id: "about")
             } label: {
                 RichMenuLabel("About SSHadow", systemImage: "info.circle")

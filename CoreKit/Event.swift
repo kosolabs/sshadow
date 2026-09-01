@@ -1,7 +1,7 @@
 import Common
 import Foundation
 
-public struct Event: Message {
+public struct Event: Message, Identifiable {
     public enum Operation: Message, CustomStringConvertible {
         case setAttributes(
             path: String,
@@ -71,7 +71,39 @@ public struct Event: Message {
         case cancelled
     }
 
+    public let id: UUID
     public let timestamp: Date
     public let operation: Operation
     public let outcome: Outcome
+
+    public init(
+        id: UUID = UUID(),
+        timestamp: Date,
+        operation: Operation,
+        outcome: Outcome
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.operation = operation
+        self.outcome = outcome
+    }
+
+    public var logLine: String {
+        let time = timestamp.formatted(.iso8601)
+        let status: String
+        let detail: String?
+        switch outcome {
+        case .succeeded(let value):
+            status = "OK"
+            detail = value
+        case .failed(let reason):
+            status = "FAILED"
+            detail = reason
+        case .cancelled:
+            status = "CANCELLED"
+            detail = nil
+        }
+        let suffix = detail.map { " — \($0)" } ?? ""
+        return "\(time)  \(status)  \(operation)\(suffix)"
+    }
 }
