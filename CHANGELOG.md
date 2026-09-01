@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/kosolabs/sshadow/compare/v0.11.0...v0.11.1) (2026-09-01)
+
+
+### Bug Fixes
+
+* anchor resetting to zero when session is reconnected ([#341](https://github.com/kosolabs/sshadow/issues/341)) ([5b80e0e](https://github.com/kosolabs/sshadow/commit/5b80e0ea684fbb76871ff1a2a827e95ea8e49e50))
+
 ## [0.11.0](https://github.com/kosolabs/sshadow/compare/v0.10.3...v0.11.0) (2026-09-01)
 
 
