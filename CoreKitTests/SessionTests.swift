@@ -828,12 +828,13 @@ struct SessionTests {
             try sandbox.createFile(at: "dir/first.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
             try await session.pollAll()
+            let firstAnchor = await session.anchor
 
             try sandbox.createFile(at: "dir/second.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
             try await session.pollAll()
 
-            let (_, changes) = await session.changes(since: 1)
+            let (_, changes) = await session.changes(since: firstAnchor)
             let (updates, _) = changes.split()
             let item = try #require(updates.only)
             #expect(item.name == "second.txt")
@@ -854,12 +855,13 @@ struct SessionTests {
             try sandbox.createFile(at: "dir/first.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
             try await session.pollAll()
-            #expect(await session.anchor == 1)
+            let firstAnchor = await session.anchor
+            #expect(firstAnchor > 0)
 
             try sandbox.createFile(at: "dir/second.txt", modifyDate: end)
             try sandbox.touch("dir", modifyDate: start)
             try await session.pollAll()
-            #expect(await session.anchor == 2)
+            #expect(await session.anchor > firstAnchor)
         }
 
         @Test func currentAnchorDoesNotAdvanceWithoutChanges() async throws {
@@ -888,7 +890,30 @@ struct SessionTests {
             try await session.pollAll()
 
             let (anchor, _) = await session.changes(since: 0)
-            #expect(anchor == 2)
+            #expect(anchor == (await session.anchor))
+        }
+
+        @Test func changesTruncatesAcknowledgedButKeepsUnread() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try sandbox.createFile(at: "dir/first.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            try await session.pollAll()
+            let firstAnchor = await session.anchor
+
+            try sandbox.createFile(at: "dir/second.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            try await session.pollAll()
+
+            // Acknowledging through firstAnchor drops the first batch but keeps
+            // the unread second one.
+            _ = await session.changes(since: firstAnchor)
+
+            let (_, again) = await session.changes(since: firstAnchor)
+            let (updates, _) = again.split()
+            #expect(updates.map { $0.name } == ["second.txt"])
         }
     }
 
@@ -1257,7 +1282,7 @@ struct SessionTests {
             let (updates, _) = changes.split()
             let item = try #require(updates.only)
             #expect(item.name == "new.txt")
-            #expect(await session.anchor == 1)
+            #expect(await session.anchor > 0)
         }
 
         @Test func pollWatchedIgnoresUnwatchedFolderLeavesAnchor()
@@ -2113,7 +2138,7 @@ struct SessionTests {
 
             try await session.tick()
 
-            #expect(await session.anchor == 1)
+            #expect(await session.anchor > 0)
         }
 
         @Test func tickSkipsPollWhileOperationOutstanding() async throws {

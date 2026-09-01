@@ -142,6 +142,6 @@ struct EnumeratorTests {
         try await sandbox.pollAll()
 
         let advanced = try #require(await enumerator.currentSyncAnchor())
-        #expect(advanced.value == 1)
+        #expect(advanced.value > initial.value)
     }
 }

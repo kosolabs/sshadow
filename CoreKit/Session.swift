@@ -157,8 +157,7 @@ actor Session {
             return
         }
 
-        changes.append((anchor, newChanges))
-        anchor += 1
+        record(newChanges)
 
         logger.info(
             "Polled all: \(newChanges.count) change(s), anchor: \(anchor)"
@@ -221,8 +220,7 @@ actor Session {
             return
         }
 
-        changes.append((anchor, newChanges))
-        anchor += 1
+        record(newChanges)
 
         logger.info(
             "Polled watched: \(newChanges.count) change(s), anchor: \(anchor), items: \(watched.keys)"
@@ -376,12 +374,21 @@ actor Session {
         }
     }
 
+    private func record(_ newChanges: [Change]) {
+        let now = UInt64(Date().timeIntervalSince1970 * 1_000_000_000)
+        anchor = max(now, anchor + 1)
+        changes.append((anchor, newChanges))
+    }
+
     func changes(since prevAnchor: UInt64) -> (UInt64, [Change]) {
-        let allChanges =
+        let result =
             changes
-            .filter { anchor, _ in anchor >= prevAnchor }
+            .filter { anchor, _ in anchor > prevAnchor }
             .flatMap { _, rowChanges in rowChanges }
-        return (anchor, allChanges)
+
+        changes.removeAll { anchor, _ in anchor <= prevAnchor }
+
+        return (anchor, result)
     }
 
     func id(of itemId: NSFileProviderItemIdentifier) async throws -> String {
