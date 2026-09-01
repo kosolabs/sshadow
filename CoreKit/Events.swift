@@ -2,6 +2,7 @@ import Common
 import Foundation
 
 private let logger = Logger(category: "Events")
+private let maxEvents: Int = 1000
 
 @MainActor
 @Observable
@@ -50,7 +51,16 @@ public final class Events<C: Clock<Duration>> {
 
         Task { @MainActor in
             _value.append(record)
+            if _value.count > maxEvents {
+                _value.removeFirst(_value.count - maxEvents)
+            }
             triggerSignalUpdate()
+        }
+    }
+
+    public func clear() {
+        withMutation(keyPath: \.value) {
+            _value.removeAll()
         }
     }
 

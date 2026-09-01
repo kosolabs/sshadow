@@ -79,6 +79,78 @@ struct EventTests {
         )
     }
 
+    // MARK: - logLine
+
+    @Test func logLineSucceededWithDetail() {
+        let timestamp = Date(timeIntervalSince1970: 1_000)
+        let event = Event(
+            timestamp: timestamp,
+            operation: .upload(path: "/f"),
+            outcome: .succeeded(detail: "42 KB")
+        )
+        #expect(
+            event.logLine
+                == "\(timestamp.formatted(.iso8601))  OK  upload /f — 42 KB"
+        )
+    }
+
+    @Test func logLineSucceededWithoutDetail() {
+        let timestamp = Date(timeIntervalSince1970: 1_000)
+        let event = Event(
+            timestamp: timestamp,
+            operation: .download(path: "/f"),
+            outcome: .succeeded(detail: nil)
+        )
+        #expect(
+            event.logLine
+                == "\(timestamp.formatted(.iso8601))  OK  download /f"
+        )
+    }
+
+    @Test func logLineFailed() {
+        let timestamp = Date(timeIntervalSince1970: 1_000)
+        let event = Event(
+            timestamp: timestamp,
+            operation: .remove(path: "/f", kind: .file),
+            outcome: .failed(reason: "boom")
+        )
+        #expect(
+            event.logLine
+                == "\(timestamp.formatted(.iso8601))  FAILED  "
+                + "remove \(Item.Kind.file) /f — boom"
+        )
+    }
+
+    @Test func logLineCancelled() {
+        let timestamp = Date(timeIntervalSince1970: 1_000)
+        let event = Event(
+            timestamp: timestamp,
+            operation: .createDirectory(path: "/dir"),
+            outcome: .cancelled
+        )
+        #expect(
+            event.logLine
+                == "\(timestamp.formatted(.iso8601))  CANCELLED  "
+                + "create directory at /dir"
+        )
+    }
+
+    // MARK: - Identity
+
+    @Test func distinctEventsHaveDistinctIDs() {
+        let a = Event(
+            timestamp: .now,
+            operation: .upload(path: "/f"),
+            outcome: .succeeded()
+        )
+        let b = Event(
+            timestamp: .now,
+            operation: .upload(path: "/f"),
+            outcome: .succeeded()
+        )
+        #expect(a.id != b.id)
+    }
+
     // MARK: - Codable round-trip
 
     @Test func eventRoundTripsThroughJSON() throws {

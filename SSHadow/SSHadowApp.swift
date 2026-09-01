@@ -53,6 +53,12 @@ struct SSHadowApp: App {
         .environment(Connections.shared)
         .environment(Activities.shared)
 
+        Window("Event Log", id: "events") {
+            EventLogView()
+        }
+        .environment(activation)
+        .environment(Activities.shared)
+
         Window("About SSHadow", id: "about") {
             AboutView()
         }
