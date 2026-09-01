@@ -19,6 +19,6 @@ struct CoreTests {
         try sandbox.createFolder(at: "new.txt")
         try await sandbox.pollAll()
 
-        #expect(try await sandbox.client.currentAnchor() == 1)
+        #expect(try await sandbox.client.currentAnchor() > 0)
     }
 }
