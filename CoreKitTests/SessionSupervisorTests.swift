@@ -97,6 +97,43 @@ private actor SpySessionProvider {
     }
 }
 
+/// A session provider that blocks inside the connect call until released,
+/// so a test can observe and act on the supervisor's `.connecting` state.
+private actor GatedSessionProvider {
+    private let base: Session.Provider
+
+    private(set) var capturedHandler: Session.ConnectionLostHandler?
+    private(set) var isOpening = false
+    private var gate: CheckedContinuation<Void, Never>?
+
+    init(base: @escaping Session.Provider) {
+        self.base = base
+    }
+
+    nonisolated func provider() -> Session.Provider {
+        { config, handler in
+            try await self.connect(config, handler)
+        }
+    }
+
+    private func connect(
+        _ config: ConnectionConfig,
+        _ handler: @escaping Session.ConnectionLostHandler
+    ) async throws(ConnectionError) -> Session {
+        capturedHandler = handler
+        isOpening = true
+        await withCheckedContinuation { gate = $0 }
+        isOpening = false
+        return try await base(config, handler)
+    }
+
+    /// Unblock the pending connect so `open()` can finish.
+    func release() {
+        gate?.resume()
+        gate = nil
+    }
+}
+
 private final class StatusSpy: @unchecked Sendable {
     private let lock = NSLock()
     private var _statuses: [ConnectionStatus] = []
@@ -268,6 +305,90 @@ struct SessionSupervisorTests {
         // The supervisor should automatically reconnect.
         try await waitUntilOnline(supervisor)
         #expect(await provider.callCount == 2)
+
+        await supervisor.disable()
+    }
+
+    @Test func connectionLostAfterPauseDoesNotReconnect() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            initialBackoff: .milliseconds(1),
+            maxBackoff: .milliseconds(5),
+            openSession: provider.provider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController(),
+            onStatusChange: spy.handler()
+        )
+
+        try await supervisor.connect(config: try sandbox.config)
+        #expect(await provider.callCount == 1)
+
+        // Capture the connection-lost handler before pausing, then pause the
+        // connection (as a user would while a download is in flight).
+        let handler = try #require(await provider.capturedHandler)
+        await supervisor.pause()
+
+        // A lost connection now reports in, but because the connection was
+        // toggled offline it must not trigger a reconnect.
+        await handler()
+
+        // Give any errant reconnect a chance to fire, then confirm none did.
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(await provider.callCount == 1)
+        #expect(spy.statuses.last == .offline(.paused))
+
+        // The supervisor stays offline.
+        await #expect(throws: CoreError.serverUnreachable) {
+            try await supervisor.withSession { _ in }
+        }
+    }
+
+    @Test func connectionLostWhileConnectingDoesNotReconnect() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let provider = try await GatedSessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            initialBackoff: .milliseconds(1),
+            maxBackoff: .milliseconds(5),
+            openSession: provider.provider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController(),
+            onStatusChange: spy.handler()
+        )
+
+        // Kick off a connect that blocks inside open(), leaving the supervisor
+        // parked in the .connecting state.
+        let connectTask = Task {
+            try await supervisor.connect(config: try sandbox.config)
+        }
+        while await provider.isOpening == false {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+
+        // A stale connection-lost handler fires mid-connect. Since we aren't
+        // online, it must be ignored rather than starting a competing
+        // reconnect that races the in-flight open().
+        let handler = try #require(await provider.capturedHandler)
+        await handler()
+
+        // Release the gate; the connect path still owns the outcome and comes
+        // online, with no teardown/reconnect from the stale handler.
+        await provider.release()
+        try await connectTask.value
+
+        #expect(spy.statuses == [.connecting, .online])
+        let online = try await supervisor.withSession { _ in true }
+        #expect(online)
 
         await supervisor.disable()
     }
