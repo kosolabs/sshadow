@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0](https://github.com/kosolabs/sshadow/compare/v0.10.3...v0.11.0) (2026-09-01)
+
+
+### Features
+
+* add a user visible event log of all remote mutations ([#340](https://github.com/kosolabs/sshadow/issues/340)) ([d6f495c](https://github.com/kosolabs/sshadow/commit/d6f495c189a5242b971abe00df2dc69e82cd27fb))
+* events trigger busy indicator ([#338](https://github.com/kosolabs/sshadow/issues/338)) ([dcb3098](https://github.com/kosolabs/sshadow/commit/dcb3098bbdd3b0e2900900e446581a5d8332e684))
+
 ## [0.10.3](https://github.com/kosolabs/sshadow/compare/v0.10.2...v0.10.3) (2026-08-28)
 
 
