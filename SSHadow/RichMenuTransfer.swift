@@ -4,32 +4,50 @@ import SwiftUI
 struct RichMenuTransfer: View {
     let transfer: Transfer
 
+    private var isCompleted: Bool {
+        transfer.progress.isFinished
+    }
+
     private var systemImage: String {
+        if isCompleted {
+            return "checkmark.circle.fill"
+        }
         switch transfer.progress.fileOperationKind {
-        case .uploading: "arrow.up.circle"
-        default: "arrow.down.circle"
+        case .uploading: return "arrow.up.circle"
+        default: return "arrow.down.circle"
         }
     }
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: systemImage)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(
+                    isCompleted
+                        ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary)
+                )
                 .frame(width: 20, alignment: .center)
 
-            ProgressView(
-                value: transfer.progress.fractionCompleted,
-                label: {
+            if isCompleted {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(transfer.name)
-                },
-                currentValueLabel: {
                     Text(transfer.progress.localizedAdditionalDescription)
                         .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
                 }
-            )
-            .progressViewStyle(.linear)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ProgressView(
+                    value: transfer.progress.fractionCompleted,
+                    label: {
+                        Text(transfer.name)
+                    },
+                    currentValueLabel: {
+                        Text(transfer.progress.localizedAdditionalDescription)
+                            .font(.system(size: 10))
+                    }
+                )
+                .progressViewStyle(.linear)
+            }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
     }
 }

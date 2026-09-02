@@ -1071,7 +1071,8 @@ actor Session {
     ) -> ThrottledProgressReporter {
         ThrottledProgressReporter(
             frequency: TimeInterval(0.2),
-            onUpdate: { _ in transfer.update() }
+            onUpdate: { _ in transfer.update() },
+            onFinalize: { _ in transfer.update() }
         )
     }
 

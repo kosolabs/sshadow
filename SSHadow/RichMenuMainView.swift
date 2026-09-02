@@ -18,22 +18,20 @@ struct RichMenuMainView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            if activities.transfers.isActive {
-                RichMenuHeading(title: "Transfers")
-
-                ForEach(activities.transfers.value) { transfer in
-                    RichMenuTransfer(transfer: transfer)
-                }
-
-                Divider().padding(.vertical, 4)
-            }
-
             if !configs.isEmpty {
                 RichMenuHeading(title: "Connections")
 
                 ForEach(configs) { config in
                     RichMenuProfileToggle(config: config)
                 }
+
+                Divider().padding(.vertical, 4)
+            }
+
+            if activities.transfers.isActive {
+                RichMenuHeading(title: "Transfers")
+
+                RichMenuTransfers(transfers: activities.transfers)
 
                 Divider().padding(.vertical, 4)
             }
