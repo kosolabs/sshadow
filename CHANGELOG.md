@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.12.0](https://github.com/kosolabs/sshadow/compare/v0.11.1...v0.12.0) (2026-09-03)
+
+
+### Features
+
+* aggregate transfers into a summary row with scrollable disclosure ([#345](https://github.com/kosolabs/sshadow/issues/345)) ([1f0ad30](https://github.com/kosolabs/sshadow/commit/1f0ad30f3369b9d6051b713c0fde4250dbf64f13))
+* restructure event log around severity levels and categories ([#346](https://github.com/kosolabs/sshadow/issues/346)) ([5e3ed1d](https://github.com/kosolabs/sshadow/commit/5e3ed1d0049e12a5cae03f25829657aea879ecd0))
+* tighten the rich menu layout and always summarize transfers ([#348](https://github.com/kosolabs/sshadow/issues/348)) ([dc6a6a1](https://github.com/kosolabs/sshadow/commit/dc6a6a1936d87529f3df09f9d48c61112079c4be))
+
+
+### Bug Fixes
+
+* pausing a connection during a download ([#343](https://github.com/kosolabs/sshadow/issues/343)) ([6e468e7](https://github.com/kosolabs/sshadow/commit/6e468e744ef6e4d72c5b94d8c0f51fbd504db526))
+
 ## [0.11.1](https://github.com/kosolabs/sshadow/compare/v0.11.0...v0.11.1) (2026-09-01)
 
 
