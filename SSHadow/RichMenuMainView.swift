@@ -39,9 +39,18 @@ struct RichMenuMainView: View {
             RichMenuButton {
                 openWindowInFront(id: "settings")
             } label: {
-                RichMenuLabel("Open SSHadow Settings...", systemImage: "gear")
+                RichMenuLabel("Settings...", systemImage: "gear")
             }
 
+            RichMenuButton {
+                openWindowInFront(id: "events")
+            } label: {
+                RichMenuLabel(
+                    "Event Log",
+                    systemImage: "list.bullet.rectangle"
+                )
+            }
+            
             if isDebug {
                 RichMenuButton {
                     Task {
@@ -66,19 +75,12 @@ struct RichMenuMainView: View {
             }
 
             RichMenuButton {
-                openWindowInFront(id: "events")
-            } label: {
-                RichMenuLabel(
-                    "Open Event Log...",
-                    systemImage: "list.bullet.rectangle"
-                )
-            }
-
-            RichMenuButton {
                 openWindowInFront(id: "about")
             } label: {
                 RichMenuLabel("About SSHadow", systemImage: "info.circle")
             }
+            
+            Divider().padding(.vertical, 4)
 
             RichMenuButton {
                 NSApplication.shared.terminate(nil)

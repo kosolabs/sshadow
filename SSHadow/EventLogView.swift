@@ -2,26 +2,24 @@ import CoreKit
 import SwiftUI
 
 struct EventLogView: View {
-    @Environment(Events<ContinuousClock>.self) private var log
+    @Environment(Events<ContinuousClock>.self) private var events
     @Environment(WindowActivationTracker.self) private var activation
 
     @State private var selection = Set<Event.ID>()
 
-    private var events: [Event] { log.value }
-
     var body: some View {
         Group {
-            if events.isEmpty {
+            if events.value.isEmpty {
                 ContentUnavailableView(
                     "No Events",
                     systemImage: "list.bullet.rectangle",
                     description: Text(
-                        "File operations will appear here as they happen."
+                        "Events will appear here as they happen."
                     )
                 )
             } else {
                 List(selection: $selection) {
-                    ForEach(events.reversed()) { event in
+                    ForEach(events.value.reversed()) { event in
                         EventLogRow(event: event)
                     }
                 }
@@ -43,13 +41,13 @@ struct EventLogView: View {
         .frame(minWidth: 480, minHeight: 320)
         .toolbar {
             Button {
-                selection = Set(events.map(\.id))
+                selection = Set(events.value.map(\.id))
             } label: {
                 Label("Select All", systemImage: "checklist")
             }
             .help("Select all events")
             .keyboardShortcut("a", modifiers: .command)
-            .disabled(events.isEmpty)
+            .disabled(events.value.isEmpty)
 
             Button {
                 copy(logLines(for: selection))
@@ -61,20 +59,19 @@ struct EventLogView: View {
 
             Button {
                 selection.removeAll()
-                log.clear()
+                events.clear()
             } label: {
                 Label("Clear", systemImage: "trash")
             }
             .help("Clear the event log")
-            .disabled(events.isEmpty)
+            .disabled(events.value.isEmpty)
         }
         .onAppear { activation.retain() }
         .onDisappear { activation.release() }
     }
 
-    /// Joins the log lines of the selected events in chronological order.
     private func logLines(for ids: Set<Event.ID>) -> String {
-        events
+        events.value
             .filter { ids.contains($0.id) }
             .map(\.logLine)
             .joined(separator: "\n")
