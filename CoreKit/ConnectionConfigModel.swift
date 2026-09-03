@@ -114,18 +114,18 @@ public class ConnectionConfigModel: CustomStringConvertible {
         let config = try ConnectionConfig(from: self)
         try await DomainRegistry.shared.connect(config: config)
         self.enabled = true
-        logger.info("Profile enabled: \(self)")
+        logger.notice("Profile enabled: \(self)")
     }
 
     public func disable() async throws {
         try await DomainRegistry.shared.disable(domain: domain)
         self.enabled = false
-        logger.info("Profile disabled: \(self)")
+        logger.notice("Profile disabled: \(self)")
     }
 
     public func pause() async throws {
         try await DomainRegistry.shared.pause(domain: domain)
-        logger.info("Profile paused: \(self)")
+        logger.notice("Profile paused: \(self)")
     }
 
     public func poll() async throws {

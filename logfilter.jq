@@ -47,8 +47,8 @@ try (
   (
     if .messageType == "Fault" then red
     elif .messageType == "Error" then yellow
-    elif .messageType == "Default" then blue
-    elif .messageType == "Info" then green
+    elif .messageType == "Default" then green
+    elif .messageType == "Info" then reset
     elif .messageType == "Debug" then gray
     else reset end
   ) as $lvl_color |

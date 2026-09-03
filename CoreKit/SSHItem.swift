@@ -1,7 +1,7 @@
 import Common
 import Foundation
 
-struct SSHItem: Message, CustomStringConvertible {
+struct SSHItem: Message, PrettyDescribable {
     typealias Stream = AsyncSequence<SSHItem, any Error> & Sendable
     
     struct EmptyStream: Stream {
@@ -10,20 +10,6 @@ struct SSHItem: Message, CustomStringConvertible {
         }
         
         func makeAsyncIterator() -> AsyncIterator { AsyncIterator() }
-    }
-    
-    var description: String {
-        let mirror = Mirror(reflecting: self)
-        let fields = mirror.children.map { field in
-            if field.label == "permissions",
-                let value = field.value as? UInt32
-            {
-                "permissions: 0o\(String(value, radix: 8))"
-            } else {
-                "\(field.label ?? ""): \(field.value)"
-            }
-        }.joined(separator: ", ")
-        return "SSHItem(\(fields))"
     }
 
     let name: String

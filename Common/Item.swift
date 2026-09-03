@@ -1,21 +1,7 @@
 import FileProvider
 import Foundation
 
-public struct Item: Message, CustomStringConvertible {
-    public var description: String {
-        let mirror = Mirror(reflecting: self)
-        let fields = mirror.children.map { field in
-            if field.label == "permissions",
-                let value = field.value as? UInt32
-            {
-                "permissions: 0o\(String(value, radix: 8))"
-            } else {
-                "\(field.label ?? ""): \(field.value)"
-            }
-        }.joined(separator: ", ")
-        return "Item(\(fields))"
-    }
-
+public struct Item: Message, PrettyDescribable {
     public enum Kind: Message {
         case file
         case folder
@@ -25,17 +11,16 @@ public struct Item: Message, CustomStringConvertible {
     public struct Flags: OptionSet, Message, CustomStringConvertible {
         public var description: String {
             var flags = [String]()
-            flags.append("rawValue: \(rawValue)")
-            if contains(.executable) {
-                flags.append("executable")
-            }
             if contains(.readable) {
-                flags.append("readable")
+                flags.append("r")
             }
             if contains(.writable) {
-                flags.append("writable")
+                flags.append("w")
             }
-            return "Flags(\(flags.joined(separator: ", ")))"
+            if contains(.executable) {
+                flags.append("x")
+            }
+            return flags.joined(separator: "")
         }
 
         public let rawValue: UInt8

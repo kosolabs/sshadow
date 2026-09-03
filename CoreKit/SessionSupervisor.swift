@@ -42,7 +42,7 @@ actor SessionSupervisor {
         }
 
         set {
-            logger.info("State changed: \(_state) -> \(newValue)")
+            logger.notice("State changed: \(_state) -> \(newValue)")
 
             if case .reconnecting(let task, _, _) = _state {
                 if case .reconnecting = newValue {
@@ -124,7 +124,7 @@ actor SessionSupervisor {
         await session.start(pollInterval: pollInterval)
         state = .online(session)
         log.notice("Connected to \(config.name)")
-        logger.info("Session connected: \(config)")
+        logger.notice("Session connected: \(config)")
     }
 
     func disable() async {
@@ -134,8 +134,8 @@ actor SessionSupervisor {
         await ext.remove()
         await session?.close()
         state = .offline(.disabled)
-        log.info("Disconnected from \(domain.displayName)")
-        logger.info("Supervisor disabled: \(domain)")
+        log.notice("Disconnected from \(domain.displayName)")
+        logger.notice("Supervisor disabled: \(domain)")
     }
 
     func pause() async {
@@ -149,12 +149,12 @@ actor SessionSupervisor {
         await session?.close()
         state = .offline(.paused)
         log.notice("Paused connection to \(domain.displayName)")
-        logger.info("Supervisor paused: \(domain)")
+        logger.notice("Supervisor paused: \(domain)")
     }
 
     private func handleFailedSession(config: ConnectionConfig) async {
         guard case .online = state else { return }
-        log.error("Lost connection to \(config.name)")
+        log.warning("Lost connection to \(config.name)")
         await session?.stop()
         await xpc.teardown()
         await ext.suspend(
@@ -175,7 +175,7 @@ actor SessionSupervisor {
             nil,
             nextAttempt: nil
         )
-        logger.info("Session reconnecting: \(config)")
+        logger.notice("Session reconnecting: \(config)")
     }
 
     private func reconnectLoop(config: ConnectionConfig) async {
@@ -210,7 +210,7 @@ actor SessionSupervisor {
                 backoff = min(backoff * 2, maxBackoff)
             }
         }
-        logger.info("Reconnect cancelled: \(config)")
+        logger.notice("Reconnect cancelled: \(config)")
     }
 
     private func setReconnecting(error: ConnectionError?, nextAttempt: Date?) {

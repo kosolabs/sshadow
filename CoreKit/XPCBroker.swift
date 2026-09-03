@@ -43,7 +43,7 @@ actor DomainXPCBroker: XPCBroker {
         await ext.attach()
         self.connection = connection
 
-        logger.info("XPC brokered: \(domain)")
+        logger.notice("XPC brokered: \(domain)")
     }
 
     private func awaitConnection() async -> NSXPCConnection {
@@ -58,7 +58,7 @@ actor DomainXPCBroker: XPCBroker {
     }
 
     private func rebrokerXpc() async {
-        logger.info("XPC invalidated: \(domain)")
+        logger.notice("XPC invalidated: \(domain)")
         connection = nil
         await broker()
     }
@@ -73,6 +73,6 @@ actor DomainXPCBroker: XPCBroker {
         connection.interruptionHandler = nil
         connection.invalidate()
 
-        logger.info("XPC torn down: \(domain)")
+        logger.notice("XPC torn down: \(domain)")
     }
 }
