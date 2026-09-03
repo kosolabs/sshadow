@@ -146,7 +146,8 @@ class TestSandbox {
             ),
             sharedUrl: shared,
             signalEnumerator: { _ in },
-            activities: Activities()
+            transfers: Transfers(),
+            events: Events()
         )
         return { config, handler in
             try await withConnectRetries {

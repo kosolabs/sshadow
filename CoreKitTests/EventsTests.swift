@@ -6,46 +6,99 @@ import Testing
 
 @MainActor
 struct EventsTests {
-    @Test func addRecordsOperationOutcomeAndInstant() async {
+    private struct SampleError: LocalizedError {
+        var errorDescription: String? { "something went wrong" }
+    }
+
+    @Test func loggerStoresEntryWithInstantAndFields() async {
         let events = Events(clock: TestClock())
+        let connectionId = UUID()
+        let log = events.logger(for: .file, connectionId: connectionId)
 
         let before = Date.now
-        events.add(.upload(path: "/f"), outcome: .succeeded(detail: "ok"))
+        log.info("Upload /f", detail: "ok")
         await waitUntil { events.value.count == 1 }
         let after = Date.now
 
         #expect(events.value.count == 1)
         let event = events.value[0]
-        #expect(event.operation == .upload(path: "/f"))
-        #expect(event.outcome == .succeeded(detail: "ok"))
+        #expect(event.message == "Upload /f")
+        #expect(event.level == .info)
+        #expect(event.category == .file)
+        #expect(event.detail == "ok")
+        #expect(event.connectionId == connectionId)
         // `timestamp` is a wall-clock timestamp, stamped independently of the
         // injected (sleep-only) clock.
         #expect(event.timestamp >= before)
         #expect(event.timestamp <= after)
     }
 
-    @Test func addPreservesOrder() async {
-        let clock = TestClock()
-        let events = Events(clock: clock)
+    @Test func loggerMapsEachMethodOntoItsLevel() async {
+        let events = Events(clock: TestClock())
+        let log = events.logger(for: .connection, connectionId: UUID())
 
-        events.add(.upload(path: "/a"), outcome: .succeeded())
-        events.add(.download(path: "/b"), outcome: .cancelled)
-        events.add(.remove(path: "/c", kind: .file), outcome: .failed(reason: "x"))
+        log.info("a")
+        log.notice("b")
+        log.warning("c")
+        log.error("d")
+
+        await waitUntil { events.value.count == 4 }
+
+        #expect(events.value.map(\.level) == [.info, .notice, .warning, .error])
+    }
+
+    @Test func loggerRecordsErrorDescriptionAsDetail() async {
+        let events = Events(clock: TestClock())
+        let log = events.logger(for: .connection, connectionId: UUID())
+
+        log.warning("Reconnecting", error: SampleError())
+        log.error("Failed", error: SampleError())
+
+        await waitUntil { events.value.count == 2 }
+
+        #expect(events.value[0].level == .warning)
+        #expect(events.value[0].detail == "something went wrong")
+        #expect(events.value[1].level == .error)
+        #expect(events.value[1].detail == "something went wrong")
+    }
+
+    @Test func loggerCarriesItsCategoryAndConnectionId() async {
+        let events = Events(clock: TestClock())
+        let syncId = UUID()
+        let fileId = UUID()
+        let syncLog = events.logger(for: .sync, connectionId: syncId)
+        let fileLog = events.logger(for: .file, connectionId: fileId)
+
+        syncLog.notice("synced")
+        fileLog.info("downloaded")
+
+        await waitUntil { events.value.count == 2 }
+
+        #expect(events.value[0].category == .sync)
+        #expect(events.value[0].connectionId == syncId)
+        #expect(events.value[1].category == .file)
+        #expect(events.value[1].connectionId == fileId)
+    }
+
+    @Test func logsPreserveOrder() async {
+        let events = Events(clock: TestClock())
+        let log = events.logger(for: .file, connectionId: UUID())
+
+        log.info("a")
+        log.info("b")
+        log.info("c")
 
         await waitUntil { events.value.count == 3 }
 
-        #expect(events.value.map(\.operation) == [
-            .upload(path: "/a"),
-            .download(path: "/b"),
-            .remove(path: "/c", kind: .file),
-        ])
+        #expect(events.value.map(\.message) == ["a", "b", "c"])
     }
 
-    @Test func clearRemovesAllRecords() async {
+    @Test func clearRemovesAllEntries() async {
         let events = Events(clock: TestClock())
+        let log = events.logger(for: .file, connectionId: UUID())
 
-        events.add(.upload(path: "/a"), outcome: .succeeded())
-        events.add(.download(path: "/b"), outcome: .succeeded())
+        log.info("a")
+        log.info("b")
         await waitUntil { events.value.count == 2 }
 
         events.clear()
@@ -53,15 +106,16 @@ struct EventsTests {
         #expect(events.value.isEmpty)
     }
 
-    @Test func rapidAddsCoalesceIntoASingleSignalUpdate() async {
+    @Test func rapidLogsCoalesceIntoASingleSignalUpdate() async {
         let clock = TestClock()
         let events = Events(clock: clock)
+        let log = events.logger(for: .file, connectionId: UUID())
 
-        events.add(.upload(path: "/a"), outcome: .succeeded())
-        events.add(.upload(path: "/b"), outcome: .succeeded())
-        events.add(.upload(path: "/c"), outcome: .succeeded())
+        log.info("a")
+        log.info("b")
+        log.info("c")
 
-        // All three records land, but they share one throttled signal task.
+        // All three entries land, but they share one throttled signal task.
         await waitUntil { events.value.count == 3 && clock.pendingCount == 1 }
 
         #expect(events.value.count == 3)
@@ -76,14 +130,15 @@ struct EventsTests {
     @Test func isActiveDependsOnlyOnThePendingSignalTask() async {
         let clock = TestClock()
         let events = Events(clock: clock)
+        let log = events.logger(for: .file, connectionId: UUID())
 
         #expect(!events.isActive)
 
-        events.add(.upload(path: "/f"), outcome: .succeeded())
+        log.info("f")
         await waitUntil { events.isActive && clock.pendingCount == 1 }
         #expect(events.isActive)
 
-        // Draining the throttle clears isActive even though records remain.
+        // Draining the throttle clears isActive even though entries remain.
         clock.advance(by: .milliseconds(250))
         await waitUntil { !events.isActive }
         #expect(!events.isActive)

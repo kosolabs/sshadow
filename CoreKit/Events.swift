@@ -1,8 +1,11 @@
 import Common
 import Foundation
 
-private let logger = Logger(category: "Events")
 private let maxEvents: Int = 1000
+
+extension Events where C == ContinuousClock {
+    nonisolated public static let shared = Events()
+}
 
 @MainActor
 @Observable
@@ -22,45 +25,53 @@ public final class Events<C: Clock<Duration>> {
         signalUpdateTask != nil
     }
 
-    nonisolated public init(clock: C) {
+    public nonisolated init(clock: C = ContinuousClock()) {
         self.clock = clock
     }
 
-    nonisolated func add(
-        _ operation: Event.Operation,
-        outcome: Event.Outcome
-    ) {
-        let record = Event(
-            timestamp: Date.now,
-            operation: operation,
-            outcome: outcome
+    public nonisolated func logger(
+        for category: Event.Category,
+        connectionId: UUID
+    ) -> Logger {
+        Logger(
+            eventLog: self,
+            category: category,
+            connectionId: connectionId
         )
-
-        switch outcome {
-        case .succeeded(let detail):
-            if let detail {
-                logger.info("Completed \(operation): \(detail)")
-            } else {
-                logger.info("Completed \(operation)")
-            }
-        case .failed(let reason):
-            logger.error("Failed to \(operation): \(reason)")
-        case .cancelled:
-            logger.info("Cancelled \(operation)")
-        }
-
-        Task { @MainActor in
-            _value.append(record)
-            if _value.count > maxEvents {
-                _value.removeFirst(_value.count - maxEvents)
-            }
-            triggerSignalUpdate()
-        }
     }
 
     public func clear() {
         withMutation(keyPath: \.value) {
             _value.removeAll()
+        }
+    }
+    
+    private nonisolated func log(
+        _ message: String,
+        level: Event.Level,
+        category: Event.Category,
+        connectionId: UUID,
+        detail: String?
+    ) {
+        append(
+            Event(
+                timestamp: Date.now,
+                connectionId: connectionId,
+                level: level,
+                category: category,
+                message: message,
+                detail: detail
+            )
+        )
+    }
+
+    private nonisolated func append(_ event: Event) {
+        Task { @MainActor in
+            _value.append(event)
+            if _value.count > maxEvents {
+                _value.removeFirst(_value.count - maxEvents)
+            }
+            triggerSignalUpdate()
         }
     }
 
@@ -70,6 +81,82 @@ public final class Events<C: Clock<Duration>> {
             try? await Task.sleep(for: .milliseconds(250), clock: clock)
             withMutation(keyPath: \.value) {}
             signalUpdateTask = nil
+        }
+    }
+
+    public struct Logger {
+        private let eventLog: Events<C>
+        private let category: Event.Category
+        private let connectionId: UUID
+
+        init(
+            eventLog: Events<C>,
+            category: Event.Category,
+            connectionId: UUID
+        ) {
+            self.eventLog = eventLog
+            self.category = category
+            self.connectionId = connectionId
+        }
+
+        public func info(_ message: String, detail: String? = nil) {
+            eventLog.log(
+                message,
+                level: .info,
+                category: category,
+                connectionId: connectionId,
+                detail: detail
+            )
+        }
+
+        public func notice(_ message: String, detail: String? = nil) {
+            eventLog.log(
+                message,
+                level: .notice,
+                category: category,
+                connectionId: connectionId,
+                detail: detail
+            )
+        }
+
+        public func warning(_ message: String, detail: String? = nil) {
+            eventLog.log(
+                message,
+                level: .warning,
+                category: category,
+                connectionId: connectionId,
+                detail: detail
+            )
+        }
+
+        public func warning(_ message: String, error: any Error) {
+            eventLog.log(
+                message,
+                level: .warning,
+                category: category,
+                connectionId: connectionId,
+                detail: error.localizedDescription
+            )
+        }
+
+        public func error(_ message: String, detail: String? = nil) {
+            eventLog.log(
+                message,
+                level: .error,
+                category: category,
+                connectionId: connectionId,
+                detail: detail
+            )
+        }
+
+        public func error(_ message: String, error: any Error) {
+            eventLog.log(
+                message,
+                level: .error,
+                category: category,
+                connectionId: connectionId,
+                detail: error.localizedDescription
+            )
         }
     }
 }

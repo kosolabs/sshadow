@@ -1,3 +1,4 @@
+import Common
 import CoreKit
 import SwiftUI
 
@@ -30,7 +31,7 @@ struct RichMenuTransfer: View {
             if isCompleted {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(transfer.name)
-                    Text(transfer.progress.localizedAdditionalDescription)
+                    Text(transfer.progress.report)
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                 }
@@ -42,7 +43,7 @@ struct RichMenuTransfer: View {
                         Text(transfer.name)
                     },
                     currentValueLabel: {
-                        Text(transfer.progress.localizedAdditionalDescription)
+                        Text(transfer.progress.report)
                             .font(.system(size: 10))
                     }
                 )

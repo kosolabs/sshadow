@@ -38,12 +38,15 @@ struct SSHadowApp: App {
         MenuBarExtra {
             RichMenuMainView()
         } label: {
-            MenuBarIcon(isLoading: Activities.shared.isActive)
+            MenuBarIcon(
+                isLoading: Events.shared.isActive || Transfers.shared.isActive
+            )
         }
         .menuBarExtraStyle(.window)
         .modelContainer(modelContainer)
         .environment(Connections.shared)
-        .environment(Activities.shared)
+        .environment(Transfers.shared)
+        .environment(Events.shared)
 
         Window("Settings", id: "settings") {
             SettingsView()
@@ -51,13 +54,15 @@ struct SSHadowApp: App {
         .modelContainer(modelContainer)
         .environment(activation)
         .environment(Connections.shared)
-        .environment(Activities.shared)
+        .environment(Transfers.shared)
+        .environment(Events.shared)
 
         Window("Event Log", id: "events") {
             EventLogView()
         }
         .environment(activation)
-        .environment(Activities.shared)
+        .environment(Transfers.shared)
+        .environment(Events.shared)
 
         Window("About SSHadow", id: "about") {
             AboutView()

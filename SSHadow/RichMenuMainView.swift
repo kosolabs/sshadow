@@ -6,7 +6,7 @@ import SwiftUI
 
 struct RichMenuMainView: View {
     @Environment(Connections.self) private var connections
-    @Environment(Activities.self) private var activities
+    @Environment(Transfers<ContinuousClock>.self) private var transfers
     @Environment(\.openWindow) private var openWindow
 
     @Query(sort: \ConnectionConfigModel.host) private var configs:
@@ -28,10 +28,10 @@ struct RichMenuMainView: View {
                 Divider().padding(.vertical, 4)
             }
 
-            if activities.transfers.isActive {
+            if transfers.isActive {
                 RichMenuHeading(title: "Transfers")
 
-                RichMenuTransfers(transfers: activities.transfers)
+                RichMenuTransfers(transfers: transfers)
 
                 Divider().padding(.vertical, 4)
             }

@@ -16,31 +16,35 @@ public actor DomainRegistry {
                 for: .workingSet
             )
         },
-        connections: Connections.shared,
-        activities: Activities.shared,
         pollInterval: .seconds(300),
+        connections: Connections.shared,
+        transfers: Transfers.shared,
+        events: Events.shared
     )
 
     private let sharedUrl: URL
     private let signalEnumerator: EnumeratorSignal
-    private let connections: Connections
-    private let activities: Activities
     private let pollInterval: Duration?
+    private let connections: Connections
+    private let transfers: Transfers<ContinuousClock>
+    private let events: Events<ContinuousClock>
 
     private var supervisors: [UUID: SessionSupervisor] = [:]
 
     init(
         sharedUrl: URL = SSHadow.groupUrl,
         signalEnumerator: @escaping EnumeratorSignal,
+        pollInterval: Duration? = nil,
         connections: Connections,
-        activities: Activities,
-        pollInterval: Duration? = nil
+        transfers: Transfers<ContinuousClock>,
+        events: Events<ContinuousClock>
     ) {
         self.sharedUrl = sharedUrl
         self.signalEnumerator = signalEnumerator
-        self.connections = connections
-        self.activities = activities
         self.pollInterval = pollInterval
+        self.connections = connections
+        self.transfers = transfers
+        self.events = events
     }
 
     private func supervisor(
@@ -59,8 +63,10 @@ public actor DomainRegistry {
                 domainDb: domainDb,
                 sharedUrl: sharedUrl,
                 signalEnumerator: signalEnumerator,
-                activities: activities
+                transfers: transfers,
+                events: events
             ),
+            events: events,
             onStatusChange: { status in
                 self.connections.update(status, for: domain.id)
             }

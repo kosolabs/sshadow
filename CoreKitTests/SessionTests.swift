@@ -44,7 +44,8 @@ extension TestSandbox {
             changesDetectedHandler: {},
             connectionLostHandler: connectionLostHandler,
             idleTimeProvider: idleTimeProvider,
-            activities: Activities()
+            transfers: Transfers(),
+            events: Events()
         )
 
         var folders: [NSFileProviderItemIdentifier] = [
