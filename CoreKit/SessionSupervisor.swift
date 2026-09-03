@@ -17,7 +17,9 @@ actor SessionSupervisor {
     private let openSession: Session.Provider
     private let xpc: XPCBroker
     private let ext: ExtensionController
+    private let events: Events<ContinuousClock>
     private let onStatusChange: StatusChangeHandler
+    private let log: Events<ContinuousClock>.Logger
 
     private lazy var service = CoreService(supervisor: self)
 
@@ -79,6 +81,7 @@ actor SessionSupervisor {
         openSession: @escaping Session.Provider,
         xpc: XPCBroker? = nil,
         ext: ExtensionController? = nil,
+        events: Events<ContinuousClock> = .shared,
         onStatusChange: @escaping StatusChangeHandler
     ) {
         self.domain = domain
@@ -90,14 +93,22 @@ actor SessionSupervisor {
         self.openSession = openSession
         self.xpc = xpc ?? DomainXPCBroker(domain: domain)
         self.ext = ext ?? domain
+        self.events = events
         self.onStatusChange = onStatusChange
+
+        self.log = events.logger(for: .connection, connectionId: domain.id)
     }
 
     func connect(config: ConnectionConfig) async throws(ConnectionError) {
         state = .connecting
+        log.info("Connecting to \(config.name)")
         do {
             try await open(config: config)
         } catch {
+            log.error(
+                "Failed to connect to \(config.name)",
+                detail: error.message
+            )
             state = .offline(.failed(error))
             throw error
         }
@@ -112,6 +123,7 @@ actor SessionSupervisor {
         await xpc.broker(exporting: service)
         await session.start(pollInterval: pollInterval)
         state = .online(session)
+        log.notice("Connected to \(config.name)")
         logger.info("Session connected: \(config)")
     }
 
@@ -122,6 +134,7 @@ actor SessionSupervisor {
         await ext.remove()
         await session?.close()
         state = .offline(.disabled)
+        log.info("Disconnected from \(domain.displayName)")
         logger.info("Supervisor disabled: \(domain)")
     }
 
@@ -135,11 +148,13 @@ actor SessionSupervisor {
         )
         await session?.close()
         state = .offline(.paused)
+        log.notice("Paused connection to \(domain.displayName)")
         logger.info("Supervisor paused: \(domain)")
     }
 
     private func handleFailedSession(config: ConnectionConfig) async {
         guard case .online = state else { return }
+        log.error("Lost connection to \(config.name)")
         await session?.stop()
         await xpc.teardown()
         await ext.suspend(
@@ -175,11 +190,20 @@ actor SessionSupervisor {
                 || error == .remotePathNotFound
                 || error == .remotePathNotDirectory
             {
+                log.error(
+                    "Reconnection to \(config.name) failed",
+                    detail: error.message
+                )
                 state = .offline(.failed(error))
                 break
             } catch {
                 let nextAttempt = Date.now.addingTimeInterval(backoff.seconds)
                 setReconnecting(error: error, nextAttempt: nextAttempt)
+                log.warning(
+                    "Reconnecting to \(config.name)",
+                    detail:
+                        "Next attempt at \(nextAttempt.formatted(date: .omitted, time: .shortened))"
+                )
                 logger.error("Connect failed; retrying in \(backoff): \(error)")
                 do { try await Task.sleep(for: backoff) } catch { break }
                 setReconnecting(error: error, nextAttempt: nil)

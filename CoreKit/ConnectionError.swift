@@ -54,4 +54,17 @@ public enum ConnectionError: Message, Error {
             message: nsError.localizedDescription
         )
     }
+
+    public var message: String {
+        switch self {
+        case .unknownHost: "Unknown host"
+        case .connectionRefused: "Connection refused"
+        case .connectionTimedOut: "Connection timed out"
+        case .invalidPrivateKey: "Invalid private key"
+        case .authenticationFailed: "Authentication failed"
+        case .remotePathNotFound: "Remote path does not exist"
+        case .remotePathNotDirectory: "Remote path is not a directory"
+        case .unknown(_, _, let message): "Other: \(message)"
+        }
+    }
 }

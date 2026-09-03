@@ -1,5 +1,9 @@
 import Foundation
 
+extension Transfers where C == ContinuousClock {
+    nonisolated public static let shared = Transfers()
+}
+
 @MainActor
 @Observable
 public final class Transfers<C: Clock<Duration>> {
@@ -9,7 +13,7 @@ public final class Transfers<C: Clock<Duration>> {
 
     private var signalUpdateTask: Task<Void, Never>?
 
-    nonisolated public init(clock: C) {
+    nonisolated public init(clock: C = ContinuousClock()) {
         self.clock = clock
     }
 

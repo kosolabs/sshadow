@@ -1,16 +1,13 @@
-import AppKit
-import Common
 import CoreKit
-import Foundation
 import SwiftUI
 
 struct EventLogView: View {
-    @Environment(Activities.self) private var activities
+    @Environment(Events<ContinuousClock>.self) private var log
     @Environment(WindowActivationTracker.self) private var activation
 
     @State private var selection = Set<Event.ID>()
 
-    private var events: [Event] { activities.events.value }
+    private var events: [Event] { log.value }
 
     var body: some View {
         Group {
@@ -18,7 +15,9 @@ struct EventLogView: View {
                 ContentUnavailableView(
                     "No Events",
                     systemImage: "list.bullet.rectangle",
-                    description: Text("File operations will appear here as they happen.")
+                    description: Text(
+                        "File operations will appear here as they happen."
+                    )
                 )
             } else {
                 List(selection: $selection) {
@@ -32,7 +31,11 @@ struct EventLogView: View {
                 }
                 .onCopyCommand {
                     guard !selection.isEmpty else { return [] }
-                    return [NSItemProvider(object: logLines(for: selection) as NSString)]
+                    return [
+                        NSItemProvider(
+                            object: logLines(for: selection) as NSString
+                        )
+                    ]
                 }
             }
         }
@@ -58,7 +61,7 @@ struct EventLogView: View {
 
             Button {
                 selection.removeAll()
-                activities.events.clear()
+                log.clear()
             } label: {
                 Label("Clear", systemImage: "trash")
             }
@@ -80,68 +83,5 @@ struct EventLogView: View {
     private func copy(_ string: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(string, forType: .string)
-    }
-}
-
-private struct EventLogRow: View {
-    let event: Event
-
-    private var systemImage: String {
-        switch event.outcome {
-        case .succeeded: "checkmark.circle.fill"
-        case .failed: "exclamationmark.triangle.fill"
-        case .cancelled: "minus.circle.fill"
-        }
-    }
-
-    private var iconColor: Color {
-        switch event.outcome {
-        case .succeeded: .green
-        case .failed: .red
-        case .cancelled: .secondary
-        }
-    }
-
-    private var detail: String? {
-        switch event.outcome {
-        case .succeeded(let detail): detail
-        case .failed(let reason): reason
-        case .cancelled: nil
-        }
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: systemImage)
-                .foregroundStyle(iconColor)
-                .frame(width: 20, alignment: .center)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(event.operation.description.capitalizedFirst)
-                    .lineLimit(2)
-
-                if let detail {
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            Text(event.timestamp.formatted(date: .omitted, time: .standard))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-        }
-        .padding(.vertical, 2)
-    }
-}
-
-extension String {
-    fileprivate var capitalizedFirst: String {
-        guard let first else { return self }
-        return first.uppercased() + dropFirst()
     }
 }

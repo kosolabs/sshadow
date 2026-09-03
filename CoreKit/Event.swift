@@ -2,108 +2,80 @@ import Common
 import Foundation
 
 public struct Event: Message, Identifiable {
-    public enum Operation: Message, CustomStringConvertible {
-        case setAttributes(
-            path: String,
-            flags: Item.Flags?,
-            accessTime: Date?,
-            modifyTime: Date?
-        )
-        case createSymlink(
-            path: String,
-            target: String
-        )
-        case createDirectory(
-            path: String
-        )
-        case move(
-            from: String,
-            to: String
-        )
-        case remove(
-            path: String,
-            kind: Item.Kind
-        )
-        case upload(
-            path: String
-        )
-        case download(
-            path: String
-        )
+    public enum Level: String, Message, CaseIterable, Comparable {
+        case info
+        case notice
+        case warning
+        case error
 
-        public var description: String {
+        public var label: String {
             switch self {
-            case .setAttributes(
-                let path,
-                let flags,
-                let accessTime,
-                let modifyTime
-            ):
-                var changes: [String] = []
-                if let flags { changes.append("permissions: \(flags)") }
-                if let accessTime {
-                    changes.append("accessTime: \(accessTime)")
-                }
-                if let modifyTime {
-                    changes.append("modifyTime: \(modifyTime)")
-                }
-                return
-                    "set attributes of \(path) to \(changes.joined(separator: ", "))"
-            case .createSymlink(let path, let target):
-                return "create symlink from \(path) to \(target)"
-            case .createDirectory(let path):
-                return "create directory at \(path)"
-            case .move(let from, let to):
-                return "move \(from) to \(to)"
-            case .remove(let path, let kind):
-                return "remove \(kind) \(path)"
-            case .upload(let path):
-                return "upload \(path)"
-            case .download(let path):
-                return "download \(path)"
+            case .info: "INFO"
+            case .notice: "NOTICE"
+            case .warning: "WARNING"
+            case .error: "ERROR"
+            }
+        }
+
+        private var rank: Int {
+            switch self {
+            case .info: 0
+            case .notice: 1
+            case .warning: 2
+            case .error: 3
+            }
+        }
+
+        public static func < (lhs: Level, rhs: Level) -> Bool {
+            lhs.rank < rhs.rank
+        }
+    }
+
+    public enum Category: String, Message, CaseIterable {
+        case connection
+        case sync
+        case file
+        case diagnostic
+
+        public var label: String {
+            switch self {
+            case .connection: "Connection"
+            case .sync: "Sync"
+            case .file: "File"
+            case .diagnostic: "Diagnostic"
             }
         }
     }
 
-    public enum Outcome: Message, PrettyDescribable {
-        case succeeded(detail: String? = nil)
-        case failed(reason: String)
-        case cancelled
-    }
-
     public let id: UUID
     public let timestamp: Date
-    public let operation: Operation
-    public let outcome: Outcome
+    public let connectionId: UUID
+    public let level: Level
+    public let category: Category
+    public let message: String
+    public let detail: String?
 
     public init(
         id: UUID = UUID(),
         timestamp: Date,
-        operation: Operation,
-        outcome: Outcome
+        connectionId: UUID,
+        level: Level,
+        category: Category,
+        message: String,
+        detail: String? = nil,
     ) {
         self.id = id
         self.timestamp = timestamp
-        self.operation = operation
-        self.outcome = outcome
+        self.connectionId = connectionId
+        self.level = level
+        self.category = category
+        self.message = message
+        self.detail = detail
     }
 
     public var logLine: String {
         let time = timestamp.formatted(.iso8601)
-        let status: String
-        let detail: String?
-        switch outcome {
-        case .succeeded(let value):
-            status = "OK"
-            detail = value
-        case .failed(let reason):
-            status = "FAILED"
-            detail = reason
-        case .cancelled:
-            status = "CANCELLED"
-            detail = nil
-        }
         let suffix = detail.map { " — \($0)" } ?? ""
-        return "\(time)  \(status)  \(operation)\(suffix)"
+        return "\(time)  \(level.label)  \(message)\(suffix)"
     }
 }

@@ -22,7 +22,11 @@ actor Session {
     private let changesDetectedHandler: ChangesDetectedHandler
     private let connectionLostHandler: ConnectionLostHandler
     private let idleTimeProvider: IdleTimeProvider
-    private let activities: Activities
+    private let transfers: Transfers<ContinuousClock>
+    private let events: Events<ContinuousClock>
+
+    nonisolated private let log: Events<ContinuousClock>.Logger
+    nonisolated private let fileLog: Events<ContinuousClock>.Logger
 
     private lazy var cache = FileCache(read: read)
 
@@ -38,7 +42,8 @@ actor Session {
         domainDb: DomainDB,
         sharedUrl: URL,
         signalEnumerator: @escaping DomainRegistry.EnumeratorSignal,
-        activities: Activities
+        transfers: Transfers<ContinuousClock>,
+        events: Events<ContinuousClock>
     ) -> Provider {
         { config, handler in
             let (ssh, sftp) = try await SSHClient.connect(config: config)
@@ -51,7 +56,8 @@ actor Session {
                 changesDetectedHandler: { try await signalEnumerator(config) },
                 connectionLostHandler: handler,
                 idleTimeProvider: SystemIdle.duration,
-                activities: activities
+                transfers: transfers,
+                events: events
             )
         }
     }
@@ -65,7 +71,8 @@ actor Session {
         changesDetectedHandler: @escaping ChangesDetectedHandler,
         connectionLostHandler: @escaping ConnectionLostHandler,
         idleTimeProvider: @escaping IdleTimeProvider,
-        activities: Activities,
+        transfers: Transfers<ContinuousClock>,
+        events: Events<ContinuousClock>
     ) {
         self.config = config
         self.ssh = ssh
@@ -75,8 +82,11 @@ actor Session {
         self.changesDetectedHandler = changesDetectedHandler
         self.connectionLostHandler = connectionLostHandler
         self.idleTimeProvider = idleTimeProvider
-        self.activities = activities
+        self.transfers = transfers
+        self.events = events
 
+        log = events.logger(for: .sync, connectionId: config.id)
+        fileLog = events.logger(for: .file, connectionId: config.id)
         let dbConfig = db.modelContainer.configurations.first
         let dbPath = dbConfig?.url.path ?? "in-memory"
         logger.info("SSH connected: \(config), DB: \(dbPath)")
@@ -114,6 +124,7 @@ actor Session {
                     logger.debug("Poll interrupted by operation")
                 } catch {
                     logger.error("Poll error: \(error)")
+                    log.warning("Sync failed", error: error)
                 }
             }
             logger.info("Poll cancelled: \(config)")
@@ -145,9 +156,7 @@ actor Session {
     }
 
     func pollAll() async throws {
-        logger.debug(
-            "Poll all: \(config.url), anchor: \(anchor)"
-        )
+        logger.debug("Poll: \(config.url), anchor: \(anchor)")
 
         let reconcileTask = Task { try await reconcileAll() }
         self.reconcileTask = reconcileTask
@@ -159,9 +168,8 @@ actor Session {
 
         record(newChanges)
 
-        logger.info(
-            "Polled all: \(newChanges.count) change(s), anchor: \(anchor)"
-        )
+        logger.info("Polled: \(newChanges.count) change(s), anchor: \(anchor)")
+        log.notice("Detected \(newChanges.count) change(s) on server")
         try await changesDetectedHandler()
     }
 
@@ -209,7 +217,7 @@ actor Session {
         guard !watched.isEmpty else { return }
 
         logger.debug(
-            "Poll watched: \(config.url), anchor: \(anchor), items: \(watched.keys)"
+            "Poll: \(config.url), anchor: \(anchor), items: \(watched.keys)"
         )
 
         let reconcileTask = Task { try await reconcileWatched() }
@@ -223,8 +231,9 @@ actor Session {
         record(newChanges)
 
         logger.info(
-            "Polled watched: \(newChanges.count) change(s), anchor: \(anchor), items: \(watched.keys)"
+            "Polled: \(newChanges.count) change(s), anchor: \(anchor), items: \(watched.keys)"
         )
+        log.notice("Detected \(newChanges.count) change(s) on server")
         try await changesDetectedHandler()
     }
 
@@ -391,8 +400,21 @@ actor Session {
         return (anchor, result)
     }
 
-    func id(of itemId: NSFileProviderItemIdentifier) async throws -> String {
-        try await "FPItemID(\(itemId.rawValue), \(path(for: itemId)))"
+    func ref(for itemId: NSFileProviderItemIdentifier) async throws -> Ref {
+        try await Ref(
+            path: db.path(for: itemId),
+            anchor: .item(id: itemId.rawValue)
+        )
+    }
+
+    func ref(
+        for name: String,
+        in parentId: NSFileProviderItemIdentifier
+    ) async throws -> Ref {
+        try await Ref(
+            path: db.path(for: name, in: parentId),
+            anchor: .parent(id: parentId.rawValue)
+        )
     }
 
     func name(
@@ -483,18 +505,20 @@ actor Session {
         reconcileTask?.cancel()
         defer { outstanding -= 1 }
 
-        let path = try await path(for: itemId)
+        let changes = {
+            var changes: [String] = []
+            if let accessTime { changes.append("accessTime: \(accessTime)") }
+            if let modifyTime { changes.append("modifyTime: \(modifyTime)") }
+            if let flags { changes.append("permissions: \(flags)") }
+            return changes
+        }().joined(separator: ", ")
+
         try await perform(
             with: itemId,
-            recording: .setAttributes(
-                path: path,
-                flags: flags,
-                accessTime: accessTime,
-                modifyTime: modifyTime
-            )
+            recording: "Set attributes of \(ref(for: itemId)) to \(changes)"
         ) {
             try await sftp.setAttributes(
-                at: path,
+                at: path(for: itemId),
                 permissions: flags?.mode(umask: 0o022),
                 accessTime: accessTime,
                 modifyTime: modifyTime
@@ -518,12 +542,15 @@ actor Session {
         reconcileTask?.cancel()
         defer { outstanding -= 1 }
 
-        let path = try await path(for: name, in: parentId)
         try await perform(
             with: parentId,
-            recording: .createSymlink(path: path, target: target)
+            recording:
+                "Create symlink from \(ref(for: name, in: parentId)) to \(target)"
         ) {
-            try await sftp.createSymlink(to: target, at: path)
+            try await sftp.createSymlink(
+                to: target,
+                at: path(for: name, in: parentId)
+            )
         }
         return try await record(
             name,
@@ -542,17 +569,20 @@ actor Session {
         reconcileTask?.cancel()
         defer { outstanding -= 1 }
 
-        let path = try await path(for: name, in: parentId)
+        let ref = try await ref(for: name, in: parentId)
         try await perform(
             with: parentId,
-            recording: .createDirectory(path: path)
+            recording: "Create directory at \(ref)"
         ) {
             do {
-                try await sftp.createDirectory(at: path, mode: flags.mode)
+                try await sftp.createDirectory(
+                    at: path(for: name, in: parentId),
+                    mode: flags.mode
+                )
             } catch SSHError.sftpError(.fileAlreadyExists, _) {
                 switch ifExists {
                 case .succeed:
-                    logger.info("Directory already exists at \(path)")
+                    logger.info("Directory already exists at \(ref)")
                 case .fail:
                     throw CoreError.filenameCollision
                 }
@@ -576,7 +606,8 @@ actor Session {
 
         try await perform(
             with: itemId,
-            recording: .move(from: oldPath, to: newPath)
+            recording:
+                "Move \(ref(for: itemId)) to \(ref(for: newName, in: newParentId))"
         ) {
             do {
                 try await sftp.move(from: oldPath, to: newPath)
@@ -602,12 +633,11 @@ actor Session {
         reconcileTask?.cancel()
         defer { outstanding -= 1 }
 
-        let path = try await path(for: itemId)
         try await perform(
             with: itemId,
-            recording: .remove(path: path, kind: .file)
+            recording: "Remove file \(ref(for: itemId))"
         ) {
-            try await sftp.removeFile(at: path)
+            try await sftp.removeFile(at: path(for: itemId))
         }
         try await refresh(db.parent(of: itemId).id)
         try await db.remove(itemId)
@@ -620,12 +650,11 @@ actor Session {
         reconcileTask?.cancel()
         defer { outstanding -= 1 }
 
-        let path = try await path(for: itemId)
         try await perform(
             with: itemId,
-            recording: .remove(path: path, kind: .folder)
+            recording: "Remove directory \(ref(for: itemId))"
         ) {
-            try await sftp.removeDirectoryRecursively(at: path)
+            try await sftp.removeDirectoryRecursively(at: path(for: itemId))
         }
         try await refresh(db.parent(of: itemId).id)
         try await db.remove(itemId)
@@ -643,43 +672,39 @@ actor Session {
         reconcileTask?.cancel()
         defer { outstanding -= 1 }
 
-        let path = try await path(for: name, in: parentId)
         let fp = try FileHandle(forReadingFrom: url)
         defer { try? fp.close() }
-
         let size = try FileManager.default.size(of: url)
 
         progress.kind = .file
         progress.fileOperationKind = .uploading
 
-        let transfer = await activities.transfers.begin(
+        let transfer = await transfers.begin(
             name: name,
             progress: progress
         )
-        defer { activities.transfers.end(transfer: transfer) }
+        defer { transfers.end(transfer: transfer) }
 
+        let message: OperationMessage = try await
+            "Upload \(ref(for: name, in: parentId))"
         let estimator = ThroughputEstimator(
             progress: progress,
             totalUnitCount: Int64(size),
             reporters: [
                 transferProgressReporter(for: transfer),
-                loggingProgressReporter(
-                    for: "Upload",
-                    detail: path,
-                    logCompletion: false
-                ),
+                loggingProgressReporter(message),
             ]
         )
 
         let bufferSize = sftp.limits.writeLength(for: chunkSize)
         try await performTransfer(
             with: parentId,
-            recording: .upload(path: path),
+            recording: message,
             estimator: estimator,
             progress: progress
         ) {
             try await sftp.withSftpFile(
-                at: path,
+                at: path(for: name, in: parentId),
                 accessType: .writeOnly,
                 mode: flags.mode
             ) { file in
@@ -708,7 +733,6 @@ actor Session {
         defer { outstanding -= 1 }
 
         let item = try await item(for: itemId)
-        let path = try await path(for: itemId)
         let url = sharedUrl.appending(path: itemId.rawValue)
 
         try create(file: url)
@@ -718,39 +742,35 @@ actor Session {
         progress.kind = .file
         progress.fileOperationKind = .downloading
 
-        let transfer = await activities.transfers.begin(
+        let transfer = await transfers.begin(
             name: item.name,
             progress: progress
         )
-        defer { activities.transfers.end(transfer: transfer) }
+        defer { transfers.end(transfer: transfer) }
 
+        let message: OperationMessage = try await "Download \(ref(for: itemId))"
         let estimator = ThroughputEstimator(
             progress: progress,
             totalUnitCount: Int64(item.size ?? 0),
             reporters: [
                 transferProgressReporter(for: transfer),
-                loggingProgressReporter(
-                    for: "Download",
-                    detail: item,
-                    logCompletion: false
-                ),
+                loggingProgressReporter(message),
             ]
         )
 
         let bufferSize = sftp.limits.readLength(for: chunkSize)
         try await performTransfer(
             with: itemId,
-            recording: .download(path: path),
+            recording: message,
             estimator: estimator,
             progress: progress
         ) {
             try await sftp.withSftpFile(
-                at: path,
+                at: path(for: itemId),
                 accessType: .readOnly
             ) { fp in
                 for try await data in fp.stream(bufferSize: bufferSize) {
                     if progress.isCancelled {
-                        logger.info("Download \(item) cancelled")
                         throw CoreError.userCancelled
                     }
                     try handle.write(contentsOf: data)
@@ -787,9 +807,7 @@ actor Session {
         let estimator = ThroughputEstimator(
             progress: progress,
             totalUnitCount: Int64(slice.byteRange.length),
-            reporters: [
-                loggingProgressReporter(for: "Stream", detail: slice)
-            ]
+            reporters: [loggingProgressReporter("Stream \(slice)")]
         )
 
         for chunk in slice {
@@ -984,25 +1002,22 @@ actor Session {
 
     private func perform<T>(
         with itemId: NSFileProviderItemIdentifier,
-        recording operation: Event.Operation? = nil,
+        recording message: OperationMessage? = nil,
         _ work: () async throws -> T
     ) async throws -> T {
+        if let message { logger.info(message.debug) }
         do {
             let result = try await work()
-            if let operation {
-                activities.events.add(operation, outcome: .succeeded())
-            }
+            if let message { fileLog.info(message.display) }
             return result
         } catch {
             let mapped = coreError(from: error, itemId: itemId)
+            if let message {
+                logger.error("Failed: \(message.debug): \(error) -> \(mapped)")
+                fileLog.error(message.display, error: mapped)
+            }
             if case CoreError.serverUnreachable = mapped {
                 await connectionLostHandler()
-            }
-            if let operation {
-                activities.events.add(
-                    operation,
-                    outcome: .failed(reason: mapped.localizedDescription)
-                )
             }
             throw mapped
         }
@@ -1010,28 +1025,23 @@ actor Session {
 
     private func performTransfer(
         with itemId: NSFileProviderItemIdentifier,
-        recording operation: Event.Operation,
+        recording message: OperationMessage,
         estimator: ThroughputEstimator,
         progress: Progress,
         _ work: () async throws -> Void
     ) async throws {
+        logger.info(message.debug)
         do {
             try await perform(with: itemId, work)
             estimator.finalize()
-            activities.events.add(
-                operation,
-                outcome: .succeeded(
-                    detail: progress.localizedAdditionalDescription
-                )
-            )
+            fileLog.info(message.display, detail: progress.report)
         } catch CoreError.userCancelled {
-            activities.events.add(operation, outcome: .cancelled)
+            logger.info("Cancelled: \(message.debug)")
+            fileLog.notice(message.display, detail: "Cancelled")
             throw CoreError.userCancelled
         } catch {
-            activities.events.add(
-                operation,
-                outcome: .failed(reason: error.localizedDescription)
-            )
+            logger.error("Failed: \(message.debug): \(error)")
+            fileLog.error(message.display, detail: error.localizedDescription)
             throw error
         }
     }
@@ -1077,21 +1087,82 @@ actor Session {
     }
 
     private func loggingProgressReporter(
-        for operation: String,
-        detail: any CustomStringConvertible,
-        logCompletion: Bool = true
+        _ message: OperationMessage
     ) -> ThrottledProgressReporter {
         ThrottledProgressReporter(
             frequency: TimeInterval(1.0),
             onUpdate: {
-                let desc = $0.localizedAdditionalDescription!
-                logger.debug("\(operation)ing \(detail): \(desc)")
+                logger.debug("\(message.debug): \($0.report)")
             },
             onFinalize: {
-                guard logCompletion else { return }
-                let desc = $0.localizedAdditionalDescription!
-                logger.info("\(operation)ed \(detail): \(desc)")
+                logger.info("Finished: \(message.debug): \($0.report)")
             }
         )
+    }
+}
+
+struct Ref: CustomStringConvertible {
+    enum Anchor {
+        case item(id: String)
+        case parent(id: String)
+    }
+
+    private let path: String
+    private let anchor: Anchor
+
+    init(path: String, anchor: Anchor) {
+        self.path = path
+        self.anchor = anchor
+    }
+
+    var display: String {
+        "\"\(path)\""
+    }
+
+    var description: String {
+        switch anchor {
+        case .item(let id):
+            "Ref(path: \(display), id: \(id))"
+        case .parent(let id):
+            "Ref(path: \(display), parentId: \(id))"
+        }
+    }
+}
+
+struct OperationMessage: ExpressibleByStringInterpolation {
+    final class StringInterpolation: StringInterpolationProtocol {
+        var debug = ""
+        var display = ""
+
+        init(literalCapacity: Int, interpolationCount: Int) {}
+
+        func appendLiteral(_ s: String) {
+            debug += s
+            display += s
+        }
+
+        func appendInterpolation(_ ref: Ref) {
+            debug += ref.description
+            display += ref.display
+        }
+
+        func appendInterpolation(_ v: some CustomStringConvertible) {
+            let s = String(describing: v)
+            debug += s
+            display += s
+        }
+    }
+
+    let debug: String
+    let display: String
+
+    init(stringLiteral v: String) {
+        debug = v
+        display = v
+    }
+
+    init(stringInterpolation i: StringInterpolation) {
+        debug = i.debug
+        display = i.display
     }
 }
