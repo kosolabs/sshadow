@@ -89,7 +89,7 @@ actor Session {
         fileLog = events.logger(for: .file, connectionId: config.id)
         let dbConfig = db.modelContainer.configurations.first
         let dbPath = dbConfig?.url.path ?? "in-memory"
-        logger.info("SSH connected: \(config), DB: \(dbPath)")
+        logger.notice("SSH connected: \(config), DB: \(dbPath)")
     }
 
     var limits: Limits {
@@ -103,7 +103,7 @@ actor Session {
         await sftp.close()
         await ssh.close()
 
-        logger.info("SSH disconnected: \(config)")
+        logger.notice("SSH disconnected: \(config)")
     }
 
     func start(pollInterval: Duration?) {
@@ -156,7 +156,7 @@ actor Session {
     }
 
     func pollAll() async throws {
-        logger.debug("Poll: \(config.url), anchor: \(anchor)")
+        logger.info("Poll: \(config.url), anchor: \(anchor)")
 
         let reconcileTask = Task { try await reconcileAll() }
         self.reconcileTask = reconcileTask
@@ -168,7 +168,9 @@ actor Session {
 
         record(newChanges)
 
-        logger.info("Polled: \(newChanges.count) change(s), anchor: \(anchor)")
+        logger.notice(
+            "Polled: \(newChanges.count) change(s), anchor: \(anchor)"
+        )
         log.notice("Detected \(newChanges.count) change(s) on server")
         try await changesDetectedHandler()
     }
@@ -198,8 +200,9 @@ actor Session {
         watched[itemId, default: 0] += 1
         schedule?.recordWatchStarted()
         if watched[itemId] == 1 {
-            logger.info("Started watching: \(itemId)")
+            logger.notice("Started watching: \(itemId)")
         }
+        logger.info("Watch on \(itemId): \(watched[itemId, default: 0])")
     }
 
     func unwatch(itemId: NSFileProviderItemIdentifier) {
@@ -207,16 +210,17 @@ actor Session {
         guard let count = watched[itemId] else { return }
         if count <= 1 {
             watched.removeValue(forKey: itemId)
-            logger.info("Stopped watching: \(itemId)")
+            logger.notice("Stopped watching: \(itemId)")
         } else {
             watched[itemId] = count - 1
         }
+        logger.info("Unwatch on \(itemId): \(watched[itemId, default: 0])")
     }
 
     func pollWatched() async throws {
         guard !watched.isEmpty else { return }
 
-        logger.debug(
+        logger.info(
             "Poll: \(config.url), anchor: \(anchor), items: \(watched.keys)"
         )
 
@@ -230,7 +234,7 @@ actor Session {
 
         record(newChanges)
 
-        logger.info(
+        logger.notice(
             "Polled: \(newChanges.count) change(s), anchor: \(anchor), items: \(watched.keys)"
         )
         log.notice("Detected \(newChanges.count) change(s) on server")
@@ -486,9 +490,11 @@ actor Session {
     }
 
     func enumerate(itemId: NSFileProviderItemIdentifier) async throws {
+        try await logger.info("Enumerating \(ref(for: itemId))")
         try await withEntries(of: itemId) { entries in
             for try await sshItem in entries {
                 try await upsert(parentId: itemId, sshItem: sshItem)
+                logger.info("Enumerate new: \(sshItem)")
             }
         }
         try await db.markEnumerated(itemId)
@@ -1037,7 +1043,7 @@ actor Session {
             fileLog.info(message.display, detail: progress.report)
         } catch CoreError.userCancelled {
             logger.info("Cancelled: \(message.debug)")
-            fileLog.notice(message.display, detail: "Cancelled")
+            fileLog.info(message.display, detail: "Cancelled")
             throw CoreError.userCancelled
         } catch {
             logger.error("Failed: \(message.debug): \(error)")
@@ -1101,7 +1107,7 @@ actor Session {
     }
 }
 
-struct Ref: CustomStringConvertible {
+struct Ref: PrettyDescribable {
     enum Anchor {
         case item(id: String)
         case parent(id: String)
@@ -1117,15 +1123,6 @@ struct Ref: CustomStringConvertible {
 
     var display: String {
         "\"\(path)\""
-    }
-
-    var description: String {
-        switch anchor {
-        case .item(let id):
-            "Ref(path: \(display), id: \(id))"
-        case .parent(let id):
-            "Ref(path: \(display), parentId: \(id))"
-        }
     }
 }
 

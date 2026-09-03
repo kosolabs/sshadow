@@ -45,7 +45,7 @@ extension NSFileProviderDomain {
     public func add() async {
         do {
             try await NSFileProviderManager.add(self)
-            logger.info("Domain added: \(self)")
+            logger.notice("Domain added: \(self)")
         } catch {
             logger.error("Failed to add domain \(self): \(error)")
         }
@@ -54,7 +54,7 @@ extension NSFileProviderDomain {
     public func remove() async {
         do {
             try await NSFileProviderManager.remove(self)
-            logger.info("Domain removed: \(self)")
+            logger.notice("Domain removed: \(self)")
         } catch {
             logger.error("Failed to remove domain \(self): \(error)")
         }
@@ -66,7 +66,7 @@ extension NSFileProviderDomain {
     ) async {
         do {
             try await manager.disconnect(reason: reason, options: options)
-            logger.info("Sync suspended: \(self)")
+            logger.notice("Sync suspended: \(self)")
         } catch {
             logger.error("Failed to suspend \(self): \(error)")
         }
@@ -75,7 +75,7 @@ extension NSFileProviderDomain {
     public func resume() async {
         do {
             try await manager.reconnect()
-            logger.info("Sync resumed: \(self)")
+            logger.notice("Sync resumed: \(self)")
         } catch {
             logger.error("Failed to resume \(self): \(error)")
         }

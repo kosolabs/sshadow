@@ -40,7 +40,7 @@ extension SSHClient {
             if attrs.type != .directory {
                 throw ConnectionError.remotePathNotDirectory
             }
-            logger.info("SSH config connected: \(config)")
+            logger.notice("SSH config connected: \(config)")
             return (ssh, sftp)
         } catch {
             logger.error("Failed to connect SSH config \(config): \(error)")

@@ -293,7 +293,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         } onSuccess: { item, fields, shouldFetchContent in
             completionHandler(item, fields, shouldFetchContent, nil)
         } onError: { error in
-            logger.fault("Failed to modify item \(item.itemIdentifier)")
+            logger.error("Failed to modify item \(item.itemIdentifier)")
             completionHandler(nil, [], false, error)
         }
     }
@@ -395,7 +395,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         } onSuccess: {
             completionHandler(nil)
         } onError: { error in
-            logger.fault("Failed to delete item \(identifier)")
+            logger.error("Failed to delete item \(identifier)")
             completionHandler(error)
         }
     }
