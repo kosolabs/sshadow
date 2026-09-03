@@ -16,13 +16,7 @@ struct RichMenuTransfers: View {
                 }
             } label: {
                 HStack(spacing: 8) {
-                    if let transfer = transfers.value.first,
-                        transfers.value.count == 1
-                    {
-                        RichMenuTransfer(transfer: transfer)
-                    } else {
-                        RichMenuTransfersSummary(transfers: transfers)
-                    }
+                    RichMenuTransfersSummary(transfers: transfers)
 
                     Image(systemName: "chevron.right")
                         .font(.caption)
