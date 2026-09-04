@@ -8,30 +8,46 @@ struct RichMenuTransfersSummary: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: systemImage)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(statusColor)
                 .frame(width: 20, alignment: .center)
 
-            ProgressView(
-                value: transfers.fractionCompleted,
-                label: {
-                    Text(title)
-                },
-                currentValueLabel: {
-                    Text(subtitle)
-                        .font(.system(size: 10))
-                }
-            )
-            .progressViewStyle(.linear)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     private var systemImage: String {
-        if transfers.isUploading && transfers.isDownloading {
-            "arrow.up.arrow.down.circle"
-        } else if transfers.isUploading {
-            "arrow.up.circle"
+        if transfers.active.isEmpty {
+            if transfers.cancelled.isEmpty {
+                "checkmark.circle.fill"
+            } else {
+                "xmark.circle.fill"
+            }
         } else {
-            "arrow.down.circle"
+            if transfers.isUploading && transfers.isDownloading {
+                "arrow.up.arrow.down.circle"
+            } else if transfers.isUploading {
+                "arrow.up.circle"
+            } else {
+                "arrow.down.circle"
+            }
+        }
+    }
+
+    private var statusColor: AnyShapeStyle {
+        if transfers.active.isEmpty {
+            if transfers.cancelled.isEmpty {
+                AnyShapeStyle(.green)
+            } else {
+                AnyShapeStyle(.red)
+            }
+        } else {
+            AnyShapeStyle(.secondary)
         }
     }
 
@@ -39,67 +55,59 @@ struct RichMenuTransfersSummary: View {
         let uploadCount = transfers.activeUploads.count
         let downloadCount = transfers.activeDownloads.count
 
+        if uploadCount == 0 && downloadCount == 0 {
+            return "No active transfers"
+        }
+
         var parts: [String] = []
         if uploadCount > 0 {
             parts.append(
-                "Uploading \(uploadCount) item\(uploadCount == 1 ? "" : "s")"
+                "Uploading \(uploadCount) \(format(items: uploadCount))"
             )
         }
         if downloadCount > 0 {
             parts.append(
-                "Downloading \(downloadCount) item\(downloadCount == 1 ? "" : "s")"
+                "Downloading \(downloadCount) \(format(items: downloadCount))"
             )
         }
         return parts.joined(separator: ", ")
     }
 
-    private var subtitle: String {
-        var parts: [String] = []
-        if transfers.isUploading {
-            parts.append(
-                progress(
-                    label: "↑",
-                    completed: transfers.completedUploadUnitCount,
-                    total: transfers.totalUploadUnitCount,
-                    throughput: transfers.uploadThroughput
-                )
-            )
-        }
-        if transfers.isDownloading {
-            parts.append(
-                progress(
-                    label: "↓",
-                    completed: transfers.completedDownloadUnitCount,
-                    total: transfers.totalDownloadUnitCount,
-                    throughput: transfers.downloadThroughput
-                )
-            )
-        }
-        return parts.joined(separator: "\n")
+    private func format(items: Int) -> String {
+        return "item\(items == 1 ? "" : "s")"
     }
 
-    private func progress(
-        label: String,
-        completed: Int64,
-        total: Int64,
-        throughput: Int
-    ) -> String {
-        let completed = ByteCountFormatter.string(
-            fromByteCount: completed,
-            countStyle: .file
-        )
-        let total = ByteCountFormatter.string(
-            fromByteCount: total,
-            countStyle: .file
-        )
-        var result = "\(label) \(completed) of \(total)"
-        if throughput > 0 {
-            let rate = ByteCountFormatter.string(
-                fromByteCount: Int64(throughput),
-                countStyle: .file
+    private var subtitle: String {
+        let finishedCount = transfers.finished.count
+        let cancelledCount = transfers.cancelled.count
+
+        var parts: [String] = []
+        if transfers.isUploading {
+            let uploadThroughput = format(
+                throughput: transfers.uploadThroughput
             )
-            result += " — \(rate)/s"
+            parts.append("↑ \(uploadThroughput)")
         }
-        return result
+        if transfers.isDownloading {
+            let downloadThroughput = format(
+                throughput: transfers.downloadThroughput
+            )
+            parts.append("↓ \(downloadThroughput)")
+        }
+        if finishedCount > 0 {
+            parts.append("\(finishedCount) finished")
+        }
+        if cancelledCount > 0 {
+            parts.append("\(cancelledCount) cancelled")
+        }
+        return parts.joined(separator: " — ")
+    }
+
+    private func format(throughput: Int) -> String {
+        let rate = ByteCountFormatter.string(
+            fromByteCount: Int64(throughput),
+            countStyle: .file
+        )
+        return "\(rate)/s"
     }
 }

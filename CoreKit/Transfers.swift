@@ -10,11 +10,16 @@ public final class Transfers<C: Clock<Duration>> {
     @ObservationIgnored private var _value: [Transfer] = []
 
     private let clock: C
+    private let linger: Duration
 
     private var signalUpdateTask: Task<Void, Never>?
 
-    nonisolated public init(clock: C = ContinuousClock()) {
+    nonisolated public init(
+        clock: C = ContinuousClock(),
+        linger: Duration = .seconds(5)
+    ) {
         self.clock = clock
+        self.linger = linger
     }
 
     public var value: [Transfer] {
@@ -22,60 +27,36 @@ public final class Transfers<C: Clock<Duration>> {
         return _value
     }
 
-    public var inFlight: Int {
-        return value.filter({ transfer in !transfer.progress.isFinished }).count
-    }
-
     public var isActive: Bool {
-        signalUpdateTask != nil || !value.isEmpty
+        signalUpdateTask != nil || !active.isEmpty
     }
 
-    public var uploads: [Transfer] {
-        value.filter { $0.progress.fileOperationKind == .uploading }
+    public var active: [Transfer] {
+        value.filter { !$0.progress.isFinished && !$0.progress.isCancelled }
     }
 
-    public var downloads: [Transfer] {
-        value.filter { $0.progress.fileOperationKind == .downloading }
+    public var finished: [Transfer] {
+        value.filter { $0.progress.isFinished }
+    }
+
+    public var cancelled: [Transfer] {
+        value.filter { $0.progress.isCancelled && !$0.progress.isFinished }
     }
 
     public var activeUploads: [Transfer] {
-        uploads.filter { !$0.progress.isFinished }
+        active.filter { $0.progress.fileOperationKind == .uploading }
     }
 
     public var activeDownloads: [Transfer] {
-        downloads.filter { !$0.progress.isFinished }
+        active.filter { $0.progress.fileOperationKind == .downloading }
     }
 
     public var isUploading: Bool {
-        !uploads.isEmpty
+        !activeUploads.isEmpty
     }
 
     public var isDownloading: Bool {
-        !downloads.isEmpty
-    }
-
-    public var totalUnitCount: Int64 {
-        value.reduce(0) { $0 + $1.progress.totalUnitCount }
-    }
-
-    public var totalUploadUnitCount: Int64 {
-        uploads.reduce(0) { $0 + $1.progress.totalUnitCount }
-    }
-
-    public var totalDownloadUnitCount: Int64 {
-        downloads.reduce(0) { $0 + $1.progress.totalUnitCount }
-    }
-
-    public var completedUnitCount: Int64 {
-        value.reduce(0) { $0 + $1.progress.completedUnitCount }
-    }
-
-    public var completedUploadUnitCount: Int64 {
-        uploads.reduce(0) { $0 + $1.progress.completedUnitCount }
-    }
-
-    public var completedDownloadUnitCount: Int64 {
-        downloads.reduce(0) { $0 + $1.progress.completedUnitCount }
+        !activeDownloads.isEmpty
     }
 
     public var uploadThroughput: Int {
@@ -84,12 +65,6 @@ public final class Transfers<C: Clock<Duration>> {
 
     public var downloadThroughput: Int {
         activeDownloads.reduce(0) { $0 + ($1.progress.throughput ?? 0) }
-    }
-
-    public var fractionCompleted: Double {
-        totalUnitCount > 0
-            ? Double(completedUnitCount) / Double(totalUnitCount)
-            : 0
     }
 
     func begin(name: String, progress: Progress) -> Transfer {
@@ -104,9 +79,8 @@ public final class Transfers<C: Clock<Duration>> {
 
     nonisolated func end(transfer: Transfer) {
         Task { @MainActor in
-            if inFlight == 0 {
-                _value.removeAll()
-            }
+            try await Task.sleep(for: linger, clock: clock)
+            _value.removeAll { $0.id == transfer.id }
             triggerSignalUpdate()
         }
     }

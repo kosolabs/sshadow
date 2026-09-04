@@ -28,7 +28,7 @@ struct RichMenuMainView: View {
                 Divider().padding(.vertical, 4)
             }
 
-            if transfers.isActive {
+            if !transfers.value.isEmpty {
                 RichMenuHeading(title: "Transfers")
 
                 RichMenuTransfers(transfers: transfers)
