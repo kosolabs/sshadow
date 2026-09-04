@@ -1,3 +1,4 @@
+import Common
 import CoreKit
 import SwiftUI
 
@@ -32,20 +33,34 @@ struct EventLogRow: View {
                 Text(event.message)
                     .lineLimit(2)
 
-                if let detail = event.detail {
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
+                HStack(alignment: .center, spacing: 8) {
+                    Text(
+                        event.timestamp.formatted(
+                            date: .omitted,
+                            time: .standard
+                        )
+                    )
+                    .monospacedDigit()
+
+                    Text(event.category.label)
+
+                    if let detail = event.detail {
+                        Text(detail)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
             }
 
             Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(event.timestamp.formatted(date: .omitted, time: .standard))
-                    .monospacedDigit()
-                Text(event.category.label)
+                if let source = event.source {
+                    Text(source.name)
+                    Text(source.url)
+                }
             }
             .font(.caption)
             .foregroundStyle(.secondary)

@@ -31,12 +31,12 @@ public final class Events<C: Clock<Duration>> {
 
     public nonisolated func logger(
         for category: Event.Category,
-        connectionId: UUID
+        source: Event.Source? = nil
     ) -> Logger {
         Logger(
             eventLog: self,
-            category: category,
-            connectionId: connectionId
+            source: source,
+            category: category
         )
     }
 
@@ -45,21 +45,21 @@ public final class Events<C: Clock<Duration>> {
             _value.removeAll()
         }
     }
-    
+
     private nonisolated func log(
-        _ message: String,
+        _ message: LogMessage,
+        source: Event.Source?,
         level: Event.Level,
         category: Event.Category,
-        connectionId: UUID,
         detail: String?
     ) {
         append(
             Event(
                 timestamp: Date.now,
-                connectionId: connectionId,
+                source: source,
                 level: level,
                 category: category,
-                message: message,
+                message: message.display,
                 detail: detail
             )
         )
@@ -87,74 +87,74 @@ public final class Events<C: Clock<Duration>> {
     public struct Logger {
         private let eventLog: Events<C>
         private let category: Event.Category
-        private let connectionId: UUID
+        private let source: Event.Source?
 
         init(
             eventLog: Events<C>,
-            category: Event.Category,
-            connectionId: UUID
+            source: Event.Source?,
+            category: Event.Category
         ) {
             self.eventLog = eventLog
+            self.source = source
             self.category = category
-            self.connectionId = connectionId
         }
 
-        public func info(_ message: String, detail: String? = nil) {
+        public func info(_ message: LogMessage, detail: String? = nil) {
             eventLog.log(
                 message,
+                source: source,
                 level: .info,
                 category: category,
-                connectionId: connectionId,
                 detail: detail
             )
         }
 
-        public func notice(_ message: String, detail: String? = nil) {
+        public func notice(_ message: LogMessage, detail: String? = nil) {
             eventLog.log(
                 message,
+                source: source,
                 level: .notice,
                 category: category,
-                connectionId: connectionId,
                 detail: detail
             )
         }
 
-        public func warning(_ message: String, detail: String? = nil) {
+        public func warning(_ message: LogMessage, detail: String? = nil) {
             eventLog.log(
                 message,
+                source: source,
                 level: .warning,
                 category: category,
-                connectionId: connectionId,
                 detail: detail
             )
         }
 
-        public func warning(_ message: String, error: any Error) {
+        public func warning(_ message: LogMessage, error: any Error) {
             eventLog.log(
                 message,
+                source: source,
                 level: .warning,
                 category: category,
-                connectionId: connectionId,
                 detail: error.localizedDescription
             )
         }
 
-        public func error(_ message: String, detail: String? = nil) {
+        public func error(_ message: LogMessage, detail: String? = nil) {
             eventLog.log(
                 message,
+                source: source,
                 level: .error,
                 category: category,
-                connectionId: connectionId,
                 detail: detail
             )
         }
 
-        public func error(_ message: String, error: any Error) {
+        public func error(_ message: LogMessage, error: any Error) {
             eventLog.log(
                 message,
+                source: source,
                 level: .error,
                 category: category,
-                connectionId: connectionId,
                 detail: error.localizedDescription
             )
         }

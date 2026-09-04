@@ -87,9 +87,10 @@ public actor DomainRegistry {
         try await supervisor(for: domain).pause()
     }
 
-    public func disable(domain: NSFileProviderDomain) async throws {
+    public func disable(domain: NSFileProviderDomain) async {
         if let supervisor = supervisors.removeValue(forKey: domain.id) {
             await supervisor.disable()
+            await DomainDB.delete(id: domain.id)
         }
     }
 }

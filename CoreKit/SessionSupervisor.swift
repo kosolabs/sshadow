@@ -19,7 +19,7 @@ actor SessionSupervisor {
     private let ext: ExtensionController
     private let events: Events<ContinuousClock>
     private let onStatusChange: StatusChangeHandler
-    private let log: Events<ContinuousClock>.Logger
+    private var log: Events<ContinuousClock>.Logger
 
     private lazy var service = CoreService(supervisor: self)
 
@@ -96,11 +96,15 @@ actor SessionSupervisor {
         self.events = events
         self.onStatusChange = onStatusChange
 
-        self.log = events.logger(for: .connection, connectionId: domain.id)
+        self.log = events.logger(for: .connection)
     }
 
     func connect(config: ConnectionConfig) async throws(ConnectionError) {
         state = .connecting
+        log = events.logger(
+            for: .connection,
+            source: Event.Source(name: config.name, url: config.url)
+        )
         log.info("Connecting to \(config.name)")
         do {
             try await open(config: config)
