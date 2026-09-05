@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.13.0](https://github.com/kosolabs/sshadow/compare/v0.12.0...v0.13.0) (2026-09-05)
+
+
+### Features
+
+* attach config to events to log connection details, fixes [#337](https://github.com/kosolabs/sshadow/issues/337) ([#349](https://github.com/kosolabs/sshadow/issues/349)) ([e4cf61c](https://github.com/kosolabs/sshadow/commit/e4cf61cdf08857f7554c723cca7edaf0e52f9233))
+* enable summary transfers to handle cancelled transfers ([#351](https://github.com/kosolabs/sshadow/issues/351)) ([051d883](https://github.com/kosolabs/sshadow/commit/051d883e7ba42b924803e0c972f421687e9d3343))
+
+
+### Bug Fixes
+
+* waitUntil to log an issue on timeout and rename to expect(eventually:) ([#355](https://github.com/kosolabs/sshadow/issues/355)) ([5cca61a](https://github.com/kosolabs/sshadow/commit/5cca61a64d80e1bbb0e98d082e23bc28113f3a8d))
+
 ## [0.12.0](https://github.com/kosolabs/sshadow/compare/v0.11.1...v0.12.0) (2026-09-03)
 
 
