@@ -1,3 +1,11 @@
+@_silgen_name("swift_EnumCaseName")
+private func _getEnumCaseName<T>(_ value: T) -> UnsafePointer<CChar>?
+
+private func enumCaseName(of value: Any) -> String? {
+    guard let cString = _getEnumCaseName(value) else { return nil }
+    return String(validatingCString: cString)
+}
+
 public protocol PrettyDescribable: CustomStringConvertible {}
 
 extension PrettyDescribable {
@@ -7,11 +15,10 @@ extension PrettyDescribable {
 
         switch mirror.displayStyle {
         case .enum:
-            guard let child = mirror.children.first, let label = child.label
-            else {
-                return typeName
-            }
-            return "\(label)(\(child.value))"
+            guard let caseName = enumCaseName(of: self) else { return typeName }
+            let name = "\(typeName).\(caseName)"
+            guard let child = mirror.children.first else { return name }
+            return "\(name)(\(formatPayload(child.value)))"
         default:
             let fields = mirror.children.compactMap { label, value -> String? in
                 guard let label else { return nil }
@@ -20,6 +27,17 @@ extension PrettyDescribable {
             return "\(typeName)(\(fields))"
         }
     }
+}
+
+private func formatPayload(_ payload: Any) -> String {
+    let mirror = Mirror(reflecting: payload)
+    guard mirror.displayStyle == .tuple else { return formatValue(payload) }
+    return mirror.children.map { label, value in
+        guard let label, !label.hasPrefix(".") else {
+            return formatValue(value)
+        }
+        return "\(label): \(formatValue(value))"
+    }.joined(separator: ", ")
 }
 
 private func formatValue(_ value: Any) -> String {
