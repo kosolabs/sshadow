@@ -85,8 +85,9 @@ actor Session {
         self.transfers = transfers
         self.events = events
 
-        log = events.logger(for: .sync, connectionId: config.id)
-        fileLog = events.logger(for: .file, connectionId: config.id)
+        let source = Event.Source(name: config.name, url: config.url)
+        log = events.logger(for: .sync, source: source)
+        fileLog = events.logger(for: .file, source: source)
         let dbConfig = db.modelContainer.configurations.first
         let dbPath = dbConfig?.url.path ?? "in-memory"
         logger.notice("SSH connected: \(config), DB: \(dbPath)")
@@ -195,26 +196,31 @@ actor Session {
         return allChanges
     }
 
-    func watch(itemId: NSFileProviderItemIdentifier) {
+    func watch(itemId: NSFileProviderItemIdentifier) async {
         guard itemId != .workingSet, itemId != .trashContainer else { return }
+        let ref = await ref(for: itemId)
+
         watched[itemId, default: 0] += 1
         schedule?.recordWatchStarted()
+
+        logger.info("Watch on \(ref): \(watched[itemId, default: 0])")
         if watched[itemId] == 1 {
-            logger.notice("Started watching: \(itemId)")
+            logger.notice("Started watching: \(ref)")
         }
-        logger.info("Watch on \(itemId): \(watched[itemId, default: 0])")
     }
 
-    func unwatch(itemId: NSFileProviderItemIdentifier) {
+    func unwatch(itemId: NSFileProviderItemIdentifier) async {
         guard itemId != .workingSet, itemId != .trashContainer else { return }
         guard let count = watched[itemId] else { return }
+        let ref = await ref(for: itemId)
+
+        logger.info("Unwatch on \(ref): \(watched[itemId, default: 0])")
         if count <= 1 {
             watched.removeValue(forKey: itemId)
-            logger.notice("Stopped watching: \(itemId)")
+            logger.notice("Stopped watching: \(ref)")
         } else {
             watched[itemId] = count - 1
         }
-        logger.info("Unwatch on \(itemId): \(watched[itemId, default: 0])")
     }
 
     func pollWatched() async throws {
@@ -404,9 +410,9 @@ actor Session {
         return (anchor, result)
     }
 
-    func ref(for itemId: NSFileProviderItemIdentifier) async throws -> Ref {
-        try await Ref(
-            path: db.path(for: itemId),
+    func ref(for itemId: NSFileProviderItemIdentifier) async -> Ref {
+        Ref(
+            path: try? await db.path(for: itemId),
             anchor: .item(id: itemId.rawValue)
         )
     }
@@ -414,9 +420,9 @@ actor Session {
     func ref(
         for name: String,
         in parentId: NSFileProviderItemIdentifier
-    ) async throws -> Ref {
-        try await Ref(
-            path: db.path(for: name, in: parentId),
+    ) async -> Ref {
+        Ref(
+            path: try? await db.path(for: name, in: parentId),
             anchor: .parent(id: parentId.rawValue)
         )
     }
@@ -490,7 +496,7 @@ actor Session {
     }
 
     func enumerate(itemId: NSFileProviderItemIdentifier) async throws {
-        try await logger.info("Enumerating \(ref(for: itemId))")
+        await logger.info("Enumerating \(ref(for: itemId))")
         try await withEntries(of: itemId) { entries in
             for try await sshItem in entries {
                 try await upsert(parentId: itemId, sshItem: sshItem)
@@ -575,7 +581,7 @@ actor Session {
         reconcileTask?.cancel()
         defer { outstanding -= 1 }
 
-        let ref = try await ref(for: name, in: parentId)
+        let ref = await ref(for: name, in: parentId)
         try await perform(
             with: parentId,
             recording: "Create directory at \(ref)"
@@ -691,8 +697,7 @@ actor Session {
         )
         defer { transfers.end(transfer: transfer) }
 
-        let message: OperationMessage = try await
-            "Upload \(ref(for: name, in: parentId))"
+        let message: LogMessage = await "Upload \(ref(for: name, in: parentId))"
         let estimator = ThroughputEstimator(
             progress: progress,
             totalUnitCount: Int64(size),
@@ -754,7 +759,7 @@ actor Session {
         )
         defer { transfers.end(transfer: transfer) }
 
-        let message: OperationMessage = try await "Download \(ref(for: itemId))"
+        let message: LogMessage = await "Download \(ref(for: itemId))"
         let estimator = ThroughputEstimator(
             progress: progress,
             totalUnitCount: Int64(item.size ?? 0),
@@ -1008,19 +1013,19 @@ actor Session {
 
     private func perform<T>(
         with itemId: NSFileProviderItemIdentifier,
-        recording message: OperationMessage? = nil,
+        recording message: LogMessage? = nil,
         _ work: () async throws -> T
     ) async throws -> T {
         if let message { logger.info(message.debug) }
         do {
             let result = try await work()
-            if let message { fileLog.info(message.display) }
+            if let message { fileLog.info(message) }
             return result
         } catch {
             let mapped = coreError(from: error, itemId: itemId)
             if let message {
                 logger.error("Failed: \(message.debug): \(error) -> \(mapped)")
-                fileLog.error(message.display, error: mapped)
+                fileLog.error(message, error: mapped)
             }
             if case CoreError.serverUnreachable = mapped {
                 await connectionLostHandler()
@@ -1031,7 +1036,7 @@ actor Session {
 
     private func performTransfer(
         with itemId: NSFileProviderItemIdentifier,
-        recording message: OperationMessage,
+        recording message: LogMessage,
         estimator: ThroughputEstimator,
         progress: Progress,
         _ work: () async throws -> Void
@@ -1040,14 +1045,14 @@ actor Session {
         do {
             try await perform(with: itemId, work)
             estimator.finalize()
-            fileLog.info(message.display, detail: progress.report)
+            fileLog.info(message, detail: progress.report)
         } catch CoreError.userCancelled {
             logger.info("Cancelled: \(message.debug)")
-            fileLog.info(message.display, detail: "Cancelled")
+            fileLog.info(message, detail: "Cancelled")
             throw CoreError.userCancelled
         } catch {
             logger.error("Failed: \(message.debug): \(error)")
-            fileLog.error(message.display, detail: error.localizedDescription)
+            fileLog.error(message, detail: error.localizedDescription)
             throw error
         }
     }
@@ -1093,7 +1098,7 @@ actor Session {
     }
 
     private func loggingProgressReporter(
-        _ message: OperationMessage
+        _ message: LogMessage
     ) -> ThrottledProgressReporter {
         ThrottledProgressReporter(
             frequency: TimeInterval(1.0),
@@ -1104,62 +1109,5 @@ actor Session {
                 logger.info("Finished: \(message.debug): \($0.report)")
             }
         )
-    }
-}
-
-struct Ref: PrettyDescribable {
-    enum Anchor {
-        case item(id: String)
-        case parent(id: String)
-    }
-
-    private let path: String
-    private let anchor: Anchor
-
-    init(path: String, anchor: Anchor) {
-        self.path = path
-        self.anchor = anchor
-    }
-
-    var display: String {
-        "\"\(path)\""
-    }
-}
-
-struct OperationMessage: ExpressibleByStringInterpolation {
-    final class StringInterpolation: StringInterpolationProtocol {
-        var debug = ""
-        var display = ""
-
-        init(literalCapacity: Int, interpolationCount: Int) {}
-
-        func appendLiteral(_ s: String) {
-            debug += s
-            display += s
-        }
-
-        func appendInterpolation(_ ref: Ref) {
-            debug += ref.description
-            display += ref.display
-        }
-
-        func appendInterpolation(_ v: some CustomStringConvertible) {
-            let s = String(describing: v)
-            debug += s
-            display += s
-        }
-    }
-
-    let debug: String
-    let display: String
-
-    init(stringLiteral v: String) {
-        debug = v
-        display = v
-    }
-
-    init(stringInterpolation i: StringInterpolation) {
-        debug = i.debug
-        display = i.display
     }
 }

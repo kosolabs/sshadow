@@ -30,6 +30,21 @@ actor DomainDB {
         try await factory.open(config: config)
     }
 
+    static func delete(id: UUID) async {
+        let basePath = url(for: id).path
+
+        for suffix in ["", "-shm", "-wal"] {
+            let path = basePath + suffix
+            if FileManager.default.fileExists(atPath: path) {
+                do {
+                    try FileManager.default.removeItem(atPath: path)
+                } catch {
+                    logger.error("Failed to remove file: \(path)")
+                }
+            }
+        }
+    }
+
     private static func url(for id: UUID) -> URL {
         SSHadow.groupUrl.appendingPathComponent(
             "DomainDB-\(id.uuidString).store"
@@ -49,17 +64,6 @@ actor DomainDB {
                 name: ".sshadow/trash"
             )
         )
-    }
-
-    static func delete(id: UUID) async throws {
-        let basePath = url(for: id).path
-
-        for suffix in ["", "-shm", "-wal"] {
-            let path = basePath + suffix
-            if FileManager.default.fileExists(atPath: path) {
-                try FileManager.default.removeItem(atPath: path)
-            }
-        }
     }
 
     func item(for id: NSFileProviderItemIdentifier) throws -> Item {

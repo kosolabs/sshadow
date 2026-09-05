@@ -52,7 +52,7 @@ struct ConnectionConfigListView: View {
                 ToolbarItem(placement: .destructiveAction) {
                     Button(role: .destructive) {
                         Task {
-                            try? await modelContext.delete(
+                            await modelContext.delete(
                                 connectionConfig: selection
                             )
                         }

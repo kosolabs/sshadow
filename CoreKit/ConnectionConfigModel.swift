@@ -117,8 +117,8 @@ public class ConnectionConfigModel: CustomStringConvertible {
         logger.notice("Profile enabled: \(self)")
     }
 
-    public func disable() async throws {
-        try await DomainRegistry.shared.disable(domain: domain)
+    public func disable() async {
+        await DomainRegistry.shared.disable(domain: domain)
         self.enabled = false
         logger.notice("Profile disabled: \(self)")
     }
@@ -265,9 +265,9 @@ extension ConnectionConfig.ValidationError {
 extension ModelContext {
     public func delete(
         connectionConfig config: ConnectionConfigModel
-    ) async throws {
+    ) async {
         if config.enabled {
-            try await config.disable()
+            await config.disable()
         }
         config.deletePassword()
         config.deletePrivateKeyPassphrase()

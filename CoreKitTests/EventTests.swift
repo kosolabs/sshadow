@@ -5,6 +5,11 @@ import Testing
 @testable import CoreKit
 
 struct EventTests {
+    private let source = Event.Source(
+        name: "test",
+        url: "user@host"
+    )
+
     // MARK: - Level
 
     @Test func levelLabels() {
@@ -26,7 +31,7 @@ struct EventTests {
         let timestamp = Date(timeIntervalSince1970: 1_000)
         let event = Event(
             timestamp: timestamp,
-            connectionId: UUID(),
+            source: source,
             level: .info,
             category: .file,
             message: "Upload /f",
@@ -34,7 +39,7 @@ struct EventTests {
         )
         #expect(
             event.logLine
-                == "\(timestamp.formatted(.iso8601))  INFO  Upload /f — 42 KB"
+                == "\(timestamp.formatted(.iso8601))  INFO  test  user@host  Upload /f  42 KB"
         )
     }
 
@@ -42,14 +47,14 @@ struct EventTests {
         let timestamp = Date(timeIntervalSince1970: 1_000)
         let event = Event(
             timestamp: timestamp,
-            connectionId: UUID(),
+            source: source,
             level: .notice,
             category: .connection,
             message: "Connected to Server"
         )
         #expect(
             event.logLine
-                == "\(timestamp.formatted(.iso8601))  NOTICE  Connected to Server"
+                == "\(timestamp.formatted(.iso8601))  NOTICE  test  user@host  Connected to Server"
         )
     }
 
@@ -57,14 +62,14 @@ struct EventTests {
         let timestamp = Date(timeIntervalSince1970: 1_000)
         let event = Event(
             timestamp: timestamp,
-            connectionId: UUID(),
+            source: source,
             level: .error,
             category: .connection,
             message: "Lost connection to Server"
         )
         #expect(
             event.logLine
-                == "\(timestamp.formatted(.iso8601))  ERROR  "
+                == "\(timestamp.formatted(.iso8601))  ERROR  test  user@host  "
                 + "Lost connection to Server"
         )
     }
@@ -72,17 +77,16 @@ struct EventTests {
     // MARK: - Identity
 
     @Test func distinctEventsHaveDistinctIDs() {
-        let connectionId = UUID()
         let a = Event(
             timestamp: .now,
-            connectionId: connectionId,
+            source: source,
             level: .info,
             category: .file,
             message: "Upload /f"
         )
         let b = Event(
             timestamp: .now,
-            connectionId: connectionId,
+            source: source,
             level: .info,
             category: .file,
             message: "Upload /f"
@@ -95,7 +99,7 @@ struct EventTests {
     @Test func eventWithDetailRoundTripsThroughJSON() throws {
         let event = Event(
             timestamp: Date.now,
-            connectionId: UUID(),
+            source: source,
             level: .warning,
             category: .sync,
             message: "Reconnecting to Server",
@@ -111,7 +115,7 @@ struct EventTests {
     @Test func eventWithoutDetailRoundTripsThroughJSON() throws {
         let event = Event(
             timestamp: Date.now,
-            connectionId: UUID(),
+            source: source,
             level: .info,
             category: .diagnostic,
             message: "Extension started"

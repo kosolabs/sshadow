@@ -2,6 +2,11 @@ import Common
 import Foundation
 
 public struct Event: Message, Identifiable {
+    public struct Source: Message {
+        public let name: String
+        public let url: String
+    }
+
     public enum Level: String, Message, CaseIterable, Comparable {
         case info
         case notice
@@ -49,7 +54,7 @@ public struct Event: Message, Identifiable {
 
     public let id: UUID
     public let timestamp: Date
-    public let connectionId: UUID
+    public let source: Source?
     public let level: Level
     public let category: Category
     public let message: String
@@ -58,7 +63,7 @@ public struct Event: Message, Identifiable {
     public init(
         id: UUID = UUID(),
         timestamp: Date,
-        connectionId: UUID,
+        source: Source?,
         level: Level,
         category: Category,
         message: String,
@@ -66,7 +71,7 @@ public struct Event: Message, Identifiable {
     ) {
         self.id = id
         self.timestamp = timestamp
-        self.connectionId = connectionId
+        self.source = source
         self.level = level
         self.category = category
         self.message = message
@@ -74,8 +79,17 @@ public struct Event: Message, Identifiable {
     }
 
     public var logLine: String {
-        let time = timestamp.formatted(.iso8601)
-        let suffix = detail.map { " — \($0)" } ?? ""
-        return "\(time)  \(level.label)  \(message)\(suffix)"
+        var parts: [String] = []
+        parts.append(timestamp.formatted(.iso8601))
+        parts.append(level.label)
+        if let source {
+            parts.append(source.name)
+            parts.append(source.url)
+        }
+        parts.append(message)
+        if let detail {
+            parts.append(detail)
+        }
+        return parts.joined(separator: "  ")
     }
 }

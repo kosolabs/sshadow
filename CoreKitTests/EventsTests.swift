@@ -10,10 +10,11 @@ struct EventsTests {
         var errorDescription: String? { "something went wrong" }
     }
 
+    private let source = Event.Source(name: "test", url: "user@host")
+
     @Test func loggerStoresEntryWithInstantAndFields() async {
         let events = Events(clock: TestClock())
-        let connectionId = UUID()
-        let log = events.logger(for: .file, connectionId: connectionId)
+        let log = events.logger(for: .file, source: source)
 
         let before = Date.now
         log.info("Upload /f", detail: "ok")
@@ -26,7 +27,7 @@ struct EventsTests {
         #expect(event.level == .info)
         #expect(event.category == .file)
         #expect(event.detail == "ok")
-        #expect(event.connectionId == connectionId)
+        #expect(event.source == source)
         // `timestamp` is a wall-clock timestamp, stamped independently of the
         // injected (sleep-only) clock.
         #expect(event.timestamp >= before)
@@ -35,7 +36,7 @@ struct EventsTests {
 
     @Test func loggerMapsEachMethodOntoItsLevel() async {
         let events = Events(clock: TestClock())
-        let log = events.logger(for: .connection, connectionId: UUID())
+        let log = events.logger(for: .connection, source: source)
 
         log.info("a")
         log.notice("b")
@@ -44,12 +45,14 @@ struct EventsTests {
 
         await waitUntil { events.value.count == 4 }
 
-        #expect(events.value.map(\.level) == [.info, .notice, .warning, .error])
+        #expect(
+            events.value.map(\.level) == [.info, .notice, .warning, .error]
+        )
     }
 
     @Test func loggerRecordsErrorDescriptionAsDetail() async {
         let events = Events(clock: TestClock())
-        let log = events.logger(for: .connection, connectionId: UUID())
+        let log = events.logger(for: .connection, source: source)
 
         log.warning("Reconnecting", error: SampleError())
         log.error("Failed", error: SampleError())
@@ -62,12 +65,14 @@ struct EventsTests {
         #expect(events.value[1].detail == "something went wrong")
     }
 
-    @Test func loggerCarriesItsCategoryAndConnectionId() async {
+    @Test func loggerCarriesItsCategoryAndConfig() async {
         let events = Events(clock: TestClock())
-        let syncId = UUID()
-        let fileId = UUID()
-        let syncLog = events.logger(for: .sync, connectionId: syncId)
-        let fileLog = events.logger(for: .file, connectionId: fileId)
+
+        let syncSource = Event.Source(name: "sync", url: "")
+        let fileSource = Event.Source(name: "file", url: "")
+
+        let syncLog = events.logger(for: .sync, source: syncSource)
+        let fileLog = events.logger(for: .file, source: fileSource)
 
         syncLog.notice("synced")
         fileLog.info("downloaded")
@@ -75,14 +80,14 @@ struct EventsTests {
         await waitUntil { events.value.count == 2 }
 
         #expect(events.value[0].category == .sync)
-        #expect(events.value[0].connectionId == syncId)
+        #expect(events.value[0].source == syncSource)
         #expect(events.value[1].category == .file)
-        #expect(events.value[1].connectionId == fileId)
+        #expect(events.value[1].source == fileSource)
     }
 
     @Test func logsPreserveOrder() async {
         let events = Events(clock: TestClock())
-        let log = events.logger(for: .file, connectionId: UUID())
+        let log = events.logger(for: .file, source: source)
 
         log.info("a")
         log.info("b")
@@ -95,7 +100,7 @@ struct EventsTests {
 
     @Test func clearRemovesAllEntries() async {
         let events = Events(clock: TestClock())
-        let log = events.logger(for: .file, connectionId: UUID())
+        let log = events.logger(for: .file, source: source)
 
         log.info("a")
         log.info("b")
@@ -109,7 +114,7 @@ struct EventsTests {
     @Test func rapidLogsCoalesceIntoASingleSignalUpdate() async {
         let clock = TestClock()
         let events = Events(clock: clock)
-        let log = events.logger(for: .file, connectionId: UUID())
+        let log = events.logger(for: .file, source: source)
 
         log.info("a")
         log.info("b")
@@ -130,7 +135,7 @@ struct EventsTests {
     @Test func isActiveDependsOnlyOnThePendingSignalTask() async {
         let clock = TestClock()
         let events = Events(clock: clock)
-        let log = events.logger(for: .file, connectionId: UUID())
+        let log = events.logger(for: .file, source: source)
 
         #expect(!events.isActive)
 
