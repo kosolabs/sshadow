@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+import Testing
 
 /// A `Clock` whose `sleep(until:)` calls only complete once the test advances it
 /// past their deadline, enabling deterministic coalescing/throttle tests.
@@ -91,13 +92,29 @@ final class TestClock: Clock {
 }
 
 @MainActor
-func waitUntil(
+@discardableResult
+func expect(
+    eventually condition: @MainActor () -> Bool,
+    _ comment: Comment? = nil,
     timeout: Duration = .seconds(2),
-    _ condition: @MainActor () -> Bool
-) async {
+    sourceLocation: SourceLocation = #_sourceLocation
+) async -> Bool {
     let deadline = ContinuousClock.now + timeout
+    var yields = 0
     while !condition() {
-        if ContinuousClock.now >= deadline { return }
-        await Task.yield()
+        guard ContinuousClock.now < deadline else {
+            Issue.record(
+                comment ?? "Condition did not hold within \(timeout)",
+                sourceLocation: sourceLocation
+            )
+            return false
+        }
+        if yields < 1000 {
+            yields += 1
+            await Task.yield()
+        } else {
+            try? await Task.sleep(for: .milliseconds(1))
+        }
     }
+    return true
 }

@@ -18,10 +18,9 @@ struct EventsTests {
 
         let before = Date.now
         log.info("Upload /f", detail: "ok")
-        await waitUntil { events.value.count == 1 }
+        await expect(eventually: { events.value.count == 1 })
         let after = Date.now
 
-        #expect(events.value.count == 1)
         let event = events.value[0]
         #expect(event.message == "Upload /f")
         #expect(event.level == .info)
@@ -43,7 +42,7 @@ struct EventsTests {
         log.warning("c")
         log.error("d")
 
-        await waitUntil { events.value.count == 4 }
+        await expect(eventually: { events.value.count == 4 })
 
         #expect(
             events.value.map(\.level) == [.info, .notice, .warning, .error]
@@ -57,7 +56,7 @@ struct EventsTests {
         log.warning("Reconnecting", error: SampleError())
         log.error("Failed", error: SampleError())
 
-        await waitUntil { events.value.count == 2 }
+        await expect(eventually: { events.value.count == 2 })
 
         #expect(events.value[0].level == .warning)
         #expect(events.value[0].detail == "something went wrong")
@@ -77,7 +76,7 @@ struct EventsTests {
         syncLog.notice("synced")
         fileLog.info("downloaded")
 
-        await waitUntil { events.value.count == 2 }
+        await expect(eventually: { events.value.count == 2 })
 
         #expect(events.value[0].category == .sync)
         #expect(events.value[0].source == syncSource)
@@ -93,7 +92,7 @@ struct EventsTests {
         log.info("b")
         log.info("c")
 
-        await waitUntil { events.value.count == 3 }
+        await expect(eventually: { events.value.count == 3 })
 
         #expect(events.value.map(\.message) == ["a", "b", "c"])
     }
@@ -104,7 +103,7 @@ struct EventsTests {
 
         log.info("a")
         log.info("b")
-        await waitUntil { events.value.count == 2 }
+        await expect(eventually: { events.value.count == 2 })
 
         events.clear()
 
@@ -121,15 +120,15 @@ struct EventsTests {
         log.info("c")
 
         // All three entries land, but they share one throttled signal task.
-        await waitUntil { events.value.count == 3 && clock.pendingCount == 1 }
+        await expect(eventually: {
+            events.value.count == 3 && clock.pendingCount == 1
+        })
 
-        #expect(events.value.count == 3)
-        #expect(clock.pendingCount == 1)
         #expect(events.isActive)
 
         // Drain the parked sleep so no continuation is left suspended.
         clock.advance(by: .milliseconds(250))
-        await waitUntil { !events.isActive }
+        await expect(eventually: { !events.isActive })
     }
 
     @Test func isActiveDependsOnlyOnThePendingSignalTask() async {
@@ -140,13 +139,13 @@ struct EventsTests {
         #expect(!events.isActive)
 
         log.info("f")
-        await waitUntil { events.isActive && clock.pendingCount == 1 }
-        #expect(events.isActive)
+        await expect(eventually: {
+            events.isActive && clock.pendingCount == 1
+        })
 
         // Draining the throttle clears isActive even though entries remain.
         clock.advance(by: .milliseconds(250))
-        await waitUntil { !events.isActive }
-        #expect(!events.isActive)
+        await expect(eventually: { !events.isActive })
         #expect(events.value.count == 1)
     }
 }
