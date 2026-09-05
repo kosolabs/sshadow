@@ -820,6 +820,7 @@ actor Session {
             totalUnitCount: Int64(slice.byteRange.length),
             reporters: [loggingProgressReporter("Stream \(slice)")]
         )
+        defer { estimator.finalize() }
 
         for chunk in slice {
             if progress.isCancelled {
@@ -841,7 +842,6 @@ actor Session {
             }
         }
 
-        estimator.finalize()
         return (url, slice.byteRange)
     }
 
@@ -1042,9 +1042,9 @@ actor Session {
         _ work: () async throws -> Void
     ) async throws {
         logger.info(message.debug)
+        defer { estimator.finalize() }
         do {
             try await perform(with: itemId, work)
-            estimator.finalize()
             fileLog.info(message, detail: progress.report)
         } catch CoreError.userCancelled {
             logger.info("Cancelled: \(message.debug)")

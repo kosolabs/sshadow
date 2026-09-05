@@ -5,13 +5,20 @@ import SwiftUI
 struct RichMenuTransfer: View {
     let transfer: Transfer
 
-    private var isCompleted: Bool {
+    private var isSuccess: Bool {
         transfer.progress.isFinished
     }
 
+    private var isFailed: Bool {
+        transfer.progress.isCancelled
+    }
+
     private var systemImage: String {
-        if isCompleted {
+        if isSuccess {
             return "checkmark.circle.fill"
+        }
+        if isFailed {
+            return "xmark.circle.fill"
         }
         switch transfer.progress.fileOperationKind {
         case .uploading: return "arrow.up.circle"
@@ -19,36 +26,29 @@ struct RichMenuTransfer: View {
         }
     }
 
+    private var statusColor: AnyShapeStyle {
+        if isSuccess { return AnyShapeStyle(.green) }
+        if isFailed { return AnyShapeStyle(.red) }
+        return AnyShapeStyle(.secondary)
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: systemImage)
-                .foregroundStyle(
-                    isCompleted
-                        ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary)
-                )
+                .foregroundStyle(statusColor)
                 .frame(width: 20, alignment: .center)
 
-            if isCompleted {
-                VStack(alignment: .leading, spacing: 2) {
+            ProgressView(
+                value: transfer.progress.fractionCompleted,
+                label: {
                     Text(transfer.name)
+                },
+                currentValueLabel: {
                     Text(transfer.progress.report)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+                        .font(.caption)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                ProgressView(
-                    value: transfer.progress.fractionCompleted,
-                    label: {
-                        Text(transfer.name)
-                    },
-                    currentValueLabel: {
-                        Text(transfer.progress.report)
-                            .font(.system(size: 10))
-                    }
-                )
-                .progressViewStyle(.linear)
-            }
+            )
+            .progressViewStyle(.linear)
         }
     }
 }

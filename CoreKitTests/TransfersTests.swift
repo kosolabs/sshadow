@@ -49,82 +49,145 @@ struct TransfersTests {
 
     // MARK: - end
 
-    @Test func endClearsAllTransfersWhenNothingInFlight() async {
-        let transfers = Transfers(clock: TestClock())
-        let first = transfers.begin(
+    /// `Task.sleep(for:clock:)` reads `clock.now` when the task body runs, so
+    /// advancing before a sleeper has parked pushes its deadline past the new
+    /// `now` and it never fires. Every test below waits for the expected number
+    /// of parked sleepers before advancing: one for the throttle `begin`
+    /// schedules, plus one per outstanding `end`.
+    private func waitForSleepers(
+        _ count: Int,
+        on clock: TestClock
+    ) async {
+        await waitUntil { clock.pendingCount == count }
+        #expect(clock.pendingCount == count)
+    }
+
+    @Test func endKeepsTransferVisibleUntilLingerElapses() async {
+        let clock = TestClock()
+        let transfers = Transfers(clock: clock, linger: .seconds(5))
+        let transfer = transfers.begin(
             name: "a",
-            progress: makeProgress(kind: .downloading, total: 100, completed: 100)
-        )
-        _ = transfers.begin(
-            name: "b",
-            progress: makeProgress(kind: .uploading, total: 100, completed: 100)
+            progress: makeProgress(
+                kind: .downloading,
+                total: 100,
+                completed: 100
+            )
         )
 
-        #expect(transfers.inFlight == 0)
+        transfers.end(transfer: transfer)
+        await waitForSleepers(2, on: clock)
 
-        transfers.end(transfer: first)
+        // Short of the linger: begin's throttle drains, the removal does not.
+        clock.advance(by: .seconds(4))
+        await waitUntil { clock.pendingCount == 1 }
+
+        #expect(clock.pendingCount == 1)
+        #expect(transfers.value.count == 1)
+    }
+
+    @Test func endRemovesTransferAfterLingerElapses() async {
+        let clock = TestClock()
+        let transfers = Transfers(clock: clock, linger: .seconds(5))
+        let transfer = transfers.begin(
+            name: "a",
+            progress: makeProgress(
+                kind: .downloading,
+                total: 100,
+                completed: 100
+            )
+        )
+
+        transfers.end(transfer: transfer)
+        await waitForSleepers(2, on: clock)
+        #expect(transfers.value.count == 1)
+
+        clock.advance(by: .seconds(5))
 
         await waitUntil { transfers.value.isEmpty }
         #expect(transfers.value.isEmpty)
     }
 
-    @Test func endKeepsAllTransfersWhileAnyInFlight() async {
+    @Test func endRemovesOnlyTheEndedTransfer() async {
         let clock = TestClock()
-        let transfers = Transfers(clock: clock)
+        let transfers = Transfers(clock: clock, linger: .seconds(5))
         let first = transfers.begin(
             name: "a",
-            progress: makeProgress(kind: .downloading, total: 100, completed: 100)
+            progress: makeProgress(
+                kind: .downloading,
+                total: 100,
+                completed: 100
+            )
         )
         _ = transfers.begin(
             name: "b",
-            progress: makeProgress(kind: .downloading, total: 100, completed: 50)
+            progress: makeProgress(
+                kind: .downloading,
+                total: 100,
+                completed: 50
+            )
         )
 
-        #expect(transfers.inFlight == 1)
-
         transfers.end(transfer: first)
+        await waitForSleepers(2, on: clock)
 
-        // The signal task scheduled during begin is our barrier that the async
-        // end() has had a chance to run. Because a transfer is still in flight,
-        // nothing should have been removed.
-        await waitUntil { clock.pendingCount == 1 }
-        #expect(transfers.value.count == 2)
+        clock.advance(by: .seconds(5))
+
+        await waitUntil { transfers.value.map(\.name) == ["b"] }
+        #expect(transfers.value.map(\.name) == ["b"])
     }
 
-    @Test func isActiveClearsAfterTransferEndsAndSignalDrains() async {
+    @Test func isActiveClearsWhileFinishedTransfersLinger() async {
         let clock = TestClock()
-        let transfers = Transfers(clock: clock)
+        let transfers = Transfers(clock: clock, linger: .seconds(5))
         let transfer = transfers.begin(
             name: "file",
-            progress: makeProgress(kind: .downloading, total: 100, completed: 100)
+            progress: makeProgress(
+                kind: .downloading,
+                total: 100,
+                completed: 100
+            )
         )
 
         #expect(transfers.isActive)
 
         transfers.end(transfer: transfer)
-        await waitUntil { transfers.value.isEmpty && clock.pendingCount == 1 }
+        await waitForSleepers(2, on: clock)
 
+        // Draining begin's throttle clears isActive even though the finished
+        // transfer is still lingering in `value` — the menu bar stops spinning
+        // while the row stays on screen showing its outcome.
         clock.advance(by: .milliseconds(250))
         await waitUntil { !transfers.isActive }
+
         #expect(!transfers.isActive)
+        #expect(transfers.value.count == 1)
     }
 
     // MARK: - direction partitioning
 
     @Test func partitionsTransfersByDirection() {
         let transfers = Transfers(clock: TestClock())
-        _ = transfers.begin(name: "up", progress: makeProgress(kind: .uploading))
-        _ = transfers.begin(name: "down", progress: makeProgress(kind: .downloading))
+        _ = transfers.begin(
+            name: "up",
+            progress: makeProgress(kind: .uploading)
+        )
+        _ = transfers.begin(
+            name: "down",
+            progress: makeProgress(kind: .downloading)
+        )
 
-        #expect(transfers.uploads.map(\.name) == ["up"])
-        #expect(transfers.downloads.map(\.name) == ["down"])
+        #expect(transfers.activeUploads.map(\.name) == ["up"])
+        #expect(transfers.activeDownloads.map(\.name) == ["down"])
         #expect(transfers.isUploading)
         #expect(transfers.isDownloading)
     }
 
     @Test func directionFlagsAreFalseWhenNoMatchingTransfers() {
         let transfers = Transfers(clock: TestClock())
-        _ = transfers.begin(name: "up", progress: makeProgress(kind: .uploading))
+        _ = transfers.begin(
+            name: "up",
+            progress: makeProgress(kind: .uploading)
+        )
 
         #expect(transfers.isUploading)
         #expect(!transfers.isDownloading)
@@ -142,57 +205,24 @@ struct TransfersTests {
         )
         _ = transfers.begin(
             name: "down-active",
-            progress: makeProgress(kind: .downloading, total: 100, completed: 10)
+            progress: makeProgress(
+                kind: .downloading,
+                total: 100,
+                completed: 10
+            )
         )
         _ = transfers.begin(
             name: "down-done",
-            progress: makeProgress(kind: .downloading, total: 100, completed: 100)
+            progress: makeProgress(
+                kind: .downloading,
+                total: 100,
+                completed: 100
+            )
         )
 
         #expect(transfers.activeUploads.map(\.name) == ["up-active"])
         #expect(transfers.activeDownloads.map(\.name) == ["down-active"])
-        #expect(transfers.inFlight == 2)
-    }
-
-    // MARK: - unit-count aggregation
-
-    @Test func aggregatesUnitCountsByDirection() {
-        let transfers = Transfers(clock: TestClock())
-        _ = transfers.begin(
-            name: "up",
-            progress: makeProgress(kind: .uploading, total: 100, completed: 40)
-        )
-        _ = transfers.begin(
-            name: "down",
-            progress: makeProgress(kind: .downloading, total: 200, completed: 60)
-        )
-
-        #expect(transfers.totalUnitCount == 300)
-        #expect(transfers.totalUploadUnitCount == 100)
-        #expect(transfers.totalDownloadUnitCount == 200)
-        #expect(transfers.completedUnitCount == 100)
-        #expect(transfers.completedUploadUnitCount == 40)
-        #expect(transfers.completedDownloadUnitCount == 60)
-    }
-
-    @Test func fractionCompletedReflectsAggregateProgress() {
-        let transfers = Transfers(clock: TestClock())
-        _ = transfers.begin(
-            name: "a",
-            progress: makeProgress(kind: .downloading, total: 100, completed: 25)
-        )
-        _ = transfers.begin(
-            name: "b",
-            progress: makeProgress(kind: .downloading, total: 100, completed: 75)
-        )
-
-        #expect(transfers.fractionCompleted == 0.5)
-    }
-
-    @Test func fractionCompletedIsZeroWithoutTotalUnits() {
-        let transfers = Transfers(clock: TestClock())
-
-        #expect(transfers.fractionCompleted == 0)
+        #expect(transfers.active.count == 2)
     }
 
     // MARK: - throughput aggregation
@@ -201,19 +231,39 @@ struct TransfersTests {
         let transfers = Transfers(clock: TestClock())
         _ = transfers.begin(
             name: "up1",
-            progress: makeProgress(kind: .uploading, total: 100, completed: 10, throughput: 100)
+            progress: makeProgress(
+                kind: .uploading,
+                total: 100,
+                completed: 10,
+                throughput: 100
+            )
         )
         _ = transfers.begin(
             name: "up2",
-            progress: makeProgress(kind: .uploading, total: 100, completed: 20, throughput: 200)
+            progress: makeProgress(
+                kind: .uploading,
+                total: 100,
+                completed: 20,
+                throughput: 200
+            )
         )
         _ = transfers.begin(
             name: "up-done",
-            progress: makeProgress(kind: .uploading, total: 100, completed: 100, throughput: 999)
+            progress: makeProgress(
+                kind: .uploading,
+                total: 100,
+                completed: 100,
+                throughput: 999
+            )
         )
         _ = transfers.begin(
             name: "down",
-            progress: makeProgress(kind: .downloading, total: 100, completed: 30, throughput: 300)
+            progress: makeProgress(
+                kind: .downloading,
+                total: 100,
+                completed: 30,
+                throughput: 300
+            )
         )
 
         #expect(transfers.uploadThroughput == 300)
