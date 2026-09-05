@@ -34,6 +34,34 @@ private actor SpyExtensionController: ExtensionController {
     private(set) var suspendReason: String?
     private(set) var suspendOptions: NSFileProviderManager.DisconnectionOptions?
 
+    private var held = false
+    private var gates: [CheckedContinuation<Void, Never>] = []
+    private var parked = 0
+
+    /// Whether a held detach call is currently parked inside the controller,
+    /// so a test can act while a teardown is half done.
+    var isDetaching: Bool { parked > 0 }
+
+    /// Park every suspend and remove until `release()` is called. More than
+    /// one can park at once on purpose: a supervisor that lets pause and
+    /// disable interleave has to be seen doing it, not deadlock the test.
+    func hold() {
+        held = true
+    }
+
+    func release() {
+        held = false
+        for gate in gates { gate.resume() }
+        gates = []
+    }
+
+    private func detaching() async {
+        guard held else { return }
+        parked += 1
+        await withCheckedContinuation { gates.append($0) }
+        parked -= 1
+    }
+
     func resume() async {
         calls.append(.resume)
     }
@@ -45,10 +73,12 @@ private actor SpyExtensionController: ExtensionController {
         calls.append(.suspend)
         suspendReason = reason
         suspendOptions = options
+        await detaching()
     }
 
     func remove() async {
         calls.append(.remove)
+        await detaching()
     }
 }
 
@@ -147,6 +177,19 @@ private final class StatusSpy: @unchecked Sendable {
             self.lock.withLock { self._statuses.append(status) }
         }
     }
+}
+
+private func waitUntil(
+    _ description: String,
+    timeout: Duration = .seconds(5),
+    _ condition: @Sendable () async -> Bool
+) async throws {
+    let deadline = ContinuousClock.now + timeout
+    while ContinuousClock.now < deadline {
+        if await condition() { return }
+        try await Task.sleep(for: .milliseconds(1))
+    }
+    Issue.record("\(description) did not happen within \(timeout)")
 }
 
 private func waitUntilOnline(
@@ -301,14 +344,15 @@ struct SessionSupervisorTests {
         let handler = try #require(await provider.capturedHandler)
         await handler()
 
-        // Going offline suspends the domain temporarily and tears down XPC.
-        #expect(await ext.calls.contains(.suspend))
-        #expect(await ext.suspendOptions?.contains(.temporary) == true)
-        #expect(await xpc.calls.contains(.teardown))
-
         // The supervisor should automatically reconnect.
         try await waitUntilOnline(supervisor)
         #expect(await provider.callCount == 2)
+
+        // Going offline suspended the domain temporarily and tore down XPC
+        // before the reconnect brought both back up.
+        #expect(await ext.calls == [.resume, .suspend, .resume])
+        #expect(await ext.suspendOptions?.contains(.temporary) == true)
+        #expect(await xpc.calls == [.broker, .teardown, .broker])
 
         await supervisor.disable()
     }
@@ -395,6 +439,138 @@ struct SessionSupervisorTests {
         #expect(online)
 
         await supervisor.disable()
+    }
+
+    @Test func pauseWhileConnectingDiscardsTheSession() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = try await GatedSessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            openSession: provider.provider(),
+            xpc: xpc,
+            ext: ext,
+            onStatusChange: spy.handler()
+        )
+
+        // Kick off a connect that blocks inside open().
+        let connectTask = Task {
+            try await supervisor.connect(config: try sandbox.config)
+        }
+        try await waitUntil("connect") { await provider.isOpening }
+
+        // The user pauses while the connect is still in flight.
+        await supervisor.pause()
+
+        // The connect now finishes, but the session it opened belongs to
+        // nobody: it must be discarded rather than installed over the pause.
+        await provider.release()
+        try await connectTask.value
+
+        #expect(await ext.calls == [.suspend])
+        #expect(await xpc.calls == [.teardown])
+        #expect(spy.statuses == [.connecting, .offline(.paused)])
+
+        await #expect(throws: CoreError.serverUnreachable) {
+            try await supervisor.withSession { _ in }
+        }
+    }
+
+    @Test func disableWhilePausingRunsAfterIt() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            openSession: provider.provider(),
+            xpc: xpc,
+            ext: ext,
+            onStatusChange: spy.handler()
+        )
+
+        try await supervisor.connect(config: try sandbox.config)
+
+        // Park the pause inside ext.suspend(), then disable while it is stuck
+        // partway through its teardown.
+        await ext.hold()
+        let pauseTask = Task { await supervisor.pause() }
+        try await waitUntil("pause") { await ext.isDetaching }
+        let disableTask = Task { await supervisor.disable() }
+
+        // Give the disable a chance to interleave, which it must not.
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(await ext.calls == [.resume, .suspend])
+
+        await ext.release()
+        await pauseTask.value
+        await disableTask.value
+
+        // The disable removed the domain only once the pause had finished, and
+        // the supervisor settles on the reason of whichever ran last.
+        #expect(await ext.calls == [.resume, .suspend, .remove])
+        #expect(await xpc.calls == [.broker, .teardown, .teardown])
+        #expect(
+            spy.statuses == [
+                .connecting, .online, .offline(.paused), .offline(.disabled),
+            ]
+        )
+    }
+
+    @Test func connectionLostWhilePausingDoesNotReconnect() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let ext = SpyExtensionController()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            initialBackoff: .milliseconds(1),
+            maxBackoff: .milliseconds(5),
+            openSession: provider.provider(),
+            xpc: SpyXPCBroker(),
+            ext: ext,
+            onStatusChange: spy.handler()
+        )
+
+        try await supervisor.connect(config: try sandbox.config)
+        #expect(await provider.callCount == 1)
+
+        // Park the pause inside ext.suspend() so the connection is on its way
+        // down but not yet offline.
+        await ext.hold()
+        let pauseTask = Task { await supervisor.pause() }
+        try await waitUntil("pause") { await ext.isDetaching }
+
+        // The session reports its loss mid-pause. It must not resurrect the
+        // connection the user just asked to put down.
+        let handler = try #require(await provider.capturedHandler)
+        let lost = Task { await handler() }
+        try await Task.sleep(for: .milliseconds(20))
+
+        await ext.release()
+        await pauseTask.value
+        await lost.value
+
+        // Give any errant reconnect a chance to fire, then confirm none did.
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(await provider.callCount == 1)
+        #expect(spy.statuses == [.connecting, .online, .offline(.paused)])
+
+        await #expect(throws: CoreError.serverUnreachable) {
+            try await supervisor.withSession { _ in }
+        }
     }
 
     @Test func disableRemovesRatherThanSuspends() async throws {

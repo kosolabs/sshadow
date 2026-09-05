@@ -23,6 +23,29 @@ actor SessionSupervisor {
 
     private lazy var service = CoreService(supervisor: self)
 
+    /// How a teardown detaches the File Provider extension.
+    private enum Detach: Sendable {
+        /// Suspend the domain, preserving its cache.
+        case suspend(reason: String)
+        /// Remove the domain along with its cache.
+        case remove
+    }
+
+    /// `offline` and `online` are settled; the rest are transitions, and each
+    /// one owns the task driving it.
+    ///
+    /// Every entry point that moves the supervisor follows the same three
+    /// steps, in this order:
+    ///
+    /// 1. `await settled()`, so a transition already in flight finishes
+    ///    rather than interleaving its teardown with our setup;
+    /// 2. check the state is one it accepts, and give up if it is not;
+    /// 3. claim a transitional state *synchronously*, which locks everyone
+    ///    else out for as long as the work takes.
+    ///
+    /// Only the flow that claimed the state lands the supervisor back in a
+    /// settled one, so nothing that suspends mid-transition can be overtaken
+    /// and then clobber the result.
     private enum State {
         case offline(OfflineReason)
         case connecting
@@ -32,6 +55,7 @@ actor SessionSupervisor {
             nextAttempt: Date?
         )
         case online(Session)
+        case stopping(Task<Void, Never>, reason: OfflineReason)
     }
 
     private var _state: State = .offline(.disabled)
@@ -51,8 +75,14 @@ actor SessionSupervisor {
                 }
             }
 
+            let previous = status(of: _state)
             _state = newValue
-            onStatusChange(status(of: newValue))
+
+            // `.stopping` already reports the offline reason it is heading
+            // for, so that the UI reflects a pause the moment it is asked for
+            // rather than once teardown finishes. Report genuine changes only.
+            let current = status(of: newValue)
+            if current != previous { onStatusChange(current) }
         }
     }
 
@@ -66,12 +96,28 @@ actor SessionSupervisor {
             .reconnecting(error, nextAttempt: nextAttempt)
         case .online:
             .online
+        case .stopping(_, let reason):
+            .offline(reason)
         }
     }
 
     private var session: Session? {
         if case .online(let session) = state { session } else { nil }
     }
+
+    /// Whether a connect or reconnect still owns the supervisor. A session
+    /// that opens after this goes false belongs to nobody.
+    private var isConnecting: Bool {
+        switch state {
+        case .connecting, .reconnecting: true
+        case .offline, .online, .stopping: false
+        }
+    }
+
+    /// The hand-off of a freshly opened session, while one is in flight. It
+    /// lives outside `State` because it spans both `.connecting` and
+    /// `.reconnecting`, but `settled()` waits for it just the same.
+    private var handoff: Task<Void, Never>?
 
     init(
         domain: NSFileProviderDomain,
@@ -99,7 +145,23 @@ actor SessionSupervisor {
         self.log = events.logger(for: .connection)
     }
 
+    /// Wait until no transition is in flight. Waiting on a connection being
+    /// opened is deliberately not part of this: that can block on the network
+    /// for as long as the timeout allows, and a pause must not.
+    private func settled() async {
+        while true {
+            if case .stopping(let task, _) = state {
+                await task.value
+            } else if let handoff {
+                await handoff.value
+            } else {
+                return
+            }
+        }
+    }
+
     func connect(config: ConnectionConfig) async throws(ConnectionError) {
+        await settled()
         state = .connecting
         log = events.logger(
             for: .connection,
@@ -113,7 +175,8 @@ actor SessionSupervisor {
                 "Failed to connect to \(config.name)",
                 detail: error.message
             )
-            state = .offline(.failed(error))
+            // A pause or disable that landed mid-connect owns the outcome.
+            if case .connecting = state { state = .offline(.failed(error)) }
             throw error
         }
     }
@@ -123,6 +186,26 @@ actor SessionSupervisor {
             guard let self else { return }
             await self.handleFailedSession(config: config)
         }
+        guard isConnecting else {
+            // A pause or disable claimed the supervisor while we were opening.
+            // Nothing else knows about this session, so close it here.
+            logger.notice(
+                "Discarding session opened during teardown: \(domain)"
+            )
+            await session.close()
+            return
+        }
+        let handoff = Task { [weak self] in
+            guard let self else { return }
+            await install(session, config: config)
+        }
+        self.handoff = handoff
+        await handoff.value
+        self.handoff = nil
+    }
+
+    /// Wire a freshly opened session up to the extension and the broker.
+    private func install(_ session: Session, config: ConnectionConfig) async {
         await ext.resume()
         await xpc.broker(exporting: service)
         await session.start(pollInterval: pollInterval)
@@ -132,54 +215,102 @@ actor SessionSupervisor {
     }
 
     func disable() async {
-        stopReconnecting()
-        await session?.stop()
-        await xpc.teardown()
-        await ext.remove()
-        await session?.close()
-        state = .offline(.disabled)
+        await stop(reason: .disabled, detach: .remove)
         log.notice("Disconnected from \(domain.displayName)")
         logger.notice("Supervisor disabled: \(domain)")
     }
 
     func pause() async {
-        stopReconnecting()
-        await session?.stop()
-        await xpc.teardown()
-        await ext.suspend(
-            reason: "The connection is paused. Reconnect it in Settings.",
-            options: .temporary
+        await stop(
+            reason: .paused,
+            detach: .suspend(
+                reason: "The connection is paused. Reconnect it in Settings."
+            )
         )
-        await session?.close()
-        state = .offline(.paused)
         log.notice("Paused connection to \(domain.displayName)")
         logger.notice("Supervisor paused: \(domain)")
     }
 
-    private func handleFailedSession(config: ConnectionConfig) async {
-        guard case .online = state else { return }
-        log.warning("Lost connection to \(config.name)")
-        await session?.stop()
-        await xpc.teardown()
-        await ext.suspend(
-            reason: "The server is unreachable. Check your network connection.",
-            options: .temporary
-        )
-        await session?.close()
-        reconnect(config: config)
+    /// Tear the connection down and settle into `.offline(reason)`. Accepts
+    /// every state: whatever the supervisor was doing, the user asked for it
+    /// to stop. A pause racing a disable therefore runs one after the other
+    /// rather than one of them being dropped.
+    private func stop(reason: OfflineReason, detach: Detach) async {
+        await settled()
+        let session = self.session
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await finishStop(
+                session: session,
+                detach: detach,
+                reason: reason
+            )
+        }
+        state = .stopping(task, reason: reason)
+        await task.value
     }
 
-    private func reconnect(config: ConnectionConfig) {
-        if case .reconnecting = state { return }
+    private func finishStop(
+        session: Session?,
+        detach: Detach,
+        reason: OfflineReason
+    ) async {
+        await teardown(session: session, detach: detach)
+        state = .offline(reason)
+    }
+
+    private func teardown(session: Session?, detach: Detach) async {
+        await session?.stop()
+        await xpc.teardown()
+        switch detach {
+        case .suspend(let reason):
+            await ext.suspend(reason: reason, options: .temporary)
+        case .remove:
+            await ext.remove()
+        }
+        await session?.close()
+    }
+
+    private func handleFailedSession(config: ConnectionConfig) async {
+        await settled()
+        guard case .online(let session) = state else { return }
+        log.warning("Lost connection to \(config.name)")
         state = .reconnecting(
             Task { [weak self] in
-                guard let self else { return }
-                await reconnectLoop(config: config)
+                await self?.reconnect(config: config, closing: session)
             },
             nil,
             nextAttempt: nil
         )
         logger.notice("Session reconnecting: \(config)")
+    }
+
+    /// Tear the lost session down, then retry with backoff. Runs as the task
+    /// `.reconnecting` was claimed with, so by the time it starts a pause or
+    /// disable may already have taken the supervisor away from it.
+    private func reconnect(
+        config: ConnectionConfig,
+        closing session: Session
+    ) async {
+        guard case .reconnecting = state else {
+            // The teardown that replaced us never saw this session, since we
+            // still held `.online` when it read the state.
+            await session.close()
+            return
+        }
+        // A pause or disable can still claim the supervisor partway through
+        // this teardown, and `settled()` deliberately does not wait on it the
+        // way it waits on a hand-off: every call here is itself a teardown, so
+        // a claim can only land after we have issued ours, and the destructive
+        // one always arrives last. The supervisor ends where the user asked.
+        await teardown(
+            session: session,
+            detach: .suspend(
+                reason:
+                    "The server is unreachable. Check your network connection."
+            )
+        )
+        await reconnectLoop(config: config)
     }
 
     private func reconnectLoop(config: ConnectionConfig) async {
@@ -198,7 +329,9 @@ actor SessionSupervisor {
                     "Reconnection to \(config.name) failed",
                     detail: error.message
                 )
-                state = .offline(.failed(error))
+                if case .reconnecting = state {
+                    state = .offline(.failed(error))
+                }
                 break
             } catch {
                 let nextAttempt = Date.now.addingTimeInterval(backoff.seconds)
@@ -221,10 +354,6 @@ actor SessionSupervisor {
         if case .reconnecting(let task, _, _) = state {
             state = .reconnecting(task, error, nextAttempt: nextAttempt)
         }
-    }
-
-    private func stopReconnecting() {
-        if case .reconnecting(let task, _, _) = state { task.cancel() }
     }
 
     @discardableResult
