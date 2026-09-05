@@ -26,8 +26,6 @@ struct TransferTests {
 
         transfer.update()
 
-        await waitUntil { fired.load(ordering: .relaxed) }
-        let didFire = fired.load(ordering: .relaxed)
-        #expect(didFire)
+        await expect(eventually: { fired.load(ordering: .relaxed) })
     }
 }

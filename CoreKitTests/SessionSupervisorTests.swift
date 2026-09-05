@@ -151,7 +151,8 @@ private final class StatusSpy: @unchecked Sendable {
 
 private func waitUntilOnline(
     _ supervisor: SessionSupervisor,
-    timeout: Duration = .seconds(30)
+    timeout: Duration = .seconds(30),
+    sourceLocation: SourceLocation = #_sourceLocation
 ) async throws {
     let deadline = ContinuousClock.now + timeout
     while ContinuousClock.now < deadline {
@@ -160,7 +161,10 @@ private func waitUntilOnline(
         }
         try await Task.sleep(for: .milliseconds(5))
     }
-    Issue.record("Supervisor did not come online within \(timeout)")
+    Issue.record(
+        "Supervisor did not come online within \(timeout)",
+        sourceLocation: sourceLocation
+    )
 }
 
 struct SessionSupervisorTests {
@@ -679,8 +683,7 @@ struct SessionSupervisorTests {
 
         // The reconnect surfaced the underlying error and a countdown target.
         let sawReconnectingWithError = spy.statuses.contains { status in
-            if case .reconnecting(.connectionRefused, let nextAttempt) = status
-            {
+            if case .reconnecting(.connectionRefused, let nextAttempt) = status {
                 return nextAttempt != nil
             }
             return false

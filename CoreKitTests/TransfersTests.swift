@@ -49,17 +49,16 @@ struct TransfersTests {
 
     // MARK: - end
 
-    /// `Task.sleep(for:clock:)` reads `clock.now` when the task body runs, so
-    /// advancing before a sleeper has parked pushes its deadline past the new
-    /// `now` and it never fires. Every test below waits for the expected number
-    /// of parked sleepers before advancing: one for the throttle `begin`
-    /// schedules, plus one per outstanding `end`.
     private func waitForSleepers(
         _ count: Int,
-        on clock: TestClock
+        on clock: TestClock,
+        sourceLocation: SourceLocation = #_sourceLocation
     ) async {
-        await waitUntil { clock.pendingCount == count }
-        #expect(clock.pendingCount == count)
+        await expect(
+            eventually: { clock.pendingCount == count },
+            "Expected \(count) parked sleepers",
+            sourceLocation: sourceLocation
+        )
     }
 
     @Test func endKeepsTransferVisibleUntilLingerElapses() async {
@@ -79,9 +78,8 @@ struct TransfersTests {
 
         // Short of the linger: begin's throttle drains, the removal does not.
         clock.advance(by: .seconds(4))
-        await waitUntil { clock.pendingCount == 1 }
+        await expect(eventually: { clock.pendingCount == 1 })
 
-        #expect(clock.pendingCount == 1)
         #expect(transfers.value.count == 1)
     }
 
@@ -103,8 +101,7 @@ struct TransfersTests {
 
         clock.advance(by: .seconds(5))
 
-        await waitUntil { transfers.value.isEmpty }
-        #expect(transfers.value.isEmpty)
+        await expect(eventually: { transfers.value.isEmpty })
     }
 
     @Test func endRemovesOnlyTheEndedTransfer() async {
@@ -132,8 +129,7 @@ struct TransfersTests {
 
         clock.advance(by: .seconds(5))
 
-        await waitUntil { transfers.value.map(\.name) == ["b"] }
-        #expect(transfers.value.map(\.name) == ["b"])
+        await expect(eventually: { transfers.value.map(\.name) == ["b"] })
     }
 
     @Test func isActiveClearsWhileFinishedTransfersLinger() async {
@@ -157,9 +153,8 @@ struct TransfersTests {
         // transfer is still lingering in `value` — the menu bar stops spinning
         // while the row stays on screen showing its outcome.
         clock.advance(by: .milliseconds(250))
-        await waitUntil { !transfers.isActive }
+        await expect(eventually: { !transfers.isActive })
 
-        #expect(!transfers.isActive)
         #expect(transfers.value.count == 1)
     }
 
