@@ -21,7 +21,12 @@ public final class Connections {
     }
 
     public func isBusy(id: UUID) -> Bool {
-        if case .connecting = status(for: id) { true } else { false }
+        switch status(for: id) {
+        case .connecting, .disconnecting:
+            return true
+        default:
+            return false
+        }
     }
 
     public func isOffline(id: UUID) -> Bool {

@@ -76,7 +76,8 @@ final class TestClock: Clock {
 
     /// Advances `now` by `duration`, resuming every sleep whose deadline has passed.
     func advance(by duration: Duration) {
-        let due = state.withLock { s -> [CheckedContinuation<Void, any Error>] in
+        let due = state.withLock {
+            s -> [CheckedContinuation<Void, any Error>] in
             s.now = s.now.advanced(by: duration)
             let now = s.now
             let ready = s.sleepers.filter { $0.value.deadline <= now }
@@ -91,30 +92,24 @@ final class TestClock: Clock {
     }
 }
 
-@MainActor
 @discardableResult
 func expect(
-    eventually condition: @MainActor () -> Bool,
-    _ comment: Comment? = nil,
-    timeout: Duration = .seconds(2),
-    sourceLocation: SourceLocation = #_sourceLocation
+    eventually condition: () async -> Bool,
+    _ description: String? = nil,
+    timeout: Duration = .seconds(5),
+    pollInterval: Duration = .milliseconds(1),
+    sourceLocation: SourceLocation = #_sourceLocation,
+    isolation: isolated (any Actor)? = #isolation
 ) async -> Bool {
     let deadline = ContinuousClock.now + timeout
-    var yields = 0
-    while !condition() {
-        guard ContinuousClock.now < deadline else {
-            Issue.record(
-                comment ?? "Condition did not hold within \(timeout)",
-                sourceLocation: sourceLocation
-            )
-            return false
-        }
-        if yields < 1000 {
-            yields += 1
-            await Task.yield()
-        } else {
-            try? await Task.sleep(for: .milliseconds(1))
-        }
+    while ContinuousClock.now < deadline {
+        if await condition() { return true }
+        try? await Task.sleep(for: pollInterval)
     }
-    return true
+
+    Issue.record(
+        "\(description ?? "Condition") did not hold within \(timeout)",
+        sourceLocation: sourceLocation
+    )
+    return false
 }

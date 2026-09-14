@@ -62,11 +62,11 @@ extension NSFileProviderDomain {
 
     public func suspend(
         reason: String,
-        options: NSFileProviderManager.DisconnectionOptions = []
+        options: NSFileProviderManager.DisconnectionOptions
     ) async {
         do {
             try await manager.disconnect(reason: reason, options: options)
-            logger.notice("Sync suspended: \(self)")
+            logger.notice("Sync suspended: \(self): \"\(reason)\"")
         } catch {
             logger.error("Failed to suspend \(self): \(error)")
         }

@@ -7,6 +7,7 @@ private let logger = Logger(category: "SessionSupervisor")
 
 actor SessionSupervisor {
     typealias StatusChangeHandler = @Sendable (ConnectionStatus) -> Void
+    typealias ReconnectTask = Task<Void, Never>
 
     private let domain: NSFileProviderDomain
 
@@ -25,9 +26,10 @@ actor SessionSupervisor {
 
     private enum State {
         case offline(OfflineReason)
+        case disconnecting(OfflineReason)
         case connecting
         case reconnecting(
-            Task<Void, Never>,
+            ReconnectTask,
             ConnectionError?,
             nextAttempt: Date?
         )
@@ -43,16 +45,11 @@ actor SessionSupervisor {
 
         set {
             logger.notice("State changed: \(_state) -> \(newValue)")
-
-            if case .reconnecting(let task, _, _) = _state {
-                if case .reconnecting = newValue {
-                } else {
-                    task.cancel()
-                }
-            }
-
+            let statusChanged = status(of: _state) != status(of: newValue)
             _state = newValue
-            onStatusChange(status(of: newValue))
+            if statusChanged {
+                onStatusChange(status(of: newValue))
+            }
         }
     }
 
@@ -60,6 +57,8 @@ actor SessionSupervisor {
         switch state {
         case .offline(let reason):
             .offline(reason)
+        case .disconnecting(let reason):
+            .disconnecting(reason)
         case .connecting:
             .connecting
         case .reconnecting(_, let error, let nextAttempt):
@@ -67,10 +66,6 @@ actor SessionSupervisor {
         case .online:
             .online
         }
-    }
-
-    private var session: Session? {
-        if case .online(let session) = state { session } else { nil }
     }
 
     init(
@@ -100,6 +95,7 @@ actor SessionSupervisor {
     }
 
     func connect(config: ConnectionConfig) async throws(ConnectionError) {
+        guard case .offline = state else { return }
         state = .connecting
         log = events.logger(
             for: .connection,
@@ -119,54 +115,72 @@ actor SessionSupervisor {
     }
 
     private func open(config: ConnectionConfig) async throws(ConnectionError) {
-        let session = try await openSession(config) { [weak self] in
+        let session = try await openSession(config) { [weak self] error in
             guard let self else { return }
-            await self.handleFailedSession(config: config)
+            await self.fail(config: config, error: error)
         }
         await ext.resume()
         await xpc.broker(exporting: service)
         await session.start(pollInterval: pollInterval)
+
+        if case .disconnecting(let reason) = state {
+            await disconnect(session, reason: reason)
+            return
+        }
+
         state = .online(session)
         log.notice("Connected to \(config.name)")
         logger.notice("Session connected: \(config)")
     }
 
     func disable() async {
-        stopReconnecting()
-        await session?.stop()
-        await xpc.teardown()
+        switch state {
+        case .reconnecting(let task, _, _):
+            await cancel(task, reason: .disabled)
+        case .online(let session):
+            await disconnect(session, reason: .disabled)
+        default:
+            return
+        }
         await ext.remove()
-        await session?.close()
-        state = .offline(.disabled)
         log.notice("Disconnected from \(domain.displayName)")
         logger.notice("Supervisor disabled: \(domain)")
     }
 
     func pause() async {
-        stopReconnecting()
-        await session?.stop()
-        await xpc.teardown()
-        await ext.suspend(
-            reason: "The connection is paused. Reconnect it in Settings.",
-            options: .temporary
-        )
-        await session?.close()
-        state = .offline(.paused)
+        switch state {
+        case .reconnecting(let task, _, _):
+            await cancel(task, reason: .paused)
+        case .online(let session):
+            await disconnect(session, reason: .paused)
+        default:
+            return
+        }
         log.notice("Paused connection to \(domain.displayName)")
         logger.notice("Supervisor paused: \(domain)")
     }
 
-    private func handleFailedSession(config: ConnectionConfig) async {
-        guard case .online = state else { return }
+    private func fail(config: ConnectionConfig, error: ConnectionError) async {
+        guard case .online(let session) = state else { return }
         log.warning("Lost connection to \(config.name)")
-        await session?.stop()
-        await xpc.teardown()
-        await ext.suspend(
-            reason: "The server is unreachable. Check your network connection.",
-            options: .temporary
-        )
-        await session?.close()
+        await disconnect(session, reason: .failed(error))
         reconnect(config: config)
+    }
+
+    private func cancel(_ task: ReconnectTask, reason: OfflineReason) async {
+        state = .disconnecting(reason)
+        task.cancel()
+        await task.value
+        state = .offline(reason)
+    }
+
+    private func disconnect(_ session: Session, reason: OfflineReason) async {
+        state = .disconnecting(reason)
+        await session.stop()
+        await xpc.teardown()
+        await ext.suspend(reason: reason.text, options: .temporary)
+        await session.close()
+        state = .offline(reason)
     }
 
     private func reconnect(config: ConnectionConfig) {
@@ -221,10 +235,6 @@ actor SessionSupervisor {
         if case .reconnecting(let task, _, _) = state {
             state = .reconnecting(task, error, nextAttempt: nextAttempt)
         }
-    }
-
-    private func stopReconnecting() {
-        if case .reconnecting(let task, _, _) = state { task.cancel() }
     }
 
     @discardableResult

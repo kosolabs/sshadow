@@ -6,66 +6,56 @@ struct ConnectionStatusButton: View {
     let status: ConnectionStatus
 
     var body: some View {
-        switch status {
-        case .connecting, .reconnecting, .online:
-            HoverActionIcon(
-                icon: ConnectionStatusIcon(status: status, variant: .drive),
-                variant: config.isEnabled()
-                    ? .hover(
-                        icon: "pause.circle.fill",
-                        help: "Pause connection",
-                        action: config.pause
-                    ) : .plain
-            )
-        case .offline(.paused), .offline(.failed):
-            HoverActionIcon(
-                icon: ConnectionStatusIcon(status: status, variant: .drive),
-                variant: config.isEnabled()
-                    ? .hover(
-                        icon: "play.circle.fill",
-                        help: "Resume connection",
-                        action: config.enable
-                    ) : .plain
-            )
-        case .offline(.disabled):
-            HoverActionIcon(
-                icon: ConnectionStatusIcon(status: status, variant: .drive),
-                variant: .plain
-            )
+        switch config.isEnabled() {
+        case false:
+            ConnectionStatusIcon(status: status, variant: .drive)
+                .frame(width: 20, alignment: .center)
+        case true:
+            switch status {
+            case .reconnecting, .online:
+                HoverActionIcon(
+                    icon: ConnectionStatusIcon(status: status, variant: .drive),
+                    hoverIcon: "pause.circle.fill",
+                    help: "Pause connection",
+                    action: config.pause
+                )
+            case .offline(.paused), .offline(.failed):
+                HoverActionIcon(
+                    icon: ConnectionStatusIcon(status: status, variant: .drive),
+                    hoverIcon: "play.circle.fill",
+                    help: "Resume connection",
+                    action: config.enable
+                )
+            case .connecting, .disconnecting, .offline(.disabled):
+                ConnectionStatusIcon(status: status, variant: .drive)
+                    .frame(width: 20, alignment: .center)
+            }
         }
     }
 }
 
 private struct HoverActionIcon: View {
-    enum Variant {
-        case plain
-        case hover(icon: String, help: String, action: () async throws -> Void)
-    }
-
     let icon: ConnectionStatusIcon
-    let variant: Variant
+    let hoverIcon: String
+    let help: String
+    let action: () async throws -> Void
 
     @State private var isHovered = false
 
     var body: some View {
-        switch variant {
-        case .plain:
-            icon.frame(width: 20, alignment: .center)
-        case .hover(let hoverIcon, let help, let action):
-            Button {
-                Task { try await action() }
-            } label: {
-                if isHovered {
-                    Image(systemName: hoverIcon)
-                        .foregroundStyle(.secondary)
-                } else {
-                    icon
-                }
+        Button {
+            Task { try await action() }
+        } label: {
+            if isHovered {
+                Image(systemName: hoverIcon)
+                    .foregroundStyle(.secondary)
+            } else {
+                icon
             }
-            .buttonStyle(.plain)
-            .onHover { isHovered = $0 }
-            .help(help)
-            .frame(width: 20, alignment: .center)
         }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(help)
+        .frame(width: 20, alignment: .center)
     }
 }

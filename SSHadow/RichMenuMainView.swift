@@ -39,7 +39,7 @@ struct RichMenuMainView: View {
             RichMenuButton {
                 openWindowInFront(id: "settings")
             } label: {
-                RichMenuLabel("Settings...", systemImage: "gear")
+                RichMenuLabel("Settings…", systemImage: "gear")
             }
 
             RichMenuButton {

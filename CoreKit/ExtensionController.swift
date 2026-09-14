@@ -10,4 +10,10 @@ protocol ExtensionController {
     func remove() async
 }
 
+extension ExtensionController {
+    func suspend(reason: String) async {
+        await suspend(reason: reason, options: [])
+    }
+}
+
 extension NSFileProviderDomain: ExtensionController {}
