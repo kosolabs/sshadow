@@ -15,6 +15,9 @@ struct ConnectionStatusText: View {
         case .offline(.failed(let error)):
             Text(error.message)
                 .foregroundStyle(.red)
+        case .disconnecting:
+            Text("Disconnecting…")
+                .foregroundStyle(.secondary)
         case .connecting:
             Text("Connecting…")
                 .foregroundStyle(.secondary)

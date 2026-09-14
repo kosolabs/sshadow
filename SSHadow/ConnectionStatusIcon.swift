@@ -12,7 +12,7 @@ struct ConnectionStatusIcon: View {
 
     var body: some View {
         switch status {
-        case .connecting, .reconnecting:
+        case .connecting, .reconnecting, .disconnecting:
             ProgressView()
                 .controlSize(.small)
         case .online:

@@ -11,7 +11,8 @@ extension TestSandbox {
     fileprivate func getSession(
         idleTimeProvider: @escaping Session.IdleTimeProvider =
             SystemIdle.duration,
-        connectionLostHandler: @escaping Session.ConnectionLostHandler = {}
+        connectionLostHandler: @escaping Session.ConnectionLostHandler =
+            { _ in }
     ) async throws -> Session {
         try await makeSession(
             idleTimeProvider: idleTimeProvider,
@@ -24,7 +25,8 @@ extension TestSandbox {
     fileprivate func makeSession(
         idleTimeProvider: @escaping Session.IdleTimeProvider =
             SystemIdle.duration,
-        connectionLostHandler: @escaping Session.ConnectionLostHandler = {}
+        connectionLostHandler: @escaping Session.ConnectionLostHandler =
+            { _ in }
     ) async throws -> (session: Session, ssh: SSHClient) {
         let config = try config
         let (ssh, sftp) = try await withConnectRetries {
@@ -1385,7 +1387,7 @@ struct SessionTests {
 
             try await confirmation("connection lost handler fires") { fired in
                 let (session, ssh) = try await sandbox.makeSession(
-                    connectionLostHandler: { fired() }
+                    connectionLostHandler: { _ in fired() }
                 )
                 let itemId = try await session.child(name: "unreachable.txt")
 

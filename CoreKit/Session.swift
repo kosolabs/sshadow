@@ -11,7 +11,7 @@ actor Session {
         @Sendable (ConnectionConfig, @escaping ConnectionLostHandler)
         async throws(ConnectionError) -> Session
     typealias ChangesDetectedHandler = @Sendable () async throws -> Void
-    typealias ConnectionLostHandler = @Sendable () async -> Void
+    typealias ConnectionLostHandler = @Sendable (ConnectionError) async -> Void
     typealias IdleTimeProvider = @Sendable () -> Duration
 
     private let config: ConnectionConfig
@@ -1028,7 +1028,7 @@ actor Session {
                 fileLog.error(message, error: mapped)
             }
             if case CoreError.serverUnreachable = mapped {
-                await connectionLostHandler()
+                await connectionLostHandler(ConnectionError(from: error))
             }
             throw mapped
         }

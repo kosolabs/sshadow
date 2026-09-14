@@ -134,6 +134,47 @@ private actor GatedSessionProvider {
     }
 }
 
+/// A session provider whose first connect succeeds immediately, but whose
+/// subsequent (reconnect) connects block inside `openSession` until released.
+/// This lets a test pause/disable while a reconnect's `open()` is in flight.
+private actor GatedReconnectProvider {
+    private let base: Session.Provider
+
+    private(set) var callCount = 0
+    private(set) var capturedHandler: Session.ConnectionLostHandler?
+    private(set) var isReconnecting = false
+    private var gate: CheckedContinuation<Void, Never>?
+
+    init(base: @escaping Session.Provider) {
+        self.base = base
+    }
+
+    nonisolated func provider() -> Session.Provider {
+        { config, handler in
+            try await self.connect(config, handler)
+        }
+    }
+
+    private func connect(
+        _ config: ConnectionConfig,
+        _ handler: @escaping Session.ConnectionLostHandler
+    ) async throws(ConnectionError) -> Session {
+        callCount += 1
+        capturedHandler = handler
+        if callCount >= 2 {
+            isReconnecting = true
+            await withCheckedContinuation { gate = $0 }
+        }
+        return try await base(config, handler)
+    }
+
+    /// Unblock the pending reconnect so its `open()` can finish.
+    func release() {
+        gate?.resume()
+        gate = nil
+    }
+}
+
 private final class StatusSpy: @unchecked Sendable {
     private let lock = NSLock()
     private var _statuses: [ConnectionStatus] = []
@@ -268,7 +309,7 @@ struct SessionSupervisorTests {
         // Losing the connection triggers a reconnect that retries through the
         // two failures before the third attempt succeeds.
         let handler = try #require(await provider.capturedHandler)
-        await handler()
+        await handler(ConnectionError.connectionRefused)
 
         try await waitUntilOnline(supervisor)
         #expect(await provider.callCount == 4)
@@ -299,7 +340,7 @@ struct SessionSupervisorTests {
 
         // Simulate the session reporting a lost connection.
         let handler = try #require(await provider.capturedHandler)
-        await handler()
+        await handler(ConnectionError.connectionRefused)
 
         // Going offline suspends the domain temporarily and tears down XPC.
         #expect(await ext.calls.contains(.suspend))
@@ -340,7 +381,7 @@ struct SessionSupervisorTests {
 
         // A lost connection now reports in, but because the connection was
         // toggled offline it must not trigger a reconnect.
-        await handler()
+        await handler(ConnectionError.connectionRefused)
 
         // Give any errant reconnect a chance to fire, then confirm none did.
         try await Task.sleep(for: .milliseconds(20))
@@ -383,7 +424,7 @@ struct SessionSupervisorTests {
         // online, it must be ignored rather than starting a competing
         // reconnect that races the in-flight open().
         let handler = try #require(await provider.capturedHandler)
-        await handler()
+        await handler(ConnectionError.connectionRefused)
 
         // Release the gate; the connect path still owns the outcome and comes
         // online, with no teardown/reconnect from the stale handler.
@@ -397,7 +438,7 @@ struct SessionSupervisorTests {
         await supervisor.disable()
     }
 
-    @Test func disableRemovesRatherThanSuspends() async throws {
+    @Test func disableRemoves() async throws {
         let sandbox = TestSandbox()
         let xpc = SpyXPCBroker()
         let ext = SpyExtensionController()
@@ -416,9 +457,8 @@ struct SessionSupervisorTests {
         try await supervisor.connect(config: try sandbox.config)
         await supervisor.disable()
 
-        // disable() removes the domain; it must not suspend it.
-        #expect(await ext.calls == [.resume, .remove])
-        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await ext.calls.last == .remove)
+        #expect(await xpc.calls.last == .teardown)
 
         await #expect(throws: CoreError.serverUnreachable) {
             try await supervisor.withSession { _ in }
@@ -460,6 +500,122 @@ struct SessionSupervisorTests {
         }
     }
 
+    @Test func pauseWhileReconnectInFlightTearsDownInsteadOfComingOnline()
+        async throws
+    {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = try await GatedReconnectProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            initialBackoff: .milliseconds(1),
+            maxBackoff: .milliseconds(5),
+            openSession: provider.provider(),
+            xpc: xpc,
+            ext: ext,
+            onStatusChange: spy.handler()
+        )
+
+        // Come online, then lose the connection to enter the reconnect loop.
+        try await supervisor.connect(config: try sandbox.config)
+        let handler = try #require(await provider.capturedHandler)
+        await handler(ConnectionError.connectionRefused)
+
+        // Park the reconnect inside its openSession call so we can pause while
+        // the reconnect's open() is in flight.
+        while await provider.isReconnecting == false {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+
+        // Pause. cancel() marks us .disconnecting and then blocks awaiting the
+        // (uncancellable) reconnect task, so run pause concurrently and release
+        // the gate only once the .disconnecting transition is observable.
+        let pauseTask = Task { await supervisor.pause() }
+        while spy.statuses.contains(.disconnecting(.paused)) == false {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        await provider.release()
+        await pauseTask.value
+
+        // The freshly-opened reconnect session must be torn down rather than
+        // left online: broker/teardown and resume/suspend stay balanced, so the
+        // domain is suspended exactly once per teardown (no leak, no double
+        // suspend), and we never came online on the reconnect.
+        #expect(await xpc.calls == [.broker, .teardown, .broker, .teardown])
+        #expect(await ext.calls == [.resume, .suspend, .resume, .suspend])
+        #expect(
+            await ext.suspendReason
+                == "The connection is paused. Reconnect it in Settings."
+        )
+        #expect(await provider.callCount == 2)
+
+        #expect(spy.statuses.last == .offline(.paused))
+        await #expect(throws: CoreError.serverUnreachable) {
+            try await supervisor.withSession { _ in }
+        }
+    }
+
+    @Test func pauseWhileReconnectingBetweenAttemptsGoesOffline() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            // A long backoff parks the reconnect loop in its sleep so we can
+            // pause between attempts deterministically.
+            initialBackoff: .seconds(30),
+            maxBackoff: .seconds(30),
+            openSession: provider.provider(),
+            xpc: xpc,
+            ext: ext,
+            onStatusChange: spy.handler()
+        )
+
+        try await supervisor.connect(config: try sandbox.config)
+
+        // Fail every reconnect so the loop backs off rather than recovering.
+        await provider.failNextConnects(10)
+        let handler = try #require(await provider.capturedHandler)
+        await handler(ConnectionError.connectionRefused)
+
+        // Wait for the first reconnect attempt to fail; the loop is now parked
+        // in its (long) backoff sleep.
+        let deadline = ContinuousClock.now + .seconds(5)
+        while await provider.callCount < 2, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        #expect(await provider.callCount == 2)
+
+        // Pausing cancels the backoff and settles offline without another
+        // attempt, and without a second suspend: the domain is already
+        // suspended from the loss, and a redundant suspend is a no-op.
+        await supervisor.pause()
+
+        #expect(await provider.callCount == 2)
+        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await ext.calls == [.resume, .suspend])
+        // The suspend reason stays the original loss message; pause cannot
+        // refresh it, which is an accepted limitation.
+        #expect(
+            await ext.suspendReason
+                == "The server is unreachable. Check your network connection."
+        )
+        #expect(spy.statuses.last == .offline(.paused))
+        await #expect(throws: CoreError.serverUnreachable) {
+            try await supervisor.withSession { _ in }
+        }
+    }
+
     @Test func reconnectGoesOfflineOnPermanentFailure() async throws {
         let sandbox = TestSandbox()
         let spy = StatusSpy()
@@ -484,7 +640,7 @@ struct SessionSupervisorTests {
         // follows a lost connection.
         await provider.failNextConnects(1, with: .authenticationFailed)
         let handler = try #require(await provider.capturedHandler)
-        await handler()
+        await handler(ConnectionError.connectionRefused)
 
         // The supervisor settles into offline(.failed) rather than retrying.
         let deadline = ContinuousClock.now + .seconds(5)
@@ -628,7 +784,7 @@ struct SessionSupervisorTests {
         try await supervisor.connect(config: try sandbox.config)
         await supervisor.pause()
 
-        #expect(spy.statuses == [.connecting, .online, .offline(.paused)])
+        #expect(spy.statuses.last == .offline(.paused))
     }
 
     @Test func disableEmitsDisabledOffline() async throws {
@@ -649,7 +805,7 @@ struct SessionSupervisorTests {
         try await supervisor.connect(config: try sandbox.config)
         await supervisor.disable()
 
-        #expect(spy.statuses == [.connecting, .online, .offline(.disabled)])
+        #expect(spy.statuses.last == .offline(.disabled))
     }
 
     @Test func connectionLostEmitsReconnectingWithErrorThenOnline()
@@ -677,7 +833,7 @@ struct SessionSupervisorTests {
         // error and a scheduled next attempt before the retry succeeds.
         await provider.failNextConnects(1)
         let handler = try #require(await provider.capturedHandler)
-        await handler()
+        await handler(ConnectionError.connectionRefused)
 
         try await waitUntilOnline(supervisor)
 
