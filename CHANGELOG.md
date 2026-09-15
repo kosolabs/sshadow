@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1](https://github.com/kosolabs/sshadow/compare/v0.14.0...v0.14.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* sftpError(.failure) being reported instead of connectionFailed ([#360](https://github.com/kosolabs/sshadow/issues/360)) ([64dd59f](https://github.com/kosolabs/sshadow/commit/64dd59f645c7d21ebf03aa97191cdbcab82ce046))
+
 ## [0.14.0](https://github.com/kosolabs/sshadow/compare/v0.13.0...v0.14.0) (2026-09-15)
 
 
