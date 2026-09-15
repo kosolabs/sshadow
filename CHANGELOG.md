@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.14.0](https://github.com/kosolabs/sshadow/compare/v0.13.0...v0.14.0) (2026-09-15)
+
+
+### Features
+
+* add disconnecting state to prevent interrupting teardown ([#356](https://github.com/kosolabs/sshadow/issues/356)) ([a40628c](https://github.com/kosolabs/sshadow/commit/a40628cc657949f32f0888f4466c65f63a6dad1a))
+
+
+### Bug Fixes
+
+* remove suspended domain when disabling a paused or failed connection ([#358](https://github.com/kosolabs/sshadow/issues/358)) ([6e91af7](https://github.com/kosolabs/sshadow/commit/6e91af714ce47a888c6d75d92ded3d518c3aa7dc))
+
 ## [0.13.0](https://github.com/kosolabs/sshadow/compare/v0.12.0...v0.13.0) (2026-09-05)
 
 
