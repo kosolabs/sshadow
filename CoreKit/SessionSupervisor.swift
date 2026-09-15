@@ -135,11 +135,15 @@ actor SessionSupervisor {
 
     func disable() async {
         switch state {
+        case .offline:
+            state = .offline(.disabled)
+            break
         case .reconnecting(let task, _, _):
             await cancel(task, reason: .disabled)
         case .online(let session):
             await disconnect(session, reason: .disabled)
         default:
+            logger.fault("Called disable while in \(state)")
             return
         }
         await ext.remove()
@@ -154,6 +158,7 @@ actor SessionSupervisor {
         case .online(let session):
             await disconnect(session, reason: .paused)
         default:
+            logger.fault("Called pause while in \(state)")
             return
         }
         log.notice("Paused connection to \(domain.displayName)")

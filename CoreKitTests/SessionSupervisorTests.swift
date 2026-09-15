@@ -851,4 +851,188 @@ struct SessionSupervisorTests {
 
         await supervisor.disable()
     }
+
+    @Test func disableWhileReconnectingCancelsAndRemoves() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            // A long backoff parks the reconnect loop in its sleep so we can
+            // disable between attempts deterministically.
+            initialBackoff: .seconds(30),
+            maxBackoff: .seconds(30),
+            openSession: provider.provider(),
+            xpc: xpc,
+            ext: ext,
+            onStatusChange: spy.handler()
+        )
+
+        try await supervisor.connect(config: try sandbox.config)
+
+        // Fail every reconnect so the loop backs off rather than recovering.
+        await provider.failNextConnects(10)
+        let handler = try #require(await provider.capturedHandler)
+        await handler(ConnectionError.connectionRefused)
+
+        // Wait for the first reconnect attempt to fail; the loop is now parked
+        // in its (long) backoff sleep.
+        let deadline = ContinuousClock.now + .seconds(5)
+        while await provider.callCount < 2, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        #expect(await provider.callCount == 2)
+
+        // Disabling cancels the backoff and settles offline without another
+        // attempt. Unlike pause, disable removes the domain; the teardown
+        // already happened at the connection loss, so no second suspend fires.
+        await supervisor.disable()
+
+        #expect(await provider.callCount == 2)
+        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await ext.calls == [.resume, .suspend, .remove])
+        #expect(spy.statuses.last == .offline(.disabled))
+        await #expect(throws: CoreError.serverUnreachable) {
+            try await supervisor.withSession { _ in }
+        }
+    }
+
+    @Test func pauseFromOnlineEmitsDisconnectingThenOffline() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            openSession: provider.provider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController(),
+            onStatusChange: spy.handler()
+        )
+
+        try await supervisor.connect(config: try sandbox.config)
+        await supervisor.pause()
+
+        // Pausing an online connection passes through .disconnecting before
+        // settling offline, so consumers can render the teardown.
+        #expect(
+            spy.statuses == [
+                .connecting, .online, .disconnecting(.paused),
+                .offline(.paused),
+            ]
+        )
+    }
+
+    @Test func disableFromOnlineEmitsDisconnectingThenOffline() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            openSession: provider.provider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController(),
+            onStatusChange: spy.handler()
+        )
+
+        try await supervisor.connect(config: try sandbox.config)
+        await supervisor.disable()
+
+        // Disabling an online connection also passes through .disconnecting
+        // before settling offline.
+        #expect(
+            spy.statuses == [
+                .connecting, .online, .disconnecting(.disabled),
+                .offline(.disabled),
+            ]
+        )
+    }
+
+    @Test func disableFromPausedRemovesDomain() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            openSession: provider.provider(),
+            xpc: xpc,
+            ext: ext,
+            onStatusChange: spy.handler()
+        )
+
+        // Pause leaves the domain suspended (not removed): the UI still lets
+        // the user toggle a paused connection off, which disables it.
+        try await supervisor.connect(config: try sandbox.config)
+        await supervisor.pause()
+
+        // Disabling a paused connection must still remove the suspended domain
+        // rather than leaking it. The session was already torn down at pause,
+        // so no second teardown/suspend fires.
+        await supervisor.disable()
+
+        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await ext.calls == [.resume, .suspend, .remove])
+        #expect(spy.statuses.last == .offline(.disabled))
+    }
+
+    @Test func disableFromFailedRemovesDomain() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            initialBackoff: .milliseconds(1),
+            maxBackoff: .milliseconds(5),
+            openSession: provider.provider(),
+            xpc: xpc,
+            ext: ext,
+            onStatusChange: spy.handler()
+        )
+
+        // Drive the supervisor into offline(.failed) by losing the connection
+        // and letting the reconnect hit a permanent failure. The domain was
+        // registered while online and is left suspended, not removed.
+        try await supervisor.connect(config: try sandbox.config)
+        await provider.failNextConnects(1, with: .authenticationFailed)
+        let handler = try #require(await provider.capturedHandler)
+        await handler(ConnectionError.connectionRefused)
+
+        let deadline = ContinuousClock.now + .seconds(5)
+        while ContinuousClock.now < deadline {
+            if spy.statuses.last == .offline(.failed(.authenticationFailed)) {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(spy.statuses.last == .offline(.failed(.authenticationFailed)))
+
+        // Disabling the failed connection removes the suspended domain; the
+        // teardown already happened at the connection loss, so there is no
+        // second teardown/suspend.
+        await supervisor.disable()
+
+        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await ext.calls == [.resume, .suspend, .remove])
+        #expect(spy.statuses.last == .offline(.disabled))
+    }
 }
