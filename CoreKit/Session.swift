@@ -203,8 +203,9 @@ actor Session {
         watched[itemId, default: 0] += 1
         schedule?.recordWatchStarted()
 
-        logger.info("Watch on \(ref): \(watched[itemId, default: 0])")
-        if watched[itemId] == 1 {
+        let newCount = watched[itemId, default: 0]
+        logger.info("Watch on \(ref): \(newCount)")
+        if newCount == 1 {
             logger.notice("Started watching: \(ref)")
         }
     }
@@ -214,12 +215,16 @@ actor Session {
         guard let count = watched[itemId] else { return }
         let ref = await ref(for: itemId)
 
-        logger.info("Unwatch on \(ref): \(watched[itemId, default: 0])")
         if count <= 1 {
             watched.removeValue(forKey: itemId)
-            logger.notice("Stopped watching: \(ref)")
         } else {
             watched[itemId] = count - 1
+        }
+
+        let newCount = watched[itemId, default: 0]
+        logger.info("Unwatch on \(ref): \(newCount)")
+        if newCount == 0 {
+            logger.notice("Stopped watching: \(ref)")
         }
     }
 
