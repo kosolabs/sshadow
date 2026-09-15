@@ -68,6 +68,10 @@ actor SessionSupervisor {
         }
     }
 
+    var status: ConnectionStatus {
+        status(of: state)
+    }
+
     init(
         domain: NSFileProviderDomain,
         pollInterval: Duration?,

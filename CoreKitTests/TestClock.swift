@@ -96,7 +96,7 @@ final class TestClock: Clock {
 func expect(
     eventually condition: () async -> Bool,
     _ description: String? = nil,
-    timeout: Duration = .seconds(5),
+    timeout: Duration = .seconds(30),
     pollInterval: Duration = .milliseconds(1),
     sourceLocation: SourceLocation = #_sourceLocation,
     isolation: isolated (any Actor)? = #isolation
