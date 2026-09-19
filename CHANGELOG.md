@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.2](https://github.com/kosolabs/sshadow/compare/v0.14.1...v0.14.2) (2026-09-19)
+
+
+### Bug Fixes
+
+* new warnings surfaced in Xcode 27 ([#362](https://github.com/kosolabs/sshadow/issues/362)) ([68ab787](https://github.com/kosolabs/sshadow/commit/68ab7874de1faca30cf76cf97ceeb8a2c21d5fe8))
+
 ## [0.14.1](https://github.com/kosolabs/sshadow/compare/v0.14.0...v0.14.1) (2026-09-15)
 
 
