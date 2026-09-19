@@ -107,14 +107,18 @@ public class ConnectionConfigModel: CustomStringConvertible {
     }
 
     public func setEnabled(_ enabled: Bool) {
-        Task { try await enabled ? enable() : disable() }
+        Task { await enabled ? enable() : disable() }
     }
 
-    public func enable() async throws {
-        let config = try ConnectionConfig(from: self)
-        try await DomainRegistry.shared.connect(config: config)
-        self.enabled = true
-        logger.notice("Profile enabled: \(self)")
+    public func enable() async {
+        do {
+            let config = try ConnectionConfig(from: self)
+            try await DomainRegistry.shared.connect(config: config)
+            self.enabled = true
+            logger.notice("Profile enabled: \(self)")
+        } catch {
+            logger.error("Failed to enable \(self): \(error)")
+        }
     }
 
     public func disable() async {
@@ -123,13 +127,16 @@ public class ConnectionConfigModel: CustomStringConvertible {
         logger.notice("Profile disabled: \(self)")
     }
 
-    public func pause() async throws {
-        try await DomainRegistry.shared.pause(domain: domain)
-        logger.notice("Profile paused: \(self)")
+    public func pause() async {
+        await DomainRegistry.shared.pause(domain: domain)
     }
 
-    public func poll() async throws {
-        try await DomainRegistry.shared.poll(domain: domain)
+    public func poll() async {
+        do {
+            try await DomainRegistry.shared.poll(domain: domain)
+        } catch {
+            logger.error("Failed to poll \(self): \(error)")
+        }
     }
 
     // MARK: - Password Management

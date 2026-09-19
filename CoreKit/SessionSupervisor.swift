@@ -44,7 +44,7 @@ actor SessionSupervisor {
         }
 
         set {
-            logger.notice("State changed: \(_state) -> \(newValue)")
+            logger.info("State changed: \(_state) -> \(newValue)")
             let statusChanged = status(of: _state) != status(of: newValue)
             _state = newValue
             if statusChanged {
@@ -134,7 +134,7 @@ actor SessionSupervisor {
 
         state = .online(session)
         log.notice("Connected to \(config.name)")
-        logger.notice("Session connected: \(config)")
+        logger.notice("Supervisor connected: \(config)")
     }
 
     func disable() async {

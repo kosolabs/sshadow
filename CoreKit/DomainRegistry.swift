@@ -80,11 +80,17 @@ public actor DomainRegistry {
     }
 
     public func poll(domain: NSFileProviderDomain) async throws {
-        try await supervisor(for: domain).withSession { try await $0.pollAll() }
+        if let supervisor = supervisors[domain.id] {
+            try await supervisor.withSession { try await $0.pollAll() }
+        } else {
+            logger.error("Failed to poll missing supervisor: \(domain)")
+        }
     }
 
-    public func pause(domain: NSFileProviderDomain) async throws {
-        try await supervisor(for: domain).pause()
+    public func pause(domain: NSFileProviderDomain) async {
+        if let supervisor = supervisors[domain.id] {
+            await supervisor.pause()
+        }
     }
 
     public func disable(domain: NSFileProviderDomain) async {
