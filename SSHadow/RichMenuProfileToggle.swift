@@ -3,6 +3,8 @@ import CoreKit
 import FileProvider
 import SwiftUI
 
+private let logger = Logger(category: "RichMenuProfileToggle")
+
 struct RichMenuProfileToggle: View {
     @Environment(Connections.self) private var connections
 
@@ -70,10 +72,14 @@ struct RichMenuProfileToggle: View {
     private func openInFinder() {
         guard config.isEnabled() else { return }
         Task {
-            let url = try await config.domain.manager.getUserVisibleURL(
-                for: .rootContainer
-            )
-            NSWorkspace.shared.activateFileViewerSelecting([url])
+            do {
+                let url = try await config.domain.manager.getUserVisibleURL(
+                    for: .rootContainer
+                )
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } catch {
+                logger.error("Failed to open \(config) in finder")
+            }
             NSApp.dismissMenuBarExtra()
         }
     }

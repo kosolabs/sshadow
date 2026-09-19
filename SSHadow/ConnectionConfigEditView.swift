@@ -160,12 +160,12 @@ struct ConnectionConfigEditView: View {
                         if enabled.wrappedValue {
                             if connections.isOffline(id: config.id) {
                                 Button("Reconnect") {
-                                    Task { try await config.enable() }
+                                    Task { await config.enable() }
                                 }
                                 .disabled(validationError != nil)
                             } else {
                                 Button("Pause") {
-                                    Task { try await config.pause() }
+                                    Task { await config.pause() }
                                 }
                             }
                         }

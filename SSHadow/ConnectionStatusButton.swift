@@ -38,13 +38,13 @@ private struct HoverActionIcon: View {
     let icon: ConnectionStatusIcon
     let hoverIcon: String
     let help: String
-    let action: () async throws -> Void
+    let action: () async -> Void
 
     @State private var isHovered = false
 
     var body: some View {
         Button {
-            Task { try await action() }
+            Task { await action() }
         } label: {
             if isHovered {
                 Image(systemName: hoverIcon)

@@ -79,7 +79,7 @@ public final class Transfers<C: Clock<Duration>> {
 
     nonisolated func end(transfer: Transfer) {
         Task { @MainActor in
-            try await Task.sleep(for: linger, clock: clock)
+            try? await Task.sleep(for: linger, clock: clock)
             _value.removeAll { $0.id == transfer.id }
             triggerSignalUpdate()
         }

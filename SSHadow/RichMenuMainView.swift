@@ -58,7 +58,7 @@ struct RichMenuMainView: View {
                         defer { isPolling = false }
                         for config in configs {
                             if config.isEnabled() {
-                                try await config.poll()
+                                await config.poll()
                             }
                         }
                     }
