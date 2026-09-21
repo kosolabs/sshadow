@@ -11,6 +11,7 @@ struct RichMenuProfileToggle: View {
     let config: ConnectionConfigModel
 
     @State private var isHovered = false
+    @State private var folderUrl: URL?
 
     private var enabled: Binding<Bool> {
         Binding<Bool>(
@@ -41,7 +42,8 @@ struct RichMenuProfileToggle: View {
                     Spacer()
                 }
                 .contentShape(Rectangle())
-                .onTapGesture { Task { await openInFinder() } }
+                .onTapGesture { openInFinder() }
+                .draggable(ifAvailable: folderUrl.map(\.shellEscapedPath))
 
                 Toggle(isOn: enabled) {}
                     .toggleStyle(.switch)
@@ -67,18 +69,25 @@ struct RichMenuProfileToggle: View {
             )
         )
         .onHover { isHovered = $0 }
+        .task(id: config.isEnabled()) { folderUrl = await resolveFolderUrl() }
     }
 
-    private func openInFinder() async {
-        guard config.isEnabled() else { return }
-        NSApp.dismissMenuBarExtra()
-        do {
-            let url = try await config.domain.manager.getUserVisibleURL(
-                for: .rootContainer
-            )
-            NSWorkspace.shared.activateFileViewerSelecting([url])
-        } catch {
-            logger.error("Failed to open \(config) in finder: \(error)")
+    private func resolveFolderUrl() async -> URL? {
+        if config.isEnabled() {
+            do {
+                return try await config.domain.manager.getUserVisibleURL(
+                    for: .rootContainer
+                )
+            } catch {
+                logger.error("Failed to resolve URL for \(config): \(error)")
+            }
         }
+        return nil
+    }
+
+    private func openInFinder() {
+        guard let folderUrl else { return }
+        NSApp.dismissMenuBarExtra()
+        NSWorkspace.shared.activateFileViewerSelecting([folderUrl])
     }
 }
