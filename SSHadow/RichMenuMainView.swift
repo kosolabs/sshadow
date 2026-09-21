@@ -50,7 +50,7 @@ struct RichMenuMainView: View {
                     systemImage: "list.bullet.rectangle"
                 )
             }
-            
+
             if isDebug {
                 RichMenuButton {
                     Task {
@@ -79,7 +79,7 @@ struct RichMenuMainView: View {
             } label: {
                 RichMenuLabel("About SSHadow", systemImage: "info.circle")
             }
-            
+
             Divider().padding(.vertical, 4)
 
             RichMenuButton {

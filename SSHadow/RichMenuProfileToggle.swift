@@ -27,7 +27,7 @@ struct RichMenuProfileToggle: View {
         VStack(alignment: .leading) {
             HStack(spacing: 8) {
                 ConnectionStatusButton(config: config, status: status)
-                
+
                 HStack {
                     VStack(alignment: .leading) {
                         if let name = config.name {
@@ -37,17 +37,17 @@ struct RichMenuProfileToggle: View {
                             Text(config.displayUrl)
                         }
                     }
-                    
+
                     Spacer()
                 }
                 .contentShape(Rectangle())
-                .onTapGesture { openInFinder() }
-                
+                .onTapGesture { Task { await openInFinder() } }
+
                 Toggle(isOn: enabled) {}
                     .toggleStyle(.switch)
                     .disabled(connections.isBusy(id: config.id))
             }
-            
+
             switch status {
             case .reconnecting, .offline(.failed):
                 ConnectionStatusText(status: status)
@@ -69,18 +69,16 @@ struct RichMenuProfileToggle: View {
         .onHover { isHovered = $0 }
     }
 
-    private func openInFinder() {
+    private func openInFinder() async {
         guard config.isEnabled() else { return }
-        Task {
-            do {
-                let url = try await config.domain.manager.getUserVisibleURL(
-                    for: .rootContainer
-                )
-                NSWorkspace.shared.activateFileViewerSelecting([url])
-            } catch {
-                logger.error("Failed to open \(config) in finder")
-            }
-            NSApp.dismissMenuBarExtra()
+        NSApp.dismissMenuBarExtra()
+        do {
+            let url = try await config.domain.manager.getUserVisibleURL(
+                for: .rootContainer
+            )
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } catch {
+            logger.error("Failed to open \(config) in finder: \(error)")
         }
     }
 }

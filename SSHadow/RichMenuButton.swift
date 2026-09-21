@@ -12,8 +12,8 @@ struct RichMenuButton<Content: View>: View {
 
     var body: some View {
         Button {
-            action()
             NSApp.dismissMenuBarExtra()
+            action()
         } label: {
             HStack {
                 label()
