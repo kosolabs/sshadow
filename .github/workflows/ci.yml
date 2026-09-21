@@ -7,7 +7,7 @@ on:
 jobs:
   tests:
     name: Tests
-    runs-on: macos-26
+    runs-on: xcode-27
 
     environment:
       name: sshadow-release
