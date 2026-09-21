@@ -12,4 +12,13 @@ extension View {
         nsImage.isTemplate = isTemplate
         return Image(nsImage: nsImage)
     }
+
+    @ViewBuilder
+    func draggable<T: Transferable>(ifAvailable payload: T?) -> some View {
+        if let payload {
+            draggable(payload)
+        } else {
+            self
+        }
+    }
 }
