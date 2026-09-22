@@ -57,7 +57,7 @@ struct ExtensionTests {
         #expect(item.filename == "small-file.txt")
         #expect(item.contentType == .text)
         #expect(item.documentSize??.intValue == contents.count)
-        #expect(item.fileSystemFlags == [.userReadable, .userWritable])
+        #expect(item.fileSystemFlags == .rw)
         #expect(try String(contentsOf: url, encoding: .utf8) == contents)
         #expect(readProgress.isFinished)
     }
@@ -163,9 +163,7 @@ struct ExtensionTests {
                 filename: "folder",
                 contentType: .folder,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userExecutable, .userReadable, .userWritable,
-                ],
+                fileSystemFlags: .rwx,
                 creationDate: newDate,
                 contentModificationDate: newDate,
                 isDownloaded: true,
@@ -183,11 +181,7 @@ struct ExtensionTests {
 
         #expect(item.filename == "folder")
         #expect(item.contentType == .folder)
-        #expect(
-            item.fileSystemFlags == [
-                .userReadable, .userWritable, .userExecutable,
-            ]
-        )
+        #expect(item.fileSystemFlags == .rwx)
         #expect(item.creationDate == newDate)
         #expect(item.contentModificationDate == newDate)
         #expect(pendingFields.isEmpty)
@@ -204,9 +198,7 @@ struct ExtensionTests {
                 filename: "parent",
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable, .pathExtensionHidden,
-                ],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
                 contentModificationDate: newDate,
                 isDownloaded: true,
                 isMostRecentVersionDownloaded: true,
@@ -248,9 +240,7 @@ struct ExtensionTests {
                 filename: "file.txt",
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable,
-                ],
+                fileSystemFlags: .rw,
                 documentSize: NSNumber(value: contents.count),
                 creationDate: newDate,
                 contentModificationDate: newDate,
@@ -269,7 +259,7 @@ struct ExtensionTests {
 
         #expect(item.filename == "file.txt")
         #expect(item.contentType == .text)
-        #expect(item.fileSystemFlags == [.userReadable, .userWritable])
+        #expect(item.fileSystemFlags == .rw)
         #expect(item.creationDate == newDate)
         #expect(item.contentModificationDate == newDate)
         #expect(pendingFields.isEmpty)
@@ -288,9 +278,7 @@ struct ExtensionTests {
                 filename: "parent",
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable, .pathExtensionHidden,
-                ],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
                 contentModificationDate: newDate,
                 isDownloaded: true,
                 isMostRecentVersionDownloaded: true,
@@ -332,7 +320,7 @@ struct ExtensionTests {
                 filename: "file.dat",
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [.userReadable, .userWritable],
+                fileSystemFlags: .rw,
                 documentSize: NSNumber(value: data.count),
                 creationDate: newDate,
                 contentModificationDate: newDate,
@@ -351,7 +339,7 @@ struct ExtensionTests {
 
         #expect(item.filename == "file.dat")
         #expect(item.contentType == .text)
-        #expect(item.fileSystemFlags == [.userReadable, .userWritable])
+        #expect(item.fileSystemFlags == .rw)
         #expect(item.creationDate == newDate)
         #expect(item.contentModificationDate == newDate)
         #expect(pendingFields.isEmpty)
@@ -370,9 +358,7 @@ struct ExtensionTests {
                 filename: "parent",
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable, .pathExtensionHidden,
-                ],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
                 contentModificationDate: newDate,
                 isDownloaded: true,
                 isMostRecentVersionDownloaded: true,
@@ -397,7 +383,11 @@ struct ExtensionTests {
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: "parent", modifyDate: oldDate)
         let contents = "Hello, World!"
-        try sandbox.createFile(at: "parent/target.txt", contents: contents)
+        try sandbox.createFile(
+            at: "parent/target.txt",
+            contents: contents,
+            modifyDate: oldDate
+        )
         let (ext, client) = try await sandbox.getExtensionAndClient()
         let parentId = try await client.child(name: "parent")
 
@@ -409,9 +399,7 @@ struct ExtensionTests {
                 filename: "symlink.txt",
                 contentType: .symbolicLink,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userExecutable, .userReadable, .userWritable,
-                ],
+                fileSystemFlags: .rwx,
                 documentSize: NSNumber(value: contents.count),
                 creationDate: newDate,
                 contentModificationDate: newDate,
@@ -431,16 +419,59 @@ struct ExtensionTests {
 
         #expect(item.filename == "symlink.txt")
         #expect(item.contentType == .symbolicLink)
-        #expect(
-            item.fileSystemFlags == [
-                .userReadable, .userWritable, .userExecutable,
-            ]
-        )
+        #expect(item.fileSystemFlags == .rwx)
         #expect(item.creationDate == newDate)
         #expect(item.contentModificationDate == newDate)
         #expect(pendingFields.isEmpty)
         #expect(!shouldFetch)
         #expect(try sandbox.target(of: "parent/symlink.txt") == "target.txt")
+        #expect(try sandbox.modifyDate(of: "parent/symlink.txt") == newDate)
+        #expect(try sandbox.modifyDate(of: "parent/target.txt") == oldDate)
+        #expect(createSymlinkProgress.isFinished)
+    }
+
+    @Test func createBrokenSymlinkSucceeds() async throws {
+        // ln -s missing.txt broken.txt
+        let date = Date(timeIntervalSince1970: 1_760_000_000)
+
+        let sandbox = TestSandbox()
+        let (ext, _) = try await sandbox.getExtensionAndClient()
+
+        // Create FPItem(id: FPItemID(<osid>), parentId: .rootContainer, filename: broken.txt, contentType: public.symlink, target: missing.txt, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), size: 11, createTime: 2026-09-21 23:42:36 +0000, modifyTime: 2026-09-21 23:42:36 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        let createSymlinkProgress = Progress()
+        let (item, pendingFields, shouldFetch) = try await ext.createItem(
+            basedOn: ItemTemplate(
+                parentItemIdentifier: .rootContainer,
+                filename: "broken.txt",
+                contentType: .symbolicLink,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: .rwx,
+                documentSize: NSNumber(value: 11),
+                creationDate: date,
+                contentModificationDate: date,
+                symlinkTargetPath: "missing.txt",
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true,
+            ),
+            fields: [
+                .contents, .filename, .parentItemIdentifier, .creationDate,
+                .contentModificationDate, .fileSystemFlags, .typeAndCreator,
+            ],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: createSymlinkProgress
+        )
+
+        #expect(item.filename == "broken.txt")
+        #expect(item.contentType == .symbolicLink)
+        #expect(item.fileSystemFlags == .rwx)
+        #expect(item.creationDate == date)
+        #expect(item.contentModificationDate == date)
+        #expect(pendingFields.isEmpty)
+        #expect(!shouldFetch)
+        #expect(try sandbox.target(of: "broken.txt") == "missing.txt")
+        #expect(try sandbox.modifyDate(of: "broken.txt") == date)
         #expect(createSymlinkProgress.isFinished)
     }
 
@@ -469,9 +500,7 @@ struct ExtensionTests {
                 filename: "dest.txt",
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable, .pathExtensionHidden,
-                ],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
                 isDownloaded: true,
                 isMostRecentVersionDownloaded: true,
             ),
@@ -485,7 +514,7 @@ struct ExtensionTests {
 
         let item = try #require(maybeItem)
         #expect(item.filename == "dest.txt")
-        #expect(item.fileSystemFlags == [.userReadable, .userWritable])
+        #expect(item.fileSystemFlags == .rw)
         #expect(item.contentModificationDate == oldDate)
         #expect(pendingFields.isEmpty)
         #expect(!shouldFetch)
@@ -501,9 +530,7 @@ struct ExtensionTests {
                 filename: "parent",
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable, .pathExtensionHidden,
-                ],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
                 contentModificationDate: newDate,
                 isDownloaded: true,
                 isMostRecentVersionDownloaded: true,
@@ -547,9 +574,7 @@ struct ExtensionTests {
                 filename: "file.txt",
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable, .pathExtensionHidden,
-                ],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
                 isDownloaded: true,
                 isMostRecentVersionDownloaded: true
             ),
@@ -563,7 +588,7 @@ struct ExtensionTests {
 
         let item = try #require(maybeItem)
         #expect(item.filename == "file.txt")
-        #expect(item.fileSystemFlags == [.userReadable, .userWritable])
+        #expect(item.fileSystemFlags == .rw)
         #expect(item.contentModificationDate == oldDate)
         #expect(pendingFields.isEmpty)
         #expect(!shouldFetch)
@@ -579,9 +604,7 @@ struct ExtensionTests {
                 filename: "dest",
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable, .pathExtensionHidden,
-                ],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
                 contentModificationDate: newDate,
                 isDownloaded: true,
                 isMostRecentVersionDownloaded: true,
@@ -605,9 +628,7 @@ struct ExtensionTests {
                 filename: "src",
                 contentType: .directory,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable, .pathExtensionHidden,
-                ],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
                 contentModificationDate: newDate,
                 isDownloaded: true,
                 isMostRecentVersionDownloaded: true,
@@ -642,9 +663,7 @@ struct ExtensionTests {
                 filename: "new.txt",
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable, .pathExtensionHidden,
-                ],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
                 isDownloaded: true,
                 isMostRecentVersionDownloaded: true
             ),
@@ -658,7 +677,7 @@ struct ExtensionTests {
 
         let item = try #require(maybeItem)
         #expect(item.filename == "new.txt")
-        #expect(item.fileSystemFlags == [.userReadable, .userWritable])
+        #expect(item.fileSystemFlags == .rw)
         #expect(pendingFields.isEmpty)
         #expect(!shouldFetch)
         #expect(sandbox.exists(at: "dest/new.txt"))
@@ -682,9 +701,7 @@ struct ExtensionTests {
                 filename: "file.txt",
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable, .pathExtensionHidden,
-                ],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
                 isDownloaded: true,
                 isMostRecentVersionDownloaded: true
             ),
@@ -700,7 +717,7 @@ struct ExtensionTests {
         #expect(item.filename == "file.txt")
         #expect(item.id == srcId)
         #expect(item.parentItemIdentifier == destFolderId)
-        #expect(item.fileSystemFlags == [.userReadable, .userWritable])
+        #expect(item.fileSystemFlags == .rw)
         #expect(pendingFields.isEmpty)
         #expect(!shouldFetch)
     }
@@ -721,9 +738,7 @@ struct ExtensionTests {
                 filename: "file.txt",
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable, .pathExtensionHidden,
-                ],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
                 isDownloaded: true,
                 isMostRecentVersionDownloaded: true,
             ),
@@ -739,7 +754,7 @@ struct ExtensionTests {
         #expect(item.filename == "file.txt")
         #expect(item.id == fileId)
         #expect(item.parentId == .trashContainer)
-        #expect(item.fileSystemFlags == [.userReadable, .userWritable])
+        #expect(item.fileSystemFlags == .rw)
         #expect(pendingFields.isEmpty)
         #expect(!shouldFetch)
         #expect(sandbox.exists(at: ".sshadow/trash/file.txt"))
@@ -794,9 +809,7 @@ struct ExtensionTests {
                 filename: "file.txt",
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable, .pathExtensionHidden,
-                ],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
                 documentSize: NSNumber(value: newContents.count),
                 contentModificationDate: newDate,
             ),
@@ -846,9 +859,7 @@ struct ExtensionTests {
                 filename: "file.txt",
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable, .pathExtensionHidden,
-                ]
+                fileSystemFlags: [.rw, .pathExtensionHidden]
             ),
             baseVersion: NSFileProviderItemVersion(),
             changedFields: [.fileSystemFlags],
@@ -859,7 +870,7 @@ struct ExtensionTests {
         )
 
         let item = try #require(maybeItem)
-        #expect(item.fileSystemFlags == [.userReadable, .userWritable])
+        #expect(item.fileSystemFlags == .rw)
         #expect(try sandbox.permissions(of: "file.txt") == 0o644)
         #expect(modifyProgress.isFinished)
     }
@@ -879,9 +890,7 @@ struct ExtensionTests {
                 filename: "folder",
                 contentType: .text,
                 capabilities: [.allowsReading, .allowsWriting],
-                fileSystemFlags: [
-                    .userReadable, .userWritable, .userExecutable,
-                ]
+                fileSystemFlags: .rwx
             ),
             baseVersion: NSFileProviderItemVersion(),
             changedFields: [.fileSystemFlags],
@@ -892,13 +901,92 @@ struct ExtensionTests {
         )
 
         let item = try #require(maybeItem)
-        #expect(
-            item.fileSystemFlags == [
-                .userReadable, .userWritable, .userExecutable,
-            ]
-        )
+        #expect(item.fileSystemFlags == .rwx)
         #expect(try sandbox.permissions(of: "folder") == 0o755)
         #expect(modifyProgress.isFinished)
+    }
+
+    @Test func setSymlinkReadWriteDoesNothing() async throws {
+        // chmod -h 666 broken.txt
+        let date = Date(timeIntervalSince1970: 1_750_000_000)
+
+        let sandbox = TestSandbox()
+        try sandbox.createSymlink(
+            at: "broken.txt",
+            target: "missing.txt",
+            modifyDate: date
+        )
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+        let itemId = try await client.child(name: "broken.txt")
+
+        // Modify FPItem(id: FPItemID(<id>), parentId: .rootContainer, filename: broken.txt, contentType: public.symlink, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 256, fileSystemFlags)
+        let updateSymlinkProgress = Progress()
+        let (maybeItem, _, _) = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: itemId,
+                filename: "broken.txt",
+                contentType: .symbolicLink,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
+                creationDate: date,
+                contentModificationDate: date,
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true,
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.fileSystemFlags],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: updateSymlinkProgress
+        )
+
+        let item = try #require(maybeItem)
+        #expect(item.fileSystemFlags == .rwx)
+        #expect(try sandbox.permissions(of: "broken.txt") == 0o755)
+        #expect(updateSymlinkProgress.isFinished)
+    }
+
+    @Test func setSymlinkModifyTimeSucceeds() async throws {
+        // touch -hd "2026-04-04 00:00:00" broken.txt
+        let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
+        let newDate = Date(timeIntervalSince1970: 1_760_000_000)
+
+        let sandbox = TestSandbox()
+        try sandbox.createSymlink(
+            at: "broken.txt",
+            target: "missing.txt",
+            modifyDate: oldDate
+        )
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+        let itemId = try await client.child(name: "broken.txt")
+
+        // Modify FPItem(id: FPItemID(<id>), parentId: .rootContainer, filename: broken.txt, contentType: public.symlink, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), createTime: 2026-04-04 07:00:00 +0000, modifyTime: 2026-04-04 07:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 192, creationDate, contentModificationDate)
+        let updateSymlinkProgress = Progress()
+        let (maybeItem, _, _) = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: itemId,
+                filename: "broken.txt",
+                contentType: .symbolicLink,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
+                creationDate: newDate,
+                contentModificationDate: newDate,
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true,
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.creationDate, .contentModificationDate],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: updateSymlinkProgress
+        )
+
+        let item = try #require(maybeItem)
+        #expect(item.contentModificationDate == newDate)
+        #expect(try sandbox.modifyDate(of: "broken.txt") == newDate)
+        #expect(updateSymlinkProgress.isFinished)
     }
 
     @Test func deleteFolderSucceeds() async throws {
@@ -967,9 +1055,7 @@ final class ItemTemplate: NSObject, NSFileProviderItem {
         typeAndCreator: NSFileProviderTypeAndCreator =
             NSFileProviderTypeAndCreator(),
         capabilities: NSFileProviderItemCapabilities = [],
-        fileSystemFlags: NSFileProviderFileSystemFlags = [
-            .userExecutable, .userReadable, .userWritable,
-        ],
+        fileSystemFlags: NSFileProviderFileSystemFlags = .rwx,
         documentSize: NSNumber? = nil,
         creationDate: Date? = nil,
         contentModificationDate: Date? = nil,

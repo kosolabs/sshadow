@@ -14,6 +14,12 @@ enum RelativeTo {
     case shared
 }
 
+enum TestSandboxError: Error {
+    case lchmod
+    case lstat
+    case utimensat
+}
+
 struct NoopXPCBroker: XPCBroker {
     func broker(exporting service: CoreService) async {}
     func teardown() async {}
@@ -253,34 +259,20 @@ class TestSandbox {
         UInt16(try attributes(of: path).filePosixPermissions())
     }
 
-    func modifyDate(of path: String) throws -> Date {
-        guard let date = try attributes(of: path).fileModificationDate() else {
-            throw NSError(
-                domain: "FileManagerExtensions",
-                code: 1,
-                userInfo: [
-                    NSLocalizedDescriptionKey:
-                        "Failed to get modification date for \(path)"
-                ]
-            )
+    private func status(of path: String) throws -> stat {
+        var status = stat()
+        guard lstat(getUrl(for: path).path(), &status) == 0 else {
+            throw TestSandboxError.lstat
         }
-        return date
+        return status
+    }
+
+    func modifyDate(of path: String) throws -> Date {
+        try Date(for: status(of: path).st_mtimespec)
     }
 
     func accessDate(of path: String) throws -> Date {
-        let url = getUrl(for: path)
-        let values = try url.resourceValues(forKeys: [.contentAccessDateKey])
-        guard let date = values.contentAccessDate else {
-            throw NSError(
-                domain: "FileManagerExtensions",
-                code: 1,
-                userInfo: [
-                    NSLocalizedDescriptionKey:
-                        "Failed to get access date for \(path)"
-                ]
-            )
-        }
-        return date
+        try Date(for: status(of: path).st_atimespec)
     }
 
     func target(of path: String) throws -> String {
@@ -333,21 +325,20 @@ class TestSandbox {
         permissions: mode_t? = nil,
         modifyDate: Date? = nil
     ) throws {
-        var attributes: [FileAttributeKey: Any] = [:]
+        let path = url.path()
 
-        if let permissions {
-            attributes[FileAttributeKey.posixPermissions] = permissions
+        if let permissions, lchmod(path, permissions) != 0 {
+            throw TestSandboxError.lchmod
         }
 
         if let modifyDate {
-            attributes[FileAttributeKey.modificationDate] = modifyDate
-        }
-
-        if !attributes.isEmpty {
-            try FileManager.default.setAttributes(
-                attributes,
-                ofItemAtPath: url.path()
-            )
+            var times = [
+                timespec(tv_sec: 0, tv_nsec: Int(UTIME_OMIT)),
+                timespec(for: modifyDate),
+            ]
+            if utimensat(AT_FDCWD, path, &times, AT_SYMLINK_NOFOLLOW) != 0 {
+                throw TestSandboxError.utimensat
+            }
         }
     }
 
@@ -407,6 +398,7 @@ class TestSandbox {
                 atPath: link.path(),
                 withDestinationPath: target
             )
+            try touch(link, modifyDate: modifyDate)
         }
         return link
     }
@@ -452,6 +444,22 @@ class TestSandbox {
             try touch(file, permissions: permissions, modifyDate: modifyDate)
         }
         return file
+    }
+}
+
+extension Date {
+    init(for ts: timespec) {
+        let seconds = Double(ts.tv_sec)
+        let nanos = Double(ts.tv_nsec) / 1_000_000_000
+        self = Date(timeIntervalSince1970: seconds + nanos)
+    }
+}
+
+extension timespec {
+    init(for date: Date) {
+        let seconds = date.timeIntervalSince1970.rounded(.down)
+        let nanos = (date.timeIntervalSince1970 - seconds) * 1_000_000_000
+        self = timespec(tv_sec: Int(seconds), tv_nsec: Int(nanos))
     }
 }
 

@@ -36,6 +36,10 @@ extension Progress {
                     try await step.action(child)
                 }
             }
+
+            guard steps.isEmpty else { return }
+            progress.totalUnitCount = 1
+            progress.completedUnitCount = 1
         }
     }
 

@@ -9,7 +9,8 @@ public class FPItem: NSObject, NSFileProviderItem {
 
     public init(item: Item) {
         self.item = item
-        logger.debug("Init FPItemID(\(item.rawId), \(item.name))")
+        super.init()
+        logger.info("Init \(self.desc)")
     }
 
     public var itemIdentifier: NSFileProviderItemIdentifier {
