@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.15.0](https://github.com/kosolabs/sshadow/compare/v0.14.2...v0.15.0) (2026-09-22)
+
+
+### Features
+
+* drag a connection to paste its folder path into a terminal ([#366](https://github.com/kosolabs/sshadow/issues/366)) ([32ccdad](https://github.com/kosolabs/sshadow/commit/32ccdad66d5698e3babf634ba4511249d06c8bed))
+
+
+### Bug Fixes
+
+* dismissing menu bar extra via on macOS 27 ([#364](https://github.com/kosolabs/sshadow/issues/364)) ([82ba6a4](https://github.com/kosolabs/sshadow/commit/82ba6a45146339045455ce2f00fe7d17ceef21f0))
+* handle symlink attribute modification and support broken symlinks ([#367](https://github.com/kosolabs/sshadow/issues/367)) ([cbcbd0f](https://github.com/kosolabs/sshadow/commit/cbcbd0fd0b7a707a0a714feff91a0cdc6991c551))
+
 ## [0.14.2](https://github.com/kosolabs/sshadow/compare/v0.14.1...v0.14.2) (2026-09-19)
 
 
