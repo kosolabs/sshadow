@@ -709,6 +709,26 @@ struct SessionTests {
             #expect(deletedIds == [linkId])
         }
 
+        @Test func reconcileSymlinkDateModifiedChanged() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createSymlink(
+                at: "dir/broken.txt",
+                target: "missing.txt",
+                modifyDate: start
+            )
+            try sandbox.createFile(at: "other/file.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try sandbox.touch("dir/broken.txt", modifyDate: end)
+            let changes = try await session.reconcileAll()
+
+            let (updates, deletedIds) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.name == "broken.txt")
+            #expect(item.modifyTime == end)
+            #expect(deletedIds == [])
+        }
+
         @Test func reconcileSymlinkRecreated() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "dir/old.txt", modifyDate: start)

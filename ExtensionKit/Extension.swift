@@ -23,12 +23,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
     public func invalidate() {}
 
-    func item(
-        for identifier: NSFileProviderItemIdentifier,
-    ) async throws -> FPItem {
-        try await FPItem(item: client.item(for: identifier))
-    }
-
     public func item(
         for itemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest,
@@ -52,7 +46,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> NSFileProviderItem {
-        logger.debug("Item \(itemIdentifier)")
+        logger.info("Item for \(itemIdentifier)")
 
         return try await progress.withChild {
             if itemIdentifier == .rootContainer || itemIdentifier == .workingSet
@@ -185,7 +179,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
-        logger.debug("Create \(item.desc) for \(fields.desc)")
+        logger.info("Create \(item.desc) for \(fields)")
 
         let parentId = item.parentItemIdentifier
         let filename = item.filename
@@ -197,7 +191,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             remaining.intersects(with: .writeFields),
             let target = item.symlinkTargetPath ?? nil
         {
-            remaining.subtract([.contents])
+            remaining.subtract([.fileSystemFlags, .contents])
 
             steps.add {
                 let item = try await self.client.createSymlink(
@@ -237,7 +231,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 ? item.fileSystemFlags ?? [] : []
             remaining.subtract([.fileSystemFlags, .contents])
 
-            steps.add(weight: fileTransferUnits) { subprogress in
+            steps.add(weight: max(1, fileTransferUnits)) { subprogress in
                 let item = try await self.client.upload(
                     parentId: parentId,
                     name: filename,
@@ -259,7 +253,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         }
 
         if !remaining.isEmpty {
-            logger.fault("Unhandled fields: \(remaining.desc)")
+            logger.fault("Unhandled fields: \(remaining)")
         }
 
         try await steps.execute()
@@ -307,7 +301,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
-        logger.debug("Modify \(item.desc) for \(changedFields.desc)")
+        logger.info("Modify \(item.desc) for \(changedFields)")
 
         var remaining = changedFields
         let steps = progress.steps()
@@ -329,7 +323,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 ? item.fileSystemFlags ?? [] : []
             remaining.subtract([.fileSystemFlags, .contents])
 
-            steps.add(weight: fileTransferUnits) { subprogress in
+            steps.add(weight: max(1, fileTransferUnits)) { subprogress in
                 let currentParent = try await self.client.parent(
                     of: item.itemIdentifier
                 )
@@ -357,18 +351,20 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             }
         }
 
+        if item.contentType == .symbolicLink {
+            remaining.subtract(.fileSystemFlags)
+        }
+
         if remaining.intersects(with: .attrFields) {
+            let attrs = remaining
             remaining.subtract(.attrFields)
             steps.add {
-                _ = try await self.setAttributes(
-                    item,
-                    fields: changedFields
-                )
+                _ = try await self.setAttributes(item, fields: attrs)
             }
         }
 
         if !remaining.isEmpty {
-            logger.fault("Unhandled fields: \(remaining.desc)")
+            logger.fault("Unhandled fields: \(remaining)")
         }
 
         try await steps.execute()
@@ -407,7 +403,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws {
-        logger.debug("Delete \(identifier)")
+        logger.info("Delete \(identifier)")
         return try await progress.withChild {
             let item = try await client.item(for: identifier)
             if item.kind == .folder {
@@ -422,11 +418,17 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         for containerItemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest
     ) throws -> NSFileProviderEnumerator {
-        logger.debug("Create enumerator for \(containerItemIdentifier)")
+        logger.debug("Enumerator for \(containerItemIdentifier)")
         return Enumerator(
             client: client,
             itemIdentifier: containerItemIdentifier
         )
+    }
+
+    private func item(
+        for identifier: NSFileProviderItemIdentifier,
+    ) async throws -> FPItem {
+        try await FPItem(item: client.item(for: identifier))
     }
 
     private func setAttributes(

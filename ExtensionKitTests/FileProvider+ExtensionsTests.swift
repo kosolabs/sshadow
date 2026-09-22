@@ -9,19 +9,15 @@ struct ItemFieldsExtensionsTests {
             .contents, .filename, .lastUsedDate,
         ]
 
-        let desc = fields.desc
-
-        #expect(desc.contains("contents"))
-        #expect(desc.contains("filename"))
-        #expect(desc.contains("lastUsedDate"))
+        #expect("\(fields)".contains("contents"))
+        #expect("\(fields)".contains("filename"))
+        #expect("\(fields)".contains("lastUsedDate"))
     }
 
     @Test func descIsEmptyWhenNoFields() {
         let fields: NSFileProviderItemFields = []
 
-        let desc = fields.desc
-
-        #expect(desc == "FPItemFields(rawValue: 0)")
+        #expect("\(fields)" == "FPItemFields(rawValue: 0)")
     }
 }
 

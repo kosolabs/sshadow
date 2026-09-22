@@ -500,7 +500,7 @@ actor Session {
         )
     }
 
-    func enumerate(itemId: NSFileProviderItemIdentifier) async throws {
+    private func enumerate(itemId: NSFileProviderItemIdentifier) async throws {
         await logger.info("Enumerating \(ref(for: itemId))")
         try await withEntries(of: itemId) { entries in
             for try await sshItem in entries {
@@ -536,6 +536,7 @@ actor Session {
         ) {
             try await sftp.setAttributes(
                 at: path(for: itemId),
+                followSymlinks: false,
                 permissions: flags?.mode(umask: 0o022),
                 accessTime: accessTime,
                 modifyTime: modifyTime

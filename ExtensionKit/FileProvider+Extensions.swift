@@ -2,14 +2,6 @@ import Common
 import FileProvider
 
 extension NSFileProviderItem {
-    public var id: NSFileProviderItemIdentifier {
-        itemIdentifier
-    }
-
-    public var parentId: NSFileProviderItemIdentifier {
-        parentItemIdentifier
-    }
-
     public var desc: String {
         var components: [String] = []
         components.append("id: \(id)")
@@ -30,10 +22,10 @@ extension NSFileProviderItem {
             }
         }
         if let capabilities = capabilities {
-            components.append("capabilities: \(capabilities.desc)")
+            components.append("capabilities: \(capabilities)")
         }
         if let fileSystemFlags = fileSystemFlags {
-            components.append("fileSystemFlags: \(fileSystemFlags.desc)")
+            components.append("fileSystemFlags: \(fileSystemFlags)")
         }
         if let s = documentSize, let size = s {
             components.append("size: \(size)")
@@ -93,6 +85,14 @@ extension NSFileProviderItem {
         }
         return "FPItem(\(components.joined(separator: ", ")))"
     }
+
+    public var id: NSFileProviderItemIdentifier {
+        itemIdentifier
+    }
+
+    public var parentId: NSFileProviderItemIdentifier {
+        parentItemIdentifier
+    }
 }
 
 public let allItemFields: [(NSFileProviderItemFields, String)] = [
@@ -109,7 +109,16 @@ public let allItemFields: [(NSFileProviderItemFields, String)] = [
     (.typeAndCreator, "typeAndCreator"),
 ]
 
-extension NSFileProviderItemFields {
+extension NSFileProviderItemFields: @retroactive CustomStringConvertible {
+    public var description: String {
+        var result: [String] = []
+        result.append("rawValue: \(rawValue)")
+        for (field, name) in allItemFields where self.contains(field) {
+            result.append(name)
+        }
+        return "FPItemFields(\(result.joined(separator: ", ")))"
+    }
+
     public static let nameFields: NSFileProviderItemFields = [
         .parentItemIdentifier, .filename,
     ]
@@ -123,22 +132,13 @@ extension NSFileProviderItemFields {
         .contents
     ]
 
-    public var desc: String {
-        var result: [String] = []
-        result.append("rawValue: \(rawValue)")
-        for (field, name) in allItemFields where self.contains(field) {
-            result.append(name)
-        }
-        return "FPItemFields(\(result.joined(separator: ", ")))"
-    }
-
     public func intersects(with members: NSFileProviderItemFields) -> Bool {
         return !intersection(members).isEmpty
     }
 }
 
-extension NSFileProviderItemCapabilities {
-    public var desc: String {
+extension NSFileProviderItemCapabilities: @retroactive CustomStringConvertible {
+    public var description: String {
         var result = [String]()
         result.append("rawValue: \(rawValue)")
         if contains(.allowsReading) {
@@ -166,21 +166,8 @@ extension NSFileProviderItemCapabilities {
     }
 }
 
-extension NSFileProviderFileSystemFlags {
-    public init(from flags: Item.Flags) {
-        self = []
-        if flags.contains(.executable) {
-            self.insert(.userExecutable)
-        }
-        if flags.contains(.readable) {
-            self.insert(.userReadable)
-        }
-        if flags.contains(.writable) {
-            self.insert(.userWritable)
-        }
-    }
-
-    public var desc: String {
+extension NSFileProviderFileSystemFlags: @retroactive CustomStringConvertible {
+    public var description: String {
         var flags = [String]()
         flags.append("rawValue: \(rawValue)")
         if contains(.userExecutable) {
@@ -199,6 +186,27 @@ extension NSFileProviderFileSystemFlags {
             flags.append("pathExtensionHidden")
         }
         return "FPFileSystemFlags(\(flags.joined(separator: ", ")))"
+    }
+
+    public static let rwx: NSFileProviderFileSystemFlags = [
+        .userExecutable, .userReadable, .userWritable,
+    ]
+
+    public static let rw: NSFileProviderFileSystemFlags = [
+        .userReadable, .userWritable,
+    ]
+
+    public init(from flags: Item.Flags) {
+        self = []
+        if flags.contains(.executable) {
+            self.insert(.userExecutable)
+        }
+        if flags.contains(.readable) {
+            self.insert(.userReadable)
+        }
+        if flags.contains(.writable) {
+            self.insert(.userWritable)
+        }
     }
 }
 

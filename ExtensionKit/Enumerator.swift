@@ -13,7 +13,9 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
     ) {
         self.client = client
         self.itemIdentifier = itemIdentifier
+
         super.init()
+
         observe()
     }
 
@@ -21,12 +23,24 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         unobserve()
     }
 
-    func observe() {
-        Task { try await client.watch(itemId: itemIdentifier) }
+    private func observe() {
+        Task {
+            do {
+                try await client.watch(itemId: itemIdentifier)
+            } catch {
+                logger.error("Failed to watch \(itemIdentifier): \(error)")
+            }
+        }
     }
 
-    func unobserve() {
-        Task { try await client.unwatch(itemId: itemIdentifier) }
+    private func unobserve() {
+        Task {
+            do {
+                try await client.unwatch(itemId: itemIdentifier)
+            } catch {
+                logger.error("Failed to unwatch \(itemIdentifier): \(error)")
+            }
+        }
     }
 
     public func enumerateItems(
@@ -52,7 +66,7 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         startingAt page: NSFileProviderPage,
         yield: @Sendable ([any NSFileProviderItemProtocol]) -> Void,
     ) async throws(CoreError) -> NSFileProviderPage? {
-        logger.debug("Enumerate \(itemIdentifier)")
+        logger.info("Enumerate \(itemIdentifier)")
 
         if itemIdentifier == .workingSet {
             return nil
@@ -71,7 +85,6 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         for observer: NSFileProviderChangeObserver,
         from anchor: NSFileProviderSyncAnchor
     ) {
-        logger.debug("Enumerating changes for \(itemIdentifier)")
         let trace = StackTrace.capture()
 
         Task {
@@ -101,6 +114,8 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
         update: @Sendable (any NSFileProviderItemProtocol) -> Void,
         delete: @Sendable (NSFileProviderItemIdentifier) -> Void
     ) async throws(CoreError) -> NSFileProviderSyncAnchor {
+        logger.info("Enumerate changes for \(itemIdentifier)")
+
         let (nextAnchor, changes) = try await client.changes(
             since: anchor.value
         )
@@ -120,7 +135,8 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
     public func currentSyncAnchor(
         completionHandler: @escaping (NSFileProviderSyncAnchor?) -> Void
     ) {
-        logger.debug("Current sync anchor for \(itemIdentifier)")
+        logger.info("Current sync anchor for \(itemIdentifier)")
+
         let trace = StackTrace.capture()
 
         Task {
