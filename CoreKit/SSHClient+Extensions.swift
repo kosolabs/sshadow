@@ -48,3 +48,9 @@ extension SSHClient {
         }
     }
 }
+
+extension SFTPAttributes {
+    var itemSize: UInt64? {
+        type == .directory ? nil : size
+    }
+}
