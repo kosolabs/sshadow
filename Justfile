@@ -10,7 +10,13 @@ test: start-test-server
     xcodebuild test -scheme SSHadow -testPlan UnitTests -destination 'platform=macOS'
 
 log:
-    log stream --predicate 'subsystem beginswith "com.kosolabs.SSHadow"' --style ndjson --level debug | jq -R -r --unbuffered -f logfilter.jq
+    #!/bin/bash
+    mkdir -p logs
+    LOGFILE="logs/sshadow-$(date +%Y%m%d-%H%M%S).log"
+    echo "Logging to $LOGFILE"
+    log stream --predicate 'subsystem beginswith "com.kosolabs.SSHadow"' --style ndjson --level debug \
+        | tee "$LOGFILE" \
+        | jq -R -r --unbuffered -f logfilter.jq
 
 unregister:
     #!/bin/bash

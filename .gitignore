@@ -1,6 +1,7 @@
 # Generated
 build/
 xcuserdata/
+logs/
 
 # Env
 .env
