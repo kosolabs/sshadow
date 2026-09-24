@@ -18,51 +18,78 @@ final class CoreService: Sendable, CoreXPC {
             request = try CoreRequest.decoded(from: data)
         } catch {
             logger.error("Failed to decode request: \(error)")
-            return try JSONEncoder().encode(
-                CoreResult.failure(CoreError(from: error))
-            )
+            return try CoreResult<Never>.failure(CoreError(from: error))
+                .encoded()
         }
-        logger.debug("Request: \(request)")
-        let result = await handle(request)
-        logger.debug("Result: \(result)")
-        return try result.encoded()
+        logger.debug("<<<: \(request.shortDescription)")
+        return try await handle(request)
     }
 
-    func handle(_ request: CoreRequest) async -> CoreResult {
-        await respond { session in
-            switch request {
-            case .name(let request):
-                try await .name(name(session, request))
-            case .child(let request):
-                try await .child(child(session, request))
-            case .parent(let request):
-                try await .parent(parent(session, request))
-            case .item(let request):
-                try await .item(item(session, request))
-            case .list(let request):
-                try await .list(list(session, request))
-            case .watch(let request):
-                try await .watch(watch(session, request))
-            case .unwatch(let request):
-                try await .unwatch(unwatch(session, request))
-            case .currentAnchor(let request):
-                try await .currentAnchor(currentAnchor(session, request))
-            case .changes(let request):
-                try await .changes(changes(session, request))
-            case .setAttributes(let request):
-                try await .setAttributes(setAttributes(session, request))
-            case .createSymlink(let request):
-                try await .createSymlink(createSymlink(session, request))
-            case .createDirectory(let request):
-                try await .createDirectory(createDirectory(session, request))
-            case .move(let request):
-                try await .move(move(session, request))
-            case .removeFile(let request):
-                try await .removeFile(removeFile(session, request))
-            case .removeDirectory(let request):
-                try await .removeDirectory(removeDirectory(session, request))
-            case .limits(let request):
-                try await .limits(limits(session, request))
+    func handle(_ request: CoreRequest) async throws -> Data {
+        switch request {
+        case .name(let request):
+            try await respond { session in
+                try await self.name(session, request)
+            }
+        case .child(let request):
+            try await respond { session in
+                try await self.child(session, request)
+            }
+        case .parent(let request):
+            try await respond { session in
+                try await self.parent(session, request)
+            }
+        case .item(let request):
+            try await respond { session in
+                try await self.item(session, request)
+            }
+        case .list(let request):
+            try await respond { session in
+                try await self.list(session, request)
+            }
+        case .watch(let request):
+            try await respond { session in
+                try await self.watch(session, request)
+            }
+        case .unwatch(let request):
+            try await respond { session in
+                try await self.unwatch(session, request)
+            }
+        case .currentAnchor(let request):
+            try await respond { session in
+                try await self.currentAnchor(session, request)
+            }
+        case .changes(let request):
+            try await respond { session in
+                try await self.changes(session, request)
+            }
+        case .setAttributes(let request):
+            try await respond { session in
+                try await self.setAttributes(session, request)
+            }
+        case .createSymlink(let request):
+            try await respond { session in
+                try await self.createSymlink(session, request)
+            }
+        case .createDirectory(let request):
+            try await respond { session in
+                try await self.createDirectory(session, request)
+            }
+        case .move(let request):
+            try await respond { session in
+                try await self.move(session, request)
+            }
+        case .removeFile(let request):
+            try await respond { session in
+                try await self.removeFile(session, request)
+            }
+        case .removeDirectory(let request):
+            try await respond { session in
+                try await self.removeDirectory(session, request)
+            }
+        case .limits(let request):
+            try await respond { session in
+                try await self.limits(session, request)
             }
         }
     }
@@ -76,58 +103,57 @@ final class CoreService: Sendable, CoreXPC {
             request = try CoreProgressRequest.decoded(from: data)
         } catch {
             logger.error("Failed to decode request: \(error)")
-            return try JSONEncoder().encode(
-                CoreResult.failure(CoreError(from: error))
-            )
+            return try CoreResult<Never>
+                .failure(CoreError(from: error))
+                .encoded()
         }
-        logger.debug("Request: \(request)")
-        let result = await handle(request, progressEndpoint: progressEndpoint)
-        logger.debug("Result: \(result)")
-        return try result.encoded()
+        logger.debug("<<<: \(request.shortDescription)")
+        return try await handle(request, progressEndpoint: progressEndpoint)
     }
 
     public func handle(
         _ request: CoreProgressRequest,
         progressEndpoint: NSXPCListenerEndpoint
-    ) async -> CoreResult {
-        await respond { session in
-            switch request {
-            case .upload(let request):
-                try await .upload(
-                    self.upload(
-                        session,
-                        request,
-                        progressEndpoint: progressEndpoint
-                    )
+    ) async throws -> Data {
+        switch request {
+        case .upload(let request):
+            try await respond { session in
+                try await self.upload(
+                    session,
+                    request,
+                    progressEndpoint: progressEndpoint
                 )
-            case .download(let request):
-                try await .download(
-                    self.download(
-                        session,
-                        request,
-                        progressEndpoint: progressEndpoint
-                    )
+            }
+        case .download(let request):
+            try await respond { session in
+                try await self.download(
+                    session,
+                    request,
+                    progressEndpoint: progressEndpoint
                 )
-            case .stream(let request):
-                try await .stream(
-                    self.stream(
-                        session,
-                        request,
-                        progressEndpoint: progressEndpoint
-                    )
+            }
+        case .stream(let request):
+            try await respond { session in
+                try await self.stream(
+                    session,
+                    request,
+                    progressEndpoint: progressEndpoint
                 )
             }
         }
     }
 
-    private func respond(
-        _ operation: @Sendable (Session) async throws -> CoreResponse
-    ) async -> CoreResult {
+    private func respond<Response: Message>(
+        _ operation: @Sendable (Session) async throws -> Response
+    ) async throws -> Data {
+        let result: CoreResult<Response>
         do {
-            return .success(try await supervisor.withSession(operation))
+            result = .success(try await supervisor.withSession(operation))
         } catch {
-            return .failure(CoreError(from: error))
+            result = .failure(CoreError(from: error))
         }
+        logger.debug(">>>: \(result.shortDescription)")
+        return try result.encoded()
     }
 
     func name(

@@ -2,13 +2,22 @@ public protocol PrettyDescribable: CustomStringConvertible {}
 
 extension PrettyDescribable {
     public var description: String {
+        prettyDescription(showEnumTypeName: true)
+    }
+
+    public var shortDescription: String {
+        prettyDescription(showEnumTypeName: false)
+    }
+
+    private func prettyDescription(showEnumTypeName: Bool) -> String {
         let mirror = Mirror(reflecting: self)
         let typeName = String(describing: type(of: self))
 
         switch mirror.displayStyle {
         case .enum:
             guard let caseName = enumCaseName(of: self) else { return typeName }
-            let name = "\(typeName).\(caseName)"
+            let name =
+                showEnumTypeName ? "\(typeName).\(caseName)" : ".\(caseName)"
             guard let child = mirror.children.first else { return name }
             return "\(name)(\(formatPayload(child.value)))"
         default:

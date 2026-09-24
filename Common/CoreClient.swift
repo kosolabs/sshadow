@@ -84,38 +84,35 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         return service
     }
 
-    private func perform(
+    private func perform<Response: Message>(
         _ handle: (CoreXPC) async throws -> Data
-    ) async throws(CoreError) -> CoreResponse {
+    ) async throws(CoreError) -> Response {
         let service = try await requireService()
+        let result: CoreResult<Response>
         do {
-            let response = try await handle(service)
-            let result = try CoreResult.decoded(from: response)
-            logger.debug("Result: \(result)")
-            return try result.get()
-        } catch let error as CoreError {
-            throw error
+            result = try CoreResult.decoded(from: try await handle(service))
         } catch {
             logger.error("Request failed: \(error)")
             throw CoreError(from: error)
         }
+        return try result.get()
     }
 
-    private func perform(
-        _ request: CoreRequest
-    ) async throws(CoreError) -> CoreResponse {
-        logger.debug("Request: \(request)")
-        return try await perform { try await $0.handle(request.encoded()) }
+    private func perform<Request: CoreRequestType>(
+        _ request: Request
+    ) async throws(CoreError) -> Request.Response {
+        return try await perform {
+            try await $0.handle(request.wrapped.encoded())
+        }
     }
 
-    private func perform(
-        _ request: CoreProgressRequest,
+    private func perform<Request: CoreProgressRequestType>(
+        _ request: Request,
         progressEndpoint: NSXPCListenerEndpoint
-    ) async throws(CoreError) -> CoreResponse {
-        logger.debug("Request: \(request)")
+    ) async throws(CoreError) -> Request.Response {
         return try await perform {
             try await $0.handle(
-                request.encoded(),
+                request.wrapped.encoded(),
                 progressEndpoint: progressEndpoint
             )
         }
@@ -124,12 +121,9 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
     public func name(
         of itemId: NSFileProviderItemIdentifier
     ) async throws(CoreError) -> String {
-        let reply = try await perform(
-            .name(NameRequest(itemId: itemId.rawValue))
+        let response = try await perform(
+            NameRequest(itemId: itemId.rawValue)
         )
-        guard case .name(let response) = reply else {
-            throw CoreError.unexpectedResponse
-        }
         return response.name
     }
 
@@ -137,92 +131,60 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         of parentId: NSFileProviderItemIdentifier = .rootContainer,
         name: String
     ) async throws(CoreError) -> NSFileProviderItemIdentifier {
-        let reply = try await perform(
-            .child(ChildRequest(parentId: parentId.rawValue, name: name))
+        let response = try await perform(
+            ChildRequest(parentId: parentId.rawValue, name: name)
         )
-        guard case .child(let response) = reply else {
-            throw CoreError.unexpectedResponse
-        }
         return NSFileProviderItemIdentifier(response.itemId)
     }
 
     public func parent(
         of itemId: NSFileProviderItemIdentifier
     ) async throws(CoreError) -> NSFileProviderItemIdentifier {
-        let reply = try await perform(
-            .parent(ParentRequest(itemId: itemId.rawValue))
+        let response = try await perform(
+            ParentRequest(itemId: itemId.rawValue)
         )
-        guard case .parent(let response) = reply else {
-            throw CoreError.unexpectedResponse
-        }
         return NSFileProviderItemIdentifier(response.itemId)
     }
 
     public func item(
         for itemId: NSFileProviderItemIdentifier
     ) async throws(CoreError) -> Item {
-        let reply = try await perform(
-            .item(ItemRequest(itemId: itemId.rawValue))
+        let response = try await perform(
+            ItemRequest(itemId: itemId.rawValue)
         )
-        guard case .item(let response) = reply else {
-            throw CoreError.unexpectedResponse
-        }
         return response.item
     }
 
     public func list(
         for itemId: NSFileProviderItemIdentifier
     ) async throws(CoreError) -> [Item] {
-        let reply = try await perform(
-            .list(ListRequest(itemId: itemId.rawValue))
+        let response = try await perform(
+            ListRequest(itemId: itemId.rawValue)
         )
-        guard case .list(let response) = reply else {
-            throw CoreError.unexpectedResponse
-        }
         return response.fileInfos
     }
 
     public func watch(
         itemId: NSFileProviderItemIdentifier
     ) async throws(CoreError) {
-        let reply = try await perform(
-            .watch(WatchRequest(itemId: itemId.rawValue))
-        )
-        guard case .watch = reply else {
-            throw CoreError.unexpectedResponse
-        }
+        _ = try await perform(WatchRequest(itemId: itemId.rawValue))
     }
 
     public func unwatch(
         itemId: NSFileProviderItemIdentifier
     ) async throws(CoreError) {
-        let reply = try await perform(
-            .unwatch(UnwatchRequest(itemId: itemId.rawValue))
-        )
-        guard case .unwatch = reply else {
-            throw CoreError.unexpectedResponse
-        }
+        _ = try await perform(UnwatchRequest(itemId: itemId.rawValue))
     }
 
     public func currentAnchor() async throws(CoreError) -> UInt64 {
-        let reply = try await perform(
-            .currentAnchor(CurrentAnchorRequest())
-        )
-        guard case .currentAnchor(let response) = reply else {
-            throw CoreError.unexpectedResponse
-        }
+        let response = try await perform(CurrentAnchorRequest())
         return response.anchor
     }
 
     public func changes(
         since anchor: UInt64
     ) async throws(CoreError) -> (UInt64, [Change]) {
-        let reply = try await perform(
-            .changes(ChangesRequest(anchor: anchor))
-        )
-        guard case .changes(let response) = reply else {
-            throw CoreError.unexpectedResponse
-        }
+        let response = try await perform(ChangesRequest(anchor: anchor))
         return (response.anchor, response.changes)
     }
 
@@ -233,19 +195,14 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         accessTime: Date? = nil,
         modifyTime: Date? = nil
     ) async throws(CoreError) -> Item {
-        let reply = try await perform(
-            .setAttributes(
-                SetAttributesRequest(
-                    itemId: itemId.rawValue,
-                    flags: flags,
-                    accessTime: accessTime,
-                    modifyTime: modifyTime
-                )
+        let response = try await perform(
+            SetAttributesRequest(
+                itemId: itemId.rawValue,
+                flags: flags,
+                accessTime: accessTime,
+                modifyTime: modifyTime
             )
         )
-        guard case .setAttributes(let response) = reply else {
-            throw CoreError.unexpectedResponse
-        }
         return response.item
     }
 
@@ -254,18 +211,13 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         name: String,
         target: String
     ) async throws(CoreError) -> Item {
-        let reply = try await perform(
-            .createSymlink(
-                CreateSymlinkRequest(
-                    parentId: parentId.rawValue,
-                    name: name,
-                    target: target
-                )
+        let response = try await perform(
+            CreateSymlinkRequest(
+                parentId: parentId.rawValue,
+                name: name,
+                target: target
             )
         )
-        guard case .createSymlink(let response) = reply else {
-            throw CoreError.unexpectedResponse
-        }
         return response.item
     }
 
@@ -275,19 +227,14 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         flags: Item.Flags,
         ifExists: OnExists = .fail
     ) async throws(CoreError) -> Item {
-        let reply = try await perform(
-            .createDirectory(
-                CreateDirectoryRequest(
-                    parentId: parentId.rawValue,
-                    name: name,
-                    flags: flags,
-                    ifExists: ifExists
-                )
+        let response = try await perform(
+            CreateDirectoryRequest(
+                parentId: parentId.rawValue,
+                name: name,
+                flags: flags,
+                ifExists: ifExists
             )
         )
-        guard case .createDirectory(let response) = reply else {
-            throw CoreError.unexpectedResponse
-        }
         return response.item
     }
 
@@ -297,50 +244,30 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         toParent newParentId: NSFileProviderItemIdentifier,
         name newName: String
     ) async throws(CoreError) -> Item {
-        let reply = try await perform(
-            .move(
-                MoveRequest(
-                    itemId: itemId.rawValue,
-                    newParentId: newParentId.rawValue,
-                    newName: newName
-                )
+        let response = try await perform(
+            MoveRequest(
+                itemId: itemId.rawValue,
+                newParentId: newParentId.rawValue,
+                newName: newName
             )
         )
-        guard case .move(let response) = reply else {
-            throw CoreError.unexpectedResponse
-        }
         return response.item
     }
 
     public func removeFile(
         for itemId: NSFileProviderItemIdentifier
     ) async throws(CoreError) {
-        let reply = try await perform(
-            .removeFile(RemoveFileRequest(itemId: itemId.rawValue))
-        )
-        guard case .removeFile = reply else {
-            throw CoreError.unexpectedResponse
-        }
+        _ = try await perform(RemoveFileRequest(itemId: itemId.rawValue))
     }
 
     public func removeDirectory(
         for itemId: NSFileProviderItemIdentifier
     ) async throws(CoreError) {
-        let reply = try await perform(
-            .removeDirectory(RemoveDirectoryRequest(itemId: itemId.rawValue))
-        )
-        guard case .removeDirectory = reply else {
-            throw CoreError.unexpectedResponse
-        }
+        _ = try await perform(RemoveDirectoryRequest(itemId: itemId.rawValue))
     }
 
     public func limits() async throws(CoreError) -> Limits {
-        let reply = try await perform(
-            .limits(LimitsRequest())
-        )
-        guard case .limits(let response) = reply else {
-            throw CoreError.unexpectedResponse
-        }
+        let response = try await perform(LimitsRequest())
         return response.limits
     }
 
@@ -364,21 +291,16 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         progress.fileOperationKind = .uploading
 
         let sync = XPCProgressSubscriber(progress: progress)
-        let reply = try await perform(
-            .upload(
-                UploadRequest(
-                    parentId: parentId.rawValue,
-                    name: name,
-                    file: stagedUrl,
-                    flags: flags,
-                    chunkSize: chunkSize
-                )
+        let response = try await perform(
+            UploadRequest(
+                parentId: parentId.rawValue,
+                name: name,
+                file: stagedUrl,
+                flags: flags,
+                chunkSize: chunkSize
             ),
             progressEndpoint: sync.endpoint
         )
-        guard case .upload(let response) = reply else {
-            throw CoreError.unexpectedResponse
-        }
         return response.item
     }
 
@@ -391,15 +313,10 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         progress.fileOperationKind = .downloading
 
         let sync = XPCProgressSubscriber(progress: progress)
-        let reply = try await perform(
-            .download(
-                DownloadRequest(itemId: itemId.rawValue, chunkSize: chunkSize)
-            ),
+        let response = try await perform(
+            DownloadRequest(itemId: itemId.rawValue, chunkSize: chunkSize),
             progressEndpoint: sync.endpoint
         )
-        guard case .download(let response) = reply else {
-            throw CoreError.unexpectedResponse
-        }
         return (response.url, response.item)
     }
 
@@ -412,13 +329,10 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         progress.fileOperationKind = .downloading
 
         let sync = XPCProgressSubscriber(progress: progress)
-        let reply = try await perform(
-            .stream(StreamRequest(itemId: itemId.rawValue, range: range)),
+        let response = try await perform(
+            StreamRequest(itemId: itemId.rawValue, range: range),
             progressEndpoint: sync.endpoint
         )
-        guard case .stream(let response) = reply else {
-            throw CoreError.unexpectedResponse
-        }
         return (response.url, response.range)
     }
 }

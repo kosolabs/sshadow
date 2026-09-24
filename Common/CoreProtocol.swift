@@ -62,11 +62,11 @@ public enum CoreProgressRequest: Message, PrettyDescribable {
     }
 }
 
-public enum CoreResult: Message, PrettyDescribable {
-    case success(CoreResponse)
+public enum CoreResult<Response: Message>: Message, PrettyDescribable {
+    case success(Response)
     case failure(CoreError)
 
-    public func get() throws -> CoreResponse {
+    public func get() throws(CoreError) -> Response {
         switch self {
         case .success(let response): return response
         case .failure(let error): throw error
@@ -77,31 +77,9 @@ public enum CoreResult: Message, PrettyDescribable {
         try JSONEncoder().encode(self)
     }
 
-    public static func decoded(from data: Data) throws -> CoreResult {
-        try JSONDecoder().decode(CoreResult.self, from: data)
+    public static func decoded(from data: Data) throws -> Self {
+        try JSONDecoder().decode(Self.self, from: data)
     }
-}
-
-public enum CoreResponse: Message, PrettyDescribable {
-    case name(NameResponse)
-    case child(ChildResponse)
-    case parent(ParentResponse)
-    case item(ItemResponse)
-    case list(ListResponse)
-    case watch(WatchResponse)
-    case unwatch(UnwatchResponse)
-    case currentAnchor(CurrentAnchorResponse)
-    case changes(ChangesResponse)
-    case setAttributes(SetAttributesResponse)
-    case createSymlink(CreateSymlinkResponse)
-    case createDirectory(CreateDirectoryResponse)
-    case move(MoveResponse)
-    case removeFile(RemoveFileResponse)
-    case removeDirectory(RemoveDirectoryResponse)
-    case limits(LimitsResponse)
-    case upload(UploadResponse)
-    case download(DownloadResponse)
-    case stream(StreamResponse)
 }
 
 public enum CoreError: Message, PrettyDescribable, Error {
@@ -114,7 +92,7 @@ public enum CoreError: Message, PrettyDescribable, Error {
     case serverUnreachable
     case notAuthenticated
     case remotePathNotFound
-    case unexpectedResponse
+    case featureUnsupported
     case unknown(domain: String, code: Int, message: String)
 
     public static var itemNotFound: CoreError {
@@ -147,8 +125,16 @@ public enum CoreError: Message, PrettyDescribable, Error {
     }
 }
 
-public struct NameRequest: Message, PrettyDescribable {
+public protocol CoreRequestType: Message {
+    associatedtype Response: Message
+    var wrapped: CoreRequest { get }
+}
+
+public struct NameRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = NameResponse
     public let itemId: String
+
+    public var wrapped: CoreRequest { .name(self) }
 
     public init(itemId: String) {
         self.itemId = itemId
@@ -163,9 +149,12 @@ public struct NameResponse: Message, PrettyDescribable {
     }
 }
 
-public struct ChildRequest: Message, PrettyDescribable {
+public struct ChildRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = ChildResponse
     public let parentId: String
     public let name: String
+
+    public var wrapped: CoreRequest { .child(self) }
 
     public init(parentId: String, name: String, ) {
         self.parentId = parentId
@@ -181,8 +170,11 @@ public struct ChildResponse: Message, PrettyDescribable {
     }
 }
 
-public struct ParentRequest: Message, PrettyDescribable {
+public struct ParentRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = ParentResponse
     public let itemId: String
+
+    public var wrapped: CoreRequest { .parent(self) }
 
     public init(itemId: String) {
         self.itemId = itemId
@@ -197,8 +189,11 @@ public struct ParentResponse: Message, PrettyDescribable {
     }
 }
 
-public struct ItemRequest: Message, PrettyDescribable {
+public struct ItemRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = ItemResponse
     public let itemId: String
+
+    public var wrapped: CoreRequest { .item(self) }
 
     public init(itemId: String) {
         self.itemId = itemId
@@ -213,8 +208,11 @@ public struct ItemResponse: Message, PrettyDescribable {
     }
 }
 
-public struct ListRequest: Message, PrettyDescribable {
+public struct ListRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = ListResponse
     public let itemId: String
+
+    public var wrapped: CoreRequest { .list(self) }
 
     public init(itemId: String) {
         self.itemId = itemId
@@ -229,8 +227,11 @@ public struct ListResponse: Message, PrettyDescribable {
     }
 }
 
-public struct WatchRequest: Message, PrettyDescribable {
+public struct WatchRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = WatchResponse
     public let itemId: String
+
+    public var wrapped: CoreRequest { .watch(self) }
 
     public init(itemId: String) {
         self.itemId = itemId
@@ -241,8 +242,11 @@ public struct WatchResponse: Message, PrettyDescribable {
     public init() {}
 }
 
-public struct UnwatchRequest: Message, PrettyDescribable {
+public struct UnwatchRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = UnwatchResponse
     public let itemId: String
+
+    public var wrapped: CoreRequest { .unwatch(self) }
 
     public init(itemId: String) {
         self.itemId = itemId
@@ -253,8 +257,11 @@ public struct UnwatchResponse: Message, PrettyDescribable {
     public init() {}
 }
 
-public struct CurrentAnchorRequest: Message, PrettyDescribable {
+public struct CurrentAnchorRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = CurrentAnchorResponse
     public init() {}
+
+    public var wrapped: CoreRequest { .currentAnchor(self) }
 }
 
 public struct CurrentAnchorResponse: Message, PrettyDescribable {
@@ -270,8 +277,11 @@ public enum Change: Message, PrettyDescribable {
     case update(item: Item)
 }
 
-public struct ChangesRequest: Message, PrettyDescribable {
+public struct ChangesRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = ChangesResponse
     public let anchor: UInt64
+
+    public var wrapped: CoreRequest { .changes(self) }
 
     public init(anchor: UInt64) {
         self.anchor = anchor
@@ -288,11 +298,14 @@ public struct ChangesResponse: Message, PrettyDescribable {
     }
 }
 
-public struct SetAttributesRequest: Message, PrettyDescribable {
+public struct SetAttributesRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = SetAttributesResponse
     public let itemId: String
     public let flags: Item.Flags?
     public let accessTime: Date?
     public let modifyTime: Date?
+
+    public var wrapped: CoreRequest { .setAttributes(self) }
 
     public init(
         itemId: String,
@@ -315,10 +328,13 @@ public struct SetAttributesResponse: Message, PrettyDescribable {
     }
 }
 
-public struct CreateSymlinkRequest: Message, PrettyDescribable {
+public struct CreateSymlinkRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = CreateSymlinkResponse
     public let parentId: String
     public let name: String
     public let target: String
+
+    public var wrapped: CoreRequest { .createSymlink(self) }
 
     public init(
         parentId: String,
@@ -339,11 +355,14 @@ public struct CreateSymlinkResponse: Message, PrettyDescribable {
     }
 }
 
-public struct CreateDirectoryRequest: Message, PrettyDescribable {
+public struct CreateDirectoryRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = CreateDirectoryResponse
     public let parentId: String
     public let name: String
     public let flags: Item.Flags
     public let ifExists: OnExists
+
+    public var wrapped: CoreRequest { .createDirectory(self) }
 
     public init(
         parentId: String,
@@ -366,10 +385,13 @@ public struct CreateDirectoryResponse: Message, PrettyDescribable {
     }
 }
 
-public struct MoveRequest: Message, PrettyDescribable {
+public struct MoveRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = MoveResponse
     public let itemId: String
     public let newParentId: String
     public let newName: String
+
+    public var wrapped: CoreRequest { .move(self) }
 
     public init(
         itemId: String,
@@ -390,8 +412,11 @@ public struct MoveResponse: Message, PrettyDescribable {
     }
 }
 
-public struct RemoveFileRequest: Message, PrettyDescribable {
+public struct RemoveFileRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = RemoveFileResponse
     public let itemId: String
+
+    public var wrapped: CoreRequest { .removeFile(self) }
 
     public init(itemId: String) {
         self.itemId = itemId
@@ -402,8 +427,11 @@ public struct RemoveFileResponse: Message, PrettyDescribable {
     public init() {}
 }
 
-public struct RemoveDirectoryRequest: Message, PrettyDescribable {
+public struct RemoveDirectoryRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = RemoveDirectoryResponse
     public let itemId: String
+
+    public var wrapped: CoreRequest { .removeDirectory(self) }
 
     public init(itemId: String) {
         self.itemId = itemId
@@ -414,8 +442,11 @@ public struct RemoveDirectoryResponse: Message, PrettyDescribable {
     public init() {}
 }
 
-public struct LimitsRequest: Message, PrettyDescribable {
+public struct LimitsRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = LimitsResponse
     public init() {}
+
+    public var wrapped: CoreRequest { .limits(self) }
 }
 
 public struct LimitsResponse: Message, PrettyDescribable {
@@ -426,12 +457,20 @@ public struct LimitsResponse: Message, PrettyDescribable {
     }
 }
 
-public struct UploadRequest: Message, PrettyDescribable {
+public protocol CoreProgressRequestType: Message {
+    associatedtype Response: Message
+    var wrapped: CoreProgressRequest { get }
+}
+
+public struct UploadRequest: CoreProgressRequestType, PrettyDescribable {
+    public typealias Response = UploadResponse
     public let parentId: String
     public let name: String
     public let file: URL
     public let flags: Item.Flags
     public let chunkSize: UInt64
+
+    public var wrapped: CoreProgressRequest { .upload(self) }
 
     public init(
         parentId: String,
@@ -456,9 +495,12 @@ public struct UploadResponse: Message, PrettyDescribable {
     }
 }
 
-public struct DownloadRequest: Message, PrettyDescribable {
+public struct DownloadRequest: CoreProgressRequestType, PrettyDescribable {
+    public typealias Response = DownloadResponse
     public let itemId: String
     public let chunkSize: UInt64
+
+    public var wrapped: CoreProgressRequest { .download(self) }
 
     public init(itemId: String, chunkSize: UInt64) {
         self.itemId = itemId
@@ -476,9 +518,12 @@ public struct DownloadResponse: Message, PrettyDescribable {
     }
 }
 
-public struct StreamRequest: Message, PrettyDescribable {
+public struct StreamRequest: CoreProgressRequestType, PrettyDescribable {
+    public typealias Response = StreamResponse
     public let itemId: String
     public let range: Range<UInt64>
+
+    public var wrapped: CoreProgressRequest { .stream(self) }
 
     public init(itemId: String, range: Range<UInt64>) {
         self.itemId = itemId
