@@ -248,6 +248,7 @@ struct SessionTests {
 
             #expect(item.name == "folder")
             #expect(item.kind == .folder)
+            #expect(item.size == nil)
         }
 
         @Test func itemForSymlinkSucceeds() async throws {
@@ -380,6 +381,7 @@ struct SessionTests {
 
             let item = try await session.item(at: "dir")
             #expect(item.kind == .folder)
+            #expect(item.size == nil)
 
             let symlink = try await session.item(at: "link.txt")
             #expect(symlink.kind == .symlink(target: "target.txt"))
@@ -1432,6 +1434,7 @@ struct SessionTests {
 
             #expect(item.name == "new-dir")
             #expect(item.kind == .folder)
+            #expect(item.size == nil)
             #expect(try sandbox.permissions(of: "new-dir") == 0o755)
             let changes = try await session.reconcileAll()
             #expect(changes == [])

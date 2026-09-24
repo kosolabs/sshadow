@@ -862,7 +862,7 @@ actor Session {
             parentId: parentId,
             name: name,
             kind: kind,
-            size: attrs.size,
+            size: attrs.itemSize,
             flags: .from(attrs.permissions),
             accessTime: attrs.accessTime,
             modifyTime: attrs.modifyTime,
@@ -874,7 +874,7 @@ actor Session {
         let attrs = try await attributes(for: itemId)
         try await db.refresh(
             itemId,
-            size: attrs.size,
+            size: attrs.itemSize,
             flags: .from(attrs.permissions),
             accessTime: attrs.accessTime,
             modifyTime: attrs.modifyTime,
@@ -998,7 +998,7 @@ actor Session {
         return SSHItem(
             name: name,
             kind: kind,
-            size: attrs.size,
+            size: attrs.itemSize,
             flags: .from(attrs.permissions),
             accessTime: attrs.accessTime,
             modifyTime: attrs.modifyTime,
