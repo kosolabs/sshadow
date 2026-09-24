@@ -17,6 +17,12 @@ extension FileManager {
         try attributes(of: url).fileSize()
     }
 
+    /// Whether `url` is a directory itself, ignoring symlinks to directories.
+    public func isDirectory(at url: URL) throws -> Bool {
+        try attributes(of: url).fileType()
+            == FileAttributeType.typeDirectory.rawValue
+    }
+
     public func permissions(of url: URL) throws -> mode_t {
         UInt16(try attributes(of: url).filePosixPermissions())
     }

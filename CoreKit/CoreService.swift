@@ -100,6 +100,14 @@ final class CoreService: Sendable, CoreXPC {
                         progressEndpoint: progressEndpoint
                     )
                 )
+            case .uploadPackage(let request):
+                try await .uploadPackage(
+                    self.uploadPackage(
+                        session,
+                        request,
+                        progressEndpoint: progressEndpoint
+                    )
+                )
             case .download(let request):
                 try await .download(
                     self.download(
@@ -310,6 +318,23 @@ final class CoreService: Sendable, CoreXPC {
         )
         await sync.confirmDelivery()
         return UploadResponse(item: item)
+    }
+
+    func uploadPackage(
+        _ session: Session,
+        _ request: UploadPackageRequest,
+        progressEndpoint: NSXPCListenerEndpoint
+    ) async throws -> UploadPackageResponse {
+        let sync = XPCProgressPublisher(endpoint: progressEndpoint)
+        let item = try await session.uploadPackage(
+            request.name,
+            to: NSFileProviderItemIdentifier(request.parentId),
+            directory: request.directory,
+            flags: request.flags,
+            progress: sync.progress
+        )
+        await sync.confirmDelivery()
+        return UploadPackageResponse(item: item)
     }
 
     func download(

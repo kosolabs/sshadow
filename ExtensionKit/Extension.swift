@@ -179,15 +179,16 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
-        logger.info("Create \(item.desc) for \(fields)")
+        logger.info("Create \(item.desc) for \(fields) \(options)")
 
         let parentId = item.parentItemIdentifier
         let filename = item.filename
         var remaining = fields.subtracting(.nameFields)
         let steps = progress.steps()
         var itemId = item.itemIdentifier
+        var packageType: UTType?
 
-        if item.contentType == .symbolicLink,
+        if let ut = item.contentType, ut == .symbolicLink,
             remaining.intersects(with: .writeFields),
             let target = item.symlinkTargetPath ?? nil
         {
@@ -203,35 +204,51 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             }
         }
 
-        if item.contentType == .folder {
+        if let ut = item.contentType, ut.conforms(to: .directory) {
             let fileSystemFlags =
                 remaining.contains(.fileSystemFlags)
                 ? item.fileSystemFlags ?? [] : []
             remaining.subtract([.fileSystemFlags])
 
-            steps.add {
-                let item = try await self.client.createDirectory(
-                    parentId: parentId,
-                    name: filename,
-                    flags: .init(from: fileSystemFlags)
-                )
-                itemId = item.id
+            if let url = url, remaining.intersects(with: .writeFields) {
+                // A package: a directory handed over as a single item, with
+                // its whole tree as the contents.
+                remaining.subtract([.contents])
+                packageType = ut
+                let tree = try FileTree(root: url)
+                let weight = try await transferUnits(for: tree.totalSize)
+
+                steps.add(weight: weight) { subprogress in
+                    let item = try await self.client.uploadPackage(
+                        parentId: parentId,
+                        name: filename,
+                        directory: url,
+                        flags: .init(from: fileSystemFlags),
+                        progress: subprogress
+                    )
+                    itemId = item.id
+                }
+            } else {
+                steps.add {
+                    let item = try await self.client.createDirectory(
+                        parentId: parentId,
+                        name: filename,
+                        flags: .init(from: fileSystemFlags)
+                    )
+                    itemId = item.id
+                }
             }
         }
 
         if let url = url, remaining.intersects(with: .writeFields) {
             let fileSize = try FileManager.default.size(of: url)
-            let limits = try await client.limits()
-            let chunkSize = limits.maxWriteLength
-            let fileTransferUnits = Int64(
-                (fileSize + chunkSize - 1) / chunkSize
-            )
+            let weight = try await transferUnits(for: fileSize)
             let fileSystemFlags =
                 remaining.contains(.fileSystemFlags)
                 ? item.fileSystemFlags ?? [] : []
             remaining.subtract([.fileSystemFlags, .contents])
 
-            steps.add(weight: max(1, fileTransferUnits)) { subprogress in
+            steps.add(weight: weight) { subprogress in
                 let item = try await self.client.upload(
                     parentId: parentId,
                     name: filename,
@@ -258,7 +275,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
         try await steps.execute()
 
-        let item = try await self.item(for: itemId)
+        let item = try await self.item(for: itemId, packageType: packageType)
         return (item, [], false)
     }
 
@@ -301,7 +318,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
-        logger.info("Modify \(item.desc) for \(changedFields)")
+        logger.info("Modify \(item.desc) for \(changedFields) \(options)")
 
         var remaining = changedFields
         let steps = progress.steps()
@@ -312,31 +329,43 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 throw CocoaError(.fileReadUnsupportedScheme)
             }
 
-            let fileSize = try FileManager.default.size(of: newContents)
-            let limits = try await client.limits()
-            let chunkSize = limits.maxWriteLength
-            let fileTransferUnits = Int64(
-                (fileSize + chunkSize - 1) / chunkSize
+            let isPackage = try FileManager.default.isDirectory(
+                at: newContents
             )
+            let fileSize =
+                isPackage
+                ? try FileTree(root: newContents).totalSize
+                : try FileManager.default.size(of: newContents)
+            let weight = try await transferUnits(for: fileSize)
             let fileSystemFlags =
                 remaining.contains(.fileSystemFlags)
                 ? item.fileSystemFlags ?? [] : []
             remaining.subtract([.fileSystemFlags, .contents])
 
-            steps.add(weight: max(1, fileTransferUnits)) { subprogress in
+            steps.add(weight: weight) { subprogress in
                 let currentParent = try await self.client.parent(
                     of: item.itemIdentifier
                 )
                 let currentName = try await self.client.name(
                     of: item.itemIdentifier
                 )
-                _ = try await self.client.upload(
-                    parentId: currentParent,
-                    name: currentName,
-                    file: newContents,
-                    flags: .init(from: fileSystemFlags),
-                    progress: subprogress
-                )
+                if isPackage {
+                    _ = try await self.client.uploadPackage(
+                        parentId: currentParent,
+                        name: currentName,
+                        directory: newContents,
+                        flags: .init(from: fileSystemFlags),
+                        progress: subprogress
+                    )
+                } else {
+                    _ = try await self.client.upload(
+                        parentId: currentParent,
+                        name: currentName,
+                        file: newContents,
+                        flags: .init(from: fileSystemFlags),
+                        progress: subprogress
+                    )
+                }
             }
         }
 
@@ -427,8 +456,18 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
     private func item(
         for identifier: NSFileProviderItemIdentifier,
+        packageType: UTType? = nil
     ) async throws -> FPItem {
-        try await FPItem(item: client.item(for: identifier))
+        try await FPItem(
+            item: client.item(for: identifier),
+            packageType: packageType
+        )
+    }
+
+    /// The progress weight of a transfer, in write requests to the server.
+    private func transferUnits(for size: UInt64) async throws -> Int64 {
+        let chunkSize = try await client.limits().maxWriteLength
+        return max(1, Int64((size + chunkSize - 1) / chunkSize))
     }
 
     private func setAttributes(

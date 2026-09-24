@@ -215,6 +215,257 @@ struct ExtensionTests {
         #expect(updateFolderProgress.isFinished)
     }
 
+    @Test func createPackageSucceeds() async throws {
+        // cp -R pkg.dSYM parent/
+        let newDate = Date(timeIntervalSince1970: 1_760_000_000)
+
+        let sandbox = TestSandbox()
+        try sandbox.createFolder(at: "parent")
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+
+        let parentId = try await client.child(name: "parent")
+
+        // A package is handed over as a single item whose contents are the
+        // package directory rather than a file.
+        let staged = UUID().uuidString
+        let packageUrl = try sandbox.createFolder(
+            at: staged,
+            relativeTo: .shared
+        )
+        try sandbox.createFile(
+            at: "\(staged)/Contents/Info.plist",
+            relativeTo: .shared,
+            contents: "plist"
+        )
+        try sandbox.createFile(
+            at: "\(staged)/Contents/Resources/DWARF/binary",
+            relativeTo: .shared,
+            contents: "dwarf",
+            permissions: 0o755
+        )
+        try sandbox.createSymlink(
+            at: "\(staged)/Contents/Current",
+            relativeTo: .shared,
+            target: "Resources"
+        )
+
+        // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID(<pid>), filename: pkg.dSYM, contentType: com.apple.xcode.dsym, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), size: 20480, createTime: 2026-01-20 00:31:01 +0000, modifyTime: 2026-01-20 00:31:01 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        let uploadProgress = Progress()
+        let (item, pendingFields, shouldFetch) = try await ext.createItem(
+            basedOn: ItemTemplate(
+                parentItemIdentifier: parentId,
+                filename: "pkg.dSYM",
+                contentType: .package,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: .rwx,
+                creationDate: newDate,
+                contentModificationDate: newDate,
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true,
+            ),
+            fields: [
+                .contents, .filename, .parentItemIdentifier, .creationDate,
+                .contentModificationDate, .fileSystemFlags, .typeAndCreator,
+            ],
+            contents: packageUrl,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: uploadProgress
+        )
+
+        // The created item keeps the package type it was created from, while
+        // the directory it is stored as is reported as a folder everywhere
+        // else.
+        #expect(item.filename == "pkg.dSYM")
+        #expect(item.contentType == .package)
+        #expect(
+            try await ext.item(
+                for: client.child(of: parentId, name: "pkg.dSYM"),
+                request: NSFileProviderRequest(),
+                progress: Progress()
+            ).contentType == .folder
+        )
+        #expect(item.fileSystemFlags == .rwx)
+        #expect(item.contentModificationDate == newDate)
+        #expect(pendingFields.isEmpty)
+        #expect(!shouldFetch)
+        #expect(uploadProgress.isFinished)
+
+        #expect(sandbox.exists(at: "parent/pkg.dSYM"))
+        #expect(try sandbox.permissions(of: "parent/pkg.dSYM") == 0o755)
+        #expect(
+            try sandbox.contents(of: "parent/pkg.dSYM/Contents/Info.plist")
+                == "plist"
+        )
+        #expect(
+            try sandbox.permissions(
+                of: "parent/pkg.dSYM/Contents/Info.plist"
+            ) == 0o644
+        )
+        #expect(
+            try sandbox.contents(
+                of: "parent/pkg.dSYM/Contents/Resources/DWARF/binary"
+            ) == "dwarf"
+        )
+        #expect(
+            try sandbox.permissions(
+                of: "parent/pkg.dSYM/Contents/Resources/DWARF/binary"
+            ) == 0o755
+        )
+        #expect(
+            try sandbox.target(of: "parent/pkg.dSYM/Contents/Current")
+                == "Resources"
+        )
+    }
+
+    @Test func createPackageWithoutContentsSucceeds() async throws {
+        // mkdir empty.dSYM
+        let sandbox = TestSandbox()
+        let (ext, _) = try await sandbox.getExtensionAndClient()
+
+        // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID.rootContainer, filename: empty.dSYM, contentType: com.apple.xcode.dsym, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable)) for FPItemFields(rawValue: 262, filename, parentItemIdentifier, fileSystemFlags)
+        let createProgress = Progress()
+        let (item, pendingFields, shouldFetch) = try await ext.createItem(
+            basedOn: ItemTemplate(
+                filename: "empty.dSYM",
+                contentType: .package,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: .rwx
+            ),
+            fields: [.filename, .parentItemIdentifier, .fileSystemFlags],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: createProgress
+        )
+
+        #expect(item.filename == "empty.dSYM")
+        #expect(item.contentType == .folder)
+        #expect(pendingFields.isEmpty)
+        #expect(!shouldFetch)
+        #expect(sandbox.exists(at: "empty.dSYM"))
+        #expect(try sandbox.permissions(of: "empty.dSYM") == 0o755)
+        #expect(createProgress.isFinished)
+    }
+
+    @Test func createPackageAgainSucceeds() async throws {
+        // The system re-issues the creation of a package with an identical
+        // template until it accepts the result, so a repeated creation has to
+        // converge instead of reporting a collision.
+        let sandbox = TestSandbox()
+        let (ext, _) = try await sandbox.getExtensionAndClient()
+
+        let staged = UUID().uuidString
+        let packageUrl = try sandbox.createFolder(
+            at: staged,
+            relativeTo: .shared
+        )
+        try sandbox.createFile(
+            at: "\(staged)/Contents/Info.plist",
+            relativeTo: .shared,
+            contents: "plist"
+        )
+
+        let template = ItemTemplate(
+            filename: "pkg.dSYM",
+            contentType: .package,
+            capabilities: [.allowsReading, .allowsWriting],
+            fileSystemFlags: .rwx
+        )
+        let fields: NSFileProviderItemFields = [
+            .contents, .filename, .parentItemIdentifier, .fileSystemFlags,
+        ]
+
+        let firstProgress = Progress()
+        _ = try await ext.createItem(
+            basedOn: template,
+            fields: fields,
+            contents: packageUrl,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: firstProgress
+        )
+
+        // Anything an interrupted attempt left behind is pruned.
+        try sandbox.createFile(at: "pkg.dSYM/stale", contents: "stale")
+
+        let secondProgress = Progress()
+        let (item, pendingFields, shouldFetch) = try await ext.createItem(
+            basedOn: template,
+            fields: fields,
+            contents: packageUrl,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: secondProgress
+        )
+
+        #expect(item.filename == "pkg.dSYM")
+        #expect(item.contentType == .package)
+        #expect(pendingFields.isEmpty)
+        #expect(!shouldFetch)
+        #expect(firstProgress.isFinished)
+        #expect(secondProgress.isFinished)
+
+        #expect(
+            try sandbox.contents(of: "pkg.dSYM/Contents/Info.plist") == "plist"
+        )
+        #expect(!sandbox.exists(at: "pkg.dSYM/stale"))
+        #expect(try sandbox.permissions(of: "pkg.dSYM") == 0o755)
+    }
+
+    @Test func modifyPackageSucceeds() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFolder(at: "doc.rtfd", permissions: 0o755)
+        try sandbox.createFile(at: "doc.rtfd/TXT.rtf", contents: "old")
+        try sandbox.createFile(at: "doc.rtfd/stale.png", contents: "stale")
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+
+        let packageId = try await client.child(name: "doc.rtfd")
+
+        let staged = UUID().uuidString
+        let packageUrl = try sandbox.createFolder(
+            at: staged,
+            relativeTo: .shared
+        )
+        try sandbox.createFile(
+            at: "\(staged)/TXT.rtf",
+            relativeTo: .shared,
+            contents: "new"
+        )
+        try sandbox.createFile(
+            at: "\(staged)/image.png",
+            relativeTo: .shared,
+            contents: "image"
+        )
+
+        // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID.rootContainer, filename: doc.rtfd, contentType: com.apple.rtfd, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1, contents)
+        let modifyProgress = Progress()
+        _ = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: packageId,
+                filename: "doc.rtfd",
+                contentType: .package,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: .rwx,
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true,
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.contents],
+            contents: packageUrl,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: modifyProgress
+        )
+
+        #expect(try sandbox.contents(of: "doc.rtfd/TXT.rtf") == "new")
+        #expect(try sandbox.contents(of: "doc.rtfd/image.png") == "image")
+        #expect(!sandbox.exists(at: "doc.rtfd/stale.png"))
+        // The permissions of an existing package are not part of its contents.
+        #expect(try sandbox.permissions(of: "doc.rtfd") == 0o755)
+        #expect(modifyProgress.isFinished)
+    }
+
     @Test func createFileSucceeds() async throws {
         // echo "Hello, World!" > parent/file.txt
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)

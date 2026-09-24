@@ -137,6 +137,36 @@ extension NSFileProviderItemFields: @retroactive CustomStringConvertible {
     }
 }
 
+extension NSFileProviderCreateItemOptions: @retroactive CustomStringConvertible
+{
+    public var description: String {
+        var result = [String]()
+        result.append("rawValue: \(rawValue)")
+        if contains(.mayAlreadyExist) {
+            result.append("mayAlreadyExist")
+        }
+        if contains(.deletionConflicted) {
+            result.append("deletionConflicted")
+        }
+        return "FPCreateItemOptions(\(result.joined(separator: ", ")))"
+    }
+}
+
+extension NSFileProviderModifyItemOptions: @retroactive CustomStringConvertible
+{
+    public var description: String {
+        var result = [String]()
+        result.append("rawValue: \(rawValue)")
+        if contains(.mayAlreadyExist) {
+            result.append("mayAlreadyExist")
+        }
+        if contains(.failOnConflict) {
+            result.append("failOnConflict")
+        }
+        return "FPModifyItemOptions(\(result.joined(separator: ", ")))"
+    }
+}
+
 extension NSFileProviderItemCapabilities: @retroactive CustomStringConvertible {
     public var description: String {
         var result = [String]()

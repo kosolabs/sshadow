@@ -382,6 +382,45 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         return response.item
     }
 
+    /// Uploads a package: a directory that the File Provider treats as a
+    /// single item, recreated on the server as a directory tree. An existing
+    /// directory of the same name is merged into and pruned.
+    public func uploadPackage(
+        parentId: NSFileProviderItemIdentifier,
+        name: String,
+        directory: URL,
+        flags: Item.Flags,
+        progress: Progress
+    ) async throws(CoreError) -> Item {
+        let stagedUrl = sharedUrl.appending(path: UUID().uuidString)
+        do {
+            try FileManager.default.moveItem(at: directory, to: stagedUrl)
+        } catch {
+            throw CoreError(from: error)
+        }
+        defer { try? FileManager.default.moveItem(at: stagedUrl, to: directory) }
+
+        progress.kind = .file
+        progress.fileOperationKind = .uploading
+
+        let sync = XPCProgressSubscriber(progress: progress)
+        let reply = try await perform(
+            .uploadPackage(
+                UploadPackageRequest(
+                    parentId: parentId.rawValue,
+                    name: name,
+                    directory: stagedUrl,
+                    flags: flags
+                )
+            ),
+            progressEndpoint: sync.endpoint
+        )
+        guard case .uploadPackage(let response) = reply else {
+            throw CoreError.unexpectedResponse
+        }
+        return response.item
+    }
+
     public func download(
         itemId: NSFileProviderItemIdentifier,
         chunkSize: UInt64 = Limits.defaultBufferSize,

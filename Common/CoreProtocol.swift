@@ -50,6 +50,7 @@ public enum CoreRequest: Message, PrettyDescribable {
 
 public enum CoreProgressRequest: Message, PrettyDescribable {
     case upload(UploadRequest)
+    case uploadPackage(UploadPackageRequest)
     case download(DownloadRequest)
     case stream(StreamRequest)
 
@@ -100,6 +101,7 @@ public enum CoreResponse: Message, PrettyDescribable {
     case removeDirectory(RemoveDirectoryResponse)
     case limits(LimitsResponse)
     case upload(UploadResponse)
+    case uploadPackage(UploadPackageResponse)
     case download(DownloadResponse)
     case stream(StreamResponse)
 }
@@ -115,6 +117,7 @@ public enum CoreError: Message, PrettyDescribable, Error {
     case notAuthenticated
     case remotePathNotFound
     case unexpectedResponse
+    case unsupportedContent
     case unknown(domain: String, code: Int, message: String)
 
     public static var itemNotFound: CoreError {
@@ -449,6 +452,33 @@ public struct UploadRequest: Message, PrettyDescribable {
 }
 
 public struct UploadResponse: Message, PrettyDescribable {
+    let item: Item
+
+    public init(item: Item) {
+        self.item = item
+    }
+}
+
+public struct UploadPackageRequest: Message, PrettyDescribable {
+    public let parentId: String
+    public let name: String
+    public let directory: URL
+    public let flags: Item.Flags
+
+    public init(
+        parentId: String,
+        name: String,
+        directory: URL,
+        flags: Item.Flags
+    ) {
+        self.parentId = parentId
+        self.name = name
+        self.directory = directory
+        self.flags = flags
+    }
+}
+
+public struct UploadPackageResponse: Message, PrettyDescribable {
     let item: Item
 
     public init(item: Item) {

@@ -6,9 +6,15 @@ private let logger = Logger(category: "FPItem")
 
 public class FPItem: NSObject, NSFileProviderItem {
     private let item: Item
+    private let packageType: UTType?
 
-    public init(item: Item) {
+    /// A package is created from a template whose content type is a package
+    /// type. Reporting the created item as a plain folder is a transition the
+    /// system does not support, so it keeps re-issuing the creation; the
+    /// created item reports the type it was created from instead.
+    public init(item: Item, packageType: UTType? = nil) {
         self.item = item
+        self.packageType = packageType
         super.init()
         logger.info("Init \(self.desc)")
     }
@@ -24,7 +30,10 @@ public class FPItem: NSObject, NSFileProviderItem {
     public var filename: String { item.name }
 
     public var contentType: UTType {
-        switch item.kind {
+        if let packageType {
+            return packageType
+        }
+        return switch item.kind {
         case .file:
             .text
         case .folder:

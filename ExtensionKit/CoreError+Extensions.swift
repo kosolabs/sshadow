@@ -15,6 +15,8 @@ extension CoreError {
             CocoaError(.fileWriteNoPermission)
         case .userCancelled:
             CocoaError(.userCancelled)
+        case .unsupportedContent:
+            CocoaError(.featureUnsupported)
         case .itemNotFound(let itemId?):
             NSError.fileProviderErrorForNonExistentItem(
                 withIdentifier: NSFileProviderItemIdentifier(itemId)

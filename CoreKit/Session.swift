@@ -690,8 +690,10 @@ actor Session {
         reconcileTask?.cancel()
         defer { outstanding -= 1 }
 
-        let fp = try FileHandle(forReadingFrom: url)
-        defer { try? fp.close() }
+        guard try !FileManager.default.isDirectory(at: url) else {
+            logger.fault("Cannot upload directory \(url) as a file")
+            throw CoreError.unsupportedContent
+        }
         let size = try FileManager.default.size(of: url)
 
         progress.kind = .file
@@ -720,24 +722,209 @@ actor Session {
             estimator: estimator,
             progress: progress
         ) {
-            try await sftp.withSftpFile(
-                at: path(for: name, in: parentId),
-                accessType: .writeOnly,
-                mode: flags.mode
-            ) { file in
-                try await file.withAsyncWriter { writer in
-                    while let data = try fp.read(upToCount: Int(bufferSize)) {
-                        if progress.isCancelled {
-                            throw CoreError.userCancelled
-                        }
-                        try await writer.write(data: data)
-                        estimator.update(delta: data.count)
+            try await write(
+                url,
+                to: path(for: name, in: parentId),
+                mode: flags.mode,
+                bufferSize: bufferSize,
+                estimator: estimator,
+                progress: progress
+            )
+        }
+
+        return try await record(name, in: parentId, kind: .file)
+    }
+
+    /// Uploads a package: a directory the File Provider hands over as a single
+    /// item, recreated on the server as a directory tree.
+    ///
+    /// An existing directory of the same name is merged into and pruned rather
+    /// than reported as a collision, because the system re-issues the creation
+    /// of a package until it accepts the result, and because creating a file
+    /// over an existing one already overwrites it.
+    func uploadPackage(
+        _ name: String,
+        to parentId: NSFileProviderItemIdentifier,
+        directory url: URL,
+        flags: Item.Flags,
+        chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
+        progress: Progress
+    ) async throws -> Item {
+        outstanding += 1
+        reconcileTask?.cancel()
+        defer { outstanding -= 1 }
+
+        let tree = try FileTree(root: url)
+
+        progress.kind = .file
+        progress.fileOperationKind = .uploading
+
+        let transfer = await transfers.begin(
+            name: name,
+            progress: progress
+        )
+        defer { transfers.end(transfer: transfer) }
+
+        let message: LogMessage =
+            await "Upload package \(ref(for: name, in: parentId))"
+        let estimator = ThroughputEstimator(
+            progress: progress,
+            totalUnitCount: Int64(tree.totalSize),
+            reporters: [
+                transferProgressReporter(for: transfer),
+                loggingProgressReporter(message),
+            ]
+        )
+
+        let root = try await path(for: name, in: parentId)
+        let bufferSize = sftp.limits.writeLength(for: chunkSize)
+
+        try await performTransfer(
+            with: parentId,
+            recording: message,
+            estimator: estimator,
+            progress: progress
+        ) {
+            let created = try await createFolder(at: root, flags: flags)
+
+            for entry in tree.entries {
+                if progress.isCancelled {
+                    throw CoreError.userCancelled
+                }
+                let path = "\(root)/\(entry.path)"
+                switch entry.kind {
+                case .folder:
+                    _ = try await createFolder(at: path, flags: entry.flags)
+                case .symlink(let target):
+                    try await replaceSymlink(to: target, at: path)
+                case .file:
+                    try await write(
+                        entry.url,
+                        to: path,
+                        mode: entry.flags.mode,
+                        bufferSize: bufferSize,
+                        estimator: estimator,
+                        progress: progress
+                    )
+                }
+            }
+
+            if !created {
+                try await prune(tree, at: root)
+            }
+
+            // The permissions of a directory we did not create belong to the
+            // item, not to the contents the system handed over.
+            try await restorePermissions(
+                of: tree,
+                at: root,
+                flags: created ? flags : nil
+            )
+        }
+
+        return try await record(name, in: parentId, kind: .folder)
+    }
+
+    private func write(
+        _ url: URL,
+        to path: String,
+        mode: mode_t,
+        bufferSize: UInt64,
+        estimator: ThroughputEstimator,
+        progress: Progress
+    ) async throws {
+        let fp = try FileHandle(forReadingFrom: url)
+        defer { try? fp.close() }
+
+        try await sftp.withSftpFile(
+            at: path,
+            accessType: .writeOnly,
+            mode: mode
+        ) { file in
+            try await file.withAsyncWriter { writer in
+                while let data = try fp.read(upToCount: Int(bufferSize)) {
+                    if progress.isCancelled {
+                        throw CoreError.userCancelled
+                    }
+                    try await writer.write(data: data)
+                    estimator.update(delta: data.count)
+                }
+            }
+        }
+    }
+
+    /// Creates a folder of a package, keeping it writable by the owner so that
+    /// its contents can be written. See `restorePermissions(of:at:flags:)`.
+    /// Returns whether the folder was created rather than already present.
+    private func createFolder(
+        at path: String,
+        flags: Item.Flags
+    ) async throws -> Bool {
+        do {
+            try await sftp.createDirectory(at: path, mode: flags.mode | S_IRWXU)
+            return true
+        } catch SSHError.sftpError(.fileAlreadyExists, _) {
+            logger.info("Directory already exists at \(path)")
+            return false
+        }
+    }
+
+    private func replaceSymlink(to target: String, at path: String) async throws
+    {
+        do {
+            try await sftp.createSymlink(to: target, at: path)
+        } catch SSHError.sftpError(.fileAlreadyExists, _) {
+            try await sftp.removeFile(at: path)
+            try await sftp.createSymlink(to: target, at: path)
+        }
+    }
+
+    /// Removes anything on the server that is no longer part of the package.
+    private func prune(_ tree: FileTree, at root: String) async throws {
+        for (folder, names) in tree.expectedNames {
+            let path = folder.isEmpty ? root : "\(root)/\(folder)"
+            try await sftp.withDirectory(at: path) { dir in
+                for try await entry in dir {
+                    guard let name = entry.name, !names.contains(name) else {
+                        continue
+                    }
+                    let stale = "\(path)/\(name)"
+                    logger.info("Remove stale package entry \(stale)")
+                    if entry.type == .directory {
+                        try await sftp.removeDirectoryRecursively(at: stale)
+                    } else {
+                        try await sftp.removeFile(at: stale)
                     }
                 }
             }
         }
+    }
 
-        return try await record(name, in: parentId, kind: .file)
+    /// Applies the permissions the package was created with, deepest first, now
+    /// that nothing more needs to be written into its folders. The root keeps
+    /// the permissions it already has when `flags` is `nil`.
+    private func restorePermissions(
+        of tree: FileTree,
+        at root: String,
+        flags: Item.Flags?
+    ) async throws {
+        for entry in tree.entries.reversed() where entry.isFolder {
+            guard entry.flags.mode != entry.flags.mode | S_IRWXU else {
+                continue
+            }
+            try await sftp.setAttributes(
+                at: "\(root)/\(entry.path)",
+                followSymlinks: false,
+                permissions: entry.flags.mode
+            )
+        }
+
+        guard let flags, flags.mode != flags.mode | S_IRWXU else { return }
+        try await sftp.setAttributes(
+            at: root,
+            followSymlinks: false,
+            permissions: flags.mode
+        )
     }
 
     func download(
@@ -750,6 +937,14 @@ actor Session {
         defer { outstanding -= 1 }
 
         let item = try await item(for: itemId)
+
+        // Only reachable if the system asks for the contents of an item it
+        // considers a package; a directory has no contents of its own.
+        guard item.kind != .folder else {
+            logger.fault("Cannot download folder \(item.name) as a file")
+            throw CoreError.unsupportedContent
+        }
+
         let url = sharedUrl.appending(path: itemId.rawValue)
 
         try create(file: url)
