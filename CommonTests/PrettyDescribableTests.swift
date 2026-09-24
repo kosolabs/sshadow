@@ -33,8 +33,8 @@ struct PrettyDescribableTests {
     @Test("Nested values use their own pretty description")
     func nestedValue() {
         #expect(
-            "\(CoreResult.failure(.serverUnreachable))"
-                == "CoreResult.failure(CoreError.serverUnreachable)"
+            "\(CoreResult<NameResponse>.failure(.serverUnreachable))"
+                == "CoreResult<NameResponse>.failure(CoreError.serverUnreachable)"
         )
     }
 

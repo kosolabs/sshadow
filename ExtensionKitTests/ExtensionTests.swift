@@ -20,7 +20,6 @@ struct ExtensionTests {
     @Test(arguments: [
         CoreError.serviceUnreachable,
         CoreError.remotePathNotFound,
-        CoreError.unexpectedResponse,
     ])
     func mapsToFileProviderServerUnreachable(error: CoreError) {
         let nsError = error.asNSError as NSError

@@ -6,7 +6,6 @@ extension CoreError {
         switch self {
         case .serviceUnreachable,
             .remotePathNotFound,
-            .unexpectedResponse,
             .serverUnreachable:
             NSFileProviderError(.serverUnreachable)
         case .profileNotFound, .notAuthenticated:
@@ -23,6 +22,8 @@ extension CoreError {
             NSFileProviderError(.noSuchItem)
         case .filenameCollision:
             NSFileProviderError(.filenameCollision)
+        case .featureUnsupported:
+            CocoaError(.featureUnsupported)
         case .unknown(let domain, let code, let message):
             NSError(
                 domain: domain,

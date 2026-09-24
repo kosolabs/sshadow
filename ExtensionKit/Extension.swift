@@ -179,7 +179,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
-        logger.info("Create \(item.desc) for \(fields)")
+        logger.info("Create \(item.desc) for \(fields) with \(options)")
 
         let parentId = item.parentItemIdentifier
         let filename = item.filename
@@ -187,7 +187,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         let steps = progress.steps()
         var itemId = item.itemIdentifier
 
-        if item.contentType == .symbolicLink,
+        if let ut = item.contentType, ut == .symbolicLink,
             remaining.intersects(with: .writeFields),
             let target = item.symlinkTargetPath ?? nil
         {
@@ -203,7 +203,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             }
         }
 
-        if item.contentType == .folder {
+        if let ut = item.contentType, ut.conforms(to: .directory) {
             let fileSystemFlags =
                 remaining.contains(.fileSystemFlags)
                 ? item.fileSystemFlags ?? [] : []
@@ -301,7 +301,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
-        logger.info("Modify \(item.desc) for \(changedFields)")
+        logger.info("Modify \(item.desc) for \(changedFields) with \(options)")
 
         var remaining = changedFields
         let steps = progress.steps()
@@ -351,7 +351,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             }
         }
 
-        if item.contentType == .symbolicLink {
+        if let ut = item.contentType, ut == .symbolicLink {
             remaining.subtract(.fileSystemFlags)
         }
 
