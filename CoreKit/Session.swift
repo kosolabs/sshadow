@@ -1025,13 +1025,13 @@ actor Session {
         if let message { logger.info(message.debug) }
         do {
             let result = try await work()
-            if let message { fileLog.info(message) }
+            if let message { fileLog.info(message.display) }
             return result
         } catch {
             let mapped = coreError(from: error, itemId: itemId)
             if let message {
                 logger.error("Failed: \(message.debug): \(error) -> \(mapped)")
-                fileLog.error(message, error: mapped)
+                fileLog.error(message.display, error: mapped)
             }
             if case CoreError.serverUnreachable = mapped {
                 await connectionLostHandler(ConnectionError(from: error))
@@ -1051,14 +1051,14 @@ actor Session {
         defer { estimator.finalize() }
         do {
             try await perform(with: itemId, work)
-            fileLog.info(message, detail: progress.report)
+            fileLog.info(message.display, detail: progress.report)
         } catch CoreError.userCancelled {
             logger.info("Cancelled: \(message.debug)")
-            fileLog.info(message, detail: "Cancelled")
+            fileLog.info(message.display, detail: "Cancelled")
             throw CoreError.userCancelled
         } catch {
             logger.error("Failed: \(message.debug): \(error)")
-            fileLog.error(message, detail: error.localizedDescription)
+            fileLog.error(message.display, detail: error.localizedDescription)
             throw error
         }
     }
