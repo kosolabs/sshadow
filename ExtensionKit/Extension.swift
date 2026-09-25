@@ -183,11 +183,17 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
         let parentId = item.parentItemIdentifier
         let filename = item.filename
-        var remaining = fields.subtracting(.nameFields)
-        let steps = progress.steps()
         var itemId = item.itemIdentifier
 
-        if let ut = item.contentType, ut == .symbolicLink,
+        guard let type = item.contentType else {
+            logger.fault("Failed to sync nil contentType: \(item.desc)")
+            throw CoreError.cannotSynchronize
+        }
+
+        var remaining = fields.subtracting(.nameFields)
+        let steps = progress.steps()
+
+        if type.conforms(to: .symbolicLink),
             remaining.intersects(with: .writeFields),
             let target = item.symlinkTargetPath ?? nil
         {
@@ -201,9 +207,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 )
                 itemId = item.id
             }
-        }
-
-        if let ut = item.contentType, ut.conforms(to: .directory) {
+        } else if type.conforms(to: .package) {
+            logger.error("Failed to sync unsupported package: \(item.desc)")
+            throw CoreError.excludedFromSync
+        } else if type.conforms(to: .directory) {
             let fileSystemFlags =
                 remaining.contains(.fileSystemFlags)
                 ? item.fileSystemFlags ?? [] : []
@@ -217,9 +224,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 )
                 itemId = item.id
             }
-        }
-
-        if let url = url, remaining.intersects(with: .writeFields) {
+        } else if type.conforms(to: .data),
+            remaining.intersects(with: .writeFields), let url = url
+        {
             let fileSize = try FileManager.default.size(of: url)
             let limits = try await client.limits()
             let chunkSize = limits.maxWriteLength
@@ -241,6 +248,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 )
                 itemId = item.id
             }
+        } else {
+            logger.fault("Failed to sync: \(item.desc)")
+            throw CoreError.cannotSynchronize
         }
 
         if remaining.intersects(with: .attrFields) {
@@ -312,7 +322,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 throw CocoaError(.fileReadUnsupportedScheme)
             }
 
-            let fileSize = try FileManager.default.size(of: newContents)
+            let fileSize = try size(of: newContents)
             let limits = try await client.limits()
             let chunkSize = limits.maxWriteLength
             let fileTransferUnits = Int64(
@@ -427,8 +437,17 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
     private func item(
         for identifier: NSFileProviderItemIdentifier,
-    ) async throws -> FPItem {
+    ) async throws(CoreError) -> FPItem {
         try await FPItem(item: client.item(for: identifier))
+    }
+
+    private func size(of file: URL) throws(CoreError) -> UInt64 {
+        do {
+            return try FileManager.default.size(of: file)
+        } catch {
+            logger.error("Failed to get size of \(file): \(error)")
+            throw CoreError.cannotSynchronize
+        }
     }
 
     private func setAttributes(
