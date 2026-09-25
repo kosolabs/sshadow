@@ -100,6 +100,10 @@ actor Session {
         )
     }
 
+    func log(level: Level, message: LogMessage, detail: String? = nil) {
+        log.log(at: level, message, detail: detail)
+    }
+
     func close() async {
         await sftp.close()
         await ssh.close()

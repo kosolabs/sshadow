@@ -24,6 +24,8 @@ extension CoreError {
             NSFileProviderError(.filenameCollision)
         case .featureUnsupported:
             CocoaError(.featureUnsupported)
+        case .excludedFromSync:
+            NSFileProviderError(.excludedFromSync)
         case .unknown(let domain, let code, let message):
             NSError(
                 domain: domain,

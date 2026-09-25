@@ -21,6 +21,35 @@ public enum OnExists: Message, PrettyDescribable {
     case succeed
 }
 
+public enum Level: String, Message, CaseIterable, Comparable {
+    case info
+    case notice
+    case warning
+    case error
+
+    public var label: String {
+        switch self {
+        case .info: "INFO"
+        case .notice: "NOTICE"
+        case .warning: "WARNING"
+        case .error: "ERROR"
+        }
+    }
+
+    private var rank: Int {
+        switch self {
+        case .info: 0
+        case .notice: 1
+        case .warning: 2
+        case .error: 3
+        }
+    }
+
+    public static func < (lhs: Level, rhs: Level) -> Bool {
+        lhs.rank < rhs.rank
+    }
+}
+
 public enum CoreRequest: Message, PrettyDescribable {
     case name(NameRequest)
     case child(ChildRequest)
@@ -38,6 +67,7 @@ public enum CoreRequest: Message, PrettyDescribable {
     case removeFile(RemoveFileRequest)
     case removeDirectory(RemoveDirectoryRequest)
     case limits(LimitsRequest)
+    case log(LogRequest)
 
     public func encoded() throws -> Data {
         try JSONEncoder().encode(self)
@@ -93,6 +123,7 @@ public enum CoreError: Message, PrettyDescribable, Error {
     case notAuthenticated
     case remotePathNotFound
     case featureUnsupported
+    case excludedFromSync
     case unknown(domain: String, code: Int, message: String)
 
     public static var itemNotFound: CoreError {
@@ -444,9 +475,10 @@ public struct RemoveDirectoryResponse: Message, PrettyDescribable {
 
 public struct LimitsRequest: CoreRequestType, PrettyDescribable {
     public typealias Response = LimitsResponse
-    public init() {}
-
+    
     public var wrapped: CoreRequest { .limits(self) }
+    
+    public init() {}
 }
 
 public struct LimitsResponse: Message, PrettyDescribable {
@@ -455,6 +487,25 @@ public struct LimitsResponse: Message, PrettyDescribable {
     public init(limits: Limits) {
         self.limits = limits
     }
+}
+
+public struct LogRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = LogResponse
+    public let level: Level
+    public let message: LogMessage
+    public let detail: String?
+    
+    public init(level: Level, message: LogMessage, detail: String?) {
+        self.level = level
+        self.message = message
+        self.detail = detail
+    }
+
+    public var wrapped: CoreRequest { .log(self) }
+}
+
+public struct LogResponse: Message, PrettyDescribable {
+    public init() {}
 }
 
 public protocol CoreProgressRequestType: Message {

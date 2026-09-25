@@ -49,7 +49,7 @@ public final class Events<C: Clock<Duration>> {
     private nonisolated func log(
         _ message: LogMessage,
         source: Event.Source?,
-        level: Event.Level,
+        level: Level,
         category: Event.Category,
         detail: String?
     ) {
@@ -99,64 +99,42 @@ public final class Events<C: Clock<Duration>> {
             self.category = category
         }
 
-        public func info(_ message: LogMessage, detail: String? = nil) {
+        public func log(
+            at level: Level,
+            _ message: LogMessage,
+            detail: String? = nil
+        ) {
             eventLog.log(
                 message,
                 source: source,
-                level: .info,
+                level: level,
                 category: category,
                 detail: detail
             )
+        }
+
+        public func info(_ message: LogMessage, detail: String? = nil) {
+            log(at: .info, message, detail: detail)
         }
 
         public func notice(_ message: LogMessage, detail: String? = nil) {
-            eventLog.log(
-                message,
-                source: source,
-                level: .notice,
-                category: category,
-                detail: detail
-            )
+            log(at: .notice, message, detail: detail)
         }
 
         public func warning(_ message: LogMessage, detail: String? = nil) {
-            eventLog.log(
-                message,
-                source: source,
-                level: .warning,
-                category: category,
-                detail: detail
-            )
+            log(at: .warning, message, detail: detail)
         }
 
         public func warning(_ message: LogMessage, error: any Error) {
-            eventLog.log(
-                message,
-                source: source,
-                level: .warning,
-                category: category,
-                detail: error.localizedDescription
-            )
+            log(at: .warning, message, detail: error.localizedDescription)
         }
 
         public func error(_ message: LogMessage, detail: String? = nil) {
-            eventLog.log(
-                message,
-                source: source,
-                level: .error,
-                category: category,
-                detail: detail
-            )
+            log(at: .error, message, detail: detail)
         }
 
         public func error(_ message: LogMessage, error: any Error) {
-            eventLog.log(
-                message,
-                source: source,
-                level: .error,
-                category: category,
-                detail: error.localizedDescription
-            )
+            log(at: .error, message, detail: error.localizedDescription)
         }
     }
 }

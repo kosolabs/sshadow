@@ -91,6 +91,10 @@ final class CoreService: Sendable, CoreXPC {
             try await respond { session in
                 try await self.limits(session, request)
             }
+        case .log(let request):
+            try await respond { session in
+                try await self.log(session, request)
+            }
         }
     }
 
@@ -319,6 +323,18 @@ final class CoreService: Sendable, CoreXPC {
         _ request: LimitsRequest
     ) async throws -> LimitsResponse {
         await LimitsResponse(limits: session.limits)
+    }
+
+    func log(
+        _ session: Session,
+        _ request: LogRequest
+    ) async throws -> LogResponse {
+        await session.log(
+            level: request.level,
+            message: request.message,
+            detail: request.detail
+        )
+        return LogResponse()
     }
 
     func upload(

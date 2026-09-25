@@ -214,6 +214,112 @@ struct ExtensionTests {
         #expect(updateFolderProgress.isFinished)
     }
 
+    @Test func createPackageIsExcludedFromSync() async throws {
+        // cp -R pkg.dSYM .
+        let sandbox = TestSandbox()
+        let (ext, _) = try await sandbox.getExtensionAndClient()
+
+        // A package is handed over as a single item whose contents are the
+        // package directory rather than a file.
+        let staged = UUID().uuidString
+        let packageUrl = try sandbox.createFolder(
+            at: staged,
+            relativeTo: .shared
+        )
+        try sandbox.createFile(
+            at: "\(staged)/Contents/Info.plist",
+            relativeTo: .shared,
+            contents: "plist"
+        )
+
+        // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID.rootContainer, filename: pkg.dSYM, contentType: com.apple.xcode.dsym, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), size: 4096, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        await #expect(throws: CoreError.excludedFromSync) {
+            try await ext.createItem(
+                basedOn: ItemTemplate(
+                    filename: "pkg.dSYM",
+                    contentType: .package,
+                    capabilities: [.allowsReading, .allowsWriting],
+                    fileSystemFlags: .rwx
+                ),
+                fields: [
+                    .contents, .filename, .parentItemIdentifier,
+                    .fileSystemFlags,
+                ],
+                contents: packageUrl,
+                options: [],
+                request: NSFileProviderRequest(),
+                progress: Progress()
+            )
+        }
+
+        // Nothing reaches the server, and the local package is left in place.
+        #expect(!sandbox.exists(at: "pkg.dSYM"))
+        #expect(
+            try String(
+                contentsOf: packageUrl.appending(path: "Contents/Info.plist"),
+                encoding: .utf8
+            ) == "plist"
+        )
+    }
+
+    @Test func createFrameworkCreatesFolder() async throws {
+        // mkdir Library.framework
+        let sandbox = TestSandbox()
+        let (ext, _) = try await sandbox.getExtensionAndClient()
+        let framework = try #require(UTType("com.apple.framework"))
+
+        // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID.rootContainer, filename: Library.framework, contentType: com.apple.framework, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable)) for FPItemFields(rawValue: 262, filename, parentItemIdentifier, fileSystemFlags)
+        let createProgress = Progress()
+        let (item, pendingFields, shouldFetch) = try await ext.createItem(
+            basedOn: ItemTemplate(
+                filename: "Library.framework",
+                contentType: framework,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: .rwx
+            ),
+            fields: [.filename, .parentItemIdentifier, .fileSystemFlags],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: createProgress
+        )
+
+        #expect(item.filename == "Library.framework")
+        #expect(item.contentType == .folder)
+        #expect(pendingFields.isEmpty)
+        #expect(!shouldFetch)
+        #expect(try sandbox.permissions(of: "Library.framework") == 0o755)
+        #expect(createProgress.isFinished)
+    }
+
+    @Test func createSymlinkWithoutTargetIsExcludedFromSync() async throws {
+        let sandbox = TestSandbox()
+        let (ext, _) = try await sandbox.getExtensionAndClient()
+        let contentsUrl = try sandbox.createFile(
+            at: UUID().uuidString,
+            relativeTo: .shared,
+            contents: "target.txt"
+        )
+
+        // Previously this fell through to uploading the contents as a file.
+        await #expect(throws: CoreError.excludedFromSync) {
+            try await ext.createItem(
+                basedOn: ItemTemplate(
+                    filename: "link.txt",
+                    contentType: .symbolicLink,
+                    capabilities: [.allowsReading, .allowsWriting]
+                ),
+                fields: [.contents, .filename, .parentItemIdentifier],
+                contents: contentsUrl,
+                options: [],
+                request: NSFileProviderRequest(),
+                progress: Progress()
+            )
+        }
+
+        #expect(!sandbox.exists(at: "link.txt"))
+    }
+
     @Test func createFileSucceeds() async throws {
         // echo "Hello, World!" > parent/file.txt
         let oldDate = Date(timeIntervalSince1970: 1_750_000_000)

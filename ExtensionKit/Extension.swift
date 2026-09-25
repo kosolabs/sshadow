@@ -183,11 +183,24 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
         let parentId = item.parentItemIdentifier
         let filename = item.filename
+
+        guard let type = item.contentType else {
+            try await self.client.log(
+                at: .error,
+                "Unable to sync \"\(filename)\"",
+                detail: "Files of this type are not supported yet."
+            )
+            logger.error(
+                "Failed to sync: \"\(filename)\", UTType: \(String(describing: item.contentType))"
+            )
+            throw CoreError.excludedFromSync
+        }
+
         var remaining = fields.subtracting(.nameFields)
         let steps = progress.steps()
         var itemId = item.itemIdentifier
 
-        if let ut = item.contentType, ut == .symbolicLink,
+        if type.conforms(to: .symbolicLink),
             remaining.intersects(with: .writeFields),
             let target = item.symlinkTargetPath ?? nil
         {
@@ -201,9 +214,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 )
                 itemId = item.id
             }
-        }
-
-        if let ut = item.contentType, ut.conforms(to: .directory) {
+        } else if type.conforms(to: .package) {
+        } else if type.conforms(to: .directory) {
             let fileSystemFlags =
                 remaining.contains(.fileSystemFlags)
                 ? item.fileSystemFlags ?? [] : []
@@ -217,9 +229,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 )
                 itemId = item.id
             }
-        }
-
-        if let url = url, remaining.intersects(with: .writeFields) {
+        } else if type.conforms(to: .data),
+            remaining.intersects(with: .writeFields), let url
+        {
             let fileSize = try FileManager.default.size(of: url)
             let limits = try await client.limits()
             let chunkSize = limits.maxWriteLength
@@ -241,6 +253,16 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 )
                 itemId = item.id
             }
+        } else {
+            try await self.client.log(
+                at: .error,
+                "Unable to sync \"\(filename)\"",
+                detail: "Files of this type are not supported yet."
+            )
+            logger.error(
+                "Failed to sync: \"\(filename)\", UTType: \(String(describing: item.contentType))"
+            )
+            throw CoreError.excludedFromSync
         }
 
         if remaining.intersects(with: .attrFields) {

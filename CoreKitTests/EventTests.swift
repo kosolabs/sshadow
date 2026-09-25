@@ -13,16 +13,16 @@ struct EventTests {
     // MARK: - Level
 
     @Test func levelLabels() {
-        #expect(Event.Level.info.label == "INFO")
-        #expect(Event.Level.notice.label == "NOTICE")
-        #expect(Event.Level.warning.label == "WARNING")
-        #expect(Event.Level.error.label == "ERROR")
+        #expect(Level.info.label == "INFO")
+        #expect(Level.notice.label == "NOTICE")
+        #expect(Level.warning.label == "WARNING")
+        #expect(Level.error.label == "ERROR")
     }
 
     @Test func levelOrdersBySeverity() {
-        #expect(Event.Level.info < .notice)
-        #expect(Event.Level.notice < .warning)
-        #expect(Event.Level.warning < .error)
+        #expect(Level.info < .notice)
+        #expect(Level.notice < .warning)
+        #expect(Level.warning < .error)
     }
 
     // MARK: - logLine

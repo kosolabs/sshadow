@@ -271,6 +271,16 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         return response.limits
     }
 
+    public func log(
+        at level: Level,
+        _ message: LogMessage,
+        detail: String? = nil
+    ) async throws(CoreError) {
+        _ = try await perform(
+            LogRequest(level: level, message: message, detail: detail)
+        )
+    }
+
     public func upload(
         parentId: NSFileProviderItemIdentifier,
         name: String,

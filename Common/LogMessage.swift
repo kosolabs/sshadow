@@ -1,4 +1,4 @@
-public struct LogMessage: ExpressibleByStringInterpolation {
+public struct LogMessage: Message, ExpressibleByStringInterpolation {
     final public class StringInterpolation: StringInterpolationProtocol {
         var debug = ""
         var display = ""
