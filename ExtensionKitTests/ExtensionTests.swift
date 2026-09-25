@@ -53,8 +53,9 @@ struct ExtensionTests {
             progress: readProgress
         )
 
+        let type = try #require(item.contentType)
         #expect(item.filename == "small-file.txt")
-        #expect(item.contentType == .text)
+        #expect(type.conforms(to: .text))
         #expect(item.documentSize??.intValue == contents.count)
         #expect(item.fileSystemFlags == .rw)
         #expect(try String(contentsOf: url, encoding: .utf8) == contents)
@@ -256,8 +257,9 @@ struct ExtensionTests {
             progress: uploadProgress
         )
 
+        let type = try #require(item.contentType)
         #expect(item.filename == "file.txt")
-        #expect(item.contentType == .text)
+        #expect(type.conforms(to: .text))
         #expect(item.fileSystemFlags == .rw)
         #expect(item.creationDate == newDate)
         #expect(item.contentModificationDate == newDate)
@@ -336,8 +338,9 @@ struct ExtensionTests {
             progress: uploadProgress
         )
 
+        let type = try #require(item.contentType)
         #expect(item.filename == "file.dat")
-        #expect(item.contentType == .text)
+        #expect(type.conforms(to: .data))
         #expect(item.fileSystemFlags == .rw)
         #expect(item.creationDate == newDate)
         #expect(item.contentModificationDate == newDate)
@@ -787,8 +790,9 @@ struct ExtensionTests {
             progress: fetchOldProgress
         )
 
+        let oldType = try #require(oldItem.contentType)
         #expect(oldItem.filename == "file.txt")
-        #expect(oldItem.contentType == .text)
+        #expect(oldType.conforms(to: .text))
         #expect(try String(contentsOf: oldUrl, encoding: .utf8) == oldContents)
         #expect(fetchOldProgress.isFinished)
 
@@ -833,8 +837,9 @@ struct ExtensionTests {
             progress: fetchNewProgress
         )
 
+        let newType = try #require(newItem.contentType)
         #expect(newItem.filename == "file.txt")
-        #expect(newItem.contentType == .text)
+        #expect(newType.conforms(to: .text))
         #expect(try String(contentsOf: newUrl, encoding: .utf8) == newContents)
         #expect(fetchNewProgress.isFinished)
     }

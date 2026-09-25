@@ -26,9 +26,19 @@ public class FPItem: NSObject, NSFileProviderItem {
     public var contentType: UTType {
         switch item.kind {
         case .file:
-            .text
+            UTType(
+                filenameExtension: (filename as NSString).pathExtension,
+                conformingTo: .data
+            ) ?? .data
         case .folder:
-            .folder
+            if let type = UTType(
+                filenameExtension: (filename as NSString).pathExtension,
+                conformingTo: .directory
+            ), !type.isDynamic {
+                type
+            } else {
+                .folder
+            }
         case .symlink(_):
             .symbolicLink
         }
