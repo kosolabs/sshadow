@@ -93,6 +93,8 @@ public enum CoreError: Message, PrettyDescribable, Error {
     case notAuthenticated
     case remotePathNotFound
     case featureUnsupported
+    case excludedFromSync
+    case cannotSynchronize
     case unknown(domain: String, code: Int, message: String)
 
     public static var itemNotFound: CoreError {

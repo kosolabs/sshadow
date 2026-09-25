@@ -212,9 +212,10 @@ actor Session {
 
     func unwatch(itemId: NSFileProviderItemIdentifier) async {
         guard itemId != .workingSet, itemId != .trashContainer else { return }
-        guard let count = watched[itemId] else { return }
+        guard watched[itemId] != nil else { return }
         let ref = await ref(for: itemId)
 
+        guard let count = watched[itemId] else { return }
         if count <= 1 {
             watched.removeValue(forKey: itemId)
         } else {
