@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.15.1](https://github.com/kosolabs/sshadow/compare/v0.15.0...v0.15.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* derive item content types from filename extensions ([#374](https://github.com/kosolabs/sshadow/issues/374)) ([9801a18](https://github.com/kosolabs/sshadow/commit/9801a180aa589693bbdfaa7e1573f25fa03e3f8d))
+* folders should report nil size instead of st_size ([#370](https://github.com/kosolabs/sshadow/issues/370)) ([251a3cc](https://github.com/kosolabs/sshadow/commit/251a3ccf9284225a42ee74037758c7f9c72772f8))
+* race on watch / unwatch and handle unsupported package type ([#373](https://github.com/kosolabs/sshadow/issues/373)) ([de72039](https://github.com/kosolabs/sshadow/commit/de720394828c3515d7c57b89ad6632630b1ba31e))
+
 ## [0.15.0](https://github.com/kosolabs/sshadow/compare/v0.14.2...v0.15.0) (2026-09-22)
 
 
