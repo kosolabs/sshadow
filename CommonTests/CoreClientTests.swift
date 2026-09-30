@@ -180,7 +180,6 @@ struct CoreClientTests {
             parentId: .rootContainer,
             name: "upload.txt",
             file: localFile,
-            flags: .rw,
             progress: Progress()
         )
 

@@ -331,7 +331,6 @@ final class CoreService: Sendable, CoreXPC {
             request.name,
             to: NSFileProviderItemIdentifier(request.parentId),
             file: request.file,
-            flags: request.flags,
             progress: sync.progress
         )
         await sync.confirmDelivery()

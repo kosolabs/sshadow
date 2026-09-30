@@ -469,7 +469,6 @@ public struct UploadRequest: CoreProgressRequestType, PrettyDescribable {
     public let parentId: String
     public let name: String
     public let file: URL
-    public let flags: Item.Flags
     public let chunkSize: UInt64
 
     public var wrapped: CoreProgressRequest { .upload(self) }
@@ -478,13 +477,11 @@ public struct UploadRequest: CoreProgressRequestType, PrettyDescribable {
         parentId: String,
         name: String,
         file: URL,
-        flags: Item.Flags,
         chunkSize: UInt64
     ) {
         self.parentId = parentId
         self.name = name
         self.file = file
-        self.flags = flags
         self.chunkSize = chunkSize
     }
 }

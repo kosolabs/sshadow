@@ -92,6 +92,84 @@ extension [Change] {
     }
 }
 
+extension TestSandbox {
+    fileprivate func createPackage(
+        at root: String,
+        relativeTo: RelativeTo = .mount
+    ) throws {
+        try createFile(
+            at: "\(root)/Contents/Info.plist",
+            relativeTo: relativeTo,
+            contents: "<plist/>",
+            permissions: 0o644
+        )
+        try createFile(
+            at: "\(root)/Contents/MacOS/tool",
+            relativeTo: relativeTo,
+            contents: "#!/bin/sh\n",
+            permissions: 0o755
+        )
+        try createFile(
+            at: "\(root)/Contents/Resources/readonly.txt",
+            relativeTo: relativeTo,
+            contents: "read only",
+            permissions: 0o444
+        )
+        try createFile(
+            at: "\(root)/Contents/Resources/large.dat",
+            relativeTo: relativeTo,
+            data: Data((0..<3_000_000).map { UInt8(truncatingIfNeeded: $0) }),
+            permissions: 0o600
+        )
+        try createFile(
+            at: "\(root)/Contents/Resources/empty.txt",
+            relativeTo: relativeTo,
+            permissions: 0o640
+        )
+        try createFile(
+            at: "\(root)/Contents/.hidden",
+            relativeTo: relativeTo,
+            contents: "hidden"
+        )
+        try createFile(
+            at: "\(root)/name with spaces #1.txt",
+            relativeTo: relativeTo,
+            contents: "spaces"
+        )
+        try createFolder(
+            at: "\(root)/Contents/Empty",
+            relativeTo: relativeTo,
+            permissions: 0o750
+        )
+        try createFile(
+            at: "\(root)/Versions/A/lib.txt",
+            relativeTo: relativeTo,
+            contents: "lib"
+        )
+        try createSymlink(
+            at: "\(root)/Versions/Current",
+            relativeTo: relativeTo,
+            target: "A"
+        )
+        try createSymlink(
+            at: "\(root)/Contents/broken",
+            relativeTo: relativeTo,
+            target: "../missing"
+        )
+        try touch(root, relativeTo: relativeTo, permissions: 0o755)
+    }
+}
+
+private func contents(of url: URL) throws -> [String: Data] {
+    var result: [String: Data] = [:]
+    for entry in try Manifest(from: url).entries {
+        if case .file = entry.kind {
+            result[entry.path] = try Data(contentsOf: entry.url(under: url))
+        }
+    }
+    return result
+}
+
 extension Session {
     fileprivate func id(of path: String) async throws
         -> NSFileProviderItemIdentifier
@@ -1457,6 +1535,43 @@ struct SessionTests {
             #expect(changes == [])
         }
 
+        @Test func createDirectoryWithIfExistsSucceedOverFileThrows()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "existing-file")
+            let session = try await sandbox.getSession()
+
+            await #expect(throws: CoreError.filenameCollision) {
+                _ = try await session.createDirectory(
+                    "existing-file",
+                    in: .rootContainer,
+                    ifExists: .succeed
+                )
+            }
+            let changes = try await session.reconcileAll()
+            #expect(changes == [])
+        }
+
+        @Test func createDirectoryWithIfExistsSucceedOverSymlinkThrows()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            _ = try sandbox.createFolder(at: "target-dir")
+            try sandbox.createSymlink(at: "link-dir", target: "target-dir")
+            let session = try await sandbox.getSession()
+
+            await #expect(throws: CoreError.filenameCollision) {
+                _ = try await session.createDirectory(
+                    "link-dir",
+                    in: .rootContainer,
+                    ifExists: .succeed
+                )
+            }
+            let changes = try await session.reconcileAll()
+            #expect(changes == [])
+        }
+
         @Test func createDirectoryWhenExistsThrows() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFolder(at: "already-exists")
@@ -1546,7 +1661,7 @@ struct SessionTests {
             try sandbox.createFile(at: "collide")
             let session = try await sandbox.getSession()
 
-            await #expect(throws: (any Error).self) {
+            await #expect(throws: CoreError.filenameCollision) {
                 _ = try await session.createSymlink(
                     "collide",
                     in: .rootContainer,
@@ -1731,7 +1846,6 @@ struct SessionTests {
                 filename,
                 to: .rootContainer,
                 file: uploadUrl,
-                flags: .rw,
                 progress: progress
             )
             let currId = try await session.child(name: filename)
@@ -1762,7 +1876,6 @@ struct SessionTests {
                 filename,
                 to: .rootContainer,
                 file: uploadUrl,
-                flags: .rw,
                 progress: progress
             )
             let currId = try await session.child(name: filename)
@@ -1780,20 +1893,17 @@ struct SessionTests {
 
         @Test func uploadFailureLeavesNoRow() async throws {
             let sandbox = TestSandbox()
-            // Pre-create a directory at the upload target so opening it as a
-            // file for writing fails.
             try sandbox.createFolder(at: "collide-upload")
             let session = try await sandbox.getSession()
 
             let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
             try Data("data".utf8).write(to: uploadUrl)
 
-            await #expect(throws: (any Error).self) {
+            await #expect(throws: CoreError.filenameCollision) {
                 _ = try await session.upload(
                     "collide-upload",
                     to: .rootContainer,
                     file: uploadUrl,
-                    flags: .rw,
                     progress: Progress()
                 )
             }
@@ -1817,7 +1927,6 @@ struct SessionTests {
                     "cancelled.dat",
                     to: .rootContainer,
                     file: uploadUrl,
-                    flags: .rw,
                     progress: progress
                 )
             }
@@ -1838,7 +1947,6 @@ struct SessionTests {
                 "file.txt",
                 to: folderId,
                 file: uploadUrl,
-                flags: .rw,
                 progress: progress
             )
             let currId = try await session.child(of: folderId, name: "file.txt")
@@ -1852,6 +1960,155 @@ struct SessionTests {
             #expect(currId == item.id)
             let changes = try await session.reconcileAll()
             #expect(changes == [])
+        }
+
+        @Test func uploadPackageReproducesTree() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createPackage(at: "src.app", relativeTo: .shared)
+            let source = sandbox.getUrl(for: "src.app", relativeTo: .shared)
+            let dest = sandbox.getUrl(for: "Bundle.app")
+            let session = try await sandbox.getSession()
+
+            let progress = Progress()
+            let item = try await session.upload(
+                "Bundle.app",
+                to: .rootContainer,
+                file: source,
+                progress: progress
+            )
+
+            #expect(item.name == "Bundle.app")
+            #expect(item.kind == .folder)
+            #expect(try await session.child(name: "Bundle.app") == item.id)
+            #expect(try Manifest(from: dest) == Manifest(from: source))
+            #expect(try contents(of: dest) == contents(of: source))
+            #expect(
+                try sandbox.target(of: "Bundle.app/Versions/Current") == "A"
+            )
+            let totalSize = try Manifest(from: source).totalSize()
+            #expect(progress.totalUnitCount == Int64(totalSize))
+            #expect(progress.isFinished)
+            let changes = try await session.reconcileAll()
+            #expect(changes == [])
+        }
+
+        @Test func uploadEmptyPackageSucceeds() async throws {
+            let sandbox = TestSandbox()
+            let source = try sandbox.createFolder(
+                at: "empty.bundle",
+                relativeTo: .shared,
+                permissions: 0o700
+            )
+            let session = try await sandbox.getSession()
+
+            let progress = Progress()
+            let item = try await session.upload(
+                "Empty.bundle",
+                to: .rootContainer,
+                file: source,
+                progress: progress
+            )
+
+            #expect(item.kind == .folder)
+            #expect(try sandbox.permissions(of: "Empty.bundle") == 0o755)
+            #expect(
+                try Manifest(from: sandbox.getUrl(for: "Empty.bundle")).entries
+                    .count == 1
+            )
+            #expect(progress.isFinished)
+        }
+
+        @Test func uploadPackageOverExistingThrowsCollision() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "Bundle.app")
+            let source = try sandbox.createFolder(
+                at: "src.app",
+                relativeTo: .shared
+            )
+            let session = try await sandbox.getSession()
+
+            await #expect(throws: CoreError.filenameCollision) {
+                _ = try await session.upload(
+                    "Bundle.app",
+                    to: .rootContainer,
+                    file: source,
+                    progress: Progress()
+                )
+            }
+        }
+
+        @Test func uploadPackageWithLockedFolderThrowsCannotSynchronize()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: "src.app/Locked/inside.txt",
+                relativeTo: .shared,
+                contents: "locked"
+            )
+            try sandbox.touch(
+                "src.app/Locked",
+                relativeTo: .shared,
+                permissions: 0o555
+            )
+            defer {
+                try? sandbox.touch(
+                    "src.app/Locked",
+                    relativeTo: .shared,
+                    permissions: 0o755
+                )
+            }
+            let source = sandbox.getUrl(for: "src.app", relativeTo: .shared)
+            let session = try await sandbox.getSession()
+
+            await #expect(throws: CoreError.cannotSynchronize) {
+                _ = try await session.upload(
+                    "Bundle.app",
+                    to: .rootContainer,
+                    file: source,
+                    progress: Progress()
+                )
+            }
+            #expect(!sandbox.exists(at: "Bundle.app"))
+        }
+
+        @Test func uploadPackageCancelledThrowsUserCancelled() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createPackage(at: "src.app", relativeTo: .shared)
+            let source = sandbox.getUrl(for: "src.app", relativeTo: .shared)
+            let session = try await sandbox.getSession()
+
+            let progress = Progress()
+            progress.cancel()
+
+            await #expect(throws: CoreError.userCancelled) {
+                _ = try await session.upload(
+                    "Bundle.app",
+                    to: .rootContainer,
+                    file: source,
+                    progress: progress
+                )
+            }
+        }
+
+        @Test func uploadPackageOverExistingKeepsExistingFolder() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "Bundle.app/keep.txt", contents: "keep")
+            let source = try sandbox.createFolder(
+                at: "src.app",
+                relativeTo: .shared
+            )
+            let session = try await sandbox.getSession()
+
+            await #expect(throws: CoreError.filenameCollision) {
+                _ = try await session.upload(
+                    "Bundle.app",
+                    to: .rootContainer,
+                    file: source,
+                    progress: Progress()
+                )
+            }
+            #expect(sandbox.exists(at: "Bundle.app/keep.txt"))
         }
     }
 
@@ -1948,6 +2205,132 @@ struct SessionTests {
                 )
             }
         }
+
+        @Test func downloadPackageReproducesTree() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createPackage(at: "Bundle.app")
+            let source = sandbox.getUrl(for: "Bundle.app")
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.child(name: "Bundle.app")
+            let progress = Progress()
+            let (url, item) = try await session.download(
+                itemId: itemId,
+                progress: progress
+            )
+
+            #expect(item.id == itemId)
+            #expect(item.kind == .folder)
+            #expect(
+                url == sandbox.getUrl(for: itemId.rawValue, relativeTo: .shared)
+            )
+            #expect(try Manifest(from: url) == Manifest(from: source))
+            #expect(try contents(of: url) == contents(of: source))
+            let totalSize = try Manifest(from: source).totalSize()
+            #expect(progress.totalUnitCount == Int64(totalSize))
+            #expect(progress.isFinished)
+        }
+
+        @Test func downloadEmptyPackageSucceeds() async throws {
+            let sandbox = TestSandbox()
+            let source = try sandbox.createFolder(
+                at: "Empty.bundle",
+                permissions: 0o700
+            )
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.child(name: "Empty.bundle")
+            let progress = Progress()
+            let (url, _) = try await session.download(
+                itemId: itemId,
+                progress: progress
+            )
+
+            #expect(try Manifest(from: url) == Manifest(from: source))
+            #expect(progress.isFinished)
+        }
+
+        @Test func downloadPackageWithLockedFolderThrowsCannotSynchronize()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: "Bundle.app/Locked/inside.txt",
+                contents: "locked"
+            )
+            try sandbox.touch("Bundle.app/Locked", permissions: 0o555)
+            defer {
+                try? sandbox.touch("Bundle.app/Locked", permissions: 0o755)
+            }
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.child(name: "Bundle.app")
+            await #expect(throws: CoreError.cannotSynchronize) {
+                _ = try await session.download(
+                    itemId: itemId,
+                    progress: Progress()
+                )
+            }
+            #expect(
+                !FileManager.default.fileExists(
+                    at: sandbox.getUrl(
+                        for: itemId.rawValue,
+                        relativeTo: .shared
+                    )
+                )
+            )
+        }
+
+        @Test func downloadPackageReplacesPreviousDownload() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createPackage(at: "Bundle.app")
+            let source = sandbox.getUrl(for: "Bundle.app")
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.child(name: "Bundle.app")
+            _ = try await session.download(itemId: itemId, progress: Progress())
+            try sandbox.removeItem(at: "Bundle.app/Versions")
+            let (url, _) = try await session.download(
+                itemId: itemId,
+                progress: Progress()
+            )
+
+            #expect(try Manifest(from: url) == Manifest(from: source))
+            #expect(try contents(of: url) == contents(of: source))
+        }
+
+        @Test func downloadMissingPackageThrowsNoSuchItem() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "missing.app")
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.child(name: "missing.app")
+            try sandbox.removeItem(at: "missing.app")
+
+            await #expect(throws: CoreError.itemNotFound(itemId.rawValue)) {
+                _ = try await session.download(
+                    itemId: itemId,
+                    progress: Progress()
+                )
+            }
+        }
+
+        @Test func downloadPackageCancelledThrowsUserCancelled() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createPackage(at: "Bundle.app")
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.child(name: "Bundle.app")
+            let progress = Progress()
+            progress.cancel()
+
+            await #expect(throws: CoreError.userCancelled) {
+                _ = try await session.download(
+                    itemId: itemId,
+                    progress: progress
+                )
+            }
+        }
     }
 
     struct StreamTests {
@@ -2036,6 +2419,27 @@ struct SessionTests {
             let expected = Data(repeating: 0xBB, count: count)
 
             #expect(actual == expected)
+        }
+
+        @Test func streamAfterDownloadOfReadOnlyFileSucceeds() async throws {
+            let sandbox = TestSandbox()
+            let data = Data(repeating: 0xAB, count: Int(chunkSize))
+            try sandbox.createFile(
+                at: "readonly.dat",
+                data: data,
+                permissions: 0o444
+            )
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.child(name: "readonly.dat")
+            _ = try await session.download(itemId: itemId, progress: Progress())
+            let (url, _) = try await session.stream(
+                itemId: itemId,
+                range: 0..<1,
+                progress: Progress()
+            )
+
+            #expect(try Data(contentsOf: url) == data)
         }
 
         @Test func streamCancelledThrowsUserCancelled() async throws {
@@ -2129,7 +2533,6 @@ struct SessionTests {
                     "large.dat",
                     to: .rootContainer,
                     file: uploadUrl,
-                    flags: .rw,
                     progress: progress
                 )
             }
@@ -2188,7 +2591,6 @@ struct SessionTests {
                     "large.dat",
                     to: .rootContainer,
                     file: uploadUrl,
-                    flags: .rw,
                     progress: progress
                 )
             }
