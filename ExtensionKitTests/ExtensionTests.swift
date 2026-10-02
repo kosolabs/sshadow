@@ -146,8 +146,8 @@ struct ExtensionTests {
 
     @Test func createFolderSucceeds() async throws {
         // mkdir parent/folder
-        let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
-        let newDate = Date(timeIntervalSince1970: 1_760_000_000)
+        let oldDate = Date(timeIntervalSince1970: 1_767_225_600)
+        let newDate = Date(timeIntervalSince1970: 1_767_312_000)
 
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: "parent", modifyDate: oldDate)
@@ -155,7 +155,7 @@ struct ExtensionTests {
 
         let parentId = try await client.child(name: "parent")
 
-        // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID(<pid>), filename: folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), createTime: 2026-03-04 07:05:26 +0000, modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1478, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID(<pid>), filename: folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), createTime: 2026-01-02 00:00:00 +0000, modifyTime: 2026-01-02 00:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1478, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let createFolderProgress = Progress()
         let (item, pendingFields, shouldFetch) = try await ext.createItem(
             basedOn: ItemTemplate(
@@ -190,7 +190,7 @@ struct ExtensionTests {
         #expect(try sandbox.modifyDate(of: "parent/folder") == newDate)
         #expect(try sandbox.permissions(of: "parent/folder") == 0o755)
 
-        // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID.rootContainer, filename: extension-create-folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 07:05:26 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID.rootContainer, filename: extension-create-folder, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-01-02 00:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -217,8 +217,8 @@ struct ExtensionTests {
 
     @Test func createFileSucceeds() async throws {
         // echo "Hello, World!" > parent/file.txt
-        let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
-        let newDate = Date(timeIntervalSince1970: 1_760_000_000)
+        let oldDate = Date(timeIntervalSince1970: 1_767_225_600)
+        let newDate = Date(timeIntervalSince1970: 1_767_312_000)
 
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: "parent", modifyDate: oldDate)
@@ -232,7 +232,7 @@ struct ExtensionTests {
             contents: contents
         )
 
-        // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 14, createTime: 2026-03-04 21:51:16 +0000, modifyTime: 2026-03-04 21:51:16 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 14, createTime: 2026-01-02 00:00:00 +0000, modifyTime: 2026-01-02 00:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let uploadProgress = Progress()
         let (item, pendingFields, shouldFetch) = try await ext.createItem(
             basedOn: ItemTemplate(
@@ -271,7 +271,7 @@ struct ExtensionTests {
         #expect(uploadProgress.isFinished)
         #expect(try sandbox.permissions(of: "parent/file.txt") == 0o644)
 
-        // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID.rootContainer, filename: extension-create-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 21:51:16 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<pid>), parentId: .rootContainer, filename: extension-create-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-01-02 00:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -296,10 +296,56 @@ struct ExtensionTests {
         #expect(updateFolderProgress.isFinished)
     }
 
+    @Test func createReadOnlyFileAppliesFlagsAfterUpload() async throws {
+        // cp -a /tmp/readonly.txt .
+        let date = Date(timeIntervalSince1970: 1_767_225_600)
+        
+        let sandbox = TestSandbox()
+        let (ext, _) = try await sandbox.getExtensionAndClient()
+
+        let contents = "read only"
+        let fileToUploadUrl = try sandbox.createFile(
+            at: UUID().uuidString,
+            relativeTo: .shared,
+            contents: contents,
+            permissions: 0o444
+        )
+
+        // Create FPItem(id: FPItemID(<osid>), parentId: .rootContainer, filename: readonly.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 2, readable), size: 10, createTime: 2026-01-01 00:00:00 +0000, modifyTime: 2026-01-01 00:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator) with FPCreateItemOptions(rawValue: 0)
+        let (item, pendingFields, _) = try await ext.createItem(
+            basedOn: ItemTemplate(
+                parentItemIdentifier: .rootContainer,
+                filename: "readonly.txt",
+                contentType: .plainText,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [.userReadable],
+                documentSize: NSNumber(value: contents.count),
+                creationDate: date,
+                contentModificationDate: date,
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true
+            ),
+            fields: [
+                .contents, .filename, .parentItemIdentifier, .creationDate,
+                .contentModificationDate, .fileSystemFlags, .typeAndCreator,
+            ],
+            contents: fileToUploadUrl,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: Progress()
+        )
+
+        #expect(item.fileSystemFlags == [.userReadable])
+        #expect(pendingFields.isEmpty)
+        #expect(try sandbox.modifyDate(of: "readonly.txt") == date)
+        #expect(try sandbox.contents(of: "readonly.txt") == contents)
+        #expect(try sandbox.permissions(of: "readonly.txt") == 0o444)
+    }
+
     @Test func createLargeFileSucceeds() async throws {
         // dd if=/dev/zero of=parent/file.dat bs=1m count=10
-        let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
-        let newDate = Date(timeIntervalSince1970: 1_760_000_000)
+        let oldDate = Date(timeIntervalSince1970: 1_767_225_600)
+        let newDate = Date(timeIntervalSince1970: 1_767_312_000)
 
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: "parent", modifyDate: oldDate)
@@ -313,7 +359,7 @@ struct ExtensionTests {
             data: data
         )
 
-        // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 10485760, createTime: 2026-03-04 22:15:29 +0000, modifyTime: 2026-03-04 22:15:29 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        // Create FPItem(id: FPItemID(<osid>), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 6, readable, writable), size: 10485760, createTime: 2026-01-02 00:00:00 +0000, modifyTime: 2026-01-02 00:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let uploadProgress = Progress()
         let (item, pendingFields, shouldFetch) = try await ext.createItem(
             basedOn: ItemTemplate(
@@ -352,7 +398,7 @@ struct ExtensionTests {
         #expect(uploadProgress.isFinished)
         #expect(try sandbox.permissions(of: "parent/file.dat") == 0o644)
 
-        // Modify FPItem(id: FPItemID(<pid>), parentId: .rootContainer, filename: extension-create-large-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-04 22:15:29 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<pid>), parentId: .rootContainer, filename: extension-create-large-file, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-01-02 00:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -379,8 +425,8 @@ struct ExtensionTests {
 
     @Test func createSymlinkSucceeds() async throws {
         // ln -s target.md parent/symlink.md
-        let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
-        let newDate = Date(timeIntervalSince1970: 1_760_000_000)
+        let oldDate = Date(timeIntervalSince1970: 1_767_225_600)
+        let newDate = Date(timeIntervalSince1970: 1_767_312_000)
 
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: "parent", modifyDate: oldDate)
@@ -393,7 +439,7 @@ struct ExtensionTests {
         let (ext, client) = try await sandbox.getExtensionAndClient()
         let parentId = try await client.child(name: "parent")
 
-        // Create FPItem(id: FPItemID(<osid>), parentId: <pid>, filename: symlink.md, contentType: public.symlink, target: target.md, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), size: 9, createTime: 2026-05-15 00:34:12 +0000, modifyTime: 2026-05-15 00:34:12 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        // Create FPItem(id: FPItemID(<osid>), parentId: <pid>, filename: symlink.md, contentType: public.symlink, target: target.md, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), size: 9, createTime: 2026-01-02 00:00:00 +0000, modifyTime: 2026-01-02 00:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let createSymlinkProgress = Progress()
         let (item, pendingFields, shouldFetch) = try await ext.createItem(
             basedOn: ItemTemplate(
@@ -434,12 +480,12 @@ struct ExtensionTests {
 
     @Test func createBrokenSymlinkSucceeds() async throws {
         // ln -s missing.txt broken.txt
-        let date = Date(timeIntervalSince1970: 1_760_000_000)
+        let date = Date(timeIntervalSince1970: 1_767_225_600)
 
         let sandbox = TestSandbox()
         let (ext, _) = try await sandbox.getExtensionAndClient()
 
-        // Create FPItem(id: FPItemID(<osid>), parentId: .rootContainer, filename: broken.txt, contentType: public.symlink, target: missing.txt, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), size: 11, createTime: 2026-09-21 23:42:36 +0000, modifyTime: 2026-09-21 23:42:36 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
+        // Create FPItem(id: FPItemID(<osid>), parentId: .rootContainer, filename: broken.txt, contentType: public.symlink, target: missing.txt, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), size: 11, createTime: 2026-01-01 00:00:00 +0000, modifyTime: 2026-01-01 00:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator)
         let createSymlinkProgress = Progress()
         let (item, pendingFields, shouldFetch) = try await ext.createItem(
             basedOn: ItemTemplate(
@@ -479,8 +525,8 @@ struct ExtensionTests {
 
     @Test func renameFileSucceeds() async throws {
         // mv parent/src.txt parent/dest.txt
-        let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
-        let newDate = Date(timeIntervalSince1970: 1_760_000_000)
+        let oldDate = Date(timeIntervalSince1970: 1_767_225_600)
+        let newDate = Date(timeIntervalSince1970: 1_767_312_000)
 
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: "parent", modifyDate: oldDate)
@@ -524,7 +570,7 @@ struct ExtensionTests {
         #expect(!sandbox.exists(at: "parent/src.txt"))
         #expect(renameProgress.isFinished)
 
-        // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID.rootContainer, filename: parent, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-03 20:18:28 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<pid>), parentId: FPItemID.rootContainer, filename: parent, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-01-02 00:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -551,8 +597,8 @@ struct ExtensionTests {
 
     @Test func moveFileSucceeds() async throws {
         // mv src/file.txt dest/
-        let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
-        let newDate = Date(timeIntervalSince1970: 1_760_000_000)
+        let oldDate = Date(timeIntervalSince1970: 1_767_225_600)
+        let newDate = Date(timeIntervalSince1970: 1_767_312_000)
 
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: "src", modifyDate: oldDate)
@@ -598,7 +644,7 @@ struct ExtensionTests {
         #expect(!sandbox.exists(at: "src/file.txt"))
         #expect(moveProgress.isFinished)
 
-        // Modify FPItem(id: FPItemID(<npid>), parentId: FPItemID(<ppid>), filename: dest, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-03 21:30:15 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<npid>), parentId: FPItemID(<ppid>), filename: dest, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-01-02 00:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateDestFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -622,7 +668,7 @@ struct ExtensionTests {
         #expect(try sandbox.modifyDate(of: "dest") == newDate)
         #expect(updateDestFolderProgress.isFinished)
 
-        // Modify FPItem(id: FPItemID(<opid>), parentId: FPItemID(<ppid>), filename: src, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-03-03 21:30:15 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<opid>), parentId: FPItemID(<ppid>), filename: src, contentType: public.folder, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), modifyTime: 2026-01-02 00:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 128, contentModificationDate)
         let updateSrcFolderProgress = Progress()
         _ = try await ext.modifyItem(
             ItemTemplate(
@@ -766,8 +812,8 @@ struct ExtensionTests {
 
     @Test func editFileSucceeds() async throws {
         // echo "World!" >> parent/file.txt
-        let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
-        let newDate = Date(timeIntervalSince1970: 1_760_000_000)
+        let oldDate = Date(timeIntervalSince1970: 1_767_225_600)
+        let newDate = Date(timeIntervalSince1970: 1_767_312_000)
 
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: "parent", modifyDate: oldDate)
@@ -796,7 +842,7 @@ struct ExtensionTests {
         #expect(try String(contentsOf: oldUrl, encoding: .utf8) == oldContents)
         #expect(fetchOldProgress.isFinished)
 
-        // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), size: 14, modifyTime: 2026-03-03 22:20:44 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 129, contents, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<id>), parentId: FPItemID(<pid>), filename: file.txt, contentType: public.plain-text, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), size: 14, modifyTime: 2026-01-02 00:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 129, contents, contentModificationDate)
         let newContents = "Hello, World!\n"
         let newContentsUrl = try sandbox.createFile(
             at: UUID().uuidString,
@@ -912,7 +958,7 @@ struct ExtensionTests {
 
     @Test func setSymlinkReadWriteDoesNothing() async throws {
         // chmod -h 666 broken.txt
-        let date = Date(timeIntervalSince1970: 1_750_000_000)
+        let date = Date(timeIntervalSince1970: 1_767_225_600)
 
         let sandbox = TestSandbox()
         try sandbox.createSymlink(
@@ -932,8 +978,6 @@ struct ExtensionTests {
                 contentType: .symbolicLink,
                 capabilities: [.allowsReading, .allowsWriting],
                 fileSystemFlags: [.rw, .pathExtensionHidden],
-                creationDate: date,
-                contentModificationDate: date,
                 isDownloaded: true,
                 isMostRecentVersionDownloaded: true,
             ),
@@ -953,8 +997,8 @@ struct ExtensionTests {
 
     @Test func setSymlinkModifyTimeSucceeds() async throws {
         // touch -hd "2026-04-04 00:00:00" broken.txt
-        let oldDate = Date(timeIntervalSince1970: 1_750_000_000)
-        let newDate = Date(timeIntervalSince1970: 1_760_000_000)
+        let oldDate = Date(timeIntervalSince1970: 1_767_225_600)
+        let newDate = Date(timeIntervalSince1970: 1_767_312_000)
 
         let sandbox = TestSandbox()
         try sandbox.createSymlink(
@@ -965,7 +1009,7 @@ struct ExtensionTests {
         let (ext, client) = try await sandbox.getExtensionAndClient()
         let itemId = try await client.child(name: "broken.txt")
 
-        // Modify FPItem(id: FPItemID(<id>), parentId: .rootContainer, filename: broken.txt, contentType: public.symlink, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), createTime: 2026-04-04 07:00:00 +0000, modifyTime: 2026-04-04 07:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 192, creationDate, contentModificationDate)
+        // Modify FPItem(id: FPItemID(<id>), parentId: .rootContainer, filename: broken.txt, contentType: public.symlink, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), createTime: 2026-01-02 00:00:00 +0000, modifyTime: 2026-01-02 00:00:00 +0000, downloaded, mostRecentVersionDownloaded) for FPItemFields(rawValue: 192, creationDate, contentModificationDate)
         let updateSymlinkProgress = Progress()
         let (maybeItem, _, _) = try await ext.modifyItem(
             ItemTemplate(

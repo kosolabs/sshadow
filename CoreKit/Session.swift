@@ -566,7 +566,7 @@ actor Session {
             recording:
                 "Create symlink from \(ref(for: name, in: parentId)) to \(target)"
         ) {
-            try await sftp.createSymlink(
+            try await sftp.makeSymlink(
                 to: target,
                 at: path(for: name, in: parentId)
             )
@@ -593,19 +593,11 @@ actor Session {
             with: parentId,
             recording: "Create directory at \(ref)"
         ) {
-            do {
-                try await sftp.createDirectory(
-                    at: path(for: name, in: parentId),
-                    mode: flags.mode
-                )
-            } catch SSHError.sftpError(.fileAlreadyExists, _) {
-                switch ifExists {
-                case .succeed:
-                    logger.info("Directory already exists at \(ref)")
-                case .fail:
-                    throw CoreError.filenameCollision
-                }
-            }
+            try await sftp.makeDirectory(
+                at: path(for: name, in: parentId),
+                mode: flags.mode,
+                ifExists: ifExists
+            )
         }
         return try await record(name, in: parentId, kind: .folder)
     }
@@ -683,7 +675,6 @@ actor Session {
         _ name: String,
         to parentId: NSFileProviderItemIdentifier,
         file url: URL,
-        flags: Item.Flags,
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
         progress: Progress
     ) async throws -> Item {
@@ -691,9 +682,7 @@ actor Session {
         reconcileTask?.cancel()
         defer { outstanding -= 1 }
 
-        let fp = try FileHandle(forReadingFrom: url)
-        defer { try? fp.close() }
-        let size = try FileManager.default.size(of: url)
+        let manifest = try Manifest(from: url)
 
         progress.kind = .file
         progress.fileOperationKind = .uploading
@@ -707,38 +696,60 @@ actor Session {
         let message: LogMessage = await "Upload \(ref(for: name, in: parentId))"
         let estimator = ThroughputEstimator(
             progress: progress,
-            totalUnitCount: Int64(size),
+            totalUnitCount: Int64(manifest.totalSize()),
             reporters: [
                 transferProgressReporter(for: transfer),
                 loggingProgressReporter(message),
             ]
         )
 
-        let bufferSize = sftp.limits.writeLength(for: chunkSize)
         try await performTransfer(
             with: parentId,
             recording: message,
             estimator: estimator,
             progress: progress
         ) {
-            try await sftp.withSftpFile(
-                at: path(for: name, in: parentId),
-                accessType: .writeOnly,
-                mode: flags.mode
-            ) { file in
-                try await file.withAsyncWriter { writer in
-                    while let data = try fp.read(upToCount: Int(bufferSize)) {
-                        if progress.isCancelled {
-                            throw CoreError.userCancelled
+            let root = try await path(for: name, in: parentId)
+            let bufferSize = sftp.limits.writeLength(for: chunkSize)
+
+            for entry in manifest.entries {
+                if progress.isCancelled { throw CoreError.userCancelled }
+                let remotePath = entry.path(under: root)
+                switch entry.kind {
+                case .folder:
+                    try await sftp.makeDirectory(
+                        at: remotePath,
+                        mode: entry.mode
+                    )
+                case .file:
+                    let fp = try FileHandle(
+                        forReadingFrom: entry.url(under: url)
+                    )
+                    defer { try? fp.close() }
+                    try await sftp.writeFile(
+                        at: remotePath,
+                        mode: entry.mode
+                    ) { file in
+                        try await file.withAsyncWriter { writer in
+                            while let data = try fp.read(
+                                upToCount: Int(bufferSize)
+                            ) {
+                                if progress.isCancelled {
+                                    throw CoreError.userCancelled
+                                }
+                                try await writer.write(data: data)
+                                estimator.update(delta: data.count)
+                            }
                         }
-                        try await writer.write(data: data)
-                        estimator.update(delta: data.count)
                     }
+                case .symlink(let target):
+                    try await sftp.makeSymlink(to: target, at: remotePath)
                 }
             }
         }
 
-        return try await record(name, in: parentId, kind: .file)
+        let kind: Item.Kind = manifest.root.kind == .folder ? .folder : .file
+        return try await record(name, in: parentId, kind: kind)
     }
 
     func download(
@@ -752,10 +763,12 @@ actor Session {
 
         let item = try await item(for: itemId)
         let url = sharedUrl.appending(path: itemId.rawValue)
+        let manifest = try await manifest(for: item)
 
-        try create(file: url)
-        let handle = try FileHandle(forWritingTo: url)
-        defer { try? handle.close() }
+        let fm = FileManager.default
+        if fm.fileExists(atPath: url.path(percentEncoded: false)) {
+            try fm.removeItem(at: url)
+        }
 
         progress.kind = .file
         progress.fileOperationKind = .downloading
@@ -769,35 +782,70 @@ actor Session {
         let message: LogMessage = await "Download \(ref(for: itemId))"
         let estimator = ThroughputEstimator(
             progress: progress,
-            totalUnitCount: Int64(item.size ?? 0),
+            totalUnitCount: Int64(manifest.totalSize()),
             reporters: [
                 transferProgressReporter(for: transfer),
                 loggingProgressReporter(message),
             ]
         )
 
-        let bufferSize = sftp.limits.readLength(for: chunkSize)
         try await performTransfer(
             with: itemId,
             recording: message,
             estimator: estimator,
             progress: progress
         ) {
-            try await sftp.withSftpFile(
-                at: path(for: itemId),
-                accessType: .readOnly
-            ) { fp in
-                for try await data in fp.stream(bufferSize: bufferSize) {
-                    if progress.isCancelled {
-                        throw CoreError.userCancelled
+            let root = try await path(for: itemId)
+            let bufferSize = sftp.limits.readLength(for: chunkSize)
+
+            for entry in manifest.entries {
+                if progress.isCancelled { throw CoreError.userCancelled }
+                let localUrl = entry.url(under: url)
+                switch entry.kind {
+                case .folder:
+                    try fm.createDirectory(
+                        at: localUrl,
+                        withIntermediateDirectories: false,
+                        attributes: [.posixPermissions: entry.mode]
+                    )
+                case .file:
+                    let handle = try FileHandle(for: localUrl, mode: entry.mode)
+                    defer { try? handle.close() }
+                    try await sftp.withSftpFile(
+                        at: entry.path(under: root),
+                        accessType: .readOnly
+                    ) { fp in
+                        for try await data in fp.stream(bufferSize: bufferSize)
+                        {
+                            if progress.isCancelled {
+                                throw CoreError.userCancelled
+                            }
+                            try handle.write(contentsOf: data)
+                            estimator.update(delta: data.count)
+                        }
                     }
-                    try handle.write(contentsOf: data)
-                    estimator.update(delta: data.count)
+                case .symlink(let target):
+                    try fm.createSymbolicLink(
+                        atPath: localUrl.path(percentEncoded: false),
+                        withDestinationPath: target
+                    )
                 }
             }
         }
 
         return (url, item)
+    }
+
+    private func manifest(for item: Item) async throws -> Manifest {
+        guard item.kind == .folder else {
+            let kind = Manifest.Entry.Kind.file(size: item.size ?? 0)
+            return try Manifest(entries: [
+                Manifest.Entry(path: "", kind: kind)
+            ])
+        }
+        return try await perform(with: item.id) {
+            try await Manifest(from: path(for: item.id), sftp: sftp)
+        }
     }
 
     func stream(
@@ -815,8 +863,7 @@ actor Session {
         let slice = file.slice(for: range)
 
         logger.info("Stream \(range) -> \(slice) into \(url)")
-        try create(file: url)
-        let handle = try FileHandle(forWritingTo: url)
+        let handle = try FileHandle(for: url)
         defer { try? handle.close() }
 
         progress.kind = .file
@@ -903,12 +950,6 @@ actor Session {
                 at: path(for: name, in: parentId),
                 followSymlinks: false
             )
-        }
-    }
-
-    private func create(file url: URL) throws {
-        if !FileManager.default.fileExists(atPath: url.path()) {
-            try Data().write(to: url)
         }
     }
 
@@ -1018,29 +1059,6 @@ actor Session {
         }
     }
 
-    private func perform<T>(
-        with itemId: NSFileProviderItemIdentifier,
-        recording message: LogMessage? = nil,
-        _ work: () async throws -> T
-    ) async throws -> T {
-        if let message { logger.info(message.debug) }
-        do {
-            let result = try await work()
-            if let message { fileLog.info(message.display) }
-            return result
-        } catch {
-            let mapped = coreError(from: error, itemId: itemId)
-            if let message {
-                logger.error("Failed: \(message.debug): \(error) -> \(mapped)")
-                fileLog.error(message.display, error: mapped)
-            }
-            if case CoreError.serverUnreachable = mapped {
-                await connectionLostHandler(ConnectionError(from: error))
-            }
-            throw mapped
-        }
-    }
-
     private func performTransfer(
         with itemId: NSFileProviderItemIdentifier,
         recording message: LogMessage,
@@ -1061,6 +1079,29 @@ actor Session {
             logger.error("Failed: \(message.debug): \(error)")
             fileLog.error(message.display, detail: error.localizedDescription)
             throw error
+        }
+    }
+
+    private func perform<T>(
+        with itemId: NSFileProviderItemIdentifier,
+        recording message: LogMessage? = nil,
+        _ work: () async throws -> T
+    ) async throws -> T {
+        if let message { logger.info(message.debug) }
+        do {
+            let result = try await work()
+            if let message { fileLog.info(message.display) }
+            return result
+        } catch {
+            let mapped = coreError(from: error, itemId: itemId)
+            if let message {
+                logger.error("Failed: \(message.debug): \(error) -> \(mapped)")
+                fileLog.error(message.display, error: mapped)
+            }
+            if case CoreError.serverUnreachable = mapped {
+                await connectionLostHandler(ConnectionError(from: error))
+            }
+            throw mapped
         }
     }
 

@@ -233,17 +233,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             let fileTransferUnits = Int64(
                 (fileSize + chunkSize - 1) / chunkSize
             )
-            let fileSystemFlags =
-                remaining.contains(.fileSystemFlags)
-                ? item.fileSystemFlags ?? [] : []
-            remaining.subtract([.fileSystemFlags, .contents])
+            remaining.subtract(.contents)
 
             steps.add(weight: max(1, fileTransferUnits)) { subprogress in
                 let item = try await self.client.upload(
                     parentId: parentId,
                     name: filename,
                     file: url,
-                    flags: .init(from: fileSystemFlags),
                     progress: subprogress
                 )
                 itemId = item.id
@@ -328,10 +324,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             let fileTransferUnits = Int64(
                 (fileSize + chunkSize - 1) / chunkSize
             )
-            let fileSystemFlags =
-                remaining.contains(.fileSystemFlags)
-                ? item.fileSystemFlags ?? [] : []
-            remaining.subtract([.fileSystemFlags, .contents])
+            remaining.subtract(.contents)
 
             steps.add(weight: max(1, fileTransferUnits)) { subprogress in
                 let currentParent = try await self.client.parent(
@@ -344,7 +337,6 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     parentId: currentParent,
                     name: currentName,
                     file: newContents,
-                    flags: .init(from: fileSystemFlags),
                     progress: subprogress
                 )
             }

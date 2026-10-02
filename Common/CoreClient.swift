@@ -275,7 +275,6 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         parentId: NSFileProviderItemIdentifier,
         name: String,
         file: URL,
-        flags: Item.Flags,
         chunkSize: UInt64 = Limits.defaultBufferSize,
         progress: Progress
     ) async throws(CoreError) -> Item {
@@ -296,7 +295,6 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
                 parentId: parentId.rawValue,
                 name: name,
                 file: stagedUrl,
-                flags: flags,
                 chunkSize: chunkSize
             ),
             progressEndpoint: sync.endpoint
