@@ -79,22 +79,15 @@ struct FPItemContentTypeTests {
         #expect(!type.conforms(to: .package))
     }
 
-    @Test(arguments: [
-        ("a.dSYM", "com.apple.xcode.dsym"),
-        ("a.app", "com.apple.application-bundle"),
-        ("a.bundle", "com.apple.generic-bundle"),
-        ("a.rtfd", "com.apple.rtfd"),
-    ])
-    func packageExtensionReportsPackageType(name: String, expected: String) {
+    @Test(arguments: ["a.dSYM", "a.rtfd", "a.pages", "a.bbprojectd"])
+    func packageExtensionsReportsPackage(name: String) {
         let type = makeItem(name: name, kind: .folder).contentType
-        #expect(type.identifier == expected)
         #expect(type.conforms(to: .package))
     }
 
-    @Test func nonPackageBundleReportsDeclaredType() {
-        let type = makeItem(name: "a.framework", kind: .folder).contentType
-        #expect(type.identifier == "com.apple.framework")
-        #expect(!type.conforms(to: .package))
+    @Test(arguments: ["a.app", "a.bundle", "a.xcodeproj", "a.utm"])
+    func unlistedPackageExtensionsReportsFolder(name: String) {
+        #expect(makeItem(name: name, kind: .folder).contentType == .folder)
     }
 
     @Test func noExtensionReportsFolder() {
@@ -106,17 +99,7 @@ struct FPItemContentTypeTests {
     }
 
     @Test func dataExtensionReportsFolder() {
-        #expect(
-            makeItem(name: "file.txt", kind: .folder).contentType == .folder
-        )
-    }
-
-    @Test func renameIntoPackageExtensionChangesType() {
-        #expect(makeItem(name: "a", kind: .folder).contentType == .folder)
-        #expect(
-            makeItem(name: "a.dSYM", kind: .folder).contentType
-                .conforms(to: .package)
-        )
+        #expect(makeItem(name: "a.txt", kind: .folder).contentType == .folder)
     }
 
     @Test(arguments: ["link", "link.md", "link.txt", "link.dSYM"])

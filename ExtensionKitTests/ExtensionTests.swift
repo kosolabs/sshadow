@@ -144,6 +144,44 @@ struct ExtensionTests {
         }
     }
 
+    @Test func readPackageSucceeds() async throws {
+        // open Document.rtfd
+        let date = Date(timeIntervalSince1970: 1_767_225_600)
+
+        let sandbox = TestSandbox()
+        let contents = "{\rtf1 hello}"
+        try sandbox.createFile(
+            at: "Document.rtfd/TXT.rtf",
+            contents: contents,
+            modifyDate: date
+        )
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+
+        // Fetch contents of FPItemID(<id>), request: FPRequest()
+        let progress = Progress()
+        let (url, item) = try await ext.fetchContents(
+            for: client.child(name: "Document.rtfd"),
+            version: nil,
+            request: NSFileProviderRequest(),
+            progress: progress
+        )
+
+        // FPItem(id: FPItemID(<id>), parentId: .rootContainer, filename: Document.rtfd, contentType: com.apple.rtfd, capabilities: FPItemCapabilities(rawValue: 63, reading, writing, reparenting, renaming, trashing, deleting), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), createTime: 2026-01-01 00:00:00 +0000, modifyTime: 2026-01-01 00:00:00 +0000, accessTime: 2026-01-01 00:00:00 +0000)
+        let type = try #require(item.contentType)
+        #expect(item.filename == "Document.rtfd")
+        #expect(type == .rtfd)
+        #expect(item.fileSystemFlags == .rwx)
+        #expect(item.creationDate == date)
+        #expect(item.contentModificationDate == date)
+        #expect(
+            try String(
+                contentsOf: url.appending(path: "TXT.rtf"),
+                encoding: .utf8
+            ) == contents
+        )
+        #expect(progress.isFinished)
+    }
+
     @Test func createFolderSucceeds() async throws {
         // mkdir parent/folder
         let oldDate = Date(timeIntervalSince1970: 1_767_225_600)
@@ -299,7 +337,7 @@ struct ExtensionTests {
     @Test func createReadOnlyFileAppliesFlagsAfterUpload() async throws {
         // cp -a /tmp/readonly.txt .
         let date = Date(timeIntervalSince1970: 1_767_225_600)
-        
+
         let sandbox = TestSandbox()
         let (ext, _) = try await sandbox.getExtensionAndClient()
 
@@ -421,6 +459,92 @@ struct ExtensionTests {
 
         #expect(try sandbox.modifyDate(of: "parent") == newDate)
         #expect(updateFolderProgress.isFinished)
+    }
+
+    @Test func createPackageSucceeds() async throws {
+        // cp -a /tmp/Document.rtfd .
+        let date = Date(timeIntervalSince1970: 1_767_225_600)
+
+        let sandbox = TestSandbox()
+        let (ext, _) = try await sandbox.getExtensionAndClient()
+
+        let contents = "{\rtf1 hello}"
+        let packageUrl = try sandbox.createFolder(
+            at: "Document.rtfd",
+            relativeTo: .shared
+        )
+        try sandbox.createFile(
+            at: "Document.rtfd/TXT.rtf",
+            relativeTo: .shared,
+            contents: contents
+        )
+
+        // Create item FPItem(id: FPItemID(<osid>), parentId: .rootContainer, filename: Document.rtfd, contentType: com.apple.rtfd, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 7, executable, readable, writable), size: 4096, createTime: 2026-01-01 00:00:00 +0000, modifyTime: 2026-01-01 00:00:00 +0000, downloaded, mostRecentVersionDownloaded), fields: FPItemFields(rawValue: 1479, contents, filename, parentItemIdentifier, creationDate, contentModificationDate, fileSystemFlags, typeAndCreator), contents: Optional(<url>), options: FPCreateItemOptions(rawValue: 0)
+        let progress = Progress()
+        let (item, pendingFields, shouldFetch) = try await ext.createItem(
+            basedOn: ItemTemplate(
+                parentItemIdentifier: .rootContainer,
+                filename: "Document.rtfd",
+                contentType: UTType.rtfd,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: .rwx,
+                documentSize: 4096,
+                creationDate: date,
+                contentModificationDate: date,
+                isDownloaded: true,
+                isMostRecentVersionDownloaded: true,
+            ),
+            fields: [
+                .contents, .filename, .parentItemIdentifier, .creationDate,
+                .contentModificationDate, .fileSystemFlags, .typeAndCreator,
+            ],
+            contents: packageUrl,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: progress
+        )
+
+        let type = try #require(item.contentType)
+        #expect(item.filename == "Document.rtfd")
+        #expect(type.conforms(to: .package))
+        #expect(item.fileSystemFlags == .rwx)
+        #expect(item.creationDate == date)
+        #expect(item.contentModificationDate == date)
+        #expect(pendingFields.isEmpty)
+        #expect(!shouldFetch)
+        #expect(sandbox.exists(at: "Document.rtfd"))
+        #expect(sandbox.exists(at: "Document.rtfd/TXT.rtf"))
+        #expect(try sandbox.modifyDate(of: "Document.rtfd") == date)
+        #expect(try sandbox.contents(of: "Document.rtfd/TXT.rtf") == contents)
+        #expect(progress.isFinished)
+        #expect(try sandbox.permissions(of: "Document.rtfd") == 0o755)
+
+    }
+
+    @Test func createFolderWithPackageExtensionFails() async throws {
+        let sandbox = TestSandbox()
+        let (ext, _) = try await sandbox.getExtensionAndClient()
+
+        await #expect(throws: CoreError.cannotSynchronize) {
+            try await ext.createItem(
+                basedOn: ItemTemplate(
+                    parentItemIdentifier: .rootContainer,
+                    filename: "Document.rtfd",
+                    contentType: .folder,
+                    capabilities: [.allowsReading, .allowsWriting],
+                    fileSystemFlags: .rwx
+                ),
+                fields: [
+                    .filename, .parentItemIdentifier, .fileSystemFlags,
+                    .typeAndCreator,
+                ],
+                contents: nil,
+                options: [],
+                request: NSFileProviderRequest(),
+                progress: Progress()
+            )
+        }
+        #expect(!sandbox.exists(at: "Document.rtfd"))
     }
 
     @Test func createSymlinkSucceeds() async throws {

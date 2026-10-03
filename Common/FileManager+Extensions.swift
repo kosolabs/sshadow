@@ -17,6 +17,23 @@ extension FileManager {
         try attributes(of: url).fileSize()
     }
 
+    /// The size of a file, or the summed size of the regular files in a
+    /// directory tree. Symlinks are not followed.
+    public func totalSize(of url: URL) throws -> UInt64 {
+        let attrs = try attributes(of: url)
+        guard attrs.fileType() == FileAttributeType.typeDirectory.rawValue
+        else {
+            return attrs.fileType() == FileAttributeType.typeRegular.rawValue
+                ? attrs.fileSize() : 0
+        }
+        return try contentsOfDirectory(
+            at: url,
+            includingPropertiesForKeys: nil
+        ).reduce(0) { total, child in
+            try total + totalSize(of: child)
+        }
+    }
+
     public func permissions(of url: URL) throws -> mode_t {
         UInt16(try attributes(of: url).filePosixPermissions())
     }
