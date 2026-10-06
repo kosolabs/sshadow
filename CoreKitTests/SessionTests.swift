@@ -383,6 +383,18 @@ struct SessionTests {
     }
 
     struct ListTests {
+        @Test func listReportsPackageKind() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "Doc.rtfd/TXT.rtf", contents: "rtf")
+            let session = try await sandbox.getSession()
+
+            let items = try await session.list(for: .rootContainer)
+
+            let package = try #require(items.only)
+            #expect(package.name == "Doc.rtfd")
+            #expect(package.kind == .package)
+        }
+
         @Test func listReturnsFilesFoldersAndSymlinks() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "file.txt", contents: "hello")
@@ -613,6 +625,20 @@ struct SessionTests {
             let item = try #require(updates.only)
             #expect(item.name == "item.txt")
             #expect(item.modifyTime == end)
+            #expect(deletedIds == [])
+        }
+
+        @Test func reconcileIgnoresChangesInsidePackage() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "Doc.rtfd/TXT.rtf", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try sandbox.createFile(at: "Doc.rtfd/new.rtf", modifyDate: end)
+            try sandbox.touch("Doc.rtfd", modifyDate: start)
+            let changes = try await session.reconcileAll()
+
+            let (updates, deletedIds) = changes.split()
+            #expect(updates == [])
             #expect(deletedIds == [])
         }
 
@@ -1241,6 +1267,39 @@ struct SessionTests {
             #expect(deletedIds == [])
         }
 
+        @Test func reconcileWatchedPackageIgnoresContents() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "Doc.rtfd/TXT.rtf", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let packageId = try await session.child(name: "Doc.rtfd")
+            await session.watch(itemId: packageId)
+
+            try sandbox.createFile(at: "Doc.rtfd/new.rtf", modifyDate: end)
+            try sandbox.touch("Doc.rtfd", modifyDate: start)
+            let changes = try await session.reconcileWatched()
+
+            #expect(changes == [])
+        }
+
+        @Test func reconcileWatchedPackageSurfacesOwnChange() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "Doc.rtfd/TXT.rtf", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            let packageId = try await session.child(name: "Doc.rtfd")
+            await session.watch(itemId: packageId)
+
+            try sandbox.touch("Doc.rtfd", modifyDate: end)
+            let changes = try await session.reconcileWatched()
+
+            let (updates, deletedIds) = changes.split()
+            let item = try #require(updates.only)
+            #expect(item.id == packageId)
+            #expect(item.modifyTime == end)
+            #expect(deletedIds == [])
+        }
+
         @Test func reconcileWatchedFileSurfacesPermissionChange()
             async throws
         {
@@ -1501,6 +1560,22 @@ struct SessionTests {
     }
 
     struct CreateDirectoryTests {
+        @Test func createDirectoryWithPackageNameRecordsPackage()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            let item = try await session.createDirectory(
+                "Doc.rtfd",
+                in: .rootContainer
+            )
+
+            #expect(item.kind == .package)
+            let changes = try await session.reconcileAll()
+            #expect(changes == [])
+        }
+
         @Test func createDirectorySucceeds() async throws {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
@@ -1674,6 +1749,47 @@ struct SessionTests {
     }
 
     struct MoveTests {
+        @Test func moveRenamingFolderToPackageChangesKind() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "Notes/TXT.rtf", contents: "rtf")
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.child(name: "Notes")
+
+            let item = try await session.move(
+                itemId,
+                to: .rootContainer,
+                name: "Notes.rtfd"
+            )
+
+            #expect(item.id == itemId)
+            #expect(item.kind == .package)
+            await #expect(throws: CoreError.itemNotFound) {
+                try await session.child(of: itemId, name: "TXT.rtf")
+            }
+            let changes = try await session.reconcileAll()
+            #expect(changes == [])
+        }
+
+        @Test func moveRenamingPackageToFolderChangesKind() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "Doc.rtfd/TXT.rtf", contents: "rtf")
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.child(name: "Doc.rtfd")
+
+            let item = try await session.move(
+                itemId,
+                to: .rootContainer,
+                name: "Doc"
+            )
+
+            #expect(item.id == itemId)
+            #expect(item.kind == .folder)
+            let children = try await session.list(for: itemId)
+            #expect(children.map(\.name) == ["TXT.rtf"])
+        }
+
         @Test func moveRenamesFile() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "original.txt", contents: "hello")
@@ -1831,6 +1947,28 @@ struct SessionTests {
     }
 
     struct UploadTests {
+        @Test func uploadPackageRecordsPackageKind() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: "src.rtfd/TXT.rtf",
+                relativeTo: .shared,
+                contents: "rtf"
+            )
+            let source = sandbox.getUrl(for: "src.rtfd", relativeTo: .shared)
+            let session = try await sandbox.getSession()
+
+            let item = try await session.upload(
+                "Doc.rtfd",
+                to: .rootContainer,
+                file: source,
+                progress: Progress()
+            )
+
+            #expect(item.kind == .package)
+            let changes = try await session.reconcileAll()
+            #expect(changes == [])
+        }
+
         @Test func uploadSmallFileSucceeds() async throws {
             let sandbox = TestSandbox()
             let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)

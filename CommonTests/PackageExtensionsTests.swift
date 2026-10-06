@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import ExtensionKit
+@testable import Common
 
 struct PackageExtensionsTests {
     static let systemConfig = URL(

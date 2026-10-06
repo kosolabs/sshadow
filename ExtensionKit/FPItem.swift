@@ -28,7 +28,9 @@ public class FPItem: NSObject, NSFileProviderItem {
         case .file:
             UTType(file: item.name)
         case .folder:
-            UTType(folder: item.name)
+            .folder
+        case .package:
+            UTType(package: item.name)
         case .symlink(_):
             .symbolicLink
         }

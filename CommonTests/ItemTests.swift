@@ -208,3 +208,21 @@ struct MetadataVersionTests {
         )
     }
 }
+
+struct KindDirectoryNamedTests {
+    @Test func packageExtensionIsPackage() {
+        #expect(Item.Kind(directoryNamed: "Doc.rtfd") == .package)
+    }
+
+    @Test func packageExtensionMatchIsCaseInsensitive() {
+        #expect(Item.Kind(directoryNamed: "Doc.RTFD") == .package)
+    }
+
+    @Test func noExtensionIsFolder() {
+        #expect(Item.Kind(directoryNamed: "Documents") == .folder)
+    }
+
+    @Test func unlistedExtensionIsFolder() {
+        #expect(Item.Kind(directoryNamed: "Bundle.app") == .folder)
+    }
+}

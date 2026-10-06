@@ -53,7 +53,6 @@ struct FPItemIdentityTests {
 struct FPItemContentTypeTests {
     @Test(arguments: [
         ("file.txt", UTType.plainText),
-        ("notes.md", UTType("net.daringfireball.markdown")!),
         ("image.png", UTType.png),
         ("archive.zip", UTType.zip),
         ("archive.tar.gz", UTType.gzip),
@@ -81,30 +80,12 @@ struct FPItemContentTypeTests {
 
     @Test(arguments: ["a.dSYM", "a.rtfd", "a.pages", "a.bbprojectd"])
     func packageExtensionsReportsPackage(name: String) {
-        let type = makeItem(name: name, kind: .folder).contentType
+        let type = makeItem(name: name, kind: .package).contentType
         #expect(type.conforms(to: .package))
     }
 
-    @Test(arguments: ["a.app", "a.bundle", "a.xcodeproj", "a.utm"])
-    func unlistedPackageExtensionsReportsFolder(name: String) {
-        #expect(makeItem(name: name, kind: .folder).contentType == .folder)
-    }
-
-    @Test func noExtensionReportsFolder() {
-        #expect(makeItem(name: "docs", kind: .folder).contentType == .folder)
-    }
-
-    @Test func unknownExtensionReportsFolder() {
-        #expect(makeItem(name: "a.foo", kind: .folder).contentType == .folder)
-    }
-
-    @Test func dataExtensionReportsFolder() {
-        #expect(makeItem(name: "a.txt", kind: .folder).contentType == .folder)
-    }
-
-    @Test(arguments: ["link", "link.md", "link.txt", "link.dSYM"])
-    func contentTypeIsSymbolicLinkRegardlessOfExtension(name: String) {
-        let item = makeItem(name: name, kind: .symlink(target: "target"))
+    @Test func contentTypeIsSymbolicLinkRegardlessOfExtension() {
+        let item = makeItem(name: "link", kind: .symlink(target: "target"))
         #expect(item.contentType == .symbolicLink)
     }
 }

@@ -203,13 +203,16 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         }
 
         if type.conforms(to: .directory) {
-            let reportedType = UTType(folder: filename)
+            let expectedType =
+                Item.Kind(directoryNamed: filename) == .package
+                ? UTType(package: filename)
+                : .folder
             if type.conforms(to: .package)
-                != reportedType.conforms(to: .package)
+                != expectedType.conforms(to: .package)
             {
                 logger.error(
                     "Failed to sync package/folder mismatch: \(item.desc), "
-                        + "reported type: \(reportedType)"
+                        + "expected type: \(expectedType)"
                 )
                 throw CoreError.cannotSynchronize
             }
@@ -437,7 +440,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         )
         return try await progress.withChild {
             let item = try await client.item(for: identifier)
-            if item.kind == .folder {
+            if item.kind == .folder || item.kind == .package {
                 try await client.removeDirectory(for: identifier)
             } else {
                 try await client.removeFile(for: identifier)

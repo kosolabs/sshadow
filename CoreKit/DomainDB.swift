@@ -120,6 +120,19 @@ actor DomainDB {
         let item = try model(for: id)
         item.parent = try model(for: parentId)
         item.name = newName
+
+        // Renaming a directory can turn it into a package or back. Either
+        // way its recorded children no longer apply.
+        if item.kind == .folder || item.kind == .package {
+            let kind = Item.Kind(directoryNamed: newName)
+            if kind != item.kind {
+                item.kind = kind
+                item.enumeratedAt = nil
+                for child in item.children {
+                    modelContext.delete(child)
+                }
+            }
+        }
         try modelContext.save()
     }
 

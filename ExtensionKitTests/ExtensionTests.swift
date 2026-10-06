@@ -546,6 +546,32 @@ struct ExtensionTests {
         }
         #expect(!sandbox.exists(at: "Document.rtfd"))
     }
+    
+    @Test func createPackageWithFolderExtensionFails() async throws {
+        let sandbox = TestSandbox()
+        let (ext, _) = try await sandbox.getExtensionAndClient()
+
+        await #expect(throws: CoreError.cannotSynchronize) {
+            try await ext.createItem(
+                basedOn: ItemTemplate(
+                    parentItemIdentifier: .rootContainer,
+                    filename: "Document",
+                    contentType: .package,
+                    capabilities: [.allowsReading, .allowsWriting],
+                    fileSystemFlags: .rwx
+                ),
+                fields: [
+                    .filename, .parentItemIdentifier, .fileSystemFlags,
+                    .typeAndCreator,
+                ],
+                contents: nil,
+                options: [],
+                request: NSFileProviderRequest(),
+                progress: Progress()
+            )
+        }
+        #expect(!sandbox.exists(at: "Document"))
+    }
 
     @Test func createSymlinkSucceeds() async throws {
         // ln -s target.md parent/symlink.md
