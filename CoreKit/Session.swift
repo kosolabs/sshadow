@@ -716,6 +716,10 @@ actor Session {
             let root = try await path(for: name, in: parentId)
             let bufferSize = sftp.limits.writeLength(for: chunkSize)
 
+            if manifest.root.kind == .folder, try await sftp.isDirectory(at: root) {
+                try await sftp.removeDirectoryRecursively(at: root)
+            }
+
             for entry in manifest.entries {
                 if progress.isCancelled { throw CoreError.userCancelled }
                 let remotePath = entry.path(under: root)

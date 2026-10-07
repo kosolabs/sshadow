@@ -93,70 +93,38 @@ extension [Change] {
 }
 
 extension TestSandbox {
+    fileprivate enum Thing {
+        case file(path: String, contents: String)
+        case link(path: String, target: String)
+    }
+
+    @discardableResult
     fileprivate func createPackage(
         at root: String,
-        relativeTo: RelativeTo = .mount
-    ) throws {
-        try createFile(
-            at: "\(root)/Contents/Info.plist",
-            relativeTo: relativeTo,
-            contents: "<plist/>",
-            permissions: 0o644
+        relativeTo: RelativeTo = .mount,
+        files: [Thing] = [.file(path: "TXT.rtf", contents: "{\rtf1 hello}")]
+    ) throws -> URL {
+        let url = try createFolder(
+            at: root,
+            relativeTo: relativeTo
         )
-        try createFile(
-            at: "\(root)/Contents/MacOS/tool",
-            relativeTo: relativeTo,
-            contents: "#!/bin/sh\n",
-            permissions: 0o755
-        )
-        try createFile(
-            at: "\(root)/Contents/Resources/readonly.txt",
-            relativeTo: relativeTo,
-            contents: "read only",
-            permissions: 0o444
-        )
-        try createFile(
-            at: "\(root)/Contents/Resources/large.dat",
-            relativeTo: relativeTo,
-            data: Data((0..<3_000_000).map { UInt8(truncatingIfNeeded: $0) }),
-            permissions: 0o600
-        )
-        try createFile(
-            at: "\(root)/Contents/Resources/empty.txt",
-            relativeTo: relativeTo,
-            permissions: 0o640
-        )
-        try createFile(
-            at: "\(root)/Contents/.hidden",
-            relativeTo: relativeTo,
-            contents: "hidden"
-        )
-        try createFile(
-            at: "\(root)/name with spaces #1.txt",
-            relativeTo: relativeTo,
-            contents: "spaces"
-        )
-        try createFolder(
-            at: "\(root)/Contents/Empty",
-            relativeTo: relativeTo,
-            permissions: 0o750
-        )
-        try createFile(
-            at: "\(root)/Versions/A/lib.txt",
-            relativeTo: relativeTo,
-            contents: "lib"
-        )
-        try createSymlink(
-            at: "\(root)/Versions/Current",
-            relativeTo: relativeTo,
-            target: "A"
-        )
-        try createSymlink(
-            at: "\(root)/Contents/broken",
-            relativeTo: relativeTo,
-            target: "../missing"
-        )
-        try touch(root, relativeTo: relativeTo, permissions: 0o755)
+        for file in files {
+            switch file {
+            case .file(let path, let contents):
+                try createFile(
+                    at: "\(root)/\(path)",
+                    relativeTo: relativeTo,
+                    contents: contents
+                )
+            case .link(let path, let target):
+                try createSymlink(
+                    at: "\(root)/\(path)",
+                    relativeTo: relativeTo,
+                    target: target
+                )
+            }
+        }
+        return url
     }
 }
 
@@ -2102,27 +2070,33 @@ struct SessionTests {
 
         @Test func uploadPackageReproducesTree() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createPackage(at: "src.app", relativeTo: .shared)
-            let source = sandbox.getUrl(for: "src.app", relativeTo: .shared)
-            let dest = sandbox.getUrl(for: "Bundle.app")
+            let source = try sandbox.createPackage(
+                at: "Source.rtfd",
+                relativeTo: .shared,
+                files: [
+                    .file(path: "TXT.rtf", contents: "{\rtf1 hello}"),
+                    .file(path: "image.png", contents: "png"),
+                    .link(path: "link.rtf", target: "TXT.rtf"),
+                    .link(path: "broken", target: "missing"),
+                ]
+            )
+            let dest = sandbox.getUrl(for: "Doc.rtfd")
             let session = try await sandbox.getSession()
 
             let progress = Progress()
             let item = try await session.upload(
-                "Bundle.app",
+                "Doc.rtfd",
                 to: .rootContainer,
                 file: source,
                 progress: progress
             )
 
-            #expect(item.name == "Bundle.app")
-            #expect(item.kind == .folder)
-            #expect(try await session.child(name: "Bundle.app") == item.id)
+            #expect(item.name == "Doc.rtfd")
+            #expect(item.kind == .package)
+            #expect(try await session.child(name: "Doc.rtfd") == item.id)
             #expect(try Manifest(from: dest) == Manifest(from: source))
             #expect(try contents(of: dest) == contents(of: source))
-            #expect(
-                try sandbox.target(of: "Bundle.app/Versions/Current") == "A"
-            )
+            #expect(try sandbox.target(of: "Doc.rtfd/link.rtf") == "TXT.rtf")
             let totalSize = try Manifest(from: source).totalSize()
             #expect(progress.totalUnitCount == Int64(totalSize))
             #expect(progress.isFinished)
@@ -2132,47 +2106,28 @@ struct SessionTests {
 
         @Test func uploadEmptyPackageSucceeds() async throws {
             let sandbox = TestSandbox()
-            let source = try sandbox.createFolder(
-                at: "empty.bundle",
+            let source = try sandbox.createPackage(
+                at: "Source.rtfd",
                 relativeTo: .shared,
-                permissions: 0o700
+                files: []
             )
             let session = try await sandbox.getSession()
 
             let progress = Progress()
             let item = try await session.upload(
-                "Empty.bundle",
+                "Empty.rtfd",
                 to: .rootContainer,
                 file: source,
                 progress: progress
             )
 
-            #expect(item.kind == .folder)
-            #expect(try sandbox.permissions(of: "Empty.bundle") == 0o755)
+            #expect(item.kind == .package)
+            #expect(try sandbox.permissions(of: "Empty.rtfd") == 0o755)
             #expect(
-                try Manifest(from: sandbox.getUrl(for: "Empty.bundle")).entries
+                try Manifest(from: sandbox.getUrl(for: "Empty.rtfd")).entries
                     .count == 1
             )
             #expect(progress.isFinished)
-        }
-
-        @Test func uploadPackageOverExistingThrowsCollision() async throws {
-            let sandbox = TestSandbox()
-            try sandbox.createFolder(at: "Bundle.app")
-            let source = try sandbox.createFolder(
-                at: "src.app",
-                relativeTo: .shared
-            )
-            let session = try await sandbox.getSession()
-
-            await #expect(throws: CoreError.filenameCollision) {
-                _ = try await session.upload(
-                    "Bundle.app",
-                    to: .rootContainer,
-                    file: source,
-                    progress: Progress()
-                )
-            }
         }
 
         @Test func uploadPackageWithLockedFolderThrowsCannotSynchronize()
@@ -2180,23 +2135,23 @@ struct SessionTests {
         {
             let sandbox = TestSandbox()
             try sandbox.createFile(
-                at: "src.app/Locked/inside.txt",
+                at: "Doc.rtfd/Locked/inside.txt",
                 relativeTo: .shared,
                 contents: "locked"
             )
             try sandbox.touch(
-                "src.app/Locked",
+                "Doc.rtfd/Locked",
                 relativeTo: .shared,
                 permissions: 0o555
             )
             defer {
                 try? sandbox.touch(
-                    "src.app/Locked",
+                    "Doc.rtfd/Locked",
                     relativeTo: .shared,
                     permissions: 0o755
                 )
             }
-            let source = sandbox.getUrl(for: "src.app", relativeTo: .shared)
+            let source = sandbox.getUrl(for: "Doc.rtfd", relativeTo: .shared)
             let session = try await sandbox.getSession()
 
             await #expect(throws: CoreError.cannotSynchronize) {
@@ -2212,8 +2167,10 @@ struct SessionTests {
 
         @Test func uploadPackageCancelledThrowsUserCancelled() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createPackage(at: "src.app", relativeTo: .shared)
-            let source = sandbox.getUrl(for: "src.app", relativeTo: .shared)
+            let source = try sandbox.createPackage(
+                at: "Doc.rtfd",
+                relativeTo: .shared
+            )
             let session = try await sandbox.getSession()
 
             let progress = Progress()
@@ -2229,24 +2186,44 @@ struct SessionTests {
             }
         }
 
-        @Test func uploadPackageOverExistingKeepsExistingFolder() async throws {
+        @Test func uploadPackageOverExistingReplacesContents() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFile(at: "Bundle.app/keep.txt", contents: "keep")
-            let source = try sandbox.createFolder(
-                at: "src.app",
-                relativeTo: .shared
-            )
-            let session = try await sandbox.getSession()
 
-            await #expect(throws: CoreError.filenameCollision) {
-                _ = try await session.upload(
-                    "Bundle.app",
-                    to: .rootContainer,
-                    file: source,
-                    progress: Progress()
-                )
-            }
-            #expect(sandbox.exists(at: "Bundle.app/keep.txt"))
+            let dest = try sandbox.createPackage(
+                at: "Doc.rtfd",
+                files: [
+                    .file(path: "text.rtf", contents: "old"),
+                    .file(path: "stale.png", contents: "png"),
+                ]
+            )
+
+            let source = try sandbox.createPackage(
+                at: "src.rtfd",
+                relativeTo: .shared,
+                files: [
+                    .file(path: "text.rtf", contents: "new"),
+                    .file(path: "fresh.jpg", contents: "jpg"),
+                ]
+            )
+
+            let session = try await sandbox.getSession()
+            let itemId = try await session.child(name: "Doc.rtfd")
+
+            let progress = Progress()
+            let item = try await session.upload(
+                "Doc.rtfd",
+                to: .rootContainer,
+                file: source,
+                progress: progress
+            )
+
+            #expect(item.id == itemId)
+            #expect(item.kind == .package)
+            #expect(try contents(of: dest) == contents(of: source))
+            #expect(!sandbox.exists(at: "Doc.rtfd/stale.png"))
+            #expect(progress.isFinished)
+            let changes = try await session.reconcileAll()
+            #expect(changes == [])
         }
     }
 
@@ -2346,11 +2323,10 @@ struct SessionTests {
 
         @Test func downloadPackageReproducesTree() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createPackage(at: "Bundle.app")
-            let source = sandbox.getUrl(for: "Bundle.app")
+            let source = try sandbox.createPackage(at: "Doc.rtfd")
             let session = try await sandbox.getSession()
 
-            let itemId = try await session.child(name: "Bundle.app")
+            let itemId = try await session.child(name: "Doc.rtfd")
             let progress = Progress()
             let (url, item) = try await session.download(
                 itemId: itemId,
@@ -2358,7 +2334,7 @@ struct SessionTests {
             )
 
             #expect(item.id == itemId)
-            #expect(item.kind == .folder)
+            #expect(item.kind == .package)
             #expect(
                 url == sandbox.getUrl(for: itemId.rawValue, relativeTo: .shared)
             )
@@ -2372,12 +2348,12 @@ struct SessionTests {
         @Test func downloadEmptyPackageSucceeds() async throws {
             let sandbox = TestSandbox()
             let source = try sandbox.createFolder(
-                at: "Empty.bundle",
+                at: "Doc.rtfd",
                 permissions: 0o700
             )
             let session = try await sandbox.getSession()
 
-            let itemId = try await session.child(name: "Empty.bundle")
+            let itemId = try await session.child(name: "Doc.rtfd")
             let progress = Progress()
             let (url, _) = try await session.download(
                 itemId: itemId,
@@ -2392,17 +2368,17 @@ struct SessionTests {
             async throws
         {
             let sandbox = TestSandbox()
-            try sandbox.createFile(
-                at: "Bundle.app/Locked/inside.txt",
-                contents: "locked"
+            try sandbox.createPackage(
+                at: "Doc.rtfd",
+                files: [.file(path: "Locked/inside.txt", contents: "locked")]
             )
-            try sandbox.touch("Bundle.app/Locked", permissions: 0o555)
+            try sandbox.touch("Doc.rtfd/Locked", permissions: 0o555)
             defer {
-                try? sandbox.touch("Bundle.app/Locked", permissions: 0o755)
+                try? sandbox.touch("Doc.rtfd/Locked", permissions: 0o755)
             }
             let session = try await sandbox.getSession()
 
-            let itemId = try await session.child(name: "Bundle.app")
+            let itemId = try await session.child(name: "Doc.rtfd")
             await #expect(throws: CoreError.cannotSynchronize) {
                 _ = try await session.download(
                     itemId: itemId,
@@ -2421,13 +2397,12 @@ struct SessionTests {
 
         @Test func downloadPackageReplacesPreviousDownload() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createPackage(at: "Bundle.app")
-            let source = sandbox.getUrl(for: "Bundle.app")
+            let source = try sandbox.createPackage(at: "Doc.rtfd")
             let session = try await sandbox.getSession()
 
-            let itemId = try await session.child(name: "Bundle.app")
+            let itemId = try await session.child(name: "Doc.rtfd")
             _ = try await session.download(itemId: itemId, progress: Progress())
-            try sandbox.removeItem(at: "Bundle.app/Versions")
+            try sandbox.removeItem(at: "Doc.rtfd/image.png")
             let (url, _) = try await session.download(
                 itemId: itemId,
                 progress: Progress()
@@ -2439,11 +2414,11 @@ struct SessionTests {
 
         @Test func downloadMissingPackageThrowsNoSuchItem() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFolder(at: "missing.app")
+            try sandbox.createPackage(at: "Missing.rtfd")
             let session = try await sandbox.getSession()
 
-            let itemId = try await session.child(name: "missing.app")
-            try sandbox.removeItem(at: "missing.app")
+            let itemId = try await session.child(name: "Missing.rtfd")
+            try sandbox.removeItem(at: "Missing.rtfd")
 
             await #expect(throws: CoreError.itemNotFound(itemId.rawValue)) {
                 _ = try await session.download(
@@ -2455,10 +2430,10 @@ struct SessionTests {
 
         @Test func downloadPackageCancelledThrowsUserCancelled() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createPackage(at: "Bundle.app")
+            try sandbox.createPackage(at: "Doc.rtfd")
             let session = try await sandbox.getSession()
 
-            let itemId = try await session.child(name: "Bundle.app")
+            let itemId = try await session.child(name: "Doc.rtfd")
             let progress = Progress()
             progress.cancel()
 

@@ -1040,6 +1040,72 @@ struct ExtensionTests {
         #expect(fetchNewProgress.isFinished)
     }
 
+    @Test func editPackageSucceeds() async throws {
+        // Edit Document.rtfd in TextEdit and save
+        let oldDate = Date(timeIntervalSince1970: 1_767_225_600)
+        let newDate = Date(timeIntervalSince1970: 1_767_312_000)
+
+        let sandbox = TestSandbox()
+        try sandbox.createFile(
+            at: "Document.rtfd/TXT.rtf",
+            contents: "{\\rtf1 old}",
+            modifyDate: oldDate
+        )
+        try sandbox.createFile(
+            at: "Document.rtfd/stale.png",
+            contents: "png",
+            modifyDate: oldDate
+        )
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+        let packageId = try await client.child(name: "Document.rtfd")
+
+        let newContents = "{\\rtf1 new}"
+        let packageUrl = try sandbox.createFolder(
+            at: UUID().uuidString,
+            relativeTo: .shared
+        )
+        try sandbox.createFile(
+            at: "\(packageUrl.lastPathComponent)/TXT.rtf",
+            relativeTo: .shared,
+            contents: newContents
+        )
+
+        // Modify item FPItem(id: <id>, parentId: .rootContainer, filename: Document.rtfd, contentType: com.apple.rtfd, capabilities: FPItemCapabilities(rawValue: 3, reading, writing), fileSystemFlags: FPFileSystemFlags(rawValue: 22, readable, writable, pathExtensionHidden), size: 4096, modifyTime: <date>, downloaded, mostRecentVersionDownloaded), fields: FPItemFields(rawValue: 129, contents, contentModificationDate), contents: Optional(<url>), options: FPModifyItemOptions(rawValue: 0)
+        let progress = Progress()
+        let (item, pendingFields, shouldFetch) = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: packageId,
+                parentItemIdentifier: .rootContainer,
+                filename: "Document.rtfd",
+                contentType: UTType.rtfd,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
+                documentSize: 4096,
+                contentModificationDate: newDate,
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.contents, .contentModificationDate],
+            contents: packageUrl,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: progress
+        )
+
+        let modified = try #require(item)
+        let type = try #require(modified.contentType)
+        #expect(modified.itemIdentifier == packageId)
+        #expect(type.conforms(to: .package))
+        #expect(pendingFields.isEmpty)
+        #expect(!shouldFetch)
+        #expect(try await client.child(name: "Document.rtfd") == packageId)
+        #expect(
+            try sandbox.contents(of: "Document.rtfd/TXT.rtf") == newContents
+        )
+        #expect(!sandbox.exists(at: "Document.rtfd/stale.png"))
+        #expect(try sandbox.modifyDate(of: "Document.rtfd") == newDate)
+        #expect(progress.isFinished)
+    }
+
     @Test func setFileReadWriteSucceeds() async throws {
         // chmod 600 file.txt
         let sandbox = TestSandbox()

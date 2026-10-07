@@ -470,7 +470,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
     private func size(of file: URL) throws(CoreError) -> UInt64 {
         do {
-            return try FileManager.default.size(of: file)
+            return try FileManager.default.totalSize(of: file)
         } catch {
             logger.error("Failed to get size of \(file): \(error)")
             throw CoreError.cannotSynchronize
