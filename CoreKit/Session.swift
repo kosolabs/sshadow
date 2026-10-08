@@ -389,7 +389,7 @@ actor Session {
                 || dbItem.flags != sshItem.flags
                 || dbItem.createTime != sshItem.createTime
                 || dbItem.modifyTime != sshItem.modifyTime
-        case .folder:
+        case .folder, .package:
             dbItem.flags != sshItem.flags
                 || dbItem.createTime != sshItem.createTime
                 || dbItem.modifyTime != sshItem.modifyTime
@@ -599,7 +599,11 @@ actor Session {
                 ifExists: ifExists
             )
         }
-        return try await record(name, in: parentId, kind: .folder)
+        return try await record(
+            name,
+            in: parentId,
+            kind: .init(directoryNamed: name)
+        )
     }
 
     @discardableResult
@@ -712,6 +716,10 @@ actor Session {
             let root = try await path(for: name, in: parentId)
             let bufferSize = sftp.limits.writeLength(for: chunkSize)
 
+            if manifest.root.kind == .folder, try await sftp.isDirectory(at: root) {
+                try await sftp.removeDirectoryRecursively(at: root)
+            }
+
             for entry in manifest.entries {
                 if progress.isCancelled { throw CoreError.userCancelled }
                 let remotePath = entry.path(under: root)
@@ -748,7 +756,8 @@ actor Session {
             }
         }
 
-        let kind: Item.Kind = manifest.root.kind == .folder ? .folder : .file
+        let kind: Item.Kind =
+            manifest.root.kind == .folder ? .init(directoryNamed: name) : .file
         return try await record(name, in: parentId, kind: kind)
     }
 
@@ -837,7 +846,7 @@ actor Session {
     }
 
     private func manifest(for item: Item) async throws -> Manifest {
-        guard item.kind == .folder else {
+        guard item.kind == .folder || item.kind == .package else {
             let kind = Manifest.Entry.Kind.file(size: item.size ?? 0)
             return try Manifest(entries: [
                 Manifest.Entry(path: "", kind: kind)
@@ -1025,7 +1034,7 @@ actor Session {
         let kind: Item.Kind =
             switch attrs.type {
             case .directory:
-                .folder
+                .init(directoryNamed: name)
             case .symlink:
                 .symlink(
                     target: try await symlinkTarget(

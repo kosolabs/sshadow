@@ -139,6 +139,35 @@ extension NSFileProviderItemFields:
     }
 }
 
+extension NSFileProviderRequest {
+    public override var description: String {
+        var result = [String]()
+        if let requestingExecutable {
+            result.append("requestingExecutable: \(requestingExecutable)")
+        }
+        if isFileViewerRequest {
+            result.append("isFileViewerRequest")
+        }
+        if isSystemRequest {
+            result.append("isSystemRequest")
+        }
+        return "FPRequest(\(result.joined(separator: ", ")))"
+    }
+}
+
+extension NSFileProviderFetchContentsOptions:
+    @retroactive CustomStringConvertible
+{
+    public var description: String {
+        var result = [String]()
+        result.append("rawValue: \(rawValue)")
+        if contains(.strictVersioning) {
+            result.append("strictVersioning")
+        }
+        return "FPFetchContentsOptions(\(result.joined(separator: ", ")))"
+    }
+}
+
 extension NSFileProviderCreateItemOptions:
     @retroactive CustomStringConvertible
 {

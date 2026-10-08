@@ -178,4 +178,104 @@ import XPC
 
         #expect(try sandbox.contents(of: "file") == "new")
     }
+
+    @Test func attributesIfExistsReturnsFileAttributes() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "file", contents: "data")
+        let (_, sftp) = try await connect(sandbox)
+
+        let attrs = try await sftp.attributesIfExists(
+            at: path("file", in: sandbox)
+        )
+        #expect(attrs?.type == .regular)
+        #expect(attrs?.size == 4)
+    }
+
+    @Test func attributesIfExistsReturnsFolderAttributes() async throws {
+        let sandbox = TestSandbox()
+        _ = try sandbox.createFolder(at: "dir")
+        let (_, sftp) = try await connect(sandbox)
+
+        let attrs = try await sftp.attributesIfExists(
+            at: path("dir", in: sandbox)
+        )
+        #expect(attrs?.type == .directory)
+    }
+
+    @Test func attributesIfExistsDoesNotFollowSymlinks() async throws {
+        let sandbox = TestSandbox()
+        _ = try sandbox.createFolder(at: "target-dir")
+        try sandbox.createSymlink(at: "link-dir", target: "target-dir")
+        let (_, sftp) = try await connect(sandbox)
+
+        let attrs = try await sftp.attributesIfExists(
+            at: path("link-dir", in: sandbox)
+        )
+        #expect(attrs?.type == .symlink)
+    }
+
+    @Test func attributesIfExistsReturnsDanglingSymlink() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createSymlink(at: "link", target: "missing")
+        let (_, sftp) = try await connect(sandbox)
+
+        let attrs = try await sftp.attributesIfExists(
+            at: path("link", in: sandbox)
+        )
+        #expect(attrs?.type == .symlink)
+    }
+
+    @Test func attributesIfExistsReturnsNilForMissingPath() async throws {
+        let sandbox = TestSandbox()
+        let (_, sftp) = try await connect(sandbox)
+
+        let attrs = try await sftp.attributesIfExists(
+            at: path("missing", in: sandbox)
+        )
+        #expect(attrs == nil)
+    }
+
+    @Test func attributesIfExistsReturnsNilForMissingParent() async throws {
+        let sandbox = TestSandbox()
+        let (_, sftp) = try await connect(sandbox)
+
+        let attrs = try await sftp.attributesIfExists(
+            at: path("missing/file", in: sandbox)
+        )
+        #expect(attrs == nil)
+    }
+
+    @Test func isDirectoryIsTrueForFolder() async throws {
+        let sandbox = TestSandbox()
+        _ = try sandbox.createFolder(at: "dir")
+        let (_, sftp) = try await connect(sandbox)
+
+        #expect(try await sftp.isDirectory(at: path("dir", in: sandbox)))
+    }
+
+    @Test func isDirectoryIsFalseForFile() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "file")
+        let (_, sftp) = try await connect(sandbox)
+
+        #expect(try await !sftp.isDirectory(at: path("file", in: sandbox)))
+    }
+
+    @Test func isDirectoryIsFalseForSymlinkToFolder() async throws {
+        let sandbox = TestSandbox()
+        _ = try sandbox.createFolder(at: "target-dir")
+        try sandbox.createSymlink(at: "link-dir", target: "target-dir")
+        let (_, sftp) = try await connect(sandbox)
+
+        #expect(
+            try await !sftp.isDirectory(at: path("link-dir", in: sandbox))
+        )
+    }
+
+    @Test func isDirectoryIsFalseForMissingPath() async throws {
+        let sandbox = TestSandbox()
+        let (_, sftp) = try await connect(sandbox)
+
+        #expect(try await !sftp.isDirectory(at: path("missing", in: sandbox)))
+    }
 }

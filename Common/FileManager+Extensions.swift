@@ -8,30 +8,21 @@ extension FileManager {
     public func destinationOfSymbolicLink(at url: URL) throws -> String {
         try destinationOfSymbolicLink(atPath: url.path)
     }
-    
-    public func attributes(of url: URL) throws -> NSDictionary {
-        try self.attributesOfItem(atPath: url.path) as NSDictionary
-    }
 
     public func size(of url: URL) throws -> UInt64 {
-        try attributes(of: url).fileSize()
-    }
-
-    public func permissions(of url: URL) throws -> mode_t {
-        UInt16(try attributes(of: url).filePosixPermissions())
-    }
-
-    public func modifyDate(of url: URL) throws -> Date {
-        guard let date = try attributes(of: url).fileModificationDate() else {
-            throw NSError(
-                domain: "FileManagerExtensions",
-                code: 1,
-                userInfo: [
-                    NSLocalizedDescriptionKey:
-                        "Failed to get modification date for \(url)"
+        let values = try url.resourceValues(
+            forKeys: [.isDirectoryKey, .isRegularFileKey, .fileSizeKey]
+        )
+        if values.isDirectory == true {
+            return try contentsOfDirectory(
+                at: url,
+                includingPropertiesForKeys: [
+                    .isDirectoryKey, .isRegularFileKey, .fileSizeKey,
                 ]
-            )
+            ).reduce(0) { total, child in
+                try total + size(of: child)
+            }
         }
-        return date
+        return values.isRegularFile == true ? UInt64(values.fileSize ?? 0) : 0
     }
 }

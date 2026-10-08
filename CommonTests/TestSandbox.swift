@@ -246,17 +246,8 @@ class TestSandbox {
         FileManager.default.fileExists(at: getUrl(for: path))
     }
 
-    func attributes(of path: String) throws -> NSDictionary {
-        try FileManager.default.attributes(of: getUrl(for: path))
-            as NSDictionary
-    }
-
     func size(of path: String) throws -> UInt64 {
-        try attributes(of: path).fileSize()
-    }
-
-    func permissions(of path: String) throws -> mode_t {
-        UInt16(try attributes(of: path).filePosixPermissions())
+        try FileManager.default.size(of: getUrl(for: path))
     }
 
     private func status(of path: String) throws -> stat {
@@ -265,6 +256,10 @@ class TestSandbox {
             throw TestSandboxError.lstat
         }
         return status
+    }
+
+    func permissions(of path: String) throws -> mode_t {
+        try status(of: path).st_mode & 0o7777
     }
 
     func modifyDate(of path: String) throws -> Date {

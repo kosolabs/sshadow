@@ -36,8 +36,7 @@ extension SSHClient {
                     )
                 }
             let sftp = try await ssh.sftp()
-            let attrs = try await sftp.attributes(at: config.path())
-            if attrs.type != .directory {
+            guard try await sftp.isDirectory(at: config.path()) else {
                 throw ConnectionError.remotePathNotDirectory
             }
             logger.notice("SSH config connected: \(config)")
@@ -61,7 +60,9 @@ extension SFTPClient {
             where error.sftpError == .failure
             || error.sftpError == .fileAlreadyExists
         {
-            guard let existing = await existing(at: path) else { throw error }
+            guard let existing = try await attributesIfExists(at: path) else {
+                throw error
+            }
             if ifExists == .succeed, existing.type == .directory { return }
             throw collision(with: existing, at: path)
         }
@@ -71,7 +72,9 @@ extension SFTPClient {
         do {
             try await createSymlink(to: target, at: path)
         } catch let error where error.sftpError == .failure {
-            guard let existing = await existing(at: path) else { throw error }
+            guard let existing = try await attributesIfExists(at: path) else {
+                throw error
+            }
             throw collision(with: existing, at: path)
         }
     }
@@ -89,15 +92,27 @@ extension SFTPClient {
                 perform: perform
             )
         } catch let error as SSHError where error.sftpError == .failure {
-            guard let existing = await existing(at: path),
+            guard let existing = try await attributesIfExists(at: path),
                 existing.type == .directory
             else { throw error }
             throw collision(with: existing, at: path)
         }
     }
 
-    private func existing(at path: String) async -> SFTPAttributes? {
-        try? await attributes(at: path, followSymlinks: false)
+    func attributesIfExists(at path: String) async throws -> SFTPAttributes? {
+        do {
+            let attrs = try await attributes(
+                at: path,
+                followSymlinks: false
+            )
+            return attrs
+        } catch SSHError.sftpError(.noSuchFile, _) {
+            return nil
+        }
+    }
+
+    func isDirectory(at path: String) async throws -> Bool {
+        try await attributesIfExists(at: path)?.type == .directory
     }
 
     private func collision(

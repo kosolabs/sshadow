@@ -5,7 +5,15 @@ public struct Item: Message, PrettyDescribable {
     public enum Kind: Message {
         case file
         case folder
+        case package
         case symlink(target: String)
+
+        public init(directoryNamed name: String) {
+            self =
+                packageExtensions.contains(
+                    (name as NSString).pathExtension.lowercased()
+                ) ? .package : .folder
+        }
     }
 
     public struct Flags: OptionSet, Message, CustomStringConvertible {

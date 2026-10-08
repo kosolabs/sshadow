@@ -9,12 +9,17 @@ stop-test-server:
 test: start-test-server
     xcodebuild test -scheme SSHadow -testPlan UnitTests -destination 'platform=macOS'
 
-log:
+log: (_log-stream 'subsystem beginswith "com.kosolabs.SSHadow"')
+
+full-log: (_log-stream 'subsystem == "com.apple.FileProvider" OR subsystem beginswith "com.kosolabs.SSHadow"')
+
+_log-stream $PREDICATE:
     #!/bin/bash
     mkdir -p logs
     LOGFILE="logs/sshadow-$(date +%Y%m%d-%H%M%S).log"
     echo "Logging to $LOGFILE"
-    log stream --predicate 'subsystem beginswith "com.kosolabs.SSHadow"' --style ndjson --level debug \
+    trap 'echo; echo "Logged to $LOGFILE"' EXIT
+    log stream --predicate "$PREDICATE" --style ndjson --level debug \
         | tee "$LOGFILE" \
         | jq -R -r --unbuffered -f logfilter.jq
 

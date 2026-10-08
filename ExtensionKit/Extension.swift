@@ -46,7 +46,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> NSFileProviderItem {
-        logger.info("Item for \(itemIdentifier)")
+        logger.info("Item for \(itemIdentifier), request: \(request)")
 
         return try await progress.withChild {
             if itemIdentifier == .rootContainer || itemIdentifier == .workingSet
@@ -84,6 +84,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> (URL, NSFileProviderItem) {
+        logger.info("Fetch contents of \(itemIdentifier), request: \(request)")
+
         let (url, item) = try await client.download(
             itemId: itemIdentifier,
             progress: progress
@@ -130,6 +132,12 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         options: NSFileProviderFetchContentsOptions = [],
         progress: Progress
     ) async throws -> (URL, NSFileProviderItem, NSRange) {
+        logger.info(
+            "Fetch partial contents of \(itemIdentifier), "
+                + "request: \(request), " + "range: \(requestedRange), "
+                + "alignment: \(alignment), " + "options: \(options)"
+        )
+
         let item = try await item(for: itemIdentifier)
 
         progress.kind = .file
@@ -179,7 +187,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> (NSFileProviderItem, NSFileProviderItemFields, Bool) {
-        logger.info("Create \(item.desc) for \(fields) with \(options)")
+        logger.info(
+            "Create item \(item.desc), " + "fields: \(fields), "
+                + "contents: \(String(describing: url)), "
+                + "options: \(options)"
+        )
 
         let parentId = item.parentItemIdentifier
         let filename = item.filename
@@ -188,6 +200,22 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         guard let type = item.contentType else {
             logger.fault("Failed to sync nil contentType: \(item.desc)")
             throw CoreError.cannotSynchronize
+        }
+
+        if type.conforms(to: .directory) {
+            let expectedType =
+                Item.Kind(directoryNamed: filename) == .package
+                ? UTType(package: filename)
+                : .folder
+            if type.conforms(to: .package)
+                != expectedType.conforms(to: .package)
+            {
+                logger.error(
+                    "Failed to sync package/folder mismatch: \(item.desc), "
+                        + "expected type: \(expectedType)"
+                )
+                throw CoreError.cannotSynchronize
+            }
         }
 
         var remaining = fields.subtracting(.nameFields)
@@ -207,24 +235,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 )
                 itemId = item.id
             }
-        } else if type.conforms(to: .package) {
-            logger.error("Failed to sync unsupported package: \(item.desc)")
-            throw CoreError.excludedFromSync
-        } else if type.conforms(to: .directory) {
-            let fileSystemFlags =
-                remaining.contains(.fileSystemFlags)
-                ? item.fileSystemFlags ?? [] : []
-            remaining.subtract([.fileSystemFlags])
-
-            steps.add {
-                let item = try await self.client.createDirectory(
-                    parentId: parentId,
-                    name: filename,
-                    flags: .init(from: fileSystemFlags)
-                )
-                itemId = item.id
-            }
-        } else if type.conforms(to: .data),
+        } else if type.conforms(to: .data) || type.conforms(to: .package),
             remaining.intersects(with: .writeFields), let url = url
         {
             let fileSize = try FileManager.default.size(of: url)
@@ -241,6 +252,20 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     name: filename,
                     file: url,
                     progress: subprogress
+                )
+                itemId = item.id
+            }
+        } else if type.conforms(to: .directory) {
+            let fileSystemFlags =
+                remaining.contains(.fileSystemFlags)
+                ? item.fileSystemFlags ?? [] : []
+            remaining.subtract([.fileSystemFlags])
+
+            steps.add {
+                let item = try await self.client.createDirectory(
+                    parentId: parentId,
+                    name: filename,
+                    flags: .init(from: fileSystemFlags)
                 )
                 itemId = item.id
             }
@@ -307,7 +332,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws -> (NSFileProviderItem?, NSFileProviderItemFields, Bool) {
-        logger.info("Modify \(item.desc) for \(changedFields) with \(options)")
+        logger.info(
+            "Modify item \(item.desc), " + "fields: \(changedFields), "
+                + "contents: \(String(describing: newContents)), "
+                + "options: \(options), " + "request: \(request)"
+        )
 
         var remaining = changedFields
         let steps = progress.steps()
@@ -405,10 +434,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         request: NSFileProviderRequest,
         progress: Progress
     ) async throws {
-        logger.info("Delete \(identifier)")
+        logger.info(
+            "Delete item \(identifier), " + "options: \(options), "
+                + "request: \(request)"
+        )
         return try await progress.withChild {
             let item = try await client.item(for: identifier)
-            if item.kind == .folder {
+            if item.kind == .folder || item.kind == .package {
                 try await client.removeDirectory(for: identifier)
             } else {
                 try await client.removeFile(for: identifier)
@@ -420,7 +452,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         for containerItemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest
     ) throws -> NSFileProviderEnumerator {
-        logger.debug("Enumerator for \(containerItemIdentifier)")
+        logger.debug(
+            "Enumerator for \(containerItemIdentifier), "
+                + "request: \(request)"
+        )
         return Enumerator(
             client: client,
             itemIdentifier: containerItemIdentifier
