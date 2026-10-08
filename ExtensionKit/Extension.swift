@@ -238,7 +238,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         } else if type.conforms(to: .data) || type.conforms(to: .package),
             remaining.intersects(with: .writeFields), let url = url
         {
-            let fileSize = try FileManager.default.totalSize(of: url)
+            let fileSize = try FileManager.default.size(of: url)
             let limits = try await client.limits()
             let chunkSize = limits.maxWriteLength
             let fileTransferUnits = Int64(
@@ -470,7 +470,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
     private func size(of file: URL) throws(CoreError) -> UInt64 {
         do {
-            return try FileManager.default.totalSize(of: file)
+            return try FileManager.default.size(of: file)
         } catch {
             logger.error("Failed to get size of \(file): \(error)")
             throw CoreError.cannotSynchronize
