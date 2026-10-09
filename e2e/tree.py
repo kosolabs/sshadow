@@ -4,7 +4,7 @@ import shutil
 import stat
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 
@@ -33,8 +33,10 @@ Tree = dict[str, Entry]
 
 @dataclass(frozen=True)
 class Write:
+    """Write a file in place, or replace a symlink."""
+
     path: str
-    contents: bytes
+    entry: File | Link
 
 
 @dataclass(frozen=True)
@@ -48,7 +50,14 @@ class Delete:
     path: str
 
 
-Edit = Write | Move | Delete
+@dataclass(frozen=True)
+class SetAttrs:
+    path: str
+    mode: int | None = None
+    mtime: int | None = None
+
+
+Edit = Write | Move | Delete | SetAttrs
 
 IGNORED = {".Trash", ".DS_Store"}
 
@@ -66,18 +75,26 @@ def make_tree(root: Path, tree: Tree) -> None:
                 path.write_bytes(contents)
     # Children first, so creating them doesn't bump a parent's mtime.
     for rel, e in sorted(tree.items(), reverse=True):
-        path = root / rel
-        if not isinstance(e, Link) and e.mode is not None:
-            path.chmod(e.mode)
-        if e.mtime is not None:
-            os.utime(path, (e.mtime, e.mtime), follow_symlinks=False)
+        set_attrs(root / rel, None if isinstance(e, Link) else e.mode, e.mtime)
+
+
+def set_attrs(path: Path, mode: int | None, mtime: int | None) -> None:
+    if mode is not None:
+        path.chmod(mode)
+    if mtime is not None:
+        os.utime(path, (mtime, mtime), follow_symlinks=False)
 
 
 def apply_edits(root: Path, edits: Sequence[Edit]) -> None:
     for e in edits:
         match e:
-            case Write(path, contents):
+            case Write(path, File(contents, mode, mtime)):
                 (root / path).write_bytes(contents)
+                set_attrs(root / path, mode, mtime)
+            case Write(path, Link(target, mtime)):
+                (root / path).unlink(missing_ok=True)
+                (root / path).symlink_to(target)
+                set_attrs(root / path, None, mtime)
             case Move(src, dst):
                 (root / src).rename(root / dst)
             case Delete(path):
@@ -86,6 +103,8 @@ def apply_edits(root: Path, edits: Sequence[Edit]) -> None:
                     shutil.rmtree(target)
                 else:
                     target.unlink()
+            case SetAttrs(path, mode, mtime):
+                set_attrs(root / path, mode, mtime)
 
 
 def edit_tree(tree: Tree, edits: Sequence[Edit]) -> Tree:
@@ -93,14 +112,19 @@ def edit_tree(tree: Tree, edits: Sequence[Edit]) -> Tree:
     tree = dict(tree)
     for e in edits:
         match e:
-            case Write(path, contents):
-                tree[path] = File(contents)
+            case Write(path, entry):
+                tree[path] = entry
             case Move(src, dst):
                 for rel in subtree(tree, src):
                     tree[dst + rel.removeprefix(src)] = tree.pop(rel)
             case Delete(path):
                 for rel in subtree(tree, path):
                     del tree[rel]
+            case SetAttrs(path, mode, mtime):
+                changes = {"mode": mode, "mtime": mtime}
+                tree[path] = replace(
+                    tree[path], **{k: v for k, v in changes.items() if v is not None}
+                )
     return tree
 
 

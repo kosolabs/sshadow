@@ -12,6 +12,7 @@ from tree import (
     File,
     Link,
     Move,
+    SetAttrs,
     Tree,
     Write,
     apply_edits,
@@ -38,21 +39,29 @@ TREE: Tree = {
     "empty-dir": Dir(),
     "Document.rtfd": Dir(),
     "Document.rtfd/TXT.rtf": File(b"{\\rtf1 hello}\n"),
+    "Old.rtfd": Dir(),
+    "Old.rtfd/TXT.rtf": File(b"{\\rtf1 old}\n"),
     "link.txt": Link("hello.txt", mtime=date("2026-02-02")),
     "broken.txt": Link("missing.txt", mtime=date("2026-03-03")),
 }
 
 EDITS: list[Edit] = [
-    Write("hello.txt", b"hello, again\n"),
+    Write("hello.txt", File(b"hello, again\n")),
+    # macOS updates a package's modification date whenever it's edited.
+    Write("Document.rtfd/TXT.rtf", File(b"{\\rtf1 edited}\n")),
+    SetAttrs("Document.rtfd", mtime=date("2026-05-05")),
     Move("with space.txt", "renamed.txt"),
     Move("docs/readme.md", "readme.md"),
     Move("docs/nested", "nested"),
     Move("broken.txt", "docs/broken.txt"),
+    Move("docs", "documents"),
+    Write("link.txt", Link("readme.md")),
+    SetAttrs("readonly.txt", mode=0o644),
+    SetAttrs("random.bin", mtime=date("2026-04-04")),
     Delete("empty.txt"),
     Delete("empty-dir"),
-    Delete("Document.rtfd"),
+    Delete("Old.rtfd"),
 ]
-EDITED = edit_tree(TREE, EDITS)
 
 
 def enable(app: App, logs: LogWatcher, profile: str) -> Path:
@@ -86,7 +95,7 @@ def test_local_edits(app: App, logs: LogWatcher, profile: str, remote: Path) -> 
     wait_for_tree(remote, TREE, on_poll=logs.check)
 
     apply_edits(local, EDITS)
-    wait_for_tree(remote, EDITED, on_poll=logs.check)
+    wait_for_tree(remote, edit_tree(TREE, EDITS), on_poll=logs.check)
 
 
 def test_remote_edits(app: App, logs: LogWatcher, profile: str, remote: Path) -> None:
@@ -96,4 +105,4 @@ def test_remote_edits(app: App, logs: LogWatcher, profile: str, remote: Path) ->
 
     apply_edits(remote, EDITS)
     app.open("poll", name=profile)
-    wait_for_tree(local, EDITED, on_poll=logs.check)
+    wait_for_tree(local, edit_tree(TREE, EDITS), on_poll=logs.check)
