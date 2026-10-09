@@ -101,7 +101,7 @@ extension TestSandbox {
     @discardableResult
     fileprivate func createPackage(
         at root: String,
-        relativeTo: RelativeTo = .mount,
+        relativeTo: TestSandbox.Root = .remote,
         files: [Thing] = [.file(path: "TXT.rtf", contents: "{\rtf1 hello}")]
     ) throws -> URL {
         let url = try createFolder(
