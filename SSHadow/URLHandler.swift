@@ -40,6 +40,8 @@ final class URLHandler: NSObject, NSApplicationDelegate {
             try await enable(name: url.query(for: "name"))
         case "disable":
             try await disable(name: url.query(for: "name"))
+        case "poll":
+            try await poll(name: url.query(for: "name"))
         case "create":
             try await create(
                 name: url.query(for: "name"),
@@ -69,6 +71,10 @@ final class URLHandler: NSObject, NSApplicationDelegate {
 
     private func disable(name: String) async throws {
         try await config(for: name).disable()
+    }
+
+    private func poll(name: String) async throws {
+        try await config(for: name).poll()
     }
 
     /// Creates a private key profile, replacing any with the same name.
