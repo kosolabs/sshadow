@@ -1,7 +1,9 @@
+import hashlib
 import os
+import shutil
 import stat
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,6 +30,26 @@ class Link:
 Entry = File | Dir | Link
 Tree = dict[str, Entry]
 
+
+@dataclass(frozen=True)
+class Write:
+    path: str
+    contents: bytes
+
+
+@dataclass(frozen=True)
+class Move:
+    src: str
+    dst: str
+
+
+@dataclass(frozen=True)
+class Delete:
+    path: str
+
+
+Edit = Write | Move | Delete
+
 IGNORED = {".Trash", ".DS_Store"}
 
 
@@ -49,6 +71,41 @@ def make_tree(root: Path, tree: Tree) -> None:
             path.chmod(e.mode)
         if e.mtime is not None:
             os.utime(path, (e.mtime, e.mtime), follow_symlinks=False)
+
+
+def apply_edits(root: Path, edits: Sequence[Edit]) -> None:
+    for e in edits:
+        match e:
+            case Write(path, contents):
+                (root / path).write_bytes(contents)
+            case Move(src, dst):
+                (root / src).rename(root / dst)
+            case Delete(path):
+                target = root / path
+                if target.is_dir() and not target.is_symlink():
+                    shutil.rmtree(target)
+                else:
+                    target.unlink()
+
+
+def edit_tree(tree: Tree, edits: Sequence[Edit]) -> Tree:
+    """The tree that `apply_edits` turns `tree` into."""
+    tree = dict(tree)
+    for e in edits:
+        match e:
+            case Write(path, contents):
+                tree[path] = File(contents)
+            case Move(src, dst):
+                for rel in subtree(tree, src):
+                    tree[dst + rel.removeprefix(src)] = tree.pop(rel)
+            case Delete(path):
+                for rel in subtree(tree, path):
+                    del tree[rel]
+    return tree
+
+
+def subtree(tree: Tree, path: str) -> list[str]:
+    return [rel for rel in tree if rel == path or rel.startswith(path + "/")]
 
 
 def read_tree(root: Path) -> Tree:
@@ -98,7 +155,8 @@ def matches(actual: Entry, expected: Entry) -> bool:
 def describe(e: Entry) -> str:
     match e:
         case File(contents, mode, mtime):
-            desc = f"file ({len(contents)} bytes)"
+            digest = hashlib.sha256(contents).hexdigest()[:8]
+            desc = f"file ({len(contents)} bytes, sha256 {digest})"
         case Dir(mode, mtime):
             desc = "directory"
         case Link(target, mtime):

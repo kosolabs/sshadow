@@ -5,7 +5,20 @@ from pathlib import Path
 
 from logwatch import LogWatcher, msg
 from sshadow import App
-from tree import Dir, File, Link, Tree, make_tree, wait_for_tree
+from tree import (
+    Delete,
+    Dir,
+    Edit,
+    File,
+    Link,
+    Move,
+    Tree,
+    Write,
+    apply_edits,
+    edit_tree,
+    make_tree,
+    wait_for_tree,
+)
 
 
 def date(day: str) -> int:
@@ -28,6 +41,18 @@ TREE: Tree = {
     "link.txt": Link("hello.txt", mtime=date("2026-02-02")),
     "broken.txt": Link("missing.txt", mtime=date("2026-03-03")),
 }
+
+EDITS: list[Edit] = [
+    Write("hello.txt", b"hello, again\n"),
+    Move("with space.txt", "renamed.txt"),
+    Move("docs/readme.md", "readme.md"),
+    Move("docs/nested", "nested"),
+    Move("broken.txt", "docs/broken.txt"),
+    Delete("empty.txt"),
+    Delete("empty-dir"),
+    Delete("Document.rtfd"),
+]
+EDITED = edit_tree(TREE, EDITS)
 
 
 def enable(app: App, logs: LogWatcher, profile: str) -> Path:
@@ -53,3 +78,22 @@ def test_download(app: App, logs: LogWatcher, profile: str, remote: Path) -> Non
     make_tree(remote, TREE)
     local = enable(app, logs, profile)
     wait_for_tree(local, TREE, on_poll=logs.check)
+
+
+def test_local_edits(app: App, logs: LogWatcher, profile: str, remote: Path) -> None:
+    local = enable(app, logs, profile)
+    make_tree(local, TREE)
+    wait_for_tree(remote, TREE, on_poll=logs.check)
+
+    apply_edits(local, EDITS)
+    wait_for_tree(remote, EDITED, on_poll=logs.check)
+
+
+def test_remote_edits(app: App, logs: LogWatcher, profile: str, remote: Path) -> None:
+    make_tree(remote, TREE)
+    local = enable(app, logs, profile)
+    wait_for_tree(local, TREE, on_poll=logs.check)
+
+    apply_edits(remote, EDITS)
+    app.open("poll", name=profile)
+    wait_for_tree(local, EDITED, on_poll=logs.check)
