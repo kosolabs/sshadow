@@ -4,5 +4,16 @@
 <dict>
 	<key>LSUIElement</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.kosolabs.SSHadow</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>sshadow</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
