@@ -9,11 +9,6 @@ import XPC
 
 private let logger = Logger(category: "TestData")
 
-enum RelativeTo {
-    case mount
-    case shared
-}
-
 enum TestSandboxError: Error {
     case lchmod
     case lstat
@@ -68,6 +63,11 @@ func withConnectRetries<T>(
 }
 
 class TestSandbox {
+    enum Root {
+        case remote
+        case shared
+    }
+
     let id: UUID
     let name: String
     let host: String
@@ -233,9 +233,9 @@ class TestSandbox {
         }
     }
 
-    func getUrl(for path: String, relativeTo: RelativeTo = .mount) -> URL {
-        switch relativeTo {
-        case .mount:
+    func getUrl(for path: String, relativeTo root: Root = .remote) -> URL {
+        switch root {
+        case .remote:
             mount.appending(path: path)
         case .shared:
             shared.appending(path: path)
@@ -286,7 +286,7 @@ class TestSandbox {
     func move(
         from src: String,
         to dest: String,
-        relativeTo: RelativeTo = .mount
+        relativeTo: Root = .remote
     ) throws {
         let srcUrl = getUrl(for: src, relativeTo: relativeTo)
         let destUrl = getUrl(for: dest, relativeTo: relativeTo)
@@ -304,7 +304,7 @@ class TestSandbox {
 
     func touch(
         _ path: String,
-        relativeTo: RelativeTo = .mount,
+        relativeTo: Root = .remote,
         permissions: mode_t? = nil,
         modifyDate: Date? = nil
     ) throws {
@@ -364,7 +364,7 @@ class TestSandbox {
     @discardableResult
     func createFolder(
         at path: String,
-        relativeTo: RelativeTo = .mount,
+        relativeTo: Root = .remote,
         permissions: mode_t? = nil,
         modifyDate: Date? = nil
     ) throws -> URL {
@@ -382,7 +382,7 @@ class TestSandbox {
     @discardableResult
     func createSymlink(
         at path: String,
-        relativeTo: RelativeTo = .mount,
+        relativeTo: Root = .remote,
         target: String,
         modifyDate: Date? = nil
     ) throws -> URL {
@@ -401,7 +401,7 @@ class TestSandbox {
     @discardableResult
     func createFile(
         at path: String,
-        relativeTo: RelativeTo = .mount,
+        relativeTo: Root = .remote,
         contents: String = "",
         permissions: mode_t? = nil,
         modifyDate: Date? = nil
@@ -428,7 +428,7 @@ class TestSandbox {
     @discardableResult
     func createFile(
         at path: String,
-        relativeTo: RelativeTo = .mount,
+        relativeTo: Root = .remote,
         data: Data,
         permissions: mode_t? = nil,
         modifyDate: Date? = nil

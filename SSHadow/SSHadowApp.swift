@@ -20,18 +20,19 @@ private func reconnectAllDomains() {
 
 @main
 struct SSHadowApp: App {
-    private let modelContainer: ModelContainer
+    static let modelContainer = try! AppDB.getModelContainer(
+        config: ModelConfiguration(
+            isStoredInMemoryOnly: ProcessInfo.processInfo
+                .arguments
+                .contains("-uiTesting")
+        )
+    )
+
+    @NSApplicationDelegateAdaptor private var urlHandler: URLHandler
     @State private var activation = WindowActivationTracker()
 
     init() {
         reconnectAllDomains()
-        modelContainer = try! AppDB.getModelContainer(
-            config: ModelConfiguration(
-                isStoredInMemoryOnly: ProcessInfo.processInfo
-                    .arguments
-                    .contains("-uiTesting")
-            )
-        )
     }
 
     var body: some Scene {
@@ -43,7 +44,7 @@ struct SSHadowApp: App {
             )
         }
         .menuBarExtraStyle(.window)
-        .modelContainer(modelContainer)
+        .modelContainer(Self.modelContainer)
         .environment(Connections.shared)
         .environment(Transfers.shared)
         .environment(Events.shared)
@@ -51,7 +52,8 @@ struct SSHadowApp: App {
         Window("Settings", id: "settings") {
             SettingsView()
         }
-        .modelContainer(modelContainer)
+        .handlesExternalEvents(matching: [])
+        .modelContainer(Self.modelContainer)
         .environment(activation)
         .environment(Connections.shared)
         .environment(Transfers.shared)
@@ -60,6 +62,7 @@ struct SSHadowApp: App {
         Window("Event Log", id: "events") {
             EventLogView()
         }
+        .handlesExternalEvents(matching: [])
         .environment(activation)
         .environment(Transfers.shared)
         .environment(Events.shared)
@@ -68,6 +71,7 @@ struct SSHadowApp: App {
             AboutView()
         }
         .windowResizability(.contentSize)
+        .handlesExternalEvents(matching: [])
         .environment(activation)
     }
 }

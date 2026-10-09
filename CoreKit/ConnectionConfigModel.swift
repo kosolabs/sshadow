@@ -279,6 +279,7 @@ extension ModelContext {
         config.deletePassword()
         config.deletePrivateKeyPassphrase()
         self.delete(config)
+        logger.notice("Profile deleted: \(config)")
     }
 }
 
