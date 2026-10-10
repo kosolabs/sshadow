@@ -94,12 +94,6 @@ class LogWatcher:
         fail: Sequence[Matcher] = (fault,),
         timeout: float = 10,
     ) -> Event:
-        """Consume events until one matches `success`.
-
-        Raises AssertionError if an event matches any of `fail` first, or
-        TimeoutError if nothing matches within `timeout` seconds. Consumed
-        events are not seen again, so successive calls assert ordering.
-        """
         deadline = time.monotonic() + timeout
         while (remaining := deadline - time.monotonic()) > 0:
             try:

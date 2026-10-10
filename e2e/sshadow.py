@@ -2,11 +2,12 @@ import os
 import subprocess
 import time
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode
 
 REPO = Path(__file__).parent.parent
+ENABLE_URL_COMMANDS = "-enableURLCommands"
 
 
 def find_app() -> Path:
@@ -40,9 +41,6 @@ class App:
         self.path = path.resolve()
         self.executable = self.path / "Contents" / "MacOS" / "SSHadow"
 
-    def built(self) -> datetime:
-        return datetime.fromtimestamp(int(self.executable.stat().st_mtime), tz=UTC)
-
     def started(self) -> datetime | None:
         env = os.environ | {"LC_ALL": "C"}
         ps = subprocess.run(
@@ -62,18 +60,24 @@ class App:
                 ).astimezone()
         return None
 
+    def launch(self, files: Sequence[Path] = ()) -> None:
+        if self.started() is not None:
+            raise RuntimeError("SSHadow is already running. Quit it and rerun.")
+        subprocess.run(
+            ["open", "-a", self.path, *files, "--args", ENABLE_URL_COMMANDS], check=True
+        )
+
     def quit(self, timeout: float = 10) -> None:
-        self.open("quit")
+        self.send("quit")
         deadline = time.monotonic() + timeout
         while self.started() is not None:
             if time.monotonic() >= deadline:
                 raise TimeoutError(f"SSHadow didn't quit within {timeout}s")
             time.sleep(0.1)
 
-    def open(
-        self, command: str, *, files: Sequence[Path] = (), **params: str | int | Path
-    ) -> None:
+    def send(self, command: str, **params: str | int | Path) -> None:
+        # Named explicitly so the URL can't go to another installed copy.
         url = f"sshadow://{command}"
         if params:
             url += "?" + urlencode({k: str(v) for k, v in params.items()})
-        subprocess.run(["open", "-a", self.path, url, *files], check=True)
+        subprocess.run(["open", "-a", self.path, url], check=True)
