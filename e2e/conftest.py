@@ -1,5 +1,6 @@
 import getpass
 import json
+import re
 import shutil
 from collections.abc import Generator
 from pathlib import Path
@@ -9,6 +10,7 @@ import pytest
 from logwatch import LogWatcher, msg
 from sshadow import REPO, App, find_app
 
+PREDICATE = 'subsystem BEGINSWITH "com.kosolabs.SSHadow"'
 LOG_DIR = REPO / "logs"
 TEST_KEY = REPO / "CommonTests" / "id_ed25519"
 PROFILE_NAME = "Test-E2E"
@@ -17,24 +19,32 @@ REMOTE_ROOT = Path("/tmp/sshadow")
 
 @pytest.fixture
 def logs() -> Generator[LogWatcher]:
-    watcher = LogWatcher('subsystem BEGINSWITH "com.kosolabs.SSHadow"')
+    watcher = LogWatcher(PREDICATE)
     yield watcher
     watcher.close()
 
 
 @pytest.fixture(scope="session")
-def app() -> Generator[App]:
-    """The app under test, quit afterwards if the tests launched it."""
+def key(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    key = tmp_path_factory.mktemp("key") / "id_ed25519"
+    shutil.copy(TEST_KEY, key)
+    return key.resolve()
+
+
+@pytest.fixture(scope="session")
+def app(key: Path) -> Generator[App]:
     app = App(find_app())
-    started = app.started()
-    if started is not None and started < app.built():
-        pytest.fail(
-            f"SSHadow is running an older build than {app.path}. Quit it and rerun.",
-            pytrace=False,
-        )
+    watcher = LogWatcher(PREDICATE)
+    try:
+        app.launch(files=[key])
+        watcher.expect(msg("^URL commands enabled$"))
+        watcher.expect(msg(rf"^Opened file: {re.escape(str(key))}$"))
+    except (RuntimeError, TimeoutError) as e:
+        pytest.fail(str(e), pytrace=False)
+    finally:
+        watcher.close()
     yield app
-    if started is None:
-        app.quit()
+    app.quit()
 
 
 @pytest.fixture
@@ -46,14 +56,10 @@ def remote() -> Path:
 
 
 @pytest.fixture
-def profile(app: App, logs: LogWatcher, remote: Path, tmp_path: Path) -> Generator[str]:
+def profile(app: App, logs: LogWatcher, remote: Path, key: Path) -> Generator[str]:
     """Create a profile for the test server, and delete it afterwards."""
-    key = tmp_path / "id_ed25519"
-    shutil.copy(TEST_KEY, key)
-
-    app.open(
+    app.send(
         "create",
-        files=[key],
         name=PROFILE_NAME,
         host="localhost",
         port=2248,
@@ -64,7 +70,7 @@ def profile(app: App, logs: LogWatcher, remote: Path, tmp_path: Path) -> Generat
     logs.expect(msg(rf"Profile created: .*\bname: {PROFILE_NAME}\b"))
     yield PROFILE_NAME
 
-    app.open("delete", name=PROFILE_NAME)
+    app.send("delete", name=PROFILE_NAME)
     logs.expect(msg(rf"Profile deleted: .*\bname: {PROFILE_NAME}\b"))
 
 

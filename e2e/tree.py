@@ -33,8 +33,6 @@ Tree = dict[str, Entry]
 
 @dataclass(frozen=True)
 class Write:
-    """Write a file in place, or replace a symlink."""
-
     path: str
     entry: File | Link
 
@@ -73,7 +71,6 @@ def make_tree(root: Path, tree: Tree) -> None:
                 path.symlink_to(target)
             case File(contents):
                 path.write_bytes(contents)
-    # Children first, so creating them doesn't bump a parent's mtime.
     for rel, e in sorted(tree.items(), reverse=True):
         set_attrs(root / rel, None if isinstance(e, Link) else e.mode, e.mtime)
 
@@ -88,13 +85,15 @@ def set_attrs(path: Path, mode: int | None, mtime: int | None) -> None:
 def apply_edits(root: Path, edits: Sequence[Edit]) -> None:
     for e in edits:
         match e:
-            case Write(path, File(contents, mode, mtime)):
-                (root / path).write_bytes(contents)
-                set_attrs(root / path, mode, mtime)
-            case Write(path, Link(target, mtime)):
-                (root / path).unlink(missing_ok=True)
-                (root / path).symlink_to(target)
-                set_attrs(root / path, None, mtime)
+            case Write(path, entry):
+                target = root / path
+                if isinstance(entry, Link):
+                    target.unlink(missing_ok=True)
+                    target.symlink_to(entry.target)
+                    set_attrs(target, None, entry.mtime)
+                else:
+                    target.write_bytes(entry.contents)
+                    set_attrs(target, entry.mode, entry.mtime)
             case Move(src, dst):
                 (root / src).rename(root / dst)
             case Delete(path):
@@ -108,7 +107,6 @@ def apply_edits(root: Path, edits: Sequence[Edit]) -> None:
 
 
 def edit_tree(tree: Tree, edits: Sequence[Edit]) -> Tree:
-    """The tree that `apply_edits` turns `tree` into."""
     tree = dict(tree)
     for e in edits:
         match e:
@@ -214,8 +212,13 @@ def wait_for_tree(
     deadline = time.monotonic() + timeout
     while True:
         on_poll()
-        actual = read_tree(root) if root.is_dir() else {}
-        diff = diff_trees(actual, expected)
+        try:
+            actual = read_tree(root) if root.is_dir() else {}
+            diff = diff_trees(actual, expected)
+        except OSError as e:
+            # Items can change while being read, e.g. File Provider replacing
+            # one gives ESTALE, so retry until the deadline.
+            diff = f"error reading tree: {e}"
         if not diff:
             return
         if time.monotonic() >= deadline:

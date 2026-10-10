@@ -65,8 +65,7 @@ EDITS: list[Edit] = [
 
 
 def enable(app: App, logs: LogWatcher, profile: str) -> Path:
-    """Enable `profile` and return its local root once it exists."""
-    app.open("enable", name=profile)
+    app.send("enable", name=profile)
     logs.expect(msg(rf"Profile enabled: .*\bname: {profile}\b"))
     root = Path.home() / "Library" / "CloudStorage" / f"SSHadow-{profile}"
     deadline = time.monotonic() + 10
@@ -104,5 +103,5 @@ def test_remote_edits(app: App, logs: LogWatcher, profile: str, remote: Path) ->
     wait_for_tree(local, TREE, on_poll=logs.check)
 
     apply_edits(remote, EDITS)
-    app.open("poll", name=profile)
+    app.send("poll", name=profile)
     wait_for_tree(local, edit_tree(TREE, EDITS), on_poll=logs.check)

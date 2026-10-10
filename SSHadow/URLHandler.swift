@@ -11,7 +11,22 @@ final class URLHandler: NSObject, NSApplicationDelegate {
         var errorDescription: String? { message }
     }
 
+    static let enabled = ProcessInfo.processInfo.arguments.contains(
+        "-enableURLCommands"
+    )
+
+    override init() {
+        super.init()
+        if Self.enabled {
+            logger.notice("URL commands enabled")
+        }
+    }
+
     func application(_ application: NSApplication, open urls: [URL]) {
+        guard Self.enabled else {
+            logger.notice("URL commands disabled, ignoring: \(urls)")
+            return
+        }
         for url in urls {
             Task {
                 do {
@@ -26,12 +41,11 @@ final class URLHandler: NSObject, NSApplicationDelegate {
     }
 
     private func handle(_ url: URL) async throws {
-        logger.info("Handle \(url)")
         if url.isFileURL {
-            // Opening a file with the app grants the sandbox access to it,
-            // which is all `create` needs for its private key.
+            logger.notice("Opened file: \(url.path(percentEncoded: false))")
             return
         }
+        logger.notice("Handle \(url)")
         guard let command = url.host() else {
             throw Error(message: "command is nil")
         }
@@ -77,12 +91,6 @@ final class URLHandler: NSObject, NSApplicationDelegate {
         try await config(for: name).poll()
     }
 
-    /// Creates a private key profile, replacing any with the same name.
-    ///
-    /// The sandbox only lets the app read the key once it's been opened with
-    /// the app, so pass it alongside the URL:
-    ///
-    ///     open -a SSHadow.app "sshadow://create?name=…&host=…&key=/path/to/key" /path/to/key
     private func create(
         name: String,
         host: String,
@@ -98,7 +106,7 @@ final class URLHandler: NSObject, NSApplicationDelegate {
             user: user,
             path: path,
             authMethod: .privateKey,
-            bookmark: try await bookmark(forPrivateKeyAt: key)
+            bookmark: try bookmark(forPrivateKeyAt: key)
         )
 
         let context = SSHadowApp.modelContainer.mainContext
@@ -116,29 +124,18 @@ final class URLHandler: NSObject, NSApplicationDelegate {
         try context.save()
     }
 
-    /// The file URL that grants access arrives as a separate event, possibly
-    /// after this one, so retry briefly. Being able to read the key isn't
-    /// enough: some paths are readable before the grant, but a security-scoped
-    /// bookmark still needs it.
-    private func bookmark(forPrivateKeyAt path: String) async throws -> Data {
-        let url = URL(filePath: path)
-        let deadline = ContinuousClock.now + .seconds(5)
-        while true {
-            do {
-                return try url.bookmarkData(
-                    options: .withSecurityScope,
-                    includingResourceValuesForKeys: nil,
-                    relativeTo: nil
-                )
-            } catch {
-                guard ContinuousClock.now < deadline else {
-                    throw Error(
-                        message: "can't access private key \"\(path)\": "
-                            + error.localizedDescription
-                    )
-                }
-                try await Task.sleep(for: .milliseconds(100))
-            }
+    private func bookmark(forPrivateKeyAt path: String) throws -> Data {
+        do {
+            return try URL(filePath: path).bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+        } catch {
+            throw Error(
+                message: "can't access private key \"\(path)\": "
+                    + error.localizedDescription
+            )
         }
     }
 
