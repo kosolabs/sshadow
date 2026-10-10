@@ -34,6 +34,9 @@ jobs:
         provisioning-profile-app: ${{ secrets.PROVISIONING_PROFILE_APP }}
         provisioning-profile-extension: ${{ secrets.PROVISIONING_PROFILE_EXTENSION }}
 
+    - name: Enable the File Provider extension
+      run: ./ci_scripts/enable_file_provider.sh
+
     - name: Build Developer ID app
       env:
         APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
@@ -41,16 +44,15 @@ jobs:
         APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
       run: ./ci_scripts/dmg.sh --app-only
 
-    - name: Enable the File Provider extension
-      run: ./ci_scripts/enable_file_provider.sh build/SSHadow.app
-
     - name: Install uv
       uses: astral-sh/setup-uv@v10.3.0
 
     - name: Run e2e tests
       env:
         SSHADOW_APP: ${{ github.workspace }}/build/SSHadow.app
-      run: uv run --directory e2e pytest -v
+      run: |
+        plutil -p "$HOME/Library/Application Support/FileProvider/com.kosolabs.SSHadow.Extension/Domains.plist"
+        uv run --directory e2e pytest -v
 
     - name: Collect logs
       if: failure()
