@@ -15,7 +15,7 @@ EXTENSION_ID="com.kosolabs.SSHadow.Extension"
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Support/lsregister
 
 registered_extensions() {
-  pluginkit -mAvvv -i "$EXTENSION_ID" | awk -F' = ' '/^ *Path = /{print $2}'
+  pluginkit -mAvvv -i "$EXTENSION_ID" | awk -F' = ' '/^[[:space:]]*Path = /{print $2}'
 }
 
 registered_extensions | while IFS= read -r appex; do
