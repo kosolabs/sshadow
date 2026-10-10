@@ -41,6 +41,9 @@ jobs:
         APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
       run: ./ci_scripts/dmg.sh --app-only
 
+    - name: Enable the File Provider extension
+      run: ./ci_scripts/enable_file_provider.sh build/SSHadow.app
+
     - name: Install uv
       uses: astral-sh/setup-uv@v10.3.0
 
