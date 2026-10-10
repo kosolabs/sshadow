@@ -9,7 +9,7 @@ jobs:
   e2e:
     name: E2E tests
     runs-on: xcode-27
-    timeout-minutes: 45
+    timeout-minutes: 20
 
     environment:
       name: sshadow-release
@@ -44,10 +44,8 @@ jobs:
         APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
       run: ./ci_scripts/dmg.sh --app-only
 
-    - name: Show registered extensions
-      run: |
-        pluginkit -mAvvv -i com.kosolabs.SSHadow.Extension || true
-        plutil -p "$HOME/Library/Application Support/FileProvider/com.kosolabs.SSHadow.Extension/Domains.plist" || true
+    - name: Register the app under test
+      run: ./ci_scripts/register_app.sh build/SSHadow.app
 
     - name: Install uv
       uses: astral-sh/setup-uv@v10.3.0
@@ -62,7 +60,6 @@ jobs:
       run: |
         mkdir -p logs
         cp "/tmp/ssh-test-server-$USER/sshd.log" logs/ || true
-        fileproviderctl dump >logs/fileproviderctl.txt 2>&1 || true
         pluginkit -mAvvv -i com.kosolabs.SSHadow.Extension >logs/pluginkit.txt 2>&1 || true
         log show --last 30m --style syslog \
           --predicate 'subsystem BEGINSWITH "com.kosolabs.SSHadow" OR subsystem == "com.apple.FileProvider"' \
