@@ -46,7 +46,17 @@ for dir in "$HOME"/Library/Developer/Xcode/DerivedData/*/Build/Intermediates.noi
 done
 
 $LSREGISTER -f "$APP"
-pluginkit -a "$APPEX"
+
+# LaunchServices registers the extension of an app in /Applications on its
+# own; only add it by hand if it doesn't.
+for _ in {1..20}; do
+  [[ "$(registrations)" == "$APPEX "* ]] && break
+  sleep 1
+done
+if [[ "$(registrations)" != "$APPEX "* ]]; then
+  echo "Adding $APPEX with pluginkit"
+  pluginkit -a "$APPEX"
+fi
 
 # Wait until only this copy is registered and its registration stops changing.
 stable=0

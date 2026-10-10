@@ -44,21 +44,22 @@ jobs:
         APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
       run: ./ci_scripts/dmg.sh --app-only
 
-    - name: Register the app under test
-      run: ./ci_scripts/register_app.sh build/SSHadow.app
+    - name: Install and register the app under test
+      run: |
+        mv build/SSHadow.app /Applications/
+        ./ci_scripts/register_app.sh /Applications/SSHadow.app
 
     - name: Show code signing assessment
       run: |
-        codesign -dvv build/SSHadow.app 2>&1 | grep -E "Authority|TeamIdentifier|Timestamp|Notarization" || true
-        spctl -a -vv -t execute build/SSHadow.app || true
-        spctl -a -vv -t execute build/SSHadow.app/Contents/PlugIns/Extension.appex || true
+        codesign -dvv /Applications/SSHadow.app 2>&1 | grep -E "Authority|TeamIdentifier|Timestamp|Notarization" || true
+        spctl -a -vv -t execute /Applications/SSHadow.app || true
 
     - name: Install uv
       uses: astral-sh/setup-uv@v10.3.0
 
     - name: Run e2e tests
       env:
-        SSHADOW_APP: ${{ github.workspace }}/build/SSHadow.app
+        SSHADOW_APP: /Applications/SSHadow.app
       run: uv run --directory e2e pytest -v
 
     - name: Collect logs
