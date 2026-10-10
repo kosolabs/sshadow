@@ -1,0 +1,84 @@
+name: E2E
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    name: E2E tests
+    runs-on: xcode-27
+    timeout-minutes: 20
+
+    environment:
+      name: sshadow-release
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Allow the runner account to log in over SSH
+      run: sudo dseditgroup -o edit -a "$USER" -t user com.apple.access_ssh
+
+    - name: Start SSH test server
+      run: ./ci_scripts/start_test_server.sh
+
+    - name: Install signing
+      uses: ./.github/actions/install-signing
+      with:
+        developer-id-certificate-p12: ${{ secrets.DEVELOPER_ID_CERTIFICATE_P12 }}
+        developer-id-certificate-password: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+        apple-development-certificate-p12: ${{ secrets.APPLE_DEVELOPMENT_CERTIFICATE_P12 }}
+        apple-development-certificate-password: ${{ secrets.APPLE_DEVELOPMENT_CERTIFICATE_PASSWORD }}
+        provisioning-profile-app: ${{ secrets.PROVISIONING_PROFILE_APP }}
+        provisioning-profile-extension: ${{ secrets.PROVISIONING_PROFILE_EXTENSION }}
+
+    - name: Enable the File Provider extension
+      run: ./ci_scripts/enable_file_provider.sh
+
+    - name: Build Developer ID app
+      env:
+        APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
+      run: ./ci_scripts/dmg.sh --app-only
+
+    - name: Install and register the app under test
+      run: |
+        mv build/SSHadow.app /Applications/
+        ./ci_scripts/register_app.sh /Applications/SSHadow.app
+
+    - name: Show code signing assessment
+      run: |
+        codesign -dvv /Applications/SSHadow.app 2>&1 | grep -E "Authority|TeamIdentifier|Timestamp|Notarization" || true
+        spctl -a -vv -t execute /Applications/SSHadow.app || true
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v10.3.0
+
+    - name: Run e2e tests
+      env:
+        SSHADOW_APP: /Applications/SSHadow.app
+      run: uv run --directory e2e pytest -v
+
+    - name: Collect logs
+      if: failure()
+      run: |
+        mkdir -p logs
+        cp "/tmp/ssh-test-server-$USER/sshd.log" logs/ || true
+        pluginkit -mAvvv -i com.kosolabs.SSHadow.Extension >logs/pluginkit.txt 2>&1 || true
+        log show --last 30m --style syslog \
+          --predicate 'subsystem BEGINSWITH "com.kosolabs.SSHadow" OR subsystem == "com.apple.FileProvider" OR process == "syspolicyd" OR process == "runningboardd" OR subsystem BEGINSWITH "com.apple.extensionkit"' \
+          >logs/system.log || true
+
+    - name: Upload logs
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: e2e-logs
+        path: logs/
+
+    - name: Stop SSH test server
+      if: always()
+      run: ./ci_scripts/stop_test_server.sh

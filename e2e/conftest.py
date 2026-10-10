@@ -1,3 +1,4 @@
+import ctypes
 import getpass
 import json
 import re
@@ -15,6 +16,31 @@ LOG_DIR = REPO / "logs"
 TEST_KEY = REPO / "CommonTests" / "id_ed25519"
 PROFILE_NAME = "Test-E2E"
 REMOTE_ROOT = Path("/tmp/sshadow")
+
+
+# From <sys/resource.h>.
+IOPOL_TYPE_VFS_MATERIALIZE_DATALESS_FILES = 3
+IOPOL_SCOPE_PROCESS = 0
+IOPOL_MATERIALIZE_DATALESS_FILES_ON = 2
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    # Reading File Provider files that aren't downloaded yet fails with EDEADLK
+    # unless the process may materialize them, which background processes such
+    # as CI runners may not by default.
+    libc = ctypes.CDLL(None, use_errno=True)
+    before = libc.getiopolicy_np(
+        IOPOL_TYPE_VFS_MATERIALIZE_DATALESS_FILES, IOPOL_SCOPE_PROCESS
+    )
+    if libc.setiopolicy_np(
+        IOPOL_TYPE_VFS_MATERIALIZE_DATALESS_FILES,
+        IOPOL_SCOPE_PROCESS,
+        IOPOL_MATERIALIZE_DATALESS_FILES_ON,
+    ):
+        raise OSError(ctypes.get_errno(), "setiopolicy_np failed")
+    print(
+        f"Dataless file materialization policy: {before} -> {IOPOL_MATERIALIZE_DATALESS_FILES_ON}"
+    )
 
 
 @pytest.fixture

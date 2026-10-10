@@ -7,6 +7,9 @@ set -euo pipefail
 # are kept in build/ for debugging. Runs locally via `just dmg` or in GitHub
 # Actions.
 #
+# With --app-only, stops after exporting build/SSHadow.app (used by the e2e
+# tests).
+#
 # Requires a "Developer ID Application" certificate + private key in the
 # keychain, and these environment variables (see .env.example):
 #   APP_STORE_CONNECT_API_KEY_ID       Key ID of an App Store Connect API key
@@ -76,6 +79,11 @@ xcodebuild -exportArchive \
   -authenticationKeyPath "$API_KEY_PATH" \
   -authenticationKeyID "$APP_STORE_CONNECT_API_KEY_ID" \
   -authenticationKeyIssuerID "$APP_STORE_CONNECT_API_ISSUER_ID"
+
+if [[ "${1:-}" == "--app-only" ]]; then
+  echo "✅ Developer ID build saved to ${APP_PATH}"
+  exit 0
+fi
 
 echo "Building DMG..."
 mkdir -p "$STAGING_DIR"
