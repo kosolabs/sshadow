@@ -67,4 +67,8 @@ if (( stable < 5 )); then
   pluginkit -mAvvv -i "$EXTENSION_ID"
   exit 1
 fi
+
+# Allow the extension, as the toggle in System Settings would.
+pluginkit -e use -i "$EXTENSION_ID"
+pluginkit -m -i "$EXTENSION_ID"
 echo "✅ Registered $last"
