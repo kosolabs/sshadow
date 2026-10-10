@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.16.0](https://github.com/kosolabs/sshadow/compare/v0.15.0...v0.16.0) (2026-10-10)
+
+
+### Features
+
+* add sshadow:// URL commands and e2e sync tests ([#379](https://github.com/kosolabs/sshadow/issues/379)) ([9e65c8b](https://github.com/kosolabs/sshadow/commit/9e65c8b5bba72773800686244506437ab8fe809e))
+* add sshadow://poll and e2e tests for edits, moves and deletes ([#380](https://github.com/kosolabs/sshadow/issues/380)) ([156392e](https://github.com/kosolabs/sshadow/commit/156392e8c1666de39bda51ac1914687e51c448ba))
+* sync packages (e.g., .dSYM, .rtfd) as single items ([#378](https://github.com/kosolabs/sshadow/issues/378)) ([cf45781](https://github.com/kosolabs/sshadow/commit/cf45781bc4435f1bf843461833ad4b3047ae9c81))
+* upload and download can now work on whole trees ([#377](https://github.com/kosolabs/sshadow/issues/377)) ([45c288f](https://github.com/kosolabs/sshadow/commit/45c288febaaf3395b2b52760820842b189754391))
+
+
+### Bug Fixes
+
+* derive item content types from filename extensions ([#374](https://github.com/kosolabs/sshadow/issues/374)) ([9801a18](https://github.com/kosolabs/sshadow/commit/9801a180aa589693bbdfaa7e1573f25fa03e3f8d))
+* folders should report nil size instead of st_size ([#370](https://github.com/kosolabs/sshadow/issues/370)) ([251a3cc](https://github.com/kosolabs/sshadow/commit/251a3ccf9284225a42ee74037758c7f9c72772f8))
+* guard e2e tests behind launch flag ([#381](https://github.com/kosolabs/sshadow/issues/381)) ([67bb72c](https://github.com/kosolabs/sshadow/commit/67bb72c088b3ea8846782561494a5ef5a76b6288))
+* race on watch / unwatch and handle unsupported package type ([#373](https://github.com/kosolabs/sshadow/issues/373)) ([de72039](https://github.com/kosolabs/sshadow/commit/de720394828c3515d7c57b89ad6632630b1ba31e))
+
 ## [0.15.0](https://github.com/kosolabs/sshadow/compare/v0.14.2...v0.15.0) (2026-09-22)
 
 
