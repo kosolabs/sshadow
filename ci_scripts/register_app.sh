@@ -46,6 +46,7 @@ for dir in "$HOME"/Library/Developer/Xcode/DerivedData/*/Build/Intermediates.noi
 done
 
 $LSREGISTER -f "$APP"
+pluginkit -a "$APPEX"
 
 # Wait until only this copy is registered and its registration stops changing.
 stable=0
