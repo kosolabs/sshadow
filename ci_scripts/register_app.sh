@@ -36,10 +36,14 @@ $LSREGISTER -dump \
 $LSREGISTER -f "$APP"
 pluginkit -a "$APPEX"
 
-registered="$(registered_extensions)"
-if [[ "$registered" != "$APPEX" ]]; then
+# Registration is asynchronous.
+for _ in {1..150}; do
+  [[ "$(registered_extensions)" == "$APPEX" ]] && break
+  sleep 0.1
+done
+if [[ "$(registered_extensions)" != "$APPEX" ]]; then
   echo "❌ Expected only $APPEX to be registered, found:"
-  echo "$registered"
+  pluginkit -mAvvv -i "$EXTENSION_ID"
   exit 1
 fi
 echo "✅ Registered $APP"
