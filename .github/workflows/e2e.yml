@@ -47,6 +47,12 @@ jobs:
     - name: Register the app under test
       run: ./ci_scripts/register_app.sh build/SSHadow.app
 
+    - name: Show code signing assessment
+      run: |
+        codesign -dvv build/SSHadow.app 2>&1 | grep -E "Authority|TeamIdentifier|Timestamp|Notarization" || true
+        spctl -a -vv -t execute build/SSHadow.app || true
+        spctl -a -vv -t execute build/SSHadow.app/Contents/PlugIns/Extension.appex || true
+
     - name: Install uv
       uses: astral-sh/setup-uv@v10.3.0
 
@@ -62,7 +68,7 @@ jobs:
         cp "/tmp/ssh-test-server-$USER/sshd.log" logs/ || true
         pluginkit -mAvvv -i com.kosolabs.SSHadow.Extension >logs/pluginkit.txt 2>&1 || true
         log show --last 30m --style syslog \
-          --predicate 'subsystem BEGINSWITH "com.kosolabs.SSHadow" OR subsystem == "com.apple.FileProvider"' \
+          --predicate 'subsystem BEGINSWITH "com.kosolabs.SSHadow" OR subsystem == "com.apple.FileProvider" OR process == "syspolicyd" OR process == "runningboardd" OR subsystem BEGINSWITH "com.apple.extensionkit"' \
           >logs/system.log || true
 
     - name: Upload logs
