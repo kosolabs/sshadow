@@ -1,7 +1,7 @@
 Port 2248
 
-ListenAddress 127.0.0.1
-ListenAddress ::1
+ListenAddress 0.0.0.0
+ListenAddress ::
 
 StrictModes no
 
