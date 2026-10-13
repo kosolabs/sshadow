@@ -1,10 +1,14 @@
 import ctypes
 import getpass
 import json
+import plistlib
 import re
 import shutil
+import subprocess
+import time
 from collections.abc import Generator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -15,7 +19,13 @@ PREDICATE = 'subsystem BEGINSWITH "com.kosolabs.SSHadow"'
 LOG_DIR = REPO / "logs"
 TEST_KEY = REPO / "CommonTests" / "id_ed25519"
 PROFILE_NAME = "Test-E2E"
+APPROVAL_PROFILE_NAME = "Test-E2E-Approval"
 REMOTE_ROOT = Path("/tmp/sshadow")
+DOMAINS_PLIST = (
+    Path.home()
+    / "Library/Application Support/FileProvider/com.kosolabs.SSHadow.Extension/Domains.plist"
+)
+DEFAULT_DOMAIN = "NSFileProviderDomainDefaultIdentifier"
 
 
 # From <sys/resource.h>.
@@ -65,12 +75,77 @@ def app(key: Path) -> Generator[App]:
         app.launch(files=[key])
         watcher.expect(msg("^URL commands enabled$"))
         watcher.expect(msg(rf"^Opened file: {re.escape(str(key))}$"))
+        approve_file_provider(app, watcher, key)
     except (RuntimeError, TimeoutError) as e:
         pytest.fail(str(e), pytrace=False)
     finally:
         watcher.close()
     yield app
     app.quit()
+
+
+def read_domains() -> dict[str, Any]:
+    try:
+        with DOMAINS_PLIST.open("rb") as f:
+            return plistlib.load(f)
+    except FileNotFoundError:
+        return {}
+    except PermissionError as e:
+        raise RuntimeError(
+            f"Can't read {DOMAINS_PLIST}. Give the terminal running the tests Full Disk Access."
+        ) from e
+
+
+def domain_named(name: str, timeout: float = 30) -> str:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        for identifier, domain in read_domains().items():
+            if identifier != DEFAULT_DOMAIN and domain.get("DisplayName") == name:
+                return identifier
+        time.sleep(0.5)
+    raise TimeoutError(f"no File Provider domain named {name} within {timeout}s")
+
+
+def approve_file_provider(app: App, logs: LogWatcher, key: Path) -> None:
+    """Approve SSHadow's File Provider, as clicking Enable in Finder does.
+
+    A new File Provider's domains stay disabled until the user clicks Enable
+    in Finder, which is only needed once. There's no API for it, so enable a
+    throwaway domain in fileproviderd's settings and restart it.
+    """
+    if read_domains().get(DEFAULT_DOMAIN, {}).get("Enabled"):
+        return
+
+    create_profile(app, logs, APPROVAL_PROFILE_NAME, key)
+    app.send("enable", name=APPROVAL_PROFILE_NAME)
+    domain = domain_named(APPROVAL_PROFILE_NAME)
+    for key_path in (f"{domain}.Enabled", f"{DEFAULT_DOMAIN}.Enabled"):
+        subprocess.run(
+            ["plutil", "-replace", key_path, "-bool", "YES", DOMAINS_PLIST], check=True
+        )
+    # SIGKILL so fileproviderd can't save its old settings over the change.
+    # launchd starts it again on demand.
+    subprocess.run(["killall", "-KILL", "fileproviderd"], check=True)
+    logs.expect(
+        msg(rf"Profile enabled: .*\bname: {APPROVAL_PROFILE_NAME}\b"), timeout=60
+    )
+
+    app.send("delete", name=APPROVAL_PROFILE_NAME)
+    logs.expect(msg(rf"Profile deleted: .*\bname: {APPROVAL_PROFILE_NAME}\b"))
+
+
+def create_profile(app: App, logs: LogWatcher, name: str, key: Path) -> None:
+    REMOTE_ROOT.mkdir(exist_ok=True)
+    app.send(
+        "create",
+        name=name,
+        host="localhost",
+        port=2248,
+        user=getpass.getuser(),
+        path=REMOTE_ROOT,
+        key=key,
+    )
+    logs.expect(msg(rf"Profile created: .*\bname: {name}\b"))
 
 
 @pytest.fixture
@@ -84,16 +159,7 @@ def remote() -> Path:
 @pytest.fixture
 def profile(app: App, logs: LogWatcher, remote: Path, key: Path) -> Generator[str]:
     """Create a profile for the test server, and delete it afterwards."""
-    app.send(
-        "create",
-        name=PROFILE_NAME,
-        host="localhost",
-        port=2248,
-        user=getpass.getuser(),
-        path=remote,
-        key=key,
-    )
-    logs.expect(msg(rf"Profile created: .*\bname: {PROFILE_NAME}\b"))
+    create_profile(app, logs, PROFILE_NAME, key)
     yield PROFILE_NAME
 
     app.send("delete", name=PROFILE_NAME)

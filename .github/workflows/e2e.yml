@@ -34,9 +34,6 @@ jobs:
         provisioning-profile-app: ${{ secrets.PROVISIONING_PROFILE_APP }}
         provisioning-profile-extension: ${{ secrets.PROVISIONING_PROFILE_EXTENSION }}
 
-    - name: Enable the File Provider extension
-      run: ./ci_scripts/enable_file_provider.sh
-
     - name: Build Developer ID app
       env:
         APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
@@ -48,11 +45,6 @@ jobs:
       run: |
         mv build/SSHadow.app /Applications/
         ./ci_scripts/register_app.sh /Applications/SSHadow.app
-
-    - name: Show code signing assessment
-      run: |
-        codesign -dvv /Applications/SSHadow.app 2>&1 | grep -E "Authority|TeamIdentifier|Timestamp|Notarization" || true
-        spctl -a -vv -t execute /Applications/SSHadow.app || true
 
     - name: Install uv
       uses: astral-sh/setup-uv@v10.3.0
