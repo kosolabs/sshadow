@@ -53,7 +53,7 @@ actor DomainXPCBroker: XPCBroker {
     }
 
     private func awaitConnection() async -> NSXPCConnection? {
-        while true {
+        while !Task.isCancelled {
             do {
                 return try await domain.service.fileProviderConnection()
             } catch {
@@ -61,6 +61,7 @@ actor DomainXPCBroker: XPCBroker {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
+        return nil
     }
 
     private func rebrokerXpc() {
