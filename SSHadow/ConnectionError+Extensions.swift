@@ -9,7 +9,7 @@ extension ConnectionError {
             "network.slash"
         case .remotePathNotFound, .remotePathNotDirectory:
             "questionmark.folder"
-        case .unknown:
+        case .cancelled, .unknown:
             "bolt.slash"
         }
     }

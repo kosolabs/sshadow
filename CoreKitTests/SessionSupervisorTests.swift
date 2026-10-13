@@ -370,6 +370,138 @@ struct SessionSupervisorTests {
         await supervisor.disable()
     }
 
+    @Test func disableWhileConnectingCancelsAndRemoves() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider(),
+            gateFromCall: 1
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            openSession: provider.provider(),
+            xpc: xpc,
+            ext: ext,
+            onStatusChange: spy.handler()
+        )
+
+        // Park the connect inside its openSession call, then disable, and
+        // release the gate once disable() has taken over.
+        let connectTask = Task {
+            try await supervisor.connect(config: try sandbox.config)
+        }
+        await provider.waitUntilGated()
+        let disableTask = Task { await supervisor.disable() }
+        while spy.statuses.contains(.disconnecting(.disabled)) == false {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        await provider.release()
+        await disableTask.value
+
+        // The connect reports that it was cancelled rather than succeeding,
+        // its session is torn down, and the domain is removed.
+        await #expect(throws: ConnectionError.cancelled) {
+            try await connectTask.value
+        }
+        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await ext.calls == [.resume, .suspend, .remove])
+        #expect(
+            spy.statuses == [
+                .connecting, .disconnecting(.disabled), .offline(.disabled),
+            ]
+        )
+    }
+
+    @Test func pauseWhileConnectingSuspendsInsteadOfComingOnline()
+        async throws
+    {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider(),
+            gateFromCall: 1
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            openSession: provider.provider(),
+            xpc: xpc,
+            ext: ext,
+            onStatusChange: spy.handler()
+        )
+
+        let connectTask = Task {
+            try await supervisor.connect(config: try sandbox.config)
+        }
+        await provider.waitUntilGated()
+        let pauseTask = Task { await supervisor.pause() }
+        while spy.statuses.contains(.disconnecting(.paused)) == false {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        await provider.release()
+        await pauseTask.value
+
+        await #expect(throws: ConnectionError.cancelled) {
+            try await connectTask.value
+        }
+        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await ext.calls == [.resume, .suspend])
+        #expect(
+            spy.statuses == [
+                .connecting, .disconnecting(.paused), .offline(.paused),
+            ]
+        )
+    }
+
+    @Test func disableWhileConnectFailsReportsCancelled() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider(),
+            failuresBeforeSuccess: 1,
+            gateFromCall: 1
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            openSession: provider.provider(),
+            xpc: xpc,
+            ext: ext,
+            onStatusChange: spy.handler()
+        )
+
+        let connectTask = Task {
+            try await supervisor.connect(config: try sandbox.config)
+        }
+        await provider.waitUntilGated()
+        let disableTask = Task { await supervisor.disable() }
+        while spy.statuses.contains(.disconnecting(.disabled)) == false {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        await provider.release()
+        await disableTask.value
+
+        // The failed connect doesn't overwrite the disabled state with its own
+        // error, and the domain is still removed.
+        await #expect(throws: ConnectionError.cancelled) {
+            try await connectTask.value
+        }
+        #expect(await xpc.calls == [])
+        #expect(await ext.calls == [.remove])
+        #expect(
+            spy.statuses == [
+                .connecting, .disconnecting(.disabled), .offline(.disabled),
+            ]
+        )
+    }
+
     @Test func disableRemoves() async throws {
         let sandbox = TestSandbox()
         let xpc = SpyXPCBroker()

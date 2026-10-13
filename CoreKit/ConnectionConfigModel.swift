@@ -116,6 +116,8 @@ public class ConnectionConfigModel: CustomStringConvertible {
             try await DomainRegistry.shared.connect(config: config)
             self.enabled = true
             logger.notice("Profile enabled: \(self)")
+        } catch ConnectionError.cancelled {
+            logger.notice("Profile enable cancelled: \(self)")
         } catch {
             logger.error("Failed to enable \(self): \(error)")
         }
@@ -273,9 +275,9 @@ extension ModelContext {
     public func delete(
         connectionConfig config: ConnectionConfigModel
     ) async {
-        if config.enabled {
-            await config.disable()
-        }
+        // Disable even if it isn't marked enabled yet, since it may still be
+        // connecting.
+        await config.disable()
         config.deletePassword()
         config.deletePrivateKeyPassphrase()
         self.delete(config)
