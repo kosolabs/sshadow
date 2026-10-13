@@ -47,16 +47,16 @@ done
 
 $LSREGISTER -f "$APP"
 
-# LaunchServices registers the extension of an app in /Applications on its
-# own; only add it by hand if it doesn't.
-for _ in {1..20}; do
+# Launching the app registers its extension, and if that happens while the
+# tests are running, File Provider drops the extension. So launch it once
+# now, then stop it.
+open -g -a "$APP"
+for _ in {1..30}; do
   [[ "$(registrations)" == "$APPEX "* ]] && break
   sleep 1
 done
-if [[ "$(registrations)" != "$APPEX "* ]]; then
-  echo "Adding $APPEX with pluginkit"
-  pluginkit -a "$APPEX"
-fi
+pkill -x SSHadow || true
+while pgrep -x SSHadow >/dev/null; do sleep 0.5; done
 
 # Wait until only this copy is registered and its registration stops changing.
 stable=0
