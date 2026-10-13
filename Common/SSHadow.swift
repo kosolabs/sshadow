@@ -14,6 +14,12 @@ public enum SSHadow {
     public static let groupUrl = FileManager.default.containerURL(
         forSecurityApplicationGroupIdentifier: appGroup
     )!
+
+    /// Posted by an extension instance that the app isn't connected to.
+    public static func connectRequest(domainId: String) -> String {
+        "\(appGroup).connect.\(domainId)"
+    }
+
     public static let version = value(for: "CFBundleShortVersionString")
     public static let build = value(for: "CFBundleVersion")
 }

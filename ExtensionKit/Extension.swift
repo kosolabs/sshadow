@@ -21,7 +21,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         super.init()
     }
 
-    public func invalidate() {}
+    public func invalidate() {
+        client.invalidate()
+    }
 
     public func item(
         for itemIdentifier: NSFileProviderItemIdentifier,

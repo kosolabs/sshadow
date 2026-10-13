@@ -12,6 +12,7 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
     private var connection: NSXPCConnection?
     private let sharedUrl: URL
     private var attached: Bool = true
+    private var invalidated = false
 
     public init(
         domain: NSFileProviderDomain,
@@ -23,6 +24,7 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         super.init()
         listener.delegate = self
         listener.resume()
+        requestConnection()
     }
 
     deinit {
@@ -33,8 +35,27 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         listener.endpoint
     }
 
+    /// Called when File Provider discards this instance. It may keep running
+    /// alongside its replacement for a while, so it must not suspend the
+    /// domain anymore.
+    public func invalidate() {
+        invalidated = true
+        listener.invalidate()
+        connection?.invalidate()
+        logger.info("Invalidated")
+    }
+
+    /// Asks the app to connect. File Provider can run more than one instance
+    /// for a domain, for example while replacing one, and the app connects to
+    /// whichever instance answers its service lookup.
+    private func requestConnection() {
+        DarwinNotification.post(
+            SSHadow.connectRequest(domainId: domain.identifier.rawValue)
+        )
+    }
+
     private func suspend() async {
-        guard attached else { return }
+        guard attached, !invalidated else { return }
         await domain.suspend(
             reason: "SSHadow needs to be running in order to sync this volume.",
             options: .temporary
@@ -46,10 +67,15 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         shouldAcceptNewConnection connection: NSXPCConnection
     ) -> Bool {
         attached = true
+        let id = ObjectIdentifier(connection)
         connection.exportedInterface = NSXPCInterface(with: ExtXPC.self)
         connection.exportedObject = self
         connection.remoteObjectInterface = NSXPCInterface(with: CoreXPC.self)
         connection.invalidationHandler = {
+            // Ignore connections the app has since replaced.
+            guard self.connection.map(ObjectIdentifier.init) == id else {
+                return
+            }
             self.connection = nil
             Task { await self.suspend() }
             logger.info("Core XPC disconnected")
@@ -71,7 +97,8 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
     private func requireService() async throws(CoreError) -> CoreXPC {
         if connection == nil {
             logger.info("Waiting for Core XPC to connect")
-            let deadline = ContinuousClock.now + .seconds(1)
+            requestConnection()
+            let deadline = ContinuousClock.now + .seconds(3)
             while connection == nil, ContinuousClock.now < deadline {
                 try? await Task.sleep(for: .milliseconds(50))
             }
