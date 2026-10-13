@@ -273,9 +273,7 @@ extension ModelContext {
     public func delete(
         connectionConfig config: ConnectionConfigModel
     ) async {
-        if config.enabled {
-            await config.disable()
-        }
+        await config.disable()
         config.deletePassword()
         config.deletePrivateKeyPassphrase()
         self.delete(config)

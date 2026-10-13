@@ -35,7 +35,7 @@ extension ConnectionError {
         case .connectionRefused, .connectionTimedOut, .unknown:
             true
         case .unknownHost, .invalidPrivateKey, .authenticationFailed,
-            .remotePathNotFound, .remotePathNotDirectory:
+                .remotePathNotFound, .remotePathNotDirectory, .cancelled:
             false
         }
     }

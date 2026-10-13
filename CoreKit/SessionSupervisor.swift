@@ -7,6 +7,7 @@ private let logger = Logger(category: "SessionSupervisor")
 
 actor SessionSupervisor {
     typealias StatusChangeHandler = @Sendable (ConnectionStatus) -> Void
+    typealias ConnectTask = Task<Result<Void, ConnectionError>, Never>
     typealias ReconnectTask = Task<Void, Never>
 
     private let domain: NSFileProviderDomain
@@ -27,7 +28,7 @@ actor SessionSupervisor {
     private enum State {
         case offline(OfflineReason)
         case disconnecting(OfflineReason)
-        case connecting
+        case connecting(ConnectTask)
         case reconnecting(
             ReconnectTask,
             ConnectionError?,
@@ -100,15 +101,27 @@ actor SessionSupervisor {
 
     func connect(config: ConnectionConfig) async throws(ConnectionError) {
         guard case .offline = state else { return }
-        state = .connecting
         log = events.logger(
             for: .connection,
             source: Event.Source(name: config.name, url: config.url)
         )
         log.info("Connecting to \(config.name)")
-        do {
-            try await open(config: config)
-        } catch {
+
+        let task: ConnectTask = Task {
+            do throws(ConnectionError) {
+                try await open(config: config)
+                return .success(())
+            } catch {
+                return .failure(error)
+            }
+        }
+        state = .connecting(task)
+
+        switch await task.value {
+        case .success:
+            guard case .online = state else { throw .cancelled }
+        case .failure(let error):
+            guard case .connecting = state else { throw .cancelled }
             log.error(
                 "Failed to connect to \(config.name)",
                 detail: error.message
@@ -142,12 +155,14 @@ actor SessionSupervisor {
         case .offline:
             state = .offline(.disabled)
             break
+        case .connecting(let task):
+            await cancel(task, reason: .disabled)
         case .reconnecting(let task, _, _):
             await cancel(task, reason: .disabled)
         case .online(let session):
             await disconnect(session, reason: .disabled)
-        default:
-            logger.fault("Called disable while in \(state)")
+        case .disconnecting:
+            logger.info("Ignored disable while in \(state)")
             return
         }
         await ext.remove()
@@ -157,12 +172,14 @@ actor SessionSupervisor {
 
     func pause() async {
         switch state {
+        case .connecting(let task):
+            await cancel(task, reason: .paused)
         case .reconnecting(let task, _, _):
             await cancel(task, reason: .paused)
         case .online(let session):
             await disconnect(session, reason: .paused)
-        default:
-            logger.fault("Called pause while in \(state)")
+        case .offline, .disconnecting:
+            logger.info("Ignored pause while in \(state)")
             return
         }
         log.notice("Paused connection to \(domain.displayName)")
@@ -176,10 +193,13 @@ actor SessionSupervisor {
         reconnect(config: config)
     }
 
-    private func cancel(_ task: ReconnectTask, reason: OfflineReason) async {
+    private func cancel<T>(
+        _ task: Task<T, Never>,
+        reason: OfflineReason
+    ) async {
         state = .disconnecting(reason)
         task.cancel()
-        await task.value
+        _ = await task.value
         state = .offline(reason)
     }
 

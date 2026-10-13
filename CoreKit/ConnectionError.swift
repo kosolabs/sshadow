@@ -10,6 +10,7 @@ public enum ConnectionError: Message, Error {
     case authenticationFailed
     case remotePathNotFound
     case remotePathNotDirectory
+    case cancelled
     case unknown(domain: String, code: Int, message: String)
 
     public init(from error: any Error) {
@@ -64,6 +65,7 @@ public enum ConnectionError: Message, Error {
         case .authenticationFailed: "Authentication failed"
         case .remotePathNotFound: "Remote path does not exist"
         case .remotePathNotDirectory: "Remote path is not a directory"
+        case .cancelled: "Cancelled"
         case .unknown(_, _, let message): "Other: \(message)"
         }
     }
