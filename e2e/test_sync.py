@@ -66,7 +66,8 @@ EDITS: list[Edit] = [
 
 def enable(app: App, logs: LogWatcher, profile: str) -> Path:
     app.send("enable", name=profile)
-    logs.expect(msg(rf"Profile enabled: .*\bname: {profile}\b"))
+    # The extension can take a while to launch the first time, e.g. on CI.
+    logs.expect(msg(rf"Profile enabled: .*\bname: {profile}\b"), timeout=60)
     root = Path.home() / "Library" / "CloudStorage" / f"SSHadow-{profile}"
     deadline = time.monotonic() + 10
     while not root.is_dir():
