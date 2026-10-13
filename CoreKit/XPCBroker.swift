@@ -13,6 +13,7 @@ actor DomainXPCBroker: XPCBroker {
     private let domain: NSFileProviderDomain
     private var connection: NSXPCConnection?
     private var service: CoreService?
+    private var rebrokering: Task<Void, Never>?
 
     init(domain: NSFileProviderDomain) {
         self.domain = domain
@@ -24,9 +25,10 @@ actor DomainXPCBroker: XPCBroker {
     }
 
     private func broker() async {
-        guard connection == nil else { return }
+        guard connection == nil, let connection = await awaitConnection() else {
+            return
+        }
 
-        let connection = await awaitConnection()
         connection.exportedInterface = NSXPCInterface(with: CoreXPC.self)
         connection.exportedObject = service
         connection.remoteObjectInterface = NSXPCInterface(with: ExtXPC.self)
@@ -41,13 +43,17 @@ actor DomainXPCBroker: XPCBroker {
 
         let ext = connection.remoteObjectProxy as! ExtXPC
         await ext.attach()
+        guard !Task.isCancelled else {
+            invalidate(connection)
+            return
+        }
         self.connection = connection
 
         logger.notice("XPC brokered: \(domain)")
     }
 
-    private func awaitConnection() async -> NSXPCConnection {
-        while true {
+    private func awaitConnection() async -> NSXPCConnection? {
+        while !Task.isCancelled {
             do {
                 return try await domain.service.fileProviderConnection()
             } catch {
@@ -55,24 +61,34 @@ actor DomainXPCBroker: XPCBroker {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
+        return nil
     }
 
-    private func rebrokerXpc() async {
+    private func rebrokerXpc() {
         logger.notice("XPC invalidated: \(domain)")
         connection = nil
-        await broker()
+        rebrokering = Task { await broker() }
     }
 
     func teardown() async {
+        if let rebrokering {
+            rebrokering.cancel()
+            await rebrokering.value
+            self.rebrokering = nil
+        }
         guard let connection else { return }
         self.connection = nil
 
         let ext = connection.remoteObjectProxy as! ExtXPC
         await ext.detach()
+        invalidate(connection)
+
+        logger.notice("XPC torn down: \(domain)")
+    }
+    
+    private func invalidate(_ connection: NSXPCConnection) {
         connection.invalidationHandler = nil
         connection.interruptionHandler = nil
         connection.invalidate()
-
-        logger.notice("XPC torn down: \(domain)")
     }
 }

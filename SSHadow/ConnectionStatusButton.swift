@@ -6,30 +6,31 @@ struct ConnectionStatusButton: View {
     let status: ConnectionStatus
 
     var body: some View {
-        switch config.isEnabled() {
-        case false:
+        switch status {
+        case .connecting:
+            HoverActionIcon(
+                icon: ConnectionStatusIcon(status: status, variant: .drive),
+                hoverIcon: "xmark.circle.fill",
+                help: "Cancel connection",
+                action: config.disable
+            )
+        case .reconnecting, .online:
+            HoverActionIcon(
+                icon: ConnectionStatusIcon(status: status, variant: .drive),
+                hoverIcon: "pause.circle.fill",
+                help: "Pause connection",
+                action: config.pause
+            )
+        case .offline(.paused), .offline(.failed):
+            HoverActionIcon(
+                icon: ConnectionStatusIcon(status: status, variant: .drive),
+                hoverIcon: "play.circle.fill",
+                help: "Resume connection",
+                action: config.enable
+            )
+        case .disconnecting, .offline(.disabled):
             ConnectionStatusIcon(status: status, variant: .drive)
                 .frame(width: 20, alignment: .center)
-        case true:
-            switch status {
-            case .reconnecting, .online:
-                HoverActionIcon(
-                    icon: ConnectionStatusIcon(status: status, variant: .drive),
-                    hoverIcon: "pause.circle.fill",
-                    help: "Pause connection",
-                    action: config.pause
-                )
-            case .offline(.paused), .offline(.failed):
-                HoverActionIcon(
-                    icon: ConnectionStatusIcon(status: status, variant: .drive),
-                    hoverIcon: "play.circle.fill",
-                    help: "Resume connection",
-                    action: config.enable
-                )
-            case .connecting, .disconnecting, .offline(.disabled):
-                ConnectionStatusIcon(status: status, variant: .drive)
-                    .frame(width: 20, alignment: .center)
-            }
         }
     }
 }

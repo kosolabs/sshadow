@@ -104,8 +104,9 @@ struct ConnectionConfigEditView: View {
         }
     }
 
-    private func message(for error: ConnectionConfig.ValidationError) -> String
-    {
+    private func message(
+        for error: ConnectionConfig.ValidationError
+    ) -> String {
         switch error {
         case .passwordMissing:
             "Password is required."
@@ -157,17 +158,24 @@ struct ConnectionConfigEditView: View {
                                 ConnectionStatusText(status: status)
                             }
                         }
-                        if enabled.wrappedValue {
-                            if connections.isOffline(id: config.id) {
+                        switch status {
+                        case .offline(let reason):
+                            if config.enabled {
                                 Button("Reconnect") {
                                     Task { await config.enable() }
                                 }
                                 .disabled(validationError != nil)
-                            } else {
-                                Button("Pause") {
-                                    Task { await config.pause() }
-                                }
                             }
+                        case .connecting:
+                            Button("Cancel") {
+                                Task { await config.disable() }
+                            }
+                        case .reconnecting, .online:
+                            Button("Pause") {
+                                Task { await config.pause() }
+                            }
+                        case .disconnecting:
+                            EmptyView()
                         }
                     }
                 } footer: {
