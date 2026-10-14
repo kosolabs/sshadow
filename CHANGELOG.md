@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.16.1](https://github.com/kosolabs/sshadow/compare/v0.16.0...v0.16.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* harden XPCBroker to improve app stability ([#392](https://github.com/kosolabs/sshadow/issues/392)) ([4bec108](https://github.com/kosolabs/sshadow/commit/4bec108025d1ccd8d7c800cfc0d8a6c279c31ad4))
+* remove orphaned domains on startup ([#390](https://github.com/kosolabs/sshadow/issues/390)) ([3141c1a](https://github.com/kosolabs/sshadow/commit/3141c1a3f0b6d6eb02f2543deb9a56f973824ce8))
+* stop connecting when a profile is disabled or deleted ([#388](https://github.com/kosolabs/sshadow/issues/388)) ([aa763ec](https://github.com/kosolabs/sshadow/commit/aa763ecc5297f1941d1759bf3d739c69d47d2bb0))
+* try all resolved addresses before failing to connect ([#386](https://github.com/kosolabs/sshadow/issues/386)) ([bb2f147](https://github.com/kosolabs/sshadow/commit/bb2f14733dd58e29956790c860eb68441d3aacd8))
+
 ## [0.16.0](https://github.com/kosolabs/sshadow/compare/v0.15.0...v0.16.0) (2026-10-10)
 
 
