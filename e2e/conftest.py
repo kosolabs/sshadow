@@ -1,12 +1,11 @@
 import ctypes
 import getpass
-import json
 import plistlib
 import re
 import shutil
 import subprocess
 import time
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +52,61 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
+log_stream: subprocess.Popen[bytes] | None = None
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Record the session's log events to logs/e2e.log."""
+    global log_stream
+    LOG_DIR.mkdir(exist_ok=True)
+    path = LOG_DIR / "e2e.log"
+    with path.open("wb") as f:
+        log_stream = subprocess.Popen(
+            [
+                "log",
+                "stream",
+                "--style",
+                "ndjson",
+                "--level",
+                "debug",
+                "--predicate",
+                f'{PREDICATE} OR process == "logger"',
+            ],
+            stdout=f,
+            stderr=subprocess.STDOUT,
+        )
+    deadline = time.monotonic() + 10
+    while path.stat().st_size == 0 and time.monotonic() < deadline:
+        time.sleep(0.1)
+
+
+def pytest_sessionfinish(session: pytest.Session) -> None:
+    if log_stream is not None:
+        log_stream.terminate()
+        log_stream.wait(timeout=5)
+
+
+def pytest_runtest_logstart(
+    nodeid: str, location: tuple[str, int | None, str]
+) -> None:
+    subprocess.run(["logger", f"e2e start: {nodeid}"], check=True)
+
+
+test_outcomes: dict[str, str] = {}
+
+
+def pytest_runtest_logreport(report: pytest.TestReport) -> None:
+    if not report.passed and report.nodeid not in test_outcomes:
+        test_outcomes[report.nodeid] = f"{report.outcome} in {report.when}"
+
+
+def pytest_runtest_logfinish(
+    nodeid: str, location: tuple[str, int | None, str]
+) -> None:
+    outcome = test_outcomes.pop(nodeid, "passed")
+    subprocess.run(["logger", f"e2e finish ({outcome}): {nodeid}"], check=True)
+
+
 @pytest.fixture
 def logs() -> Generator[LogWatcher]:
     watcher = LogWatcher(PREDICATE)
@@ -72,9 +126,7 @@ def app(key: Path) -> Generator[App]:
     app = App(find_app())
     watcher = LogWatcher(PREDICATE)
     try:
-        app.launch(files=[key])
-        watcher.expect(msg("^URL commands enabled$"))
-        watcher.expect(msg(rf"^Opened file: {re.escape(str(key))}$"))
+        launch(app, watcher, key)
         approve_file_provider(app, watcher, key)
     except (RuntimeError, TimeoutError) as e:
         pytest.fail(str(e), pytrace=False)
@@ -82,6 +134,21 @@ def app(key: Path) -> Generator[App]:
         watcher.close()
     yield app
     app.quit()
+
+
+def launch(app: App, logs: LogWatcher, key: Path) -> None:
+    app.launch(files=[key])
+    logs.expect(msg("^URL commands enabled$"))
+    logs.expect(msg(rf"^Opened file: {re.escape(str(key))}$"))
+
+
+@pytest.fixture
+def relaunch_app(
+    app: App, logs: LogWatcher, key: Path, profile: str
+) -> Generator[Callable[[], None]]:
+    yield lambda: launch(app, logs, key)
+    if app.started() is None:
+        launch(app, logs, key)
 
 
 def read_domains() -> dict[str, Any]:
@@ -164,20 +231,3 @@ def profile(app: App, logs: LogWatcher, remote: Path, key: Path) -> Generator[st
 
     app.send("delete", name=PROFILE_NAME)
     logs.expect(msg(rf"Profile deleted: .*\bname: {PROFILE_NAME}\b"))
-
-
-@pytest.hookimpl(wrapper=True)
-def pytest_runtest_makereport(
-    item: pytest.Item, call: pytest.CallInfo[None]
-) -> Generator[None, pytest.TestReport, pytest.TestReport]:
-    """Save every event a failed test's watcher received under logs/."""
-    report = yield
-    funcargs: dict[str, object] = getattr(item, "funcargs", {})
-    watcher = funcargs.get("logs")
-    if report.when == "call" and report.failed and isinstance(watcher, LogWatcher):
-        watcher.drain()
-        LOG_DIR.mkdir(exist_ok=True)
-        path = LOG_DIR / f"e2e-{item.name}.log"
-        path.write_text("".join(json.dumps(e) + "\n" for e in watcher.seen))
-        report.sections.append(("log events", str(path)))
-    return report

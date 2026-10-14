@@ -12,6 +12,36 @@ final class CoreService: Sendable, CoreXPC {
         self.supervisor = supervisor
     }
 
+    func handle(
+        _ data: Data,
+        reply: @escaping @Sendable (Data?, (any Error)?) -> Void
+    ) {
+        Task {
+            do {
+                reply(try await handle(data), nil)
+            } catch {
+                reply(nil, error)
+            }
+        }
+    }
+
+    func handle(
+        _ data: Data,
+        progressEndpoint: NSXPCListenerEndpoint,
+        reply: @escaping @Sendable (Data?, (any Error)?) -> Void
+    ) {
+        Task {
+            do {
+                reply(
+                    try await handle(data, progressEndpoint: progressEndpoint),
+                    nil
+                )
+            } catch {
+                reply(nil, error)
+            }
+        }
+    }
+
     func handle(_ data: Data) async throws -> Data {
         let request: CoreRequest
         do {
