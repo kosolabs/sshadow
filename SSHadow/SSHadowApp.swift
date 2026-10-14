@@ -41,7 +41,7 @@ struct SSHadowApp: App {
         )
     )
 
-    @NSApplicationDelegateAdaptor private var urlHandler: URLHandler
+    @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var activation = WindowActivationTracker()
 
     init() {

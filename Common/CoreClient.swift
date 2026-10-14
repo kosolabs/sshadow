@@ -8,6 +8,7 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
     NSXPCListenerDelegate
 {
     private enum State {
+        case idle
         case waiting
         case connected(NSXPCConnection)
         case detaching(NSXPCConnection)
@@ -19,7 +20,23 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
     private let domain: NSFileProviderDomain
     private let listener = NSXPCListener.anonymous()
     private let sharedUrl: URL
-    private let state = Mutex(State.waiting)
+    private let state = Mutex(State.idle)
+
+    private static let clients = Mutex<
+        [NSFileProviderDomainIdentifier: CoreClient]
+    >([:])
+
+    // File Provider can create several extensions for a domain in one process.
+    public static func shared(for domain: NSFileProviderDomain) -> CoreClient {
+        clients.withLock { clients in
+            if let client = clients[domain.identifier] {
+                return client
+            }
+            let client = CoreClient(domain: domain)
+            clients[domain.identifier] = client
+            return client
+        }
+    }
 
     public init(
         domain: NSFileProviderDomain,
@@ -46,7 +63,7 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
             switch $0 {
             case .connected(let connection), .detaching(let connection):
                 connection
-            case .waiting, .detached, .suspended:
+            case .idle, .waiting, .detached, .suspended:
                 nil
             }
         }

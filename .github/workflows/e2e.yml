@@ -55,17 +55,18 @@ jobs:
       run: uv run --directory e2e pytest -v
 
     - name: Collect logs
-      if: failure()
+      if: always()
       run: |
         mkdir -p logs
         cp "/tmp/ssh-test-server-$USER/sshd.log" logs/ || true
+        ps -axo pid,ppid,lstart,command >logs/ps.txt 2>&1 || true
         pluginkit -mAvvv -i com.kosolabs.SSHadow.Extension >logs/pluginkit.txt 2>&1 || true
         log show --last 30m --style syslog \
-          --predicate 'subsystem BEGINSWITH "com.kosolabs.SSHadow" OR subsystem == "com.apple.FileProvider" OR process == "syspolicyd" OR process == "runningboardd" OR subsystem BEGINSWITH "com.apple.extensionkit"' \
+          --predicate 'subsystem BEGINSWITH "com.kosolabs.SSHadow" OR subsystem == "com.apple.FileProvider" OR process == "syspolicyd" OR process == "runningboardd" OR subsystem BEGINSWITH "com.apple.extensionkit" OR process == "lsd" OR process == "pkd"' \
           >logs/system.log || true
 
     - name: Upload logs
-      if: failure()
+      if: always()
       uses: actions/upload-artifact@v7
       with:
         name: e2e-logs

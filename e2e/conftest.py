@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from logwatch import LogWatcher, msg
-from sshadow import REPO, App, find_app
+from sshadow import REPO, App, cloud_storage, find_app
 
 PREDICATE = 'subsystem BEGINSWITH "com.kosolabs.SSHadow"'
 LOG_DIR = REPO / "logs"
@@ -138,7 +138,7 @@ def app(key: Path) -> Generator[App]:
 
 def launch(app: App, logs: LogWatcher, key: Path) -> None:
     app.launch(files=[key])
-    logs.expect(msg("^URL commands enabled$"))
+    logs.expect(msg("^Test commands enabled$"))
     logs.expect(msg(rf"^Opened file: {re.escape(str(key))}$"))
 
 
@@ -231,3 +231,16 @@ def profile(app: App, logs: LogWatcher, remote: Path, key: Path) -> Generator[st
 
     app.send("delete", name=PROFILE_NAME)
     logs.expect(msg(rf"Profile deleted: .*\bname: {PROFILE_NAME}\b"))
+    wait_for_removal(cloud_storage(PROFILE_NAME))
+
+
+def wait_for_removal(path: Path, timeout: float = 30) -> None:
+    """Wait for File Provider to finish removing a deleted domain's root.
+
+    Until it does, adding a domain with the same name fails.
+    """
+    deadline = time.monotonic() + timeout
+    while path.exists():
+        if time.monotonic() >= deadline:
+            raise TimeoutError(f"{path} still exists {timeout}s after deletion")
+        time.sleep(0.5)

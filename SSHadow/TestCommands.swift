@@ -3,75 +3,79 @@ import Common
 import CoreKit
 import SwiftData
 
-private let logger = Logger(category: "URLHandler")
+private let logger = Logger(category: "TestCommands")
 
-final class URLHandler: NSObject, NSApplicationDelegate {
+final class TestCommands {
     struct Error: LocalizedError {
         let message: String
         var errorDescription: String? { message }
     }
 
     static let enabled = ProcessInfo.processInfo.arguments.contains(
-        "-enableURLCommands"
+        "-enableTestCommands"
     )
 
-    override init() {
-        super.init()
-        if Self.enabled {
-            logger.notice("URL commands enabled")
-        }
-    }
+    static let notification = Notification.Name("com.kosolabs.SSHadow.command")
 
-    func application(_ application: NSApplication, open urls: [URL]) {
-        guard Self.enabled else {
-            logger.notice("URL commands disabled, ignoring: \(urls)")
-            return
-        }
-        for url in urls {
-            Task {
+    init() {
+        DistributedNotificationCenter.default().addObserver(
+            forName: Self.notification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self else { return }
+            let object = notification.object
+            Task { @MainActor in
                 do {
-                    try await handle(url)
+                    try await self.handle(Self.params(from: object))
                 } catch {
                     logger.error(
-                        "Failed to handle \"\(url)\": \(error.localizedDescription)"
+                        "Failed to handle \(String(describing: object)): \(error.localizedDescription)"
                     )
                 }
             }
         }
+        logger.notice("Test commands enabled")
     }
 
-    private func handle(_ url: URL) async throws {
-        if url.isFileURL {
-            logger.notice("Opened file: \(url.path(percentEncoded: false))")
-            return
+    private static func params(from object: Any?) throws -> [String: String] {
+        guard let string = object as? String,
+            let params = try? JSONDecoder().decode(
+                [String: String].self,
+                from: Data(string.utf8)
+            )
+        else {
+            throw Error(message: "invalid command")
         }
-        logger.notice("Handle \(url)")
-        guard let command = url.host() else {
-            throw Error(message: "command is nil")
-        }
+        return params
+    }
+
+    private func handle(_ params: [String: String]) async throws {
+        logger.notice("Handle \(params)")
+        let command = try params.required("command")
         switch command {
         case "enable":
-            try await enable(name: url.query(for: "name"))
+            try await enable(name: params.required("name"))
         case "disable":
-            try await disable(name: url.query(for: "name"))
+            try await disable(name: params.required("name"))
         case "poll":
-            try await poll(name: url.query(for: "name"))
+            try await poll(name: params.required("name"))
         case "create":
             try await create(
-                name: url.query(for: "name"),
-                host: url.query(for: "host"),
-                port: url.optionalQuery(for: "port").map({
+                name: params.required("name"),
+                host: params.required("host"),
+                port: params.optional("port").map({
                     guard let port = UInt16($0) else {
                         throw Error(message: "invalid port: \"\($0)\"")
                     }
                     return port
                 }),
-                user: url.optionalQuery(for: "user"),
-                path: url.optionalQuery(for: "path"),
-                key: url.query(for: "key")
+                user: params.optional("user"),
+                path: params.optional("path"),
+                key: params.required("key")
             )
         case "delete":
-            try await delete(name: url.query(for: "name"))
+            try await delete(name: params.required("name"))
         case "quit":
             NSApp.terminate(nil)
         default:
@@ -155,26 +159,16 @@ final class URLHandler: NSObject, NSApplicationDelegate {
     }
 }
 
-extension URL {
-    fileprivate func query(for name: String) throws -> String {
-        guard let value = optionalQuery(for: name) else {
-            throw URLHandler.Error(
-                message: "missing query parameter: \"\(name)\""
-            )
+extension [String: String] {
+    fileprivate func required(_ name: String) throws -> String {
+        guard let value = optional(name) else {
+            throw TestCommands.Error(message: "missing parameter: \"\(name)\"")
         }
         return value
     }
 
-    fileprivate func optionalQuery(for name: String) -> String? {
-        guard
-            let value = URLComponents(
-                url: self,
-                resolvingAgainstBaseURL: false
-            )?.queryItems?.first(where: { $0.name == name })?.value,
-            !value.isEmpty
-        else {
-            return nil
-        }
+    fileprivate func optional(_ name: String) -> String? {
+        guard let value = self[name], !value.isEmpty else { return nil }
         return value
     }
 }
