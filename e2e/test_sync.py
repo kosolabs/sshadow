@@ -1,10 +1,9 @@
 import random
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from logwatch import LogWatcher, msg
-from sshadow import App
+from logwatch import LogWatcher
+from sshadow import App, enable
 from tree import (
     Delete,
     Dir,
@@ -62,19 +61,6 @@ EDITS: list[Edit] = [
     Delete("empty-dir"),
     Delete("Old.rtfd"),
 ]
-
-
-def enable(app: App, logs: LogWatcher, profile: str) -> Path:
-    app.send("enable", name=profile)
-    # The extension can take a while to launch the first time, e.g. on CI.
-    logs.expect(msg(rf"Profile enabled: .*\bname: {profile}\b"), timeout=60)
-    root = Path.home() / "Library" / "CloudStorage" / f"SSHadow-{profile}"
-    deadline = time.monotonic() + 10
-    while not root.is_dir():
-        assert time.monotonic() < deadline, f"{root} never appeared"
-        logs.check()
-        time.sleep(0.1)
-    return root
 
 
 def test_upload(app: App, logs: LogWatcher, profile: str, remote: Path) -> None:

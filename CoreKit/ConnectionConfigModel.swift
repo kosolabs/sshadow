@@ -115,6 +115,7 @@ public class ConnectionConfigModel: CustomStringConvertible {
             let config = try ConnectionConfig(from: self)
             try await DomainRegistry.shared.connect(config: config)
             self.enabled = true
+            save()
             logger.notice("Profile enabled: \(self)")
         } catch {
             logger.error("Failed to enable \(self): \(error)")
@@ -124,7 +125,18 @@ public class ConnectionConfigModel: CustomStringConvertible {
     public func disable() async {
         await DomainRegistry.shared.disable(domain: domain)
         self.enabled = false
+        save()
         logger.notice("Profile disabled: \(self)")
+    }
+
+    // Save now rather than on autosave, since startup removes the domains of
+    // profiles that aren't enabled, e.g. if the app crashed before autosaving.
+    private func save() {
+        do {
+            try modelContext?.save()
+        } catch {
+            logger.error("Failed to save \(self): \(error)")
+        }
     }
 
     public func pause() async {

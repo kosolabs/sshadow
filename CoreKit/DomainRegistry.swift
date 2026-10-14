@@ -104,10 +104,19 @@ public actor DomainRegistry {
     }
 
     public func poll(domain: NSFileProviderDomain) async throws {
-        if let supervisor = supervisors[domain.id] {
-            try await supervisor.withSession { try await $0.pollAll() }
-        } else {
+        guard let supervisor = supervisors[domain.id] else {
             logger.error("Failed to poll missing supervisor: \(domain)")
+            return
+        }
+        // File operations cancel a poll in progress, so retry until one
+        // finishes rather than drop a poll the user asked for.
+        while true {
+            do {
+                return try await supervisor.withSession { try await $0.pollAll() }
+            } catch is CancellationError where !Task.isCancelled {
+                logger.debug("Poll interrupted by operation, retrying")
+                try await Task.sleep(for: .milliseconds(100))
+            }
         }
     }
 
