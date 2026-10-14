@@ -209,8 +209,7 @@ class TestSandbox {
             connection.resume()
             self.connection = connection
 
-            let ext = connection.remoteObjectProxy as! ExtXPC
-            await ext.attach()
+            try await connection.attach()
 
             var folders: [NSFileProviderItemIdentifier] = [.rootContainer]
             while !folders.isEmpty {
@@ -226,7 +225,7 @@ class TestSandbox {
                 }
             }
 
-            await ext.detach()
+            try await connection.detach()
 
             self._client = client
             return client

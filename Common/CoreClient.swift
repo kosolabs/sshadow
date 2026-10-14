@@ -1,18 +1,25 @@
 import FileProvider
 import Foundation
+import Synchronization
 
 private let logger = Logger(category: "CoreClient")
 
 public final class CoreClient: NSObject, NSFileProviderServiceSource,
-    NSXPCListenerDelegate, ExtXPC
+    NSXPCListenerDelegate
 {
+    private enum State {
+        case waiting
+        case connected(NSXPCConnection)
+        case detaching(NSXPCConnection)
+        case detached
+        case suspended
+    }
+
     public let serviceName = SSHadow.extensionServiceName
     private let domain: NSFileProviderDomain
     private let listener = NSXPCListener.anonymous()
-    private var connection: NSXPCConnection?
     private let sharedUrl: URL
-    private var attached: Bool = true
-    private var suspended: Bool = false
+    private let state = Mutex(State.waiting)
 
     public init(
         domain: NSFileProviderDomain,
@@ -34,9 +41,24 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         listener.endpoint
     }
 
+    private var connection: NSXPCConnection? {
+        state.withLock {
+            switch $0 {
+            case .connected(let connection), .detaching(let connection):
+                connection
+            case .waiting, .detached, .suspended:
+                nil
+            }
+        }
+    }
+
     private func suspend() async {
-        guard attached, !suspended else { return }
-        suspended = true
+        let shouldSuspend = state.withLock {
+            guard case .waiting = $0 else { return false }
+            $0 = .suspended
+            return true
+        }
+        guard shouldSuspend else { return }
         await domain.suspend(
             reason: "SSHadow needs to be running in order to sync this volume.",
             options: .temporary
@@ -47,31 +69,54 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         _ listener: NSXPCListener,
         shouldAcceptNewConnection connection: NSXPCConnection
     ) -> Bool {
-        attached = true
-        suspended = false
         connection.exportedInterface = NSXPCInterface(with: ExtXPC.self)
-        connection.exportedObject = self
+        connection.exportedObject = ExtHandler(
+            client: self,
+            connection: connection
+        )
         connection.remoteObjectInterface = NSXPCInterface(with: CoreXPC.self)
-        connection.invalidationHandler = {
-            self.connection = nil
-            Task { await self.suspend() }
-            logger.info("Core XPC disconnected")
+        connection.invalidationHandler = { [weak self] in
+            guard let self else { return }
+            self.disconnected(connection)
         }
         connection.interruptionHandler = { connection.invalidate() }
+        state.withLock { $0 = .connected(connection) }
         connection.resume()
-        self.connection = connection
 
         logger.info("Core XPC connected")
         return true
     }
 
-    public func attach() async {}
-
-    public func detach() async {
-        attached = false
+    private func disconnected(_ connection: NSXPCConnection) {
+        let current = state.withLock {
+            switch $0 {
+            case .connected(let current) where current === connection:
+                $0 = .waiting
+            case .detaching(let current) where current === connection:
+                $0 = .detached
+            default:
+                return false
+            }
+            return true
+        }
+        guard current else {
+            logger.info("Ignored stale Core XPC disconnect")
+            return
+        }
+        Task { await suspend() }
+        logger.info("Core XPC disconnected")
     }
 
-    private func requireService() async throws(CoreError) -> CoreXPC {
+    fileprivate func detach(_ connection: NSXPCConnection) {
+        state.withLock {
+            if case .connected(let current) = $0, current === connection {
+                $0 = .detaching(current)
+            }
+        }
+    }
+
+    private func requireConnection() async throws(CoreError) -> NSXPCConnection
+    {
         if connection == nil {
             logger.info("Waiting for Core XPC to connect")
             let deadline = ContinuousClock.now + .seconds(1)
@@ -79,21 +124,21 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
                 try? await Task.sleep(for: .milliseconds(50))
             }
         }
-        guard let service = connection?.remoteObjectProxy as? CoreXPC else {
+        guard let connection else {
             await suspend()
             logger.error("Core XPC never connected")
             throw CoreError.serviceUnreachable
         }
-        return service
+        return connection
     }
 
     private func perform<Response: Message>(
-        _ handle: (CoreXPC) async throws -> Data
+        _ handle: (NSXPCConnection) async throws -> Data
     ) async throws(CoreError) -> Response {
-        let service = try await requireService()
+        let connection = try await requireConnection()
         let result: CoreResult<Response>
         do {
-            result = try CoreResult.decoded(from: try await handle(service))
+            result = try CoreResult.decoded(from: try await handle(connection))
         } catch {
             logger.error("Request failed: \(error)")
             throw CoreError(from: error)
@@ -335,5 +380,26 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
             progressEndpoint: sync.endpoint
         )
         return (response.url, response.range)
+    }
+}
+
+private final class ExtHandler: NSObject, ExtXPC {
+    private weak var client: CoreClient?
+    private weak var connection: NSXPCConnection?
+
+    init(client: CoreClient, connection: NSXPCConnection) {
+        self.client = client
+        self.connection = connection
+    }
+
+    func attach(reply: @escaping @Sendable () -> Void) {
+        reply()
+    }
+
+    func detach(reply: @escaping @Sendable () -> Void) {
+        if let client, let connection {
+            client.detach(connection)
+        }
+        reply()
     }
 }

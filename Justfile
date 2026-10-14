@@ -12,8 +12,9 @@ test: start-test-server
 build:
     xcodebuild build -scheme SSHadow -configuration Debug -destination 'platform=macOS' -quiet
 
-e2e: build start-test-server
-    uv run --directory e2e pytest -v
+[positional-arguments]
+e2e *ARGS: build start-test-server
+    uv run --directory e2e pytest -v "$@"
 
 log: (_log-stream 'subsystem beginswith "com.kosolabs.SSHadow"')
 
