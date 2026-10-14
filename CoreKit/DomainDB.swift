@@ -30,7 +30,7 @@ actor DomainDB {
         try await factory.open(config: config)
     }
 
-    static func delete(id: UUID) async {
+    static func delete(id: UUID) {
         let basePath = url(for: id).path
 
         for suffix in ["", "-shm", "-wal"] {

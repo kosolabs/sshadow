@@ -29,6 +29,18 @@ public actor AppDB {
         return try AppDB(modelContainer: getModelContainer(config: config))
     }
 
+    public func enabledIds() -> Set<UUID>? {
+        let descriptor = FetchDescriptor<ConnectionConfigModel>(
+            predicate: #Predicate { profile in
+                profile.enabled
+            }
+        )
+        guard let profiles = try? modelContext.fetch(descriptor) else {
+            return nil
+        }
+        return Set(profiles.map(\.id))
+    }
+
     public func enabledConfigs() -> [ConnectionConfig] {
         let descriptor = FetchDescriptor<ConnectionConfigModel>(
             predicate: #Predicate { profile in
