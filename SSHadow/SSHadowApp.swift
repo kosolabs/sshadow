@@ -6,16 +6,29 @@ import SwiftUI
 
 private let logger = Logger(category: "SSHadowApp")
 
-private func reconnectAllDomains() {
+private func startup() {
     Task {
-        for config in await AppDB.shared.enabledConfigs() {
-            do {
-                try await DomainRegistry.shared.connect(config: config)
-            } catch {
-                logger.error("Failed to enable \(config.domain): \(error)")
-            }
+        await reconnectEnabledDomains()
+        await removeOrphanedDomains()
+    }
+}
+
+private func reconnectEnabledDomains() async {
+    for config in await AppDB.shared.enabledConfigs() {
+        do {
+            try await DomainRegistry.shared.connect(config: config)
+        } catch {
+            logger.error("Failed to enable \(config.domain): \(error)")
         }
     }
+}
+
+private func removeOrphanedDomains() async {
+    guard let enabledIds = await AppDB.shared.enabledIds() else {
+        logger.error("Failed to clean up orphaned domains")
+        return
+    }
+    await DomainRegistry.shared.removeOrphanedDomains(enabledIds: enabledIds)
 }
 
 @main
@@ -32,7 +45,7 @@ struct SSHadowApp: App {
     @State private var activation = WindowActivationTracker()
 
     init() {
-        reconnectAllDomains()
+        startup()
     }
 
     var body: some Scene {

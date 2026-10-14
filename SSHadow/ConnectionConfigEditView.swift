@@ -159,7 +159,7 @@ struct ConnectionConfigEditView: View {
                             }
                         }
                         switch status {
-                        case .offline(let reason):
+                        case .offline:
                             if config.enabled {
                                 Button("Reconnect") {
                                     Task { await config.enable() }

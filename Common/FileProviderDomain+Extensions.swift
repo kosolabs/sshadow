@@ -42,6 +42,15 @@ extension NSFileProviderDomain {
         }
     }
 
+    public static func all() async -> [NSFileProviderDomain] {
+        do {
+            return try await NSFileProviderManager.domains()
+        } catch {
+            logger.error("Failed to list domains: \(error)")
+            return []
+        }
+    }
+
     public func add() async {
         do {
             try await NSFileProviderManager.add(self)
