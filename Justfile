@@ -9,7 +9,10 @@ stop-test-server:
 test: start-test-server
     xcodebuild test -scheme SSHadow -testPlan UnitTests -destination 'platform=macOS'
 
-e2e: start-test-server
+build:
+    xcodebuild build -scheme SSHadow -configuration Debug -destination 'platform=macOS' -quiet
+
+e2e: build start-test-server
     uv run --directory e2e pytest -v
 
 log: (_log-stream 'subsystem beginswith "com.kosolabs.SSHadow"')

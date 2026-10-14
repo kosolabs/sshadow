@@ -12,7 +12,6 @@ protocol XPCBroker {
 actor DomainXPCBroker: XPCBroker {
     private let domain: NSFileProviderDomain
     private var connection: NSXPCConnection?
-    private var service: CoreService?
     private var rebrokering: Task<Void, Never>?
 
     init(domain: NSFileProviderDomain) {
@@ -20,11 +19,10 @@ actor DomainXPCBroker: XPCBroker {
     }
 
     func broker(exporting service: CoreService) async {
-        self.service = service
-        await broker()
+        await broker(service: service)
     }
 
-    private func broker() async {
+    private func broker(service: CoreService) async {
         guard connection == nil, let connection = await awaitConnection() else {
             return
         }
@@ -35,7 +33,7 @@ actor DomainXPCBroker: XPCBroker {
         connection.invalidationHandler = { [weak self] in
             Task {
                 guard let self else { return }
-                await self.rebrokerXpc()
+                await self.rebrokerXpc(service: service)
             }
         }
         connection.interruptionHandler = { connection.invalidate() }
@@ -64,10 +62,10 @@ actor DomainXPCBroker: XPCBroker {
         return nil
     }
 
-    private func rebrokerXpc() {
+    private func rebrokerXpc(service: CoreService) {
         logger.notice("XPC invalidated: \(domain)")
         connection = nil
-        rebrokering = Task { await broker() }
+        rebrokering = Task { await broker(service: service) }
     }
 
     func teardown() async {

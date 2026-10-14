@@ -12,6 +12,7 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
     private var connection: NSXPCConnection?
     private let sharedUrl: URL
     private var attached: Bool = true
+    private var suspended: Bool = false
 
     public init(
         domain: NSFileProviderDomain,
@@ -34,7 +35,8 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
     }
 
     private func suspend() async {
-        guard attached else { return }
+        guard attached, !suspended else { return }
+        suspended = true
         await domain.suspend(
             reason: "SSHadow needs to be running in order to sync this volume.",
             options: .temporary
@@ -46,6 +48,7 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         shouldAcceptNewConnection connection: NSXPCConnection
     ) -> Bool {
         attached = true
+        suspended = false
         connection.exportedInterface = NSXPCInterface(with: ExtXPC.self)
         connection.exportedObject = self
         connection.remoteObjectInterface = NSXPCInterface(with: CoreXPC.self)
