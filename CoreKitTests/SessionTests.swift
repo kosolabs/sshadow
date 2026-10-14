@@ -2575,7 +2575,7 @@ struct SessionTests {
         }
     }
 
-    struct PollInterruptionTests {
+    struct PollTurnTakingTests {
         @Test func reconcileAllThrowsWhenItsTaskIsCancelled() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "dir/file.txt")
@@ -2607,14 +2607,16 @@ struct SessionTests {
             }
         }
 
-        @Test func operationInterruptsRunningPoll() async throws {
+        @Test func operationWaitsForRunningPoll() async throws {
             let sandbox = TestSandbox()
             // A tree large enough that reconcileAll is still walking the
-            // server when the operation arrives to cancel it.
+            // server when the operation arrives.
             for i in 0..<60 {
                 try sandbox.createFile(at: "dir/file\(i).txt")
             }
             let session = try await sandbox.getSession()
+            // A change the poll should surface.
+            try sandbox.createFile(at: "new.txt")
 
             let poll = Task { try await session.pollAll() }
             // Wait until the poll's reconcile is actually in flight.
@@ -2622,14 +2624,48 @@ struct SessionTests {
                 await Task.yield()
             }
 
-            // An incoming operation cancels the in-flight poll.
             _ = try await session.createDirectory("newdir", in: .rootContainer)
 
-            await #expect(throws: CancellationError.self) {
-                try await poll.value
+            // The poll finishes and emits its changes.
+            try await poll.value
+            #expect(await session.anchor > 0)
+        }
+
+        @Test func pollWaitsForOutstandingOperation() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir")
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            try Data(count: 10_485_760).write(to: uploadUrl)
+            let session = try await sandbox.getSession()
+            // A change the poll should surface.
+            try sandbox.createFile(at: "dir/new.txt")
+
+            let progress = Progress()
+            let upload = Task {
+                try await session.upload(
+                    "large.dat",
+                    to: .rootContainer,
+                    file: uploadUrl,
+                    progress: progress
+                )
             }
-            // A cancelled poll emits no changes.
-            #expect(await session.anchor == 0)
+            while await session.outstanding == 0 {
+                await Task.yield()
+            }
+
+            let poll = Task { try await session.pollAll() }
+            for _ in 0..<100 {
+                await Task.yield()
+            }
+            // The poll doesn't start while the upload runs.
+            #expect(await session.reconcileTask == nil)
+
+            progress.cancel()
+            _ = try? await upload.value
+
+            // ... and runs once it finishes.
+            try await poll.value
+            #expect(await session.anchor > 0)
         }
 
         @Test func operationTracksAndReleasesOutstandingCount() async throws {

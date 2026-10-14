@@ -35,10 +35,6 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
     }
 
     private func suspend() async {
-        // Only the app resumes the domain, which may start a new instance of
-        // the extension, so suspend once until the app connects to this one.
-        // Otherwise a request still waiting here could suspend the domain
-        // after the app has resumed it.
         guard attached, !suspended else { return }
         suspended = true
         await domain.suspend(

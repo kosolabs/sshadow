@@ -129,8 +129,6 @@ public class ConnectionConfigModel: CustomStringConvertible {
         logger.notice("Profile disabled: \(self)")
     }
 
-    // Save now rather than on autosave, since startup removes the domains of
-    // profiles that aren't enabled, e.g. if the app crashed before autosaving.
     private func save() {
         do {
             try modelContext?.save()

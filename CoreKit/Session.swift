@@ -34,7 +34,7 @@ actor Session {
     private var schedule: PollSchedule?
     private var pollTask: Task<Void, Never>?
     private(set) var reconcileTask: Task<[Change], any Error>?
-    private(set) var outstanding = 0
+    private let gate = ReconcileGate()
     private var changes: [(UInt64, [Change])] = []
     private(set) var anchor: UInt64 = 0
 
@@ -100,6 +100,8 @@ actor Session {
         )
     }
 
+    var outstanding: Int { gate.operations }
+
     func close() async {
         await sftp.close()
         await ssh.close()
@@ -122,7 +124,7 @@ actor Session {
                 } catch CoreError.serverUnreachable {
                     break
                 } catch is CancellationError {
-                    logger.debug("Poll interrupted by operation")
+                    logger.debug("Poll interrupted")
                 } catch {
                     logger.error("Poll error: \(error)")
                     log.warning("Sync failed", error: error)
@@ -134,7 +136,7 @@ actor Session {
 
     func tick() async throws {
         guard let schedule else { return }
-        guard outstanding == 0 else { return }
+        guard !gate.isBusy else { return }
         switch schedule.next(
             now: ContinuousClock.now,
             userIdle: idleTimeProvider()
@@ -157,12 +159,14 @@ actor Session {
     }
 
     func pollAll() async throws {
-        logger.info("Poll: \(config.url), anchor: \(anchor)")
+        let newChanges = try await gate.reconcile {
+            logger.info("Poll: \(config.url), anchor: \(anchor)")
 
-        let reconcileTask = Task { try await reconcileAll() }
-        self.reconcileTask = reconcileTask
-        defer { self.reconcileTask = nil }
-        let newChanges = try await reconcileTask.value
+            let reconcileTask = Task { try await reconcileAll() }
+            self.reconcileTask = reconcileTask
+            defer { self.reconcileTask = nil }
+            return try await reconcileTask.value
+        }
         guard !newChanges.isEmpty else {
             return
         }
@@ -230,16 +234,18 @@ actor Session {
     }
 
     func pollWatched() async throws {
-        guard !watched.isEmpty else { return }
+        let newChanges: [Change] = try await gate.reconcile {
+            guard !watched.isEmpty else { return [] }
 
-        logger.info(
-            "Poll: \(config.url), anchor: \(anchor), items: \(watched.keys)"
-        )
+            logger.info(
+                "Poll: \(config.url), anchor: \(anchor), items: \(watched.keys)"
+            )
 
-        let reconcileTask = Task { try await reconcileWatched() }
-        self.reconcileTask = reconcileTask
-        defer { self.reconcileTask = nil }
-        let newChanges = try await reconcileTask.value
+            let reconcileTask = Task { try await reconcileWatched() }
+            self.reconcileTask = reconcileTask
+            defer { self.reconcileTask = nil }
+            return try await reconcileTask.value
+        }
         guard !newChanges.isEmpty else {
             return
         }
@@ -474,9 +480,8 @@ actor Session {
     func list(
         for itemId: NSFileProviderItemIdentifier
     ) async throws -> [Item] {
-        outstanding += 1
-        reconcileTask?.cancel()
-        defer { outstanding -= 1 }
+        await gate.enter()
+        defer { gate.leave() }
 
         if try await !db.isEnumerated(itemId) {
             try await enumerate(itemId: itemId)
@@ -519,9 +524,8 @@ actor Session {
         accessTime: Date? = nil,
         modifyTime: Date? = nil
     ) async throws -> Item {
-        outstanding += 1
-        reconcileTask?.cancel()
-        defer { outstanding -= 1 }
+        await gate.enter()
+        defer { gate.leave() }
 
         let changes = {
             var changes: [String] = []
@@ -557,9 +561,8 @@ actor Session {
         in parentId: NSFileProviderItemIdentifier,
         target: String
     ) async throws -> Item {
-        outstanding += 1
-        reconcileTask?.cancel()
-        defer { outstanding -= 1 }
+        await gate.enter()
+        defer { gate.leave() }
 
         try await perform(
             with: parentId,
@@ -584,9 +587,8 @@ actor Session {
         flags: Item.Flags = .all,
         ifExists: OnExists = .fail
     ) async throws -> Item {
-        outstanding += 1
-        reconcileTask?.cancel()
-        defer { outstanding -= 1 }
+        await gate.enter()
+        defer { gate.leave() }
 
         let ref = await ref(for: name, in: parentId)
         try await perform(
@@ -612,9 +614,8 @@ actor Session {
         to newParentId: NSFileProviderItemIdentifier,
         name newName: String
     ) async throws -> Item {
-        outstanding += 1
-        reconcileTask?.cancel()
-        defer { outstanding -= 1 }
+        await gate.enter()
+        defer { gate.leave() }
 
         let oldPath = try await path(for: itemId)
         let newPath = try await path(for: newName, in: newParentId)
@@ -644,9 +645,8 @@ actor Session {
     func removeFile(
         for itemId: NSFileProviderItemIdentifier
     ) async throws {
-        outstanding += 1
-        reconcileTask?.cancel()
-        defer { outstanding -= 1 }
+        await gate.enter()
+        defer { gate.leave() }
 
         try await perform(
             with: itemId,
@@ -661,9 +661,8 @@ actor Session {
     func removeDirectory(
         for itemId: NSFileProviderItemIdentifier
     ) async throws {
-        outstanding += 1
-        reconcileTask?.cancel()
-        defer { outstanding -= 1 }
+        await gate.enter()
+        defer { gate.leave() }
 
         try await perform(
             with: itemId,
@@ -682,9 +681,8 @@ actor Session {
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
         progress: Progress
     ) async throws -> Item {
-        outstanding += 1
-        reconcileTask?.cancel()
-        defer { outstanding -= 1 }
+        await gate.enter()
+        defer { gate.leave() }
 
         let manifest = try Manifest(from: url)
 
@@ -766,9 +764,8 @@ actor Session {
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
         progress: Progress
     ) async throws -> (URL, Item) {
-        outstanding += 1
-        reconcileTask?.cancel()
-        defer { outstanding -= 1 }
+        await gate.enter()
+        defer { gate.leave() }
 
         let item = try await item(for: itemId)
         let url = sharedUrl.appending(path: itemId.rawValue)
@@ -862,9 +859,8 @@ actor Session {
         range: Range<UInt64>,
         progress: Progress
     ) async throws -> (URL, Range<UInt64>) {
-        outstanding += 1
-        reconcileTask?.cancel()
-        defer { outstanding -= 1 }
+        await gate.enter()
+        defer { gate.leave() }
 
         let item = try await item(for: itemId)
         let file = File(item: item)
