@@ -2534,6 +2534,39 @@ struct SessionTests {
             #expect(actual == expected)
         }
 
+        @Test func streamAfterUploadReturnsUploadedContents() async throws {
+            let sandbox = TestSandbox()
+            let old = Data(repeating: 0xAA, count: Int(chunkSize) * 2)
+            let new = Data(repeating: 0xBB, count: Int(chunkSize) * 2)
+            try sandbox.createFile(at: "edited.dat", data: old)
+            let session = try await sandbox.getSession()
+
+            let itemId = try await session.child(name: "edited.dat")
+            let (warmUrl, _) = try await session.stream(
+                itemId: itemId,
+                range: 0..<1,
+                progress: Progress()
+            )
+            #expect(try Data(contentsOf: warmUrl).prefix(1) == old.prefix(1))
+
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            try new.write(to: uploadUrl)
+            let item = try await session.upload(
+                "edited.dat",
+                to: .rootContainer,
+                file: uploadUrl,
+                progress: Progress()
+            )
+            #expect(item.id == itemId)
+
+            let (freshUrl, _) = try await session.stream(
+                itemId: itemId,
+                range: 0..<(chunkSize * 2),
+                progress: Progress()
+            )
+            #expect(try Data(contentsOf: freshUrl) == new)
+        }
+
         @Test func streamAfterDownloadOfReadOnlyFileSucceeds() async throws {
             let sandbox = TestSandbox()
             let data = Data(repeating: 0xAB, count: Int(chunkSize))

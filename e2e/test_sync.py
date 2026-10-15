@@ -285,7 +285,6 @@ def test_remote_edit_after_read(
     wait_for_tree(local, {"big.bin": File(new)}, on_poll=logs.check)
 
 
-@pytest.mark.skip(reason="not implemented yet")
 def test_local_edit_after_read(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:

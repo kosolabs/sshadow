@@ -695,6 +695,10 @@ actor Session {
         )
         defer { transfers.end(transfer: transfer) }
 
+        if let itemId = try? await child(of: parentId, name: name) {
+            await cache.invalidate(itemId)
+        }
+
         let message: LogMessage = await "Upload \(ref(for: name, in: parentId))"
         let estimator = ThroughputEstimator(
             progress: progress,
@@ -756,7 +760,9 @@ actor Session {
 
         let kind: Item.Kind =
             manifest.root.kind == .folder ? .init(directoryNamed: name) : .file
-        return try await record(name, in: parentId, kind: kind)
+        let item = try await record(name, in: parentId, kind: kind)
+        await cache.invalidate(item.id)
+        return item
     }
 
     func download(
