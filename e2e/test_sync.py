@@ -139,41 +139,6 @@ def modify_requested(name: str) -> Matcher:
     return msg(rf"^Modify item .*\bfilename: {name},")
 
 
-@pytest.mark.skip(reason="not implemented yet")
-def test_conflicting_edits(
-    app: App, logs: LogWatcher, profile: str, remote: Path
-) -> None:
-    tree: Tree = {"notes.txt": File(b"original\n")}
-    make_tree(remote, tree)
-    local = enable(app, logs, profile)
-    wait_for_tree(local, tree, on_poll=logs.check)
-
-    (remote / "notes.txt").write_bytes(b"edited on the server\n")
-    (local / "notes.txt").write_bytes(b"edited locally\n")
-    logs.expect(modify_requested("notes.txt"))
-    app.send("poll", name=profile)
-    wait_for(
-        converged(local, remote, b"edited on the server\n", b"edited locally\n"),
-        on_poll=logs.check,
-    )
-
-
-@pytest.mark.skip(reason="not implemented yet")
-def test_delete_remotely_edited(
-    app: App, logs: LogWatcher, profile: str, remote: Path
-) -> None:
-    tree: Tree = {"notes.txt": File(b"original\n")}
-    make_tree(remote, tree)
-    local = enable(app, logs, profile)
-    wait_for_tree(local, tree, on_poll=logs.check)
-
-    (remote / "notes.txt").write_bytes(b"edited on the server\n")
-    (local / "notes.txt").unlink()
-    logs.expect(msg(r"^Delete item "))
-    app.send("poll", name=profile)
-    wait_for(converged(local, remote, b"edited on the server\n"), on_poll=logs.check)
-
-
 def test_edit_remotely_deleted(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
