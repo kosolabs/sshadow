@@ -109,6 +109,41 @@ class LogWatcher:
                 return e
         raise TimeoutError(f"no matching event within {timeout}s\n\n{self.tail()}")
 
+    def expect_all(
+        self,
+        matchers: Sequence[Matcher],
+        *,
+        fail: Sequence[Matcher] = (fault,),
+        timeout: float = 10,
+    ) -> list[Event]:
+        """Wait for an event matching each of `matchers`, in any order."""
+        deadline = time.monotonic() + timeout
+        remaining = list(matchers)
+        events: list[Event] = []
+        while remaining:
+            e = self.expect(
+                lambda e: any(m(e) for m in remaining),
+                fail=fail,
+                timeout=deadline - time.monotonic(),
+            )
+            remaining.remove(next(m for m in remaining if m(e)))
+            events.append(e)
+        return events
+
+    def expect_none(
+        self,
+        matcher: Matcher,
+        *,
+        fail: Sequence[Matcher] = (fault,),
+        timeout: float = 10,
+    ) -> None:
+        """Fail if an event matching `matcher` arrives within `timeout`."""
+        try:
+            e = self.expect(matcher, fail=fail, timeout=timeout)
+        except TimeoutError:
+            return
+        raise AssertionError(f"unexpected event: {format_event(e)}\n\n{self.tail()}")
+
     def drain(self) -> list[Event]:
         """Consume and return all events received so far."""
         events: list[Event] = []
