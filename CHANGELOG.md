@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.2](https://github.com/kosolabs/sshadow/compare/v0.16.1...v0.16.2) (2026-10-15)
+
+
+### Bug Fixes
+
+* replace URL handler with notifications to get e2e tests to work ([#393](https://github.com/kosolabs/sshadow/issues/393)) ([aa4bd7d](https://github.com/kosolabs/sshadow/commit/aa4bd7d8f33e0bf70683276a5c495ad2753bd759))
+
 ## [0.16.1](https://github.com/kosolabs/sshadow/compare/v0.16.0...v0.16.1) (2026-10-14)
 
 
