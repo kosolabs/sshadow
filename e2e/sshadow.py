@@ -1,3 +1,4 @@
+import json
 import os
 import signal
 import subprocess
@@ -5,12 +6,21 @@ import time
 from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urlencode
+
+from Foundation import NSDistributedNotificationCenter  # pyright: ignore[reportAttributeAccessIssue]
 
 from logwatch import LogWatcher, msg
 
 REPO = Path(__file__).parent.parent
-ENABLE_URL_COMMANDS = "-enableURLCommands"
+ENABLE_TEST_COMMANDS = "-enableTestCommands"
+COMMAND_NOTIFICATION = "com.kosolabs.SSHadow.command"
+
+
+def post_distributed_notification(name: str, obj: str) -> None:
+    center = NSDistributedNotificationCenter.defaultCenter()
+    center.postNotificationName_object_userInfo_deliverImmediately_(
+        name, obj, None, True
+    )
 
 
 def find_app() -> Path:
@@ -93,7 +103,8 @@ class App:
         if self.started() is not None:
             raise RuntimeError("SSHadow is already running. Quit it and rerun.")
         subprocess.run(
-            ["open", "-a", self.path, *files, "--args", ENABLE_URL_COMMANDS], check=True
+            ["open", "-a", self.path, *files, "--args", ENABLE_TEST_COMMANDS],
+            check=True,
         )
 
     def quit(self, timeout: float = 10) -> None:
@@ -111,18 +122,20 @@ class App:
         kill(self.extension, timeout)
 
     def send(self, command: str, **params: str | int | Path) -> None:
-        # Named explicitly so the URL can't go to another installed copy.
-        url = f"sshadow://{command}"
-        if params:
-            url += "?" + urlencode({k: str(v) for k, v in params.items()})
-        subprocess.run(["open", "-a", self.path, url], check=True)
+        if self.started() is None:
+            raise RuntimeError(f"{self.path} isn't running")
+        payload = {"command": command} | {k: str(v) for k, v in params.items()}
+        post_distributed_notification(COMMAND_NOTIFICATION, json.dumps(payload))
+
+
+def cloud_storage(profile: str) -> Path:
+    return Path.home() / "Library" / "CloudStorage" / f"SSHadow-{profile}"
 
 
 def enable(app: App, logs: LogWatcher, profile: str) -> Path:
     app.send("enable", name=profile)
-    # The extension can take a while to launch the first time, e.g. on CI.
     logs.expect(msg(rf"Profile enabled: .*\bname: {profile}\b"), timeout=60)
-    root = Path.home() / "Library" / "CloudStorage" / f"SSHadow-{profile}"
+    root = cloud_storage(profile)
     deadline = time.monotonic() + 10
     while not root.is_dir():
         assert time.monotonic() < deadline, f"{root} never appeared"

@@ -52,11 +52,17 @@ actor DomainXPCBroker: XPCBroker {
                 state = .connected(connection)
                 logger.notice("XPC brokered: \(domain)")
                 return
+            } catch where Task.isCancelled {
+                return
+            } catch let error as NSError where error.isDisconnectedDomain {
+                logger.error(
+                    "Failed to broker XPC for \(domain), reconnecting: \(error)"
+                )
+                await domain.resume()
             } catch {
-                guard !Task.isCancelled else { return }
                 logger.error("Failed to broker XPC for \(domain): \(error)")
-                try? await Task.sleep(for: .seconds(1))
             }
+            try? await Task.sleep(for: .seconds(1))
         }
     }
 
@@ -122,5 +128,19 @@ actor DomainXPCBroker: XPCBroker {
         connection.invalidationHandler = nil
         connection.interruptionHandler = nil
         connection.invalidate()
+    }
+}
+
+extension NSError {
+    // Seen when brokering to a disconnected domain; the underlying code isn't public.
+    fileprivate var isDisconnectedDomain: Bool {
+        guard domain == NSCocoaErrorDomain,
+            code == NSXPCConnectionReplyInvalid,
+            let underlying = userInfo[NSUnderlyingErrorKey] as? NSError
+        else {
+            return false
+        }
+        return underlying.domain == "NSFileProviderInternalErrorDomain"
+            && underlying.code == 12
     }
 }

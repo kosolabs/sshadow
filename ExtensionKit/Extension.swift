@@ -11,7 +11,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     private let client: CoreClient
 
     required public init(domain: NSFileProviderDomain) {
-        client = CoreClient(domain: domain)
+        client = CoreClient.shared(for: domain)
         logger.debug("Init \(domain)")
         super.init()
     }
