@@ -101,10 +101,7 @@ actor SessionSupervisor {
 
     func connect(config: ConnectionConfig) async throws(ConnectionError) {
         guard case .offline = state else { return }
-        log = events.logger(
-            for: .connection,
-            source: Event.Source(name: config.name, url: config.url)
-        )
+        setLogSource(config)
         log.info("Connecting to \(config.name)")
 
         let task: ConnectTask = Task {
@@ -148,6 +145,20 @@ actor SessionSupervisor {
         state = .online(session)
         log.notice("Connected to \(config.name)")
         logger.notice("Supervisor connected: \(config)")
+    }
+
+    func reconnect(config: ConnectionConfig) {
+        guard case .offline = state else { return }
+        setLogSource(config)
+        state = .reconnecting(
+            Task { [weak self] in
+                guard let self else { return }
+                await reconnectLoop(config: config)
+            },
+            nil,
+            nextAttempt: nil
+        )
+        logger.notice("Session reconnecting: \(config)")
     }
 
     func disable() async {
@@ -212,17 +223,11 @@ actor SessionSupervisor {
         state = .offline(reason)
     }
 
-    private func reconnect(config: ConnectionConfig) {
-        if case .reconnecting = state { return }
-        state = .reconnecting(
-            Task { [weak self] in
-                guard let self else { return }
-                await reconnectLoop(config: config)
-            },
-            nil,
-            nextAttempt: nil
+    private func setLogSource(_ config: ConnectionConfig) {
+        log = events.logger(
+            for: .connection,
+            source: Event.Source(name: config.name, url: config.url)
         )
-        logger.notice("Session reconnecting: \(config)")
     }
 
     private func reconnectLoop(config: ConnectionConfig) async {
