@@ -1292,6 +1292,100 @@ struct ExtensionTests {
         #expect(!sandbox.exists(at: "file.txt"))
         #expect(progress.isFinished)
     }
+
+    @Test func modifyItemWithStaleBaseVersionOverwritesServer() async throws {
+        // echo local > file.txt, after the server changed it
+        let oldDate = Date(timeIntervalSince1970: 1_767_225_600)
+        let serverDate = Date(timeIntervalSince1970: 1_767_312_000)
+        let localDate = Date(timeIntervalSince1970: 1_767_398_400)
+
+        let sandbox = TestSandbox()
+        try sandbox.createFile(
+            at: "file.txt",
+            contents: "original",
+            modifyDate: oldDate
+        )
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+        let fileId = try await client.child(name: "file.txt")
+        let baseVersion = try #require(
+            await ext.item(
+                for: fileId,
+                request: NSFileProviderRequest(),
+                progress: Progress()
+            ).itemVersion
+        )
+
+        try sandbox.createFile(
+            at: "file.txt",
+            contents: "edited on the server",
+            modifyDate: serverDate
+        )
+
+        let localContents = "edited locally"
+        let localContentsUrl = try sandbox.createFile(
+            at: UUID().uuidString,
+            relativeTo: .shared,
+            contents: localContents
+        )
+        _ = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: fileId,
+                parentItemIdentifier: .rootContainer,
+                filename: "file.txt",
+                contentType: .text,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
+                documentSize: NSNumber(value: localContents.count),
+                contentModificationDate: localDate,
+            ),
+            baseVersion: baseVersion,
+            changedFields: [.contents, .contentModificationDate],
+            contents: localContentsUrl,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: Progress()
+        )
+
+        #expect(try sandbox.contents(of: "file.txt") == localContents)
+        #expect(try sandbox.modifyDate(of: "file.txt") == localDate)
+    }
+
+    @Test func deleteItemWithStaleBaseVersionDeletes() async throws {
+        // rm file.txt, after the server changed it
+        let oldDate = Date(timeIntervalSince1970: 1_767_225_600)
+        let serverDate = Date(timeIntervalSince1970: 1_767_312_000)
+
+        let sandbox = TestSandbox()
+        try sandbox.createFile(
+            at: "file.txt",
+            contents: "original",
+            modifyDate: oldDate
+        )
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+        let fileId = try await client.child(name: "file.txt")
+        let baseVersion = try #require(
+            await ext.item(
+                for: fileId,
+                request: NSFileProviderRequest(),
+                progress: Progress()
+            ).itemVersion
+        )
+
+        try sandbox.createFile(
+            at: "file.txt",
+            contents: "edited on the server",
+            modifyDate: serverDate
+        )
+
+        try await ext.deleteItem(
+            identifier: fileId,
+            baseVersion: baseVersion,
+            request: NSFileProviderRequest(),
+            progress: Progress()
+        )
+
+        #expect(!sandbox.exists(at: "file.txt"))
+    }
 }
 
 final class ItemTemplate: NSObject, NSFileProviderItem {
