@@ -4,8 +4,6 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-import pytest
-
 from logwatch import LogWatcher
 from proxy import Proxy
 from sshadow import (
@@ -16,6 +14,7 @@ from sshadow import (
     connected,
     disable,
     enable,
+    pause,
     round_trip,
     uploading,
 )
@@ -87,27 +86,26 @@ def test_disable_and_enable(
     round_trip(app, logs, profile, local, remote, TREE)
 
 
-@pytest.mark.skip(reason="not implemented yet")
-def test_disable_during_upload(
+def test_pause_during_upload(
     app: App, logs: LogWatcher, proxy: Proxy, proxied_profile: str, remote: Path
 ) -> None:
     proxy.rate = MiB
     local = enable(app, logs, proxied_profile)
     data = random.Random(0).randbytes(32 * MiB)
-    make_tree(local, {"big.bin": File(data)})
+    tree: Tree = {"big.bin": File(data)}
+    make_tree(local, tree)
     logs.expect(uploading("big.bin"), timeout=30)
+    time.sleep(1)
 
-    disable(app, logs, proxied_profile, timeout=10)
-    assert_not_truncated(remote / "big.bin", data)
-
+    pause(app, logs, proxied_profile, timeout=10)
     proxy.rate = None
-    local = enable(app, logs, proxied_profile)
-    tree = remote_tree(remote / "big.bin", data)
+    # Resume, as the menu's Resume button does.
+    enable(app, logs, proxied_profile)
+    wait_for_tree(remote, tree, timeout=60, on_poll=logs.check)
     wait_for_tree(local, tree, on_poll=logs.check)
     round_trip(app, logs, proxied_profile, local, remote, tree)
 
 
-@pytest.mark.skip(reason="not implemented yet")
 def test_delete_during_upload(
     app: App,
     logs: LogWatcher,

@@ -58,6 +58,8 @@ final class TestCommands {
             try await enable(name: params.required("name"))
         case "disable":
             try await disable(name: params.required("name"))
+        case "pause":
+            try await pause(name: params.required("name"))
         case "poll":
             try await poll(name: params.required("name"))
         case "create":
@@ -89,6 +91,10 @@ final class TestCommands {
 
     private func disable(name: String) async throws {
         try await config(for: name).disable()
+    }
+
+    private func pause(name: String) async throws {
+        try await config(for: name).pause()
     }
 
     private func poll(name: String) async throws {

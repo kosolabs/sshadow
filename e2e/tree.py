@@ -57,7 +57,7 @@ class SetAttrs:
 
 Edit = Write | Move | Delete | SetAttrs
 
-IGNORED = {".Trash", ".DS_Store"}
+IGNORED = {".Trash", ".DS_Store", ".sshadow"}
 
 
 def make_tree(root: Path, tree: Tree) -> None:

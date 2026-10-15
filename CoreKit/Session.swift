@@ -47,7 +47,7 @@ actor Session {
     ) -> Provider {
         { config, handler in
             let (ssh, sftp) = try await SSHClient.connect(config: config)
-            return Session(
+            let session = Session(
                 config: config,
                 ssh: ssh,
                 sftp: sftp,
@@ -59,6 +59,8 @@ actor Session {
                 transfers: transfers,
                 events: events
             )
+            await session.removeStaleUploads()
+            return session
         }
     }
 
@@ -715,45 +717,37 @@ actor Session {
             estimator: estimator,
             progress: progress
         ) {
-            let root = try await path(for: name, in: parentId)
-            let bufferSize = sftp.limits.writeLength(for: chunkSize)
-
-            if manifest.root.kind == .folder, try await sftp.isDirectory(at: root) {
-                try await sftp.removeDirectoryRecursively(at: root)
+            let target = try await path(for: name, in: parentId)
+            let kind = manifest.root.kind
+            let staged = stagingName()
+            let writeStaged = {
+                try await self.write(
+                    manifest,
+                    from: url,
+                    to: self.stagingPath(staged),
+                    chunkSize: chunkSize,
+                    estimator: estimator,
+                    progress: progress
+                )
             }
-
-            for entry in manifest.entries {
-                if progress.isCancelled { throw CoreError.userCancelled }
-                let remotePath = entry.path(under: root)
-                switch entry.kind {
-                case .folder:
-                    try await sftp.makeDirectory(
-                        at: remotePath,
-                        mode: entry.mode
-                    )
-                case .file:
-                    let fp = try FileHandle(
-                        forReadingFrom: entry.url(under: url)
-                    )
-                    defer { try? fp.close() }
-                    try await sftp.writeFile(
-                        at: remotePath,
-                        mode: entry.mode
-                    ) { file in
-                        try await file.withAsyncWriter { writer in
-                            while let data = try fp.read(
-                                upToCount: Int(bufferSize)
-                            ) {
-                                if progress.isCancelled {
-                                    throw CoreError.userCancelled
-                                }
-                                try await writer.write(data: data)
-                                estimator.update(delta: data.count)
-                            }
-                        }
-                    }
-                case .symlink(let target):
-                    try await sftp.makeSymlink(to: target, at: remotePath)
+            do {
+                do {
+                    try await writeStaged()
+                } catch SSHError.sftpError(.noSuchFile, _) {
+                    logger.info("Uploads folder doesn't exist, creating")
+                    await removeStaged(staged, kind: kind)
+                    try await sftp.createDirectoryRecursively(at: stagingPath)
+                    try await writeStaged()
+                }
+                try await install(staged, at: target, kind: kind)
+            } catch {
+                await removeStaged(staged, kind: kind)
+                switch coreError(from: error, itemId: parentId) {
+                case CoreError.userCancelled, CoreError.serverUnreachable:
+                    throw error
+                default:
+                    logger.error("Failed to upload \(target): \(error)")
+                    throw CoreError.cannotSynchronize
                 }
             }
         }
@@ -763,6 +757,132 @@ actor Session {
         let item = try await record(name, in: parentId, kind: kind)
         await cache.invalidate(item.id)
         return item
+    }
+
+    private func install(
+        _ staged: String,
+        at target: String,
+        kind: Manifest.Entry.Kind
+    ) async throws {
+        guard kind == .folder, try await sftp.isDirectory(at: target) else {
+            try await sftp.move(from: stagingPath(staged), to: target)
+            return
+        }
+        let old = stagingName()
+        try await sftp.move(from: target, to: stagingPath(old))
+        do {
+            try await sftp.move(from: stagingPath(staged), to: target)
+        } catch {
+            try? await sftp.move(from: stagingPath(old), to: target)
+            throw error
+        }
+        await removeStaged(old, kind: kind)
+    }
+
+    private func write(
+        _ manifest: Manifest,
+        from url: URL,
+        to root: String,
+        chunkSize: UInt64,
+        estimator: ThroughputEstimator,
+        progress: Progress
+    ) async throws {
+        let bufferSize = sftp.limits.writeLength(for: chunkSize)
+        for entry in manifest.entries {
+            if progress.isCancelled { throw CoreError.userCancelled }
+            let remotePath = entry.path(under: root)
+            switch entry.kind {
+            case .folder:
+                try await sftp.makeDirectory(
+                    at: remotePath,
+                    mode: entry.mode
+                )
+            case .file:
+                let fp = try FileHandle(
+                    forReadingFrom: entry.url(under: url)
+                )
+                defer { try? fp.close() }
+                try await sftp.writeFile(
+                    at: remotePath,
+                    mode: entry.mode
+                ) { file in
+                    try await file.withAsyncWriter { writer in
+                        while let data = try fp.read(
+                            upToCount: Int(bufferSize)
+                        ) {
+                            if progress.isCancelled {
+                                throw CoreError.userCancelled
+                            }
+                            try await writer.write(data: data)
+                            estimator.update(delta: data.count)
+                        }
+                    }
+                }
+            case .symlink(let target):
+                try await sftp.makeSymlink(to: target, at: remotePath)
+            }
+        }
+    }
+
+    func removeStaleUploads(
+        olderThan age: TimeInterval = 24 * 60 * 60
+    ) async {
+        let cutoff = Date.now.addingTimeInterval(-age)
+        let stale: [(String, Manifest.Entry.Kind)]
+        do {
+            stale = try await sftp.withDirectory(at: stagingPath) { dir in
+                var stale: [(String, Manifest.Entry.Kind)] = []
+                for try await attrs in dir {
+                    guard let name = attrs.name,
+                        let modifyTime = attrs.modifyTime,
+                        modifyTime < cutoff
+                    else { continue }
+                    let kind: Manifest.Entry.Kind =
+                        attrs.type == .directory ? .folder : .file(size: 0)
+                    stale.append((name, kind))
+                }
+                return stale
+            }
+        } catch SSHError.sftpError(.noSuchFile, _) {
+            return
+        } catch {
+            logger.error("Failed to list \(stagingPath): \(error)")
+            return
+        }
+        for (name, kind) in stale {
+            await removeStaged(name, kind: kind)
+        }
+    }
+
+    private func removeStaged(
+        _ name: String,
+        kind: Manifest.Entry.Kind
+    ) async {
+        let path = stagingPath(name)
+        do {
+            if kind == .folder {
+                try await sftp.removeDirectoryRecursively(at: path)
+            } else {
+                try await sftp.removeFile(at: path)
+            }
+            logger.notice("Removed staged upload: \(path)")
+        } catch SSHError.sftpError(.noSuchFile, _) {
+            return
+        } catch {
+            logger.error("Failed to remove staged upload \(path): \(error)")
+        }
+    }
+
+    private func stagingName() -> String {
+        UUID().uuidString
+    }
+
+    private var stagingPath: String {
+        config.path(for: ".sshadow/uploads")
+    }
+
+    private func stagingPath(_ name: String) -> String {
+        "\(stagingPath)/\(name)"
     }
 
     func download(

@@ -307,6 +307,14 @@ def disable(app: App, logs: LogWatcher, profile: str, timeout: float = 30) -> No
     wait_for_removal(cloud_storage(profile))
 
 
+def pause(app: App, logs: LogWatcher, profile: str, timeout: float = 30) -> None:
+    app.send("pause", name=profile)
+    logs.expect(
+        msg(rf"^Supervisor paused: .*{named(profile, 'displayName')}"),
+        timeout=timeout,
+    )
+
+
 def connected(profile: str) -> Matcher:
     return msg(rf"^Supervisor connected: .*{named(profile)}")
 
