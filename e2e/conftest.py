@@ -1,5 +1,4 @@
 import ctypes
-import getpass
 import plistlib
 import re
 import shutil
@@ -12,14 +11,22 @@ from typing import Any
 import pytest
 
 from logwatch import LogWatcher, msg
-from sshadow import REPO, App, cloud_storage, find_app
+from proxy import Proxy
+from sshadow import (
+    PROFILE_NAME,
+    REMOTE_ROOT,
+    REPO,
+    SERVER_PORT,
+    App,
+    Profiles,
+    create_profile,
+    find_app,
+)
 
 PREDICATE = 'subsystem BEGINSWITH "com.kosolabs.SSHadow"'
 LOG_DIR = REPO / "logs"
 TEST_KEY = REPO / "CommonTests" / "id_ed25519"
-PROFILE_NAME = "Test-E2E"
 APPROVAL_PROFILE_NAME = "Test-E2E-Approval"
-REMOTE_ROOT = Path("/tmp/sshadow")
 DOMAINS_PLIST = (
     Path.home()
     / "Library/Application Support/FileProvider/com.kosolabs.SSHadow.Extension/Domains.plist"
@@ -86,9 +93,7 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
         log_stream.wait(timeout=5)
 
 
-def pytest_runtest_logstart(
-    nodeid: str, location: tuple[str, int | None, str]
-) -> None:
+def pytest_runtest_logstart(nodeid: str, location: tuple[str, int | None, str]) -> None:
     subprocess.run(["logger", f"e2e start: {nodeid}"], check=True)
 
 
@@ -142,15 +147,6 @@ def launch(app: App, logs: LogWatcher, key: Path) -> None:
     logs.expect(msg(rf"^Opened file: {re.escape(str(key))}$"))
 
 
-@pytest.fixture
-def relaunch_app(
-    app: App, logs: LogWatcher, key: Path, profile: str
-) -> Generator[Callable[[], None]]:
-    yield lambda: launch(app, logs, key)
-    if app.started() is None:
-        launch(app, logs, key)
-
-
 def read_domains() -> dict[str, Any]:
     try:
         with DOMAINS_PLIST.open("rb") as f:
@@ -201,20 +197,6 @@ def approve_file_provider(app: App, logs: LogWatcher, key: Path) -> None:
     logs.expect(msg(rf"Profile deleted: .*\bname: {APPROVAL_PROFILE_NAME}\b"))
 
 
-def create_profile(app: App, logs: LogWatcher, name: str, key: Path) -> None:
-    REMOTE_ROOT.mkdir(exist_ok=True)
-    app.send(
-        "create",
-        name=name,
-        host="localhost",
-        port=2248,
-        user=getpass.getuser(),
-        path=REMOTE_ROOT,
-        key=key,
-    )
-    logs.expect(msg(rf"Profile created: .*\bname: {name}\b"))
-
-
 @pytest.fixture
 def remote() -> Path:
     """The profile's directory on the test server, emptied."""
@@ -224,23 +206,40 @@ def remote() -> Path:
 
 
 @pytest.fixture
-def profile(app: App, logs: LogWatcher, remote: Path, key: Path) -> Generator[str]:
+def profiles(
+    app: App, logs: LogWatcher, remote: Path, key: Path
+) -> Generator[Profiles]:
+    profiles = Profiles(app, logs, key)
+    yield profiles
+    profiles.delete_all()
+
+
+@pytest.fixture
+def relaunch_app(
+    app: App, logs: LogWatcher, key: Path, profiles: Profiles
+) -> Generator[Callable[[], None]]:
+    yield lambda: launch(app, logs, key)
+    if app.started() is None:
+        launch(app, logs, key)
+
+
+@pytest.fixture
+def profile(profiles: Profiles) -> str:
     """Create a profile for the test server, and delete it afterwards."""
-    create_profile(app, logs, PROFILE_NAME, key)
-    yield PROFILE_NAME
-
-    app.send("delete", name=PROFILE_NAME)
-    logs.expect(msg(rf"Profile deleted: .*\bname: {PROFILE_NAME}\b"))
-    wait_for_removal(cloud_storage(PROFILE_NAME))
+    return profiles.create(PROFILE_NAME)
 
 
-def wait_for_removal(path: Path, timeout: float = 30) -> None:
-    """Wait for File Provider to finish removing a deleted domain's root.
+@pytest.fixture
+def proxy() -> Generator[Proxy]:
+    """A proxy in front of the test server, for simulating network failures."""
+    proxy = Proxy(("127.0.0.1", SERVER_PORT))
+    yield proxy
+    proxy.close()
 
-    Until it does, adding a domain with the same name fails.
-    """
-    deadline = time.monotonic() + timeout
-    while path.exists():
-        if time.monotonic() >= deadline:
-            raise TimeoutError(f"{path} still exists {timeout}s after deletion")
-        time.sleep(0.5)
+
+@pytest.fixture
+def proxied_profile(proxy: Proxy, profiles: Profiles) -> Generator[str]:
+    """Create a profile that reaches the test server through `proxy`."""
+    yield profiles.create(PROFILE_NAME, host="127.0.0.1", port=proxy.port)
+    proxy.rate = None
+    proxy.restore()

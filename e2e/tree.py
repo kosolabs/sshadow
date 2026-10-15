@@ -224,3 +224,25 @@ def wait_for_tree(
         if time.monotonic() >= deadline:
             raise AssertionError(f"{root} did not match within {timeout}s:\n{diff}")
         time.sleep(interval)
+
+
+def wait_for(
+    check: Callable[[], str],
+    *,
+    timeout: float = 30,
+    interval: float = 0.5,
+    on_poll: Callable[[], None] = lambda: None,
+) -> None:
+    """Wait for `check` to return an empty string, or fail with what it last returned."""
+    deadline = time.monotonic() + timeout
+    while True:
+        on_poll()
+        try:
+            problem = check()
+        except OSError as e:
+            problem = f"error: {e}"
+        if not problem:
+            return
+        if time.monotonic() >= deadline:
+            raise AssertionError(f"not done within {timeout}s:\n{problem}")
+        time.sleep(interval)
