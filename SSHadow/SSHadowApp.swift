@@ -16,7 +16,7 @@ private func startup() {
 private func reconnectEnabledDomains() async {
     for config in await AppDB.shared.enabledConfigs() {
         do {
-            try await DomainRegistry.shared.connect(config: config)
+            try await DomainRegistry.shared.reconnect(config: config)
         } catch {
             logger.error("Failed to enable \(config.domain): \(error)")
         }

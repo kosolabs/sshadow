@@ -305,29 +305,6 @@ def test_enable_while_server_down(
     round_trip(app, logs, name, local, remote, {})
 
 
-@pytest.mark.skip(reason="not implemented yet")
-def test_relaunch_while_server_down(
-    app: App,
-    logs: LogWatcher,
-    proxy: Proxy,
-    proxied_profile: str,
-    remote: Path,
-    relaunch_app: Callable[[], None],
-) -> None:
-    name = proxied_profile
-    local = enable(app, logs, name)
-    tree = round_trip(app, logs, name, local, remote, {})
-
-    app.quit()
-    proxy.refuse()
-    relaunch_app()
-    logs.expect(msg(rf"^Failed to enable .*{named(name, 'displayName')}"), timeout=60)
-
-    proxy.restore()
-    logs.expect(connected(name), timeout=90)
-    round_trip(app, logs, name, local, remote, tree)
-
-
 def test_missing_remote_path_stops_retrying(
     app: App, logs: LogWatcher, proxy: Proxy, profiles: Profiles, remote: Path
 ) -> None:

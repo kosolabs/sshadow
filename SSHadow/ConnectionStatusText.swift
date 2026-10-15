@@ -18,10 +18,10 @@ struct ConnectionStatusText: View {
         case .disconnecting:
             Text("Disconnecting…")
                 .foregroundStyle(.secondary)
-        case .connecting:
+        case .connecting, .reconnecting(nil, _):
             Text("Connecting…")
                 .foregroundStyle(.secondary)
-        case .reconnecting(let error, let nextAttempt):
+        case .reconnecting(let error?, let nextAttempt):
             ReconnectingLabel(error: error, nextAttempt: nextAttempt)
                 .foregroundStyle(.secondary)
         case .online:
@@ -32,11 +32,11 @@ struct ConnectionStatusText: View {
 }
 
 private struct ReconnectingLabel: View {
-    let error: ConnectionError?
+    let error: ConnectionError
     let nextAttempt: Date?
 
     var body: some View {
-        let prefix = error?.message ?? "Connection lost"
+        let prefix = error.message
         if let nextAttempt {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let remaining = max(
