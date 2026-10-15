@@ -116,12 +116,8 @@ def contents_only(e: Entry) -> Entry:
 
 
 def synced_contents(root: Path) -> Tree:
-    """The tree under `root`, without modes, times or SSHadow's own files."""
-    return {
-        rel: contents_only(e)
-        for rel, e in read_tree(root).items()
-        if rel != ".sshadow" and not rel.startswith(".sshadow/")
-    }
+    """The tree under `root`, without modes or times."""
+    return {rel: contents_only(e) for rel, e in read_tree(root).items()}
 
 
 def converged(local: Path, remote: Path, *kept: bytes) -> Callable[[], str]:
@@ -329,13 +325,6 @@ def test_evict(app: App, logs: LogWatcher, profile: str, remote: Path) -> None:
     wait_for_tree(local, edit_tree(TREE, EDITS), on_poll=logs.check)
 
 
-def in_trash(tree: Tree) -> Tree:
-    """`tree` as it appears on the server once moved to the Trash."""
-    return {".sshadow": Dir(), TRASH: Dir()} | {
-        f"{TRASH}/{rel}": e for rel, e in tree.items()
-    }
-
-
 def test_trash(app: App, logs: LogWatcher, profile: str, remote: Path) -> None:
     tree: Tree = {
         "hello.txt": File(b"hello\n"),
@@ -349,26 +338,30 @@ def test_trash(app: App, logs: LogWatcher, profile: str, remote: Path) -> None:
     trashed = [trash(local / "hello.txt"), trash(local / "docs")]
     wait_for_tree(local, {}, on_poll=logs.check)
     wait_for_tree(local / ".Trash", tree, on_poll=logs.check)
-    wait_for_tree(remote, in_trash(tree), on_poll=logs.check)
+    wait_for_tree(remote, {}, on_poll=logs.check)
+    wait_for_tree(remote / TRASH, tree, on_poll=logs.check)
 
     # Trash another file with the same name.
     again: Tree = {"hello.txt": File(b"hello again\n")}
     make_tree(local, again)
-    wait_for_tree(remote, again | in_trash(tree), on_poll=logs.check)
+    wait_for_tree(remote, again, on_poll=logs.check)
     second = trash(local / "hello.txt")
     left: Tree = {second.name: File(b"hello again\n")}
     wait_for_tree(local, {}, on_poll=logs.check)
     wait_for_tree(local / ".Trash", tree | left, on_poll=logs.check)
-    wait_for_tree(remote, in_trash(tree | left), on_poll=logs.check)
+    wait_for_tree(remote, {}, on_poll=logs.check)
+    wait_for_tree(remote / TRASH, tree | left, on_poll=logs.check)
 
     # Put back.
     for path in trashed:
         path.rename(local / path.name)
     wait_for_tree(local, tree, on_poll=logs.check)
     wait_for_tree(local / ".Trash", left, on_poll=logs.check)
-    wait_for_tree(remote, tree | in_trash(left), on_poll=logs.check)
+    wait_for_tree(remote, tree, on_poll=logs.check)
+    wait_for_tree(remote / TRASH, left, on_poll=logs.check)
 
     # Empty the Trash.
     second.unlink()
     wait_for_tree(local / ".Trash", {}, on_poll=logs.check)
-    wait_for_tree(remote, tree | in_trash({}), on_poll=logs.check)
+    wait_for_tree(remote, tree, on_poll=logs.check)
+    wait_for_tree(remote / TRASH, {}, on_poll=logs.check)

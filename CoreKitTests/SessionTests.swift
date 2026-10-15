@@ -128,6 +128,14 @@ extension TestSandbox {
     }
 }
 
+extension TestSandbox {
+    fileprivate func stagedUploads() throws -> [String] {
+        let url = getUrl(for: ".sshadow/uploads")
+        guard FileManager.default.fileExists(at: url) else { return [] }
+        return try FileManager.default.contentsOfDirectory(atPath: url.path)
+    }
+}
+
 private func contents(of url: URL) throws -> [String: Data] {
     var result: [String: Data] = [:]
     for entry in try Manifest(from: url).entries {
@@ -2005,7 +2013,7 @@ struct SessionTests {
             let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
             try Data("data".utf8).write(to: uploadUrl)
 
-            await #expect(throws: CoreError.filenameCollision) {
+            await #expect(throws: CoreError.cannotSynchronize) {
                 _ = try await session.upload(
                     "collide-upload",
                     to: .rootContainer,
@@ -2035,6 +2043,312 @@ struct SessionTests {
                     file: uploadUrl,
                     progress: progress
                 )
+            }
+        }
+
+        @Test func uploadCancelledMidwayRemovesPartialFile() async throws {
+            let sandbox = TestSandbox()
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            try Data(count: 256 << 20).write(to: uploadUrl)
+            let session = try await sandbox.getSession()
+
+            let progress = Progress()
+            let upload = Task {
+                try await session.upload(
+                    "partial.dat",
+                    to: .rootContainer,
+                    file: uploadUrl,
+                    progress: progress
+                )
+            }
+            try await waitForBytes(progress)
+            progress.cancel()
+
+            await #expect(throws: CoreError.userCancelled) {
+                _ = try await upload.value
+            }
+            #expect(
+                !FileManager.default.fileExists(
+                    at: sandbox.getUrl(for: "partial.dat")
+                )
+            )
+            #expect(try sandbox.stagedUploads() == [])
+        }
+
+        @Test func closeDuringUploadLeavesNoPartialFile() async throws {
+            let sandbox = TestSandbox()
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            try Data(count: 256 << 20).write(to: uploadUrl)
+            let session = try await sandbox.getSession()
+
+            let progress = Progress()
+            let upload = Task {
+                try await session.upload(
+                    "partial.dat",
+                    to: .rootContainer,
+                    file: uploadUrl,
+                    progress: progress
+                )
+            }
+            try await waitForBytes(progress)
+            await session.close()
+
+            await #expect(throws: CoreError.serverUnreachable) {
+                _ = try await upload.value
+            }
+            #expect(
+                !FileManager.default.fileExists(
+                    at: sandbox.getUrl(for: "partial.dat")
+                )
+            )
+        }
+
+        @Test func uploadCancelledBeforeWritingKeepsExistingFile()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "existing.txt", contents: "original")
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            try Data("replacement".utf8).write(to: uploadUrl)
+            let session = try await sandbox.getSession()
+
+            let progress = Progress()
+            progress.cancel()
+
+            await #expect(throws: CoreError.userCancelled) {
+                _ = try await session.upload(
+                    "existing.txt",
+                    to: .rootContainer,
+                    file: uploadUrl,
+                    progress: progress
+                )
+            }
+            let url = sandbox.getUrl(for: "existing.txt")
+            #expect(try String(contentsOf: url, encoding: .utf8) == "original")
+        }
+
+        @Test func uploadCancelledMidwayKeepsExistingFile() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "existing.dat", contents: "original")
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            try Data(count: 256 << 20).write(to: uploadUrl)
+            let session = try await sandbox.getSession()
+
+            let progress = Progress()
+            let upload = Task {
+                try await session.upload(
+                    "existing.dat",
+                    to: .rootContainer,
+                    file: uploadUrl,
+                    progress: progress
+                )
+            }
+            try await waitForBytes(progress)
+            progress.cancel()
+
+            await #expect(throws: CoreError.userCancelled) {
+                _ = try await upload.value
+            }
+            #expect(try sandbox.contents(of: "existing.dat") == "original")
+            #expect(try sandbox.stagedUploads() == [])
+        }
+
+        @Test func closeDuringUploadKeepsExistingFile() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "existing.dat", contents: "original")
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            try Data(count: 256 << 20).write(to: uploadUrl)
+            let session = try await sandbox.getSession()
+
+            let progress = Progress()
+            let upload = Task {
+                try await session.upload(
+                    "existing.dat",
+                    to: .rootContainer,
+                    file: uploadUrl,
+                    progress: progress
+                )
+            }
+            try await waitForBytes(progress)
+            await session.close()
+
+            await #expect(throws: CoreError.serverUnreachable) {
+                _ = try await upload.value
+            }
+            #expect(try sandbox.contents(of: "existing.dat") == "original")
+        }
+
+        @Test func uploadPackageCancelledMidwayKeepsExistingPackage()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createPackage(
+                at: "Doc.rtfd",
+                files: [.file(path: "text.rtf", contents: "old")]
+            )
+            let source = try sandbox.createPackage(
+                at: "src.rtfd",
+                relativeTo: .shared,
+                files: [.file(path: "text.rtf", contents: "new")]
+            )
+            try Data(count: 256 << 20).write(
+                to: source.appending(path: "big.dat")
+            )
+            let session = try await sandbox.getSession()
+
+            let progress = Progress()
+            let upload = Task {
+                try await session.upload(
+                    "Doc.rtfd",
+                    to: .rootContainer,
+                    file: source,
+                    progress: progress
+                )
+            }
+            try await waitForBytes(progress)
+            progress.cancel()
+
+            await #expect(throws: CoreError.userCancelled) {
+                _ = try await upload.value
+            }
+            #expect(try sandbox.contents(of: "Doc.rtfd/text.rtf") == "old")
+            #expect(!sandbox.exists(at: "Doc.rtfd/big.dat"))
+            #expect(try sandbox.stagedUploads() == [])
+        }
+
+        @Test func uploadOverExistingFileLeavesNoStagedUploads()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "existing.txt", contents: "original")
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            try Data("replacement".utf8).write(to: uploadUrl)
+            let session = try await sandbox.getSession()
+            let itemId = try await session.child(name: "existing.txt")
+
+            let item = try await session.upload(
+                "existing.txt",
+                to: .rootContainer,
+                file: uploadUrl,
+                progress: Progress()
+            )
+
+            #expect(item.id == itemId)
+            #expect(try sandbox.contents(of: "existing.txt") == "replacement")
+            #expect(try sandbox.stagedUploads() == [])
+            let changes = try await session.reconcileAll()
+            #expect(changes == [])
+        }
+
+        @Test func uploadIntoLockedFolderThrowsCannotSynchronize()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: "locked/existing.txt",
+                contents: "original",
+                permissions: 0o666
+            )
+            try sandbox.touch("locked", permissions: 0o555)
+            defer { try? sandbox.touch("locked", permissions: 0o755) }
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            try Data("replacement".utf8).write(to: uploadUrl)
+            let session = try await sandbox.getSession()
+            let lockedId = try await session.child(name: "locked")
+
+            await #expect(throws: CoreError.cannotSynchronize) {
+                _ = try await session.upload(
+                    "existing.txt",
+                    to: lockedId,
+                    file: uploadUrl,
+                    progress: Progress()
+                )
+            }
+            #expect(
+                try sandbox.contents(of: "locked/existing.txt") == "original"
+            )
+            #expect(try sandbox.stagedUploads() == [])
+        }
+
+        @Test func uploadRecreatesDeletedUploadsFolder() async throws {
+            let sandbox = TestSandbox()
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            try Data("contents".utf8).write(to: uploadUrl)
+            let session = try await sandbox.getSession()
+
+            _ = try await session.upload(
+                "first.txt",
+                to: .rootContainer,
+                file: uploadUrl,
+                progress: Progress()
+            )
+            _ = try sandbox.removeItem(at: ".sshadow")
+            _ = try await session.upload(
+                "second.txt",
+                to: .rootContainer,
+                file: uploadUrl,
+                progress: Progress()
+            )
+
+            #expect(try sandbox.contents(of: "second.txt") == "contents")
+            #expect(try sandbox.stagedUploads() == [])
+        }
+
+        @Test func uploadWithoutUploadsFolderThrowsCannotSynchronize()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadow", contents: "not a folder")
+            try sandbox.createFile(at: "existing.txt", contents: "original")
+            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            try Data("replacement".utf8).write(to: uploadUrl)
+            let session = try await sandbox.getSession()
+
+            await #expect(throws: CoreError.cannotSynchronize) {
+                _ = try await session.upload(
+                    "existing.txt",
+                    to: .rootContainer,
+                    file: uploadUrl,
+                    progress: Progress()
+                )
+            }
+            #expect(try sandbox.contents(of: "existing.txt") == "original")
+        }
+
+        @Test func removeStaleUploadsKeepsRecentOnes() async throws {
+            let sandbox = TestSandbox()
+            let old = Date.now.addingTimeInterval(-2 * 24 * 60 * 60)
+            try sandbox.createFile(
+                at: ".sshadow/uploads/old-file",
+                modifyDate: old
+            )
+            try sandbox.createFile(
+                at: ".sshadow/uploads/old-package/text.rtf",
+                modifyDate: old
+            )
+            try sandbox.touch(".sshadow/uploads/old-package", modifyDate: old)
+            try sandbox.createFile(at: ".sshadow/uploads/recent-file")
+            let session = try await sandbox.getSession()
+
+            await session.removeStaleUploads()
+
+            #expect(try sandbox.stagedUploads() == ["recent-file"])
+        }
+
+        @Test func removeStaleUploadsWithoutUploadsFolderSucceeds()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            await session.removeStaleUploads()
+
+            #expect(try sandbox.stagedUploads() == [])
+        }
+
+        private func waitForBytes(_ progress: Progress) async throws {
+            while progress.completedUnitCount == 0 {
+                try await Task.sleep(for: .milliseconds(1))
             }
         }
 
