@@ -19,7 +19,7 @@ from sshadow import (
     round_trip,
     uploading,
 )
-from tree import Dir, File, Tree, make_tree, wait_for, wait_for_tree
+from tree import File, Tree, make_tree, wait_for, wait_for_tree
 
 MiB = 1 << 20
 
@@ -45,39 +45,6 @@ def enable_domains(
     for name, path in paths.items():
         profiles.create(name, path=path)
     return {name: enable(app, logs, name) for name in paths}
-
-
-def test_domains_are_isolated(
-    app: App, logs: LogWatcher, profiles: Profiles, remote: Path
-) -> None:
-    remotes = {"Test-E2E-A": remote / "a", "Test-E2E-B": remote / "b"}
-    roots = enable_domains(app, logs, profiles, remotes)
-    (a, b) = remotes
-
-    trees: dict[str, Tree] = {
-        a: {"hello.txt": File(b"hello from A\n"), "only-a": Dir()},
-        b: {"hello.txt": File(b"hello from B\n"), "only-b": Dir()},
-    }
-    make_tree(roots[a], trees[a])
-    make_tree(remotes[b], trees[b])
-    app.send("poll", name=a)
-    app.send("poll", name=b)
-    for name, path in remotes.items():
-        wait_for_tree(path, trees[name], on_poll=logs.check)
-        wait_for_tree(roots[name], trees[name], on_poll=logs.check)
-
-    edits: dict[str, Tree] = {
-        a: {"hello.txt": File(b"edited on A's server\n")},
-        b: {"hello.txt": File(b"edited in B's folder\n")},
-    }
-    make_tree(remotes[a], edits[a])
-    make_tree(roots[b], edits[b])
-    app.send("poll", name=a)
-    app.send("poll", name=b)
-    for name, path in remotes.items():
-        trees[name] |= edits[name]
-        wait_for_tree(path, trees[name], on_poll=logs.check)
-        wait_for_tree(roots[name], trees[name], on_poll=logs.check)
 
 
 @pytest.mark.parametrize("kill", ["app", "extension"])

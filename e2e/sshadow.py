@@ -170,14 +170,19 @@ def wait_for_removal(path: Path, timeout: float = 30) -> None:
 def round_trip(
     app: App, logs: LogWatcher, profile: str, local: Path, remote: Path, tree: Tree
 ) -> Tree:
-    """Sync a new file each way, which only works if the extension can reach the app."""
+    """Sync a new file each way, which only works if the extension can reach the app.
+
+    The files' contents name `profile`, to catch syncing through the wrong domain.
+    """
     n = len(tree)
-    upload: Tree = {f"upload-{n}.txt": File(f"upload {n}\n".encode())}
+    upload: Tree = {f"upload-{n}.txt": File(f"upload {n} from {profile}\n".encode())}
     make_tree(local, upload)
     tree = tree | upload
     wait_for_tree(remote, tree, on_poll=logs.check)
 
-    download: Tree = {f"download-{n}.txt": File(f"download {n}\n".encode())}
+    download: Tree = {
+        f"download-{n}.txt": File(f"download {n} from {profile}\n".encode())
+    }
     make_tree(remote, download)
     tree = tree | download
     app.send("poll", name=profile)
