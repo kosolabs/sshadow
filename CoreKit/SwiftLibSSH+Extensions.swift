@@ -36,7 +36,11 @@ extension SSHClient {
                     )
                 }
             let sftp = try await ssh.sftp()
-            guard try await sftp.isDirectory(at: config.path()) else {
+            let path = config.path()
+            guard let attrs = try await sftp.attributesIfExists(at: path) else {
+                throw ConnectionError.remotePathNotFound
+            }
+            guard attrs.type == .directory else {
                 throw ConnectionError.remotePathNotDirectory
             }
             logger.notice("SSH config connected: \(config)")

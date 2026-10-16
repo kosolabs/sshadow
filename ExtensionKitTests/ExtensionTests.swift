@@ -546,7 +546,7 @@ struct ExtensionTests {
         }
         #expect(!sandbox.exists(at: "Document.rtfd"))
     }
-    
+
     @Test func createPackageWithFolderExtensionFails() async throws {
         let sandbox = TestSandbox()
         let (ext, _) = try await sandbox.getExtensionAndClient()
@@ -1348,6 +1348,49 @@ struct ExtensionTests {
 
         #expect(try sandbox.contents(of: "file.txt") == localContents)
         #expect(try sandbox.modifyDate(of: "file.txt") == localDate)
+    }
+
+    @Test func modifyItemDeletedOnServerRecreatesIt() async throws {
+        // echo local > file.txt, after the server deleted it
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "file.txt", contents: "original")
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+        let fileId = try await client.child(name: "file.txt")
+        let baseVersion = try #require(
+            await ext.item(
+                for: fileId,
+                request: NSFileProviderRequest(),
+                progress: Progress()
+            ).itemVersion
+        )
+
+        _ = try sandbox.removeItem(at: "file.txt")
+
+        let localContents = "edited locally"
+        let localContentsUrl = try sandbox.createFile(
+            at: UUID().uuidString,
+            relativeTo: .shared,
+            contents: localContents
+        )
+        _ = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: fileId,
+                parentItemIdentifier: .rootContainer,
+                filename: "file.txt",
+                contentType: .text,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: [.rw, .pathExtensionHidden],
+                documentSize: NSNumber(value: localContents.count),
+            ),
+            baseVersion: baseVersion,
+            changedFields: [.contents],
+            contents: localContentsUrl,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: Progress()
+        )
+
+        #expect(try sandbox.contents(of: "file.txt") == localContents)
     }
 
     @Test func deleteItemWithStaleBaseVersionDeletes() async throws {

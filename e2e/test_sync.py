@@ -5,13 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from logwatch import LogWatcher, Matcher, msg
+from logwatch import LogWatcher
 from sshadow import App, enable, evict, replace_item, trash
 from tree import (
     Delete,
     Dir,
     Edit,
-    Entry,
     File,
     Link,
     Move,
@@ -19,10 +18,8 @@ from tree import (
     Tree,
     Write,
     apply_edits,
-    diff_trees,
     edit_tree,
     make_tree,
-    read_tree,
     wait_for,
     wait_for_tree,
 )
@@ -103,55 +100,6 @@ def test_remote_edits(app: App, logs: LogWatcher, profile: str, remote: Path) ->
     apply_edits(remote, EDITS)
     app.send("poll", name=profile)
     wait_for_tree(local, edit_tree(TREE, EDITS), on_poll=logs.check)
-
-
-def contents_only(e: Entry) -> Entry:
-    match e:
-        case File(contents):
-            return File(contents)
-        case Dir():
-            return Dir()
-        case Link(target):
-            return Link(target)
-
-
-def synced_contents(root: Path) -> Tree:
-    """The tree under `root`, without modes or times."""
-    return {rel: contents_only(e) for rel, e in read_tree(root).items()}
-
-
-def converged(local: Path, remote: Path, *kept: bytes) -> Callable[[], str]:
-    """Check that `local` and `remote` match, and that some file holds each of `kept`."""
-
-    def check() -> str:
-        local_tree, remote_tree = synced_contents(local), synced_contents(remote)
-        problems: list[str] = []
-        if diff := diff_trees(local_tree, remote_tree):
-            problems.append(f"local doesn't match remote:\n{diff}")
-        held = {e.contents for e in remote_tree.values() if isinstance(e, File)}
-        problems += [f"no file holds {c!r}" for c in kept if c not in held]
-        return "\n".join(problems)
-
-    return check
-
-
-def modify_requested(name: str) -> Matcher:
-    return msg(rf"^Modify item .*\bfilename: {name},")
-
-
-def test_edit_remotely_deleted(
-    app: App, logs: LogWatcher, profile: str, remote: Path
-) -> None:
-    tree: Tree = {"notes.txt": File(b"original\n")}
-    make_tree(remote, tree)
-    local = enable(app, logs, profile)
-    wait_for_tree(local, tree, on_poll=logs.check)
-
-    (remote / "notes.txt").unlink()
-    (local / "notes.txt").write_bytes(b"edited locally\n")
-    logs.expect(modify_requested("notes.txt"))
-    app.send("poll", name=profile)
-    wait_for(converged(local, remote, b"edited locally\n"), on_poll=logs.check)
 
 
 def save_by_rename(path: Path, contents: bytes) -> None:
