@@ -193,9 +193,6 @@ extension NSFileProviderModifyItemOptions:
         if contains(.mayAlreadyExist) {
             result.append("mayAlreadyExist")
         }
-        if contains(.failOnConflict) {
-            result.append("failOnConflict")
-        }
         return "FPModifyItemOptions(\(result.joined(separator: ", ")))"
     }
 }
