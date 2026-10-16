@@ -218,23 +218,6 @@ def test_reconnect_after_outage(
     round_trip(app, logs, name, local, remote, tree)
 
 
-@pytest.mark.skip(reason="not implemented yet")
-def test_reconnect_after_blackhole(
-    app: App, logs: LogWatcher, proxy: Proxy, proxied_profile: str, remote: Path
-) -> None:
-    name = proxied_profile
-    local = enable(app, logs, name)
-    tree = round_trip(app, logs, name, local, remote, {})
-
-    proxy.blackhole()
-    app.send("poll", name=name)
-    logs.expect(reconnecting(name), timeout=120)
-
-    proxy.restore()
-    logs.expect(connected(name), timeout=120)
-    round_trip(app, logs, name, local, remote, tree)
-
-
 def test_drop_during_upload(
     app: App, logs: LogWatcher, proxy: Proxy, proxied_profile: str, remote: Path
 ) -> None:
