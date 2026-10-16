@@ -70,6 +70,42 @@ extension TestSandbox {
     }
 }
 
+/// Blocks the first `wait()` until `open()`; later calls pass through.
+private actor Latch {
+    private var waiter: CheckedContinuation<Void, Never>?
+    private var used = false
+
+    func wait() async {
+        guard !used else { return }
+        used = true
+        await withCheckedContinuation { waiter = $0 }
+    }
+
+    func open() {
+        used = true
+        waiter?.resume()
+        waiter = nil
+    }
+}
+
+private func waitUntilOutstanding(
+    _ session: Session,
+    timeout: Duration = .seconds(10),
+    sourceLocation: SourceLocation = #_sourceLocation
+) async throws {
+    let deadline = ContinuousClock.now + timeout
+    while await session.outstanding == 0 {
+        guard ContinuousClock.now < deadline else {
+            Issue.record(
+                "No operation became outstanding within \(timeout)",
+                sourceLocation: sourceLocation
+            )
+            return
+        }
+        try await Task.sleep(for: .milliseconds(1))
+    }
+}
+
 extension Collection {
     fileprivate var only: Element? {
         count == 1 ? first : nil
@@ -2980,68 +3016,55 @@ struct SessionTests {
 
         @Test func pollWaitsForOutstandingOperation() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFolder(at: "dir")
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
-            try Data(count: 10_485_760).write(to: uploadUrl)
-            let session = try await sandbox.getSession()
-            // A change the poll should surface.
-            try sandbox.createFile(at: "dir/new.txt")
+            try sandbox.createFile(at: "file.txt")
+            let latch = Latch()
+            let (session, ssh) = try await sandbox.makeSession(
+                connectionLostHandler: { _ in await latch.wait() }
+            )
+            let itemId = try await session.child(name: "file.txt")
+            await ssh.close()
 
-            let progress = Progress()
-            let upload = Task {
-                try await session.upload(
-                    "large.dat",
-                    to: .rootContainer,
-                    file: uploadUrl,
-                    progress: progress
-                )
+            // The operation stays outstanding until the latch opens.
+            let operation = Task {
+                try await session.setAttributes(for: itemId, flags: .rw)
             }
-            while await session.outstanding == 0 {
-                await Task.yield()
-            }
+            try await waitUntilOutstanding(session)
 
             let poll = Task { try await session.pollAll() }
             for _ in 0..<100 {
                 await Task.yield()
             }
-            // The poll doesn't start while the upload runs.
             #expect(await session.reconcileTask == nil)
 
-            progress.cancel()
-            _ = try? await upload.value
-
-            // ... and runs once it finishes.
-            try await poll.value
-            #expect(await session.anchor > 0)
+            await latch.open()
+            await #expect(throws: CoreError.serverUnreachable) {
+                try await operation.value
+            }
+            await #expect(throws: CoreError.serverUnreachable) {
+                try await poll.value
+            }
         }
 
         @Test func operationTracksAndReleasesOutstandingCount() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
-            try Data(count: 10_485_760).write(to: uploadUrl)
-            let session = try await sandbox.getSession()
+            try sandbox.createFile(at: "file.txt")
+            let latch = Latch()
+            let (session, ssh) = try await sandbox.makeSession(
+                connectionLostHandler: { _ in await latch.wait() }
+            )
+            let itemId = try await session.child(name: "file.txt")
+            await ssh.close()
 
             #expect(await session.outstanding == 0)
 
-            let progress = Progress()
-            let upload = Task {
-                try await session.upload(
-                    "large.dat",
-                    to: .rootContainer,
-                    file: uploadUrl,
-                    progress: progress
-                )
+            let operation = Task {
+                try await session.setAttributes(for: itemId, flags: .rw)
             }
-
-            // The operation marks the session busy while it runs.
-            while await session.outstanding == 0 {
-                await Task.yield()
-            }
+            try await waitUntilOutstanding(session)
             #expect(await session.outstanding == 1)
 
-            // ... and releases the count once it finishes.
-            progress.cancel()
-            _ = try? await upload.value
+            await latch.open()
+            _ = try? await operation.value
             #expect(await session.outstanding == 0)
         }
     }
@@ -3068,38 +3091,29 @@ struct SessionTests {
 
         @Test func tickSkipsPollWhileOperationOutstanding() async throws {
             let sandbox = TestSandbox()
-            try sandbox.createFolder(at: "dir")
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
-            try Data(count: 10_485_760).write(to: uploadUrl)
-            let session = try await sandbox.getSession(idleTimeProvider: {
-                .zero
-            })
-
-            // A change a due poll would otherwise surface.
-            try sandbox.createFile(at: "dir/new.txt")
+            try sandbox.createFile(at: "file.txt")
+            let latch = Latch()
+            let (session, ssh) = try await sandbox.makeSession(
+                idleTimeProvider: { .zero },
+                connectionLostHandler: { _ in await latch.wait() }
+            )
+            let itemId = try await session.child(name: "file.txt")
 
             await session.start(pollInterval: .zero)
             await session.stop()
+            await ssh.close()
 
-            let progress = Progress()
-            let upload = Task {
-                try await session.upload(
-                    "large.dat",
-                    to: .rootContainer,
-                    file: uploadUrl,
-                    progress: progress
-                )
+            let operation = Task {
+                try await session.setAttributes(for: itemId, flags: .rw)
             }
-            while await session.outstanding == 0 {
-                await Task.yield()
-            }
+            try await waitUntilOutstanding(session)
 
-            // The poll is due, but must be skipped while the upload runs.
+            // The poll is due, but must be skipped while the operation runs.
             try await session.tick()
-            #expect(await session.anchor == 0)
+            #expect(await session.reconcileTask == nil)
 
-            progress.cancel()
-            _ = try? await upload.value
+            await latch.open()
+            _ = try? await operation.value
         }
     }
 }
