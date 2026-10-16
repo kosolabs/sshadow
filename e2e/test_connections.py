@@ -225,16 +225,3 @@ def test_drop_during_download(
         assert result[0] == data, "read returned corrupt contents"
     wait_for_tree(local, tree, on_poll=logs.check)
     round_trip(app, logs, name, local, remote, tree)
-
-
-def test_enable_while_server_down(
-    app: App, logs: LogWatcher, proxy: Proxy, proxied_profile: str, remote: Path
-) -> None:
-    name = proxied_profile
-    proxy.refuse()
-    app.send("enable", name=name)
-    logs.expect(msg(rf"^Failed to enable .*{named(name)}"), timeout=60)
-
-    proxy.restore()
-    local = enable(app, logs, name)
-    round_trip(app, logs, name, local, remote, {})

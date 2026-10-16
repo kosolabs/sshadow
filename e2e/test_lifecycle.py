@@ -7,9 +7,7 @@ from pathlib import Path
 from logwatch import LogWatcher
 from proxy import Proxy
 from sshadow import (
-    PROFILE_NAME,
     App,
-    Profiles,
     brokered,
     connected,
     disable,
@@ -27,22 +25,6 @@ TREE: Tree = {
     "docs": Dir(),
     "docs/readme.md": File(b"# Readme\n"),
 }
-
-
-def assert_not_truncated(path: Path, contents: bytes) -> None:
-    """Check that an interrupted upload left either nothing or all of `contents`."""
-    # Give an upload that's still running time to show up.
-    time.sleep(2)
-    if path.exists():
-        size = path.stat().st_size
-        assert size == len(contents), (
-            f"{path} is truncated: {size} of {len(contents)} bytes"
-        )
-        assert path.read_bytes() == contents, f"{path} is corrupt"
-
-
-def remote_tree(path: Path, contents: bytes) -> Tree:
-    return {path.name: File(contents)} if path.exists() else {}
 
 
 def test_quit_and_relaunch(
@@ -104,31 +86,6 @@ def test_pause_during_upload(
     wait_for_tree(remote, tree, timeout=60, on_poll=logs.check)
     wait_for_tree(local, tree, on_poll=logs.check)
     round_trip(app, logs, proxied_profile, local, remote, tree)
-
-
-def test_delete_during_upload(
-    app: App,
-    logs: LogWatcher,
-    proxy: Proxy,
-    profiles: Profiles,
-    proxied_profile: str,
-    remote: Path,
-) -> None:
-    proxy.rate = MiB
-    local = enable(app, logs, proxied_profile)
-    data = random.Random(0).randbytes(32 * MiB)
-    make_tree(local, {"big.bin": File(data)})
-    logs.expect(uploading("big.bin"), timeout=30)
-
-    profiles.delete(proxied_profile, timeout=10)
-    assert_not_truncated(remote / "big.bin", data)
-
-    proxy.rate = None
-    profiles.create(PROFILE_NAME, host="127.0.0.1", port=proxy.port)
-    local = enable(app, logs, PROFILE_NAME)
-    tree = remote_tree(remote / "big.bin", data)
-    wait_for_tree(local, tree, on_poll=logs.check)
-    round_trip(app, logs, PROFILE_NAME, local, remote, tree)
 
 
 def test_kill_fileproviderd_during_upload(

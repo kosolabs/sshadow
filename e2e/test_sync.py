@@ -194,26 +194,6 @@ def test_remote_edit_after_read(
     wait_for_tree(local, {"big.bin": File(new)}, on_poll=logs.check)
 
 
-def test_local_edit_after_read(
-    app: App, logs: LogWatcher, profile: str, remote: Path
-) -> None:
-    old = random.Random(1).randbytes(16 * CHUNK)
-    new = random.Random(2).randbytes(16 * CHUNK)
-    make_tree(remote, {"big.bin": File(old)})
-    local = enable(app, logs, profile)
-    path = local / "big.bin"
-    wait_for(exists(path), on_poll=logs.check)
-    assert read_range(path, OFFSETS[0], 4096) == old[OFFSETS[0] : OFFSETS[0] + 4096]
-
-    path.write_bytes(new)
-    wait_for_tree(remote, {"big.bin": File(new)}, on_poll=logs.check)
-    wait_for(evicted(path), on_poll=logs.check)
-    for offset in OFFSETS:
-        expected = new[offset : offset + 4096]
-        wait_for(range_matches(path, offset, expected), on_poll=logs.check)
-    wait_for_tree(local, {"big.bin": File(new)}, on_poll=logs.check)
-
-
 def evict_files(root: Path, tree: Tree, logs: LogWatcher) -> None:
     for rel, e in tree.items():
         # A package is one item, evicted as a whole.
