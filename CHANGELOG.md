@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.4](https://github.com/kosolabs/sshadow/compare/v0.16.3...v0.16.4) (2026-10-16)
+
+
+### Bug Fixes
+
+* put deployment target back to macOS 15 ([#407](https://github.com/kosolabs/sshadow/issues/407)) ([2e97ee1](https://github.com/kosolabs/sshadow/commit/2e97ee1f4fdd33f3c3ab76c375230adf80972d12))
+* show correct error when remote path is missing ([#403](https://github.com/kosolabs/sshadow/issues/403)) ([5172506](https://github.com/kosolabs/sshadow/commit/517250676d5e04abac6e19bd0d85fd8654fa58ca))
+
 ## [0.16.3](https://github.com/kosolabs/sshadow/compare/v0.16.2...v0.16.3) (2026-10-16)
 
 
