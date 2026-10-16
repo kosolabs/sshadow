@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.16.3](https://github.com/kosolabs/sshadow/compare/v0.16.2...v0.16.3) (2026-10-16)
+
+
+### Bug Fixes
+
+* clear stale cache after upload ([#396](https://github.com/kosolabs/sshadow/issues/396)) ([7d7b536](https://github.com/kosolabs/sshadow/commit/7d7b536c74755f9e3bfaace85408b17e68852c03))
+* retry connecting at launch when the server is unreachable ([#400](https://github.com/kosolabs/sshadow/issues/400)) ([64b68a8](https://github.com/kosolabs/sshadow/commit/64b68a8346addeba92f980ad0e7cc06f7cbcffcc))
+* stage uploads and move them into place ([#398](https://github.com/kosolabs/sshadow/issues/398)) ([701a45f](https://github.com/kosolabs/sshadow/commit/701a45f610433d8588219fda5b894e5bd2eeb5e9))
+
 ## [0.16.2](https://github.com/kosolabs/sshadow/compare/v0.16.1...v0.16.2) (2026-10-15)
 
 
