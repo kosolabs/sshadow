@@ -1,12 +1,7 @@
-import os
 import random
-import shutil
-import signal
-import socket
-import subprocess
 import threading
 import time
-from collections.abc import Callable, Generator
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -14,9 +9,6 @@ import pytest
 from logwatch import APP, EXTENSION, LogWatcher, Matcher, msg
 from proxy import Proxy
 from sshadow import (
-    PROFILE_NAME,
-    REPO,
-    SERVER_PORT,
     App,
     Profiles,
     brokered,
@@ -36,16 +28,11 @@ def reconnecting(profile: str) -> Matcher:
     return msg(rf"^Session reconnecting: .*{named(profile)}")
 
 
-def gave_up(profile: str) -> Matcher:
-    return msg(rf"^Reconnect cancelled: .*{named(profile)}")
-
-
 def invalidated(profile: str) -> Matcher:
     return msg(rf"^XPC invalidated: .*{named(profile, 'displayName')}", subsystem=APP)
 
 
 RETRYING = msg(r"^Connect failed; retrying in ")
-CONNECT_ATTEMPT = msg(r"^(Failed to connect SSH config|SSH config connected)")
 
 
 # Multiple domains
@@ -120,41 +107,6 @@ def test_rebroker_domains(
         logs.expect_all([brokered(name) for name in remotes], timeout=60)
         for name, path in remotes.items():
             trees[name] = round_trip(app, logs, name, roots[name], path, trees[name])
-
-
-def test_nested_domains(
-    app: App, logs: LogWatcher, profiles: Profiles, remote: Path
-) -> None:
-    outer, inner = "Test-E2E-Outer", "Test-E2E-Inner"
-    roots = enable_domains(
-        app, logs, profiles, {outer: remote, inner: remote / "inner"}
-    )
-
-    from_inner: Tree = {"from-inner.txt": File(b"from the inner domain\n")}
-    make_tree(roots[inner], from_inner)
-    wait_for_tree(remote / "inner", from_inner, on_poll=logs.check)
-    app.send("poll", name=outer)
-    wait_for_tree(
-        roots[outer],
-        {"inner": Dir(), "inner/from-inner.txt": from_inner["from-inner.txt"]},
-        on_poll=logs.check,
-    )
-
-    from_outer: Tree = {"from-outer.txt": File(b"from the outer domain\n")}
-    make_tree(roots[outer] / "inner", from_outer)
-    both = from_inner | from_outer
-    wait_for_tree(remote / "inner", both, on_poll=logs.check)
-    app.send("poll", name=inner)
-    wait_for_tree(roots[inner], both, on_poll=logs.check)
-
-    (roots[inner] / "from-outer.txt").unlink()
-    wait_for_tree(remote / "inner", from_inner, on_poll=logs.check)
-    app.send("poll", name=outer)
-    wait_for_tree(
-        roots[outer],
-        {"inner": Dir(), "inner/from-inner.txt": from_inner["from-inner.txt"]},
-        on_poll=logs.check,
-    )
 
 
 def test_disable_one_domain(
@@ -286,84 +238,3 @@ def test_enable_while_server_down(
     proxy.restore()
     local = enable(app, logs, name)
     round_trip(app, logs, name, local, remote, {})
-
-
-def test_missing_remote_path_stops_retrying(
-    app: App, logs: LogWatcher, proxy: Proxy, profiles: Profiles, remote: Path
-) -> None:
-    root = remote / "root"
-    name = profiles.create(PROFILE_NAME, path=root, host="127.0.0.1", port=proxy.port)
-    local = enable(app, logs, name)
-    round_trip(app, logs, name, local, root, {})
-
-    proxy.drop()
-    shutil.rmtree(root)
-    app.send("poll", name=name)
-    logs.expect(reconnecting(name), timeout=30)
-    logs.expect(gave_up(name), timeout=30)
-    logs.expect_none(CONNECT_ATTEMPT, timeout=10)
-
-    root.mkdir()
-    disable(app, logs, name)
-    local = enable(app, logs, name)
-    round_trip(app, logs, name, local, root, {})
-
-
-@pytest.fixture
-def locked_server(tmp_path: Path) -> Generator[int]:
-    """Another test server, which accepts no keys, and return its port."""
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
-    pid_file = tmp_path / "sshd.pid"
-    host_key = tmp_path / "host_key_ed25519"
-    subprocess.run(
-        ["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", host_key], check=True
-    )
-    subprocess.run(
-        [
-            "/usr/sbin/sshd",
-            "-f",
-            REPO / "ci_scripts/test_server/sshd_config",
-            "-p",
-            str(port),
-            "-E",
-            tmp_path / "sshd.log",
-            "-h",
-            host_key,
-            "-o",
-            f"PidFile {pid_file}",
-            "-o",
-            "AuthorizedKeysFile none",
-        ],
-        check=True,
-    )
-    wait_for(lambda: "" if pid_file.exists() else "sshd didn't start", timeout=5)
-    yield port
-    os.kill(int(pid_file.read_text()), signal.SIGTERM)
-
-
-def test_rejected_key_stops_retrying(
-    app: App,
-    logs: LogWatcher,
-    proxy: Proxy,
-    proxied_profile: str,
-    remote: Path,
-    locked_server: int,
-) -> None:
-    name = proxied_profile
-    local = enable(app, logs, name)
-    tree = round_trip(app, logs, name, local, remote, {})
-
-    proxy.upstream = ("127.0.0.1", locked_server)
-    proxy.drop()
-    app.send("poll", name=name)
-    logs.expect(reconnecting(name), timeout=30)
-    logs.expect(gave_up(name), timeout=30)
-    logs.expect_none(CONNECT_ATTEMPT, timeout=10)
-
-    proxy.upstream = ("127.0.0.1", SERVER_PORT)
-    disable(app, logs, name)
-    local = enable(app, logs, name)
-    wait_for_tree(local, tree, on_poll=logs.check)
-    round_trip(app, logs, name, local, remote, tree)

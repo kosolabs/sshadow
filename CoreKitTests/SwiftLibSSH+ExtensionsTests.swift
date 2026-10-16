@@ -39,7 +39,77 @@ import XPC
             try await SSHClient.connect(config: config)
         }
     }
+
+    @Test func testThrowsAuthenticationFailed() async throws {
+        let sandbox = TestSandbox()
+        let config = try sandbox.config(
+            authMethod: .privateKey(contents: unauthorizedKey, passphrase: nil)
+        )
+
+        await #expect(throws: ConnectionError.authenticationFailed) {
+            try await connect(config)
+        }
+    }
+
+    @Test func testThrowsRemotePathNotFound() async throws {
+        let sandbox = TestSandbox()
+        let config = try sandbox.config(path: "missing")
+
+        await #expect(throws: ConnectionError.remotePathNotFound) {
+            try await connect(config)
+        }
+    }
+
+    @Test func testThrowsRemotePathNotDirectory() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "file", contents: "data")
+        let config = try sandbox.config(path: "file")
+
+        await #expect(throws: ConnectionError.remotePathNotDirectory) {
+            try await connect(config)
+        }
+    }
+
+    private func connect(
+        _ config: ConnectionConfig
+    ) async throws(ConnectionError) -> (SSHClient, SFTPClient) {
+        try await withConnectRetries {
+            () async throws(ConnectionError) -> (SSHClient, SFTPClient) in
+            try await SSHClient.connect(config: config)
+        }
+    }
 }
+
+extension TestSandbox {
+    fileprivate func config(
+        path: String? = nil,
+        authMethod: ConnectionConfig.AuthMethod? = nil
+    ) throws -> ConnectionConfig {
+        let base = try config
+        return ConnectionConfig(
+            id: base.id,
+            name: base.name,
+            host: base.host,
+            port: base.port,
+            user: base.user,
+            path: path.map { getUrl(for: $0).path(percentEncoded: false) }
+                ?? base.path,
+            authMethod: authMethod ?? base.authMethod,
+        )
+    }
+}
+
+// A key that isn't in the test server's authorized_keys.
+private let unauthorizedKey = """
+    -----BEGIN OPENSSH PRIVATE KEY-----
+    b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+    QyNTUxOQAAACDiWiiqTxtHb1ER8sBiQb/OqssiLOC9uAzaW7zfqEyWvgAAAKC11KnUtdSp
+    1AAAAAtzc2gtZWQyNTUxOQAAACDiWiiqTxtHb1ER8sBiQb/OqssiLOC9uAzaW7zfqEyWvg
+    AAAEBLb7xoFO4wzyXzDTcgUK3eauyQH1200BzhfszYuDhqUeJaKKpPG0dvURHywGJBv86q
+    yyIs4L24DNpbvN+oTJa+AAAAHXNzaGFkb3ctdW5hdXRob3JpemVkLXRlc3Qta2V5
+    -----END OPENSSH PRIVATE KEY-----
+
+    """
 
 @Suite struct SFTPClientExtensionTests {
     private func connect(
