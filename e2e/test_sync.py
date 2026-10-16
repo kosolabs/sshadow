@@ -71,19 +71,9 @@ EDITS: list[Edit] = [
 ]
 
 
-def test_upload(app: App, logs: LogWatcher, profile: str, remote: Path) -> None:
-    local = enable(app, logs, profile)
-    make_tree(local, TREE)
-    wait_for_tree(remote, TREE, on_poll=logs.check)
-
-
-def test_download(app: App, logs: LogWatcher, profile: str, remote: Path) -> None:
-    make_tree(remote, TREE)
-    local = enable(app, logs, profile)
-    wait_for_tree(local, TREE, on_poll=logs.check)
-
-
-def test_local_edits(app: App, logs: LogWatcher, profile: str, remote: Path) -> None:
+def test_upload_local_edits(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
     local = enable(app, logs, profile)
     make_tree(local, TREE)
     wait_for_tree(remote, TREE, on_poll=logs.check)
@@ -92,7 +82,9 @@ def test_local_edits(app: App, logs: LogWatcher, profile: str, remote: Path) -> 
     wait_for_tree(remote, edit_tree(TREE, EDITS), on_poll=logs.check)
 
 
-def test_remote_edits(app: App, logs: LogWatcher, profile: str, remote: Path) -> None:
+def test_download_remote_edits(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
     make_tree(remote, TREE)
     local = enable(app, logs, profile)
     wait_for_tree(local, TREE, on_poll=logs.check)
@@ -207,9 +199,6 @@ def evict_files(root: Path, tree: Tree, logs: LogWatcher) -> None:
 def test_evict(app: App, logs: LogWatcher, profile: str, remote: Path) -> None:
     make_tree(remote, TREE)
     local = enable(app, logs, profile)
-    wait_for_tree(local, TREE, on_poll=logs.check)
-
-    evict_files(local, TREE, logs)
     wait_for_tree(local, TREE, on_poll=logs.check)
 
     evict_files(local, TREE, logs)
