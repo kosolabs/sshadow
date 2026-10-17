@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.5](https://github.com/kosolabs/sshadow/compare/v0.16.4...v0.16.5) (2026-10-17)
+
+
+### Bug Fixes
+
+* crash when opening the menu on macOS 15 ([#408](https://github.com/kosolabs/sshadow/issues/408)) ([6a69b8e](https://github.com/kosolabs/sshadow/commit/6a69b8e297e3f24bc6fa6a7d203842066a54e2d6))
+
 ## [0.16.4](https://github.com/kosolabs/sshadow/compare/v0.16.3...v0.16.4) (2026-10-16)
 
 
