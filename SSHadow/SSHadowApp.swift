@@ -33,13 +33,7 @@ private func removeOrphanedDomains() async {
 
 @main
 struct SSHadowApp: App {
-    static let modelContainer = try! AppDB.getModelContainer(
-        config: ModelConfiguration(
-            isStoredInMemoryOnly: ProcessInfo.processInfo
-                .arguments
-                .contains("-uiTesting")
-        )
-    )
+    static let modelContainer = try! AppDB.getModelContainer()
 
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var activation = WindowActivationTracker()
@@ -51,40 +45,40 @@ struct SSHadowApp: App {
     var body: some Scene {
         MenuBarExtra {
             RichMenuMainView()
+                .modelContainer(Self.modelContainer)
+                .environment(Connections.shared)
+                .environment(Transfers.shared)
+                .environment(Events.shared)
         } label: {
             MenuBarIcon(
                 isLoading: Events.shared.isActive || Transfers.shared.isActive
             )
         }
         .menuBarExtraStyle(.window)
-        .modelContainer(Self.modelContainer)
-        .environment(Connections.shared)
-        .environment(Transfers.shared)
-        .environment(Events.shared)
 
         Window("Settings", id: "settings") {
             SettingsView()
+                .modelContainer(Self.modelContainer)
+                .environment(activation)
+                .environment(Connections.shared)
+                .environment(Transfers.shared)
+                .environment(Events.shared)
         }
         .handlesExternalEvents(matching: [])
-        .modelContainer(Self.modelContainer)
-        .environment(activation)
-        .environment(Connections.shared)
-        .environment(Transfers.shared)
-        .environment(Events.shared)
 
         Window("Event Log", id: "events") {
             EventLogView()
+                .environment(activation)
+                .environment(Transfers.shared)
+                .environment(Events.shared)
         }
         .handlesExternalEvents(matching: [])
-        .environment(activation)
-        .environment(Transfers.shared)
-        .environment(Events.shared)
 
         Window("About SSHadow", id: "about") {
             AboutView()
+                .environment(activation)
         }
         .windowResizability(.contentSize)
         .handlesExternalEvents(matching: [])
-        .environment(activation)
     }
 }
