@@ -10,9 +10,7 @@ public actor AppDB {
     public static let shared: AppDB = try! open()
 
     public static func getModelContainer(
-        config: ModelConfiguration = ModelConfiguration(
-            groupContainer: .identifier(SSHadow.appGroup)
-        )
+        config: ModelConfiguration = ModelConfiguration()
     ) throws -> ModelContainer {
         let schema = Schema([ConnectionConfigModel.self])
         return try ModelContainer(
@@ -22,9 +20,7 @@ public actor AppDB {
     }
 
     public static func open(
-        config: ModelConfiguration = ModelConfiguration(
-            groupContainer: .identifier(SSHadow.appGroup)
-        )
+        config: ModelConfiguration = ModelConfiguration()
     ) throws -> AppDB {
         return try AppDB(modelContainer: getModelContainer(config: config))
     }
