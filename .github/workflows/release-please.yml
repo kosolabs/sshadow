@@ -12,7 +12,7 @@ jobs:
       name: sshadow-release
     steps:
       - id: app
-        uses: actions/create-github-app-token@v3.2.0
+        uses: actions/create-github-app-token@v3.3.0
         with:
           client-id: Iv23liXdlxbyAb7jyk9P
           private-key: ${{ secrets.RELEASER_PRIVATE_KEY }}
