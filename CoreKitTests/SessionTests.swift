@@ -1958,6 +1958,149 @@ struct SessionTests {
         }
     }
 
+    struct IsExcludedTests {
+        @Test func matchingNameIsExcluded() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            let excluded = try await session.isExcluded(
+                "build",
+                in: .rootContainer,
+                isDirectory: true,
+                ignoreFiles: IgnoreFiles(files: [".sshadowignore": .contents("build/\n")])
+            )
+
+            #expect(excluded)
+        }
+
+        @Test func otherNameIsNotExcluded() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            let excluded = try await session.isExcluded(
+                "build",
+                in: .rootContainer,
+                isDirectory: false,
+                ignoreFiles: IgnoreFiles(files: [".sshadowignore": .contents("build/\n")])
+            )
+
+            #expect(!excluded)
+        }
+
+        @Test func nestedRulesOverrideParentRules() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "src")
+            let session = try await sandbox.getSession()
+            let srcId = try await session.child(name: "src")
+            let ignoreFiles = IgnoreFiles(
+                files: [".sshadowignore": .contents("*.log\n")],
+                children: ["src": IgnoreFiles(files: [".sshadowignore": .contents("!keep.log\n")])]
+            )
+
+            let keep = try await session.isExcluded(
+                "keep.log",
+                in: srcId,
+                isDirectory: false,
+                ignoreFiles: ignoreFiles
+            )
+            let other = try await session.isExcluded(
+                "other.log",
+                in: srcId,
+                isDirectory: false,
+                ignoreFiles: ignoreFiles
+            )
+
+            #expect(!keep)
+            #expect(other)
+        }
+
+        @Test func remoteIgnoreFileIsReadFromServer() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "src/.sshadowignore", contents: "*.o\n")
+            let session = try await sandbox.getSession()
+            let srcId = try await session.child(name: "src")
+
+            let excluded = try await session.isExcluded(
+                "out.o",
+                in: srcId,
+                isDirectory: false,
+                ignoreFiles: IgnoreFiles(children: [
+                    "src": IgnoreFiles(files: [".sshadowignore": .remote])
+                ])
+            )
+
+            #expect(excluded)
+        }
+
+        @Test func missingRemoteIgnoreFileHasNoRules() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            let excluded = try await session.isExcluded(
+                "out.o",
+                in: .rootContainer,
+                isDirectory: false,
+                ignoreFiles: IgnoreFiles(files: [".sshadowignore": .remote])
+            )
+
+            #expect(!excluded)
+        }
+
+        @Test func onlyConfiguredFilenamesApply() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            let excluded = try await session.isExcluded(
+                "build",
+                in: .rootContainer,
+                isDirectory: true,
+                ignoreFiles: IgnoreFiles(files: [".gitignore": .contents("build/\n")])
+            )
+
+            #expect(!excluded)
+        }
+
+        @Test func laterRulesReplaceEarlierOnes() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            let before = try await session.isExcluded(
+                "build",
+                in: .rootContainer,
+                isDirectory: true,
+                ignoreFiles: IgnoreFiles(files: [".sshadowignore": .contents("build/\n")])
+            )
+            let after = try await session.isExcluded(
+                "build",
+                in: .rootContainer,
+                isDirectory: true,
+                ignoreFiles: IgnoreFiles()
+            )
+
+            #expect(before)
+            #expect(!after)
+        }
+
+        @Test func mismatchedDirectoriesAreNotExcluded() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "src")
+            let session = try await sandbox.getSession()
+            let srcId = try await session.child(name: "src")
+
+            let excluded = try await session.isExcluded(
+                "build",
+                in: srcId,
+                isDirectory: true,
+                ignoreFiles: IgnoreFiles(
+                    files: [".sshadowignore": .contents("build/\n")],
+                    children: ["lib": IgnoreFiles()]
+                )
+            )
+
+            #expect(!excluded)
+        }
+    }
+
     struct UploadTests {
         @Test func uploadPackageRecordsPackageKind() async throws {
             let sandbox = TestSandbox()

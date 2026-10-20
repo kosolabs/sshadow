@@ -9,15 +9,18 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
     NSFileProviderPartialContentFetching, NSFileProviderServicing
 {
     private let client: CoreClient
+    let domain: NSFileProviderDomain?
 
     required public init(domain: NSFileProviderDomain) {
         client = CoreClient.shared(for: domain)
+        self.domain = domain
         logger.debug("Init \(domain)")
         super.init()
     }
 
     public init(client: CoreClient) {
         self.client = client
+        self.domain = nil
         super.init()
     }
 
@@ -216,6 +219,14 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 )
                 throw CoreError.cannotSynchronize
             }
+        }
+
+        if try await isExcluded(
+            filename,
+            in: parentId,
+            isDirectory: type.conforms(to: .directory)
+        ) {
+            throw CoreError.excludedFromSync
         }
 
         var remaining = fields.subtracting(.nameFields)
@@ -466,6 +477,43 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         for identifier: NSFileProviderItemIdentifier,
     ) async throws(CoreError) -> FPItem {
         try await FPItem(item: client.item(for: identifier))
+    }
+
+    private func isExcluded(
+        _ name: String,
+        in parentId: NSFileProviderItemIdentifier,
+        isDirectory: Bool
+    ) async throws(CoreError) -> Bool {
+        guard let domain, let manager = NSFileProviderManager(for: domain),
+            parentId != .trashContainer
+        else { return false }
+
+        let filenames = try await client.ignoreFilenames()
+        guard !filenames.isEmpty else { return false }
+
+        let root: URL
+        let parent: URL
+        do {
+            root = try await manager.getUserVisibleURL(for: .rootContainer)
+            parent = try await manager.getUserVisibleURL(for: parentId)
+        } catch {
+            logger.error("Failed to locate ignore files for \(name): \(error)")
+            return false
+        }
+
+        let scoped = root.startAccessingSecurityScopedResource()
+        defer { if scoped { root.stopAccessingSecurityScopedResource() } }
+        guard let ignoreFiles = IgnoreFiles.read(filenames, from: root, to: parent)
+        else {
+            logger.error("Failed to locate ignore files for \(name): \(parent) is outside \(root)")
+            return false
+        }
+        return try await client.isExcluded(
+            name,
+            in: parentId,
+            isDirectory: isDirectory,
+            ignoreFiles: ignoreFiles
+        )
     }
 
     private func size(of file: URL) throws(CoreError) -> UInt64 {

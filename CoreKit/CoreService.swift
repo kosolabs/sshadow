@@ -121,6 +121,14 @@ final class CoreService: Sendable, CoreXPC {
             try await respond { session in
                 try await self.limits(session, request)
             }
+        case .ignoreFilenames(let request):
+            try await respond { session in
+                try await self.ignoreFilenames(session, request)
+            }
+        case .excluded(let request):
+            try await respond { session in
+                try await self.excluded(session, request)
+            }
         }
     }
 
@@ -349,6 +357,26 @@ final class CoreService: Sendable, CoreXPC {
         _ request: LimitsRequest
     ) async throws -> LimitsResponse {
         await LimitsResponse(limits: session.limits)
+    }
+
+    func ignoreFilenames(
+        _ session: Session,
+        _ request: IgnoreFilenamesRequest
+    ) async throws -> IgnoreFilenamesResponse {
+        await IgnoreFilenamesResponse(filenames: session.ignoreFilenames)
+    }
+
+    func excluded(
+        _ session: Session,
+        _ request: ExcludedRequest
+    ) async throws -> ExcludedResponse {
+        let excluded = try await session.isExcluded(
+            request.name,
+            in: NSFileProviderItemIdentifier(request.parentId),
+            isDirectory: request.isDirectory,
+            ignoreFiles: request.ignoreFiles
+        )
+        return ExcludedResponse(excluded: excluded)
     }
 
     func upload(

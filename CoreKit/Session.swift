@@ -1,6 +1,7 @@
 import Common
 import FileProvider
 import Foundation
+import IgnoreModule
 import SwiftData
 import SwiftLibSSH
 
@@ -29,6 +30,7 @@ actor Session {
     nonisolated private let fileLog: Events<ContinuousClock>.Logger
 
     private lazy var cache = FileCache(read: read)
+    private lazy var ignores = IgnoreCache(filenames: config.ignoreFilenames)
 
     private var watched: [NSFileProviderItemIdentifier: Int] = [:]
     private var schedule: PollSchedule?
@@ -103,6 +105,79 @@ actor Session {
     }
 
     var outstanding: Int { gate.operations }
+
+    var ignoreFilenames: [String] { config.ignoreFilenames }
+
+    func isExcluded(
+        _ name: String,
+        in parentId: NSFileProviderItemIdentifier,
+        isDirectory: Bool,
+        ignoreFiles: IgnoreFiles
+    ) async throws -> Bool {
+        let parent = try await db.path(for: parentId)
+        let dirs = parent.split(separator: "/").map(String.init)
+        let branch = ignoreFiles.branch
+        guard branch == dirs else {
+            let ref = await ref(for: name, in: parentId)
+            logger.error(
+                "Ignore files are for \(String(describing: branch)), "
+                    + "expected \(dirs): \(ref)"
+            )
+            return false
+        }
+
+        let resolved = try await readRemote(ignoreFiles)
+        for dir in ignores.update(resolved) {
+            logger.info("Ignore rules changed in \(dir.isEmpty ? "/" : dir)")
+        }
+
+        guard
+            let glob = ignores.rule(
+                ignoring: name,
+                in: parent,
+                isDirectory: isDirectory
+            )
+        else { return false }
+        let path = parent.isEmpty ? name : "\(parent)/\(name)"
+        logger.info(
+            "Excluded from sync: \(path) (\(glob.from ?? "global"): \(glob.original))"
+        )
+        return true
+    }
+
+    private func readRemote(
+        _ ignoreFiles: IgnoreFiles,
+        in dir: String = ""
+    ) async throws -> IgnoreFiles {
+        var resolved = ignoreFiles
+        for (filename, file) in ignoreFiles.files where file == .remote {
+            let path = dir.isEmpty ? filename : "\(dir)/\(filename)"
+            resolved.files[filename] = try await readIgnoreFile(at: path).map(
+                IgnoreFile.contents
+            )
+        }
+        for (name, child) in ignoreFiles.children {
+            let path = dir.isEmpty ? name : "\(dir)/\(name)"
+            resolved.children[name] = try await readRemote(child, in: path)
+        }
+        return resolved
+    }
+
+    private func readIgnoreFile(at path: String) async throws -> String? {
+        try await perform(with: .rootContainer) { () async throws -> String? in
+            do {
+                let data = try await sftp.withSftpFile(
+                    at: config.path(for: path),
+                    accessType: .readOnly
+                ) { file in
+                    try await file.read()
+                }
+                return String(decoding: data, as: UTF8.self)
+            } catch SSHError.sftpError(.noSuchFile, _) {
+                return nil
+            }
+        }
+    }
 
     func close() async {
         await sftp.close()

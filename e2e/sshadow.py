@@ -22,6 +22,8 @@ from Foundation import (
 from logwatch import APP, LogWatcher, Matcher, msg
 from tree import File, Tree, make_tree, wait_for_tree
 
+SF_DATALESS = 0x40000000
+
 REPO = Path(__file__).parent.parent
 ENABLE_TEST_COMMANDS = "-enableTestCommands"
 COMMAND_NOTIFICATION = "com.kosolabs.SSHadow.command"
@@ -267,6 +269,11 @@ def evict(path: Path) -> None:
     )
     if not ok:
         raise OSError(f"can't evict {path}: {error}")
+
+
+def dataless(path: Path) -> bool:
+    """Whether a File Provider item's contents haven't been downloaded."""
+    return bool(os.lstat(path).st_flags & SF_DATALESS)
 
 
 def trash(path: Path) -> Path:

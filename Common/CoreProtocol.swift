@@ -83,6 +83,8 @@ public enum CoreRequest: Message, PrettyDescribable {
     case removeFile(RemoveFileRequest)
     case removeDirectory(RemoveDirectoryRequest)
     case limits(LimitsRequest)
+    case ignoreFilenames(IgnoreFilenamesRequest)
+    case excluded(ExcludedRequest)
 
     public func encoded() throws -> Data {
         try JSONEncoder().encode(self)
@@ -513,6 +515,51 @@ public struct LimitsResponse: Message, PrettyDescribable {
 
     public init(limits: Limits) {
         self.limits = limits
+    }
+}
+
+public struct IgnoreFilenamesRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = IgnoreFilenamesResponse
+    public init() {}
+
+    public var wrapped: CoreRequest { .ignoreFilenames(self) }
+}
+
+public struct IgnoreFilenamesResponse: Message, PrettyDescribable {
+    public let filenames: [String]
+
+    public init(filenames: [String]) {
+        self.filenames = filenames
+    }
+}
+
+public struct ExcludedRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = ExcludedResponse
+    public let parentId: String
+    public let name: String
+    public let isDirectory: Bool
+    public let ignoreFiles: IgnoreFiles
+
+    public var wrapped: CoreRequest { .excluded(self) }
+
+    public init(
+        parentId: String,
+        name: String,
+        isDirectory: Bool,
+        ignoreFiles: IgnoreFiles
+    ) {
+        self.parentId = parentId
+        self.name = name
+        self.isDirectory = isDirectory
+        self.ignoreFiles = ignoreFiles
+    }
+}
+
+public struct ExcludedResponse: Message, PrettyDescribable {
+    public let excluded: Bool
+
+    public init(excluded: Bool) {
+        self.excluded = excluded
     }
 }
 

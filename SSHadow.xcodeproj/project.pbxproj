@@ -15,6 +15,9 @@
 		7322A9222F2857C700D8117D /* SSHadow.icon in Resources */ = {isa = PBXBuildFile; fileRef = 7322A9212F2857C700D8117D /* SSHadow.icon */; };
 		7322A9282F294D5400D8117D /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 7322A9272F294D5400D8117D /* SwiftLibSSH */; };
 		7369DF3F2F45513300F709F8 /* UnitTests.xctestplan in Resources */ = {isa = PBXBuildFile; fileRef = 7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */; };
+		737141313086AB16008C937C /* IgnoreModule in Frameworks */ = {isa = PBXBuildFile; productRef = 737141303086AB16008C937C /* IgnoreModule */; };
+		737141333086AB2D008C937C /* IgnoreModule in Frameworks */ = {isa = PBXBuildFile; productRef = 737141323086AB2D008C937C /* IgnoreModule */; };
+		7371413D3086BBDF008C937C /* IgnoreModule in Frameworks */ = {isa = PBXBuildFile; productRef = 7371413C3086BBDF008C937C /* IgnoreModule */; };
 		737720C92FBD039600FC5390 /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 737720C82FBD039600FC5390 /* OrderedCollections */; };
 		73799A492F9811DD00A15109 /* CoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* CoreKit.framework */; };
 		73799A532F9811DD00A15109 /* CoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* CoreKit.framework */; };
@@ -358,6 +361,7 @@
 			files = (
 				738D63B72F3FD1F100FED311 /* ExtensionKit.framework in Frameworks */,
 				73799A532F9811DD00A15109 /* CoreKit.framework in Frameworks */,
+				737141313086AB16008C937C /* IgnoreModule in Frameworks */,
 				7322A9282F294D5400D8117D /* SwiftLibSSH in Frameworks */,
 				730981142F318825009F7AA2 /* Common.framework in Frameworks */,
 			);
@@ -369,6 +373,7 @@
 			files = (
 				73799A642F98129E00A15109 /* Common.framework in Frameworks */,
 				73799A6A2F9812A200A15109 /* SwiftLibSSH in Frameworks */,
+				737141333086AB2D008C937C /* IgnoreModule in Frameworks */,
 				737720C92FBD039600FC5390 /* OrderedCollections in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -378,6 +383,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				73799A492F9811DD00A15109 /* CoreKit.framework in Frameworks */,
+				7371413D3086BBDF008C937C /* IgnoreModule in Frameworks */,
 				73799A6C2F9812D100A15109 /* SwiftLibSSH in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -578,6 +584,7 @@
 			name = SSHadow;
 			packageProductDependencies = (
 				7322A9272F294D5400D8117D /* SwiftLibSSH */,
+				737141303086AB16008C937C /* IgnoreModule */,
 			);
 			productName = SSHadow;
 			productReference = 733470892F22037100B8181D /* SSHadow.app */;
@@ -605,6 +612,7 @@
 			packageProductDependencies = (
 				73799A692F9812A200A15109 /* SwiftLibSSH */,
 				737720C82FBD039600FC5390 /* OrderedCollections */,
+				737141323086AB2D008C937C /* IgnoreModule */,
 			);
 			productName = CoreKit;
 			productReference = 73799A3E2F9811DD00A15109 /* CoreKit.framework */;
@@ -630,6 +638,7 @@
 			name = CoreKitTests;
 			packageProductDependencies = (
 				73799A6B2F9812D100A15109 /* SwiftLibSSH */,
+				7371413C3086BBDF008C937C /* IgnoreModule */,
 			);
 			productName = CoreKitTests;
 			productReference = 73799A482F9811DD00A15109 /* CoreKitTests.xctest */;
@@ -762,6 +771,7 @@
 			packageReferences = (
 				7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */,
 				737720C72FBD039600FC5390 /* XCRemoteSwiftPackageReference "swift-collections" */,
+				7371412F3086AAE9008C937C /* XCRemoteSwiftPackageReference "swift-ignore" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7334708A2F22037100B8181D /* Products */;
@@ -1770,6 +1780,14 @@
 				minimumVersion = 1.24.1;
 			};
 		};
+		7371412F3086AAE9008C937C /* XCRemoteSwiftPackageReference "swift-ignore" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kosolabs/swift-ignore.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.0;
+			};
+		};
 		737720C72FBD039600FC5390 /* XCRemoteSwiftPackageReference "swift-collections" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-collections.git";
@@ -1785,6 +1803,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */;
 			productName = SwiftLibSSH;
+		};
+		737141303086AB16008C937C /* IgnoreModule */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7371412F3086AAE9008C937C /* XCRemoteSwiftPackageReference "swift-ignore" */;
+			productName = IgnoreModule;
+		};
+		737141323086AB2D008C937C /* IgnoreModule */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7371412F3086AAE9008C937C /* XCRemoteSwiftPackageReference "swift-ignore" */;
+			productName = IgnoreModule;
+		};
+		7371413C3086BBDF008C937C /* IgnoreModule */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7371412F3086AAE9008C937C /* XCRemoteSwiftPackageReference "swift-ignore" */;
+			productName = IgnoreModule;
 		};
 		737720C82FBD039600FC5390 /* OrderedCollections */ = {
 			isa = XCSwiftPackageProductDependency;

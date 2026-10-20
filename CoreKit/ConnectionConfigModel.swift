@@ -30,6 +30,7 @@ public class ConnectionConfigModel: CustomStringConvertible {
     public var path: String?
     public var authMethod: AuthMethod
     public var bookmark: Data?
+    public var ignoreFilenames: [String] = ConnectionConfig.defaultIgnoreFilenames
 
     public init(
         id: UUID = UUID(),
@@ -41,6 +42,7 @@ public class ConnectionConfigModel: CustomStringConvertible {
         path: String? = nil,
         authMethod: AuthMethod = .password,
         bookmark: Data? = nil,
+        ignoreFilenames: [String] = ConnectionConfig.defaultIgnoreFilenames,
     ) {
         self.id = id
         self.name = name
@@ -51,6 +53,7 @@ public class ConnectionConfigModel: CustomStringConvertible {
         self.path = path
         self.authMethod = authMethod
         self.bookmark = bookmark
+        self.ignoreFilenames = ignoreFilenames
     }
 
     // MARK: - Effective Values
@@ -300,7 +303,8 @@ extension ConnectionConfig {
             port: profile.effectivePort,
             user: profile.effectiveUser,
             path: profile.effectivePath,
-            authMethod: profile.resolveConfigAuthMethod()
+            authMethod: profile.resolveConfigAuthMethod(),
+            ignoreFilenames: profile.ignoreFilenames
         )
     }
 }
