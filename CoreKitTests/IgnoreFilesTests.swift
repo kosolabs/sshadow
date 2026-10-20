@@ -83,6 +83,14 @@ struct IgnoreFilesMergeTests {
         )
     }
 
+    @Test func branchInitNestsEachLevel() {
+        let tree = IgnoreFiles(
+            branch: ["src", "lib"],
+            files: [[ignore: .contents("a\n")], [:], [ignore: .contents("b\n")]]
+        )
+        #expect(tree == branch("a\n", "b\n"))
+    }
+
     @Test func branchListsDirectoryNames() {
         #expect(IgnoreFiles().branch == [])
         #expect(branch(nil, nil).branch == ["src", "lib"])

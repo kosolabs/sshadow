@@ -18,6 +18,10 @@ struct IgnoreCache {
         return root!.merge(ignoreFiles)
     }
 
+    func knows(_ dir: String) -> Bool {
+        node(at: dir) != nil
+    }
+
     func rule(
         ignoring name: String,
         in dir: String,
@@ -30,6 +34,14 @@ struct IgnoreCache {
             )
         else { return nil }
         return glob
+    }
+
+    private func node(at dir: String) -> IgnoreFiles? {
+        var node = root
+        for name in dir.split(separator: "/").map(String.init) {
+            node = node?.children[name]
+        }
+        return node
     }
 
     private func ignore(for dir: String) -> Ignore? {

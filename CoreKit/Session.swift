@@ -150,7 +150,8 @@ actor Session {
         in dir: String = ""
     ) async throws -> IgnoreFiles {
         var resolved = ignoreFiles
-        for (filename, file) in ignoreFiles.files where file == .remote {
+        for (filename, file) in ignoreFiles.files
+        where file == .remote && !ignores.knows(dir) {
             let path = dir.isEmpty ? filename : "\(dir)/\(filename)"
             resolved.files[filename] = try await readIgnoreFile(at: path).map(
                 IgnoreFile.contents
@@ -1203,23 +1204,93 @@ actor Session {
         of itemId: NSFileProviderItemIdentifier,
         _ work: @Sendable (any SSHItem.Stream) async throws -> T
     ) async throws -> T {
+        var listing: [SFTPAttributes]
         do {
-            return try await withDirectory(for: itemId) { dir in
-                let entries = dir.compactMap { attrs -> SSHItem? in
-                    guard let name = attrs.name else { return nil }
-                    if itemId == .rootContainer, name == ".sshadow" {
-                        return nil
-                    }
-                    return try await self.sshItem(
-                        for: name,
-                        in: itemId,
-                        from: attrs
-                    )
-                }
-                return try await work(entries)
+            listing = try await withDirectory(for: itemId) { dir in
+                var listing: [SFTPAttributes] = []
+                for try await attrs in dir { listing.append(attrs) }
+                return listing
             }
         } catch CoreError.itemNotFound where itemId == .trashContainer {
             return try await work(SSHItem.EmptyStream())
+        }
+
+        if itemId == .rootContainer {
+            listing.removeAll { $0.name == ".sshadow" }
+        }
+        listing = try await excludingIgnored(listing, in: itemId)
+
+        let attrs = AsyncThrowingStream<SFTPAttributes, any Error> { stream in
+            for attrs in listing { stream.yield(attrs) }
+            stream.finish()
+        }
+        let entries = attrs.compactMap { attrs -> SSHItem? in
+            guard let name = attrs.name else { return nil }
+            return try await self.sshItem(for: name, in: itemId, from: attrs)
+        }
+        return try await work(entries)
+    }
+
+    private func excludingIgnored(
+        _ listing: [SFTPAttributes],
+        in itemId: NSFileProviderItemIdentifier
+    ) async throws -> [SFTPAttributes] {
+        guard itemId != .trashContainer, !config.ignoreFilenames.isEmpty
+        else { return listing }
+        let dir = try await db.path(for: itemId)
+        guard !dir.hasPrefix(".sshadow/") else { return listing }
+
+        let listed = Set(
+            listing.filter { $0.type != .directory }.compactMap(\.name)
+        )
+        var files: [String: IgnoreFile] = [:]
+        for filename in config.ignoreFilenames where listed.contains(filename) {
+            let path = dir.isEmpty ? filename : "\(dir)/\(filename)"
+            files[filename] = try await readIgnoreFile(at: path).map(IgnoreFile.contents)
+        }
+        try await updateIgnores(files, in: dir)
+
+        return listing.filter { attrs in
+            guard let name = attrs.name,
+                let glob = ignores.rule(
+                    ignoring: name,
+                    in: dir,
+                    isDirectory: attrs.type == .directory
+                )
+            else { return true }
+            let path = dir.isEmpty ? name : "\(dir)/\(name)"
+            logger.debug(
+                "Excluded from sync: \(path) (\(glob.from ?? "global"): \(glob.original))"
+            )
+            return false
+        }
+    }
+
+    /// Records `files` as the ignore files in `dir`, reading those of any
+    /// ancestor the cache doesn't know yet.
+    private func updateIgnores(
+        _ files: [String: IgnoreFile],
+        in dir: String
+    ) async throws {
+        let names = dir.split(separator: "/").map(String.init)
+        var levels: [[String: IgnoreFile]] = []
+        for depth in 0..<names.count {
+            let ancestor = names.prefix(depth).joined(separator: "/")
+            let known = ignores.knows(ancestor)
+            var level: [String: IgnoreFile] = [:]
+            for filename in config.ignoreFilenames {
+                let path = ancestor.isEmpty ? filename : "\(ancestor)/\(filename)"
+                level[filename] =
+                    known
+                    ? .remote
+                    : try await readIgnoreFile(at: path).map(IgnoreFile.contents)
+            }
+            levels.append(level)
+        }
+        levels.append(files)
+
+        for changed in ignores.update(IgnoreFiles(branch: names, files: levels)) {
+            logger.info("Ignore rules changed in \(changed.isEmpty ? "/" : changed)")
         }
     }
 

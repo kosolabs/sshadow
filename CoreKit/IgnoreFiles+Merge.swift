@@ -1,6 +1,16 @@
 import Common
 
 extension IgnoreFiles {
+    /// A single branch through `names`, with `files` for the root and then
+    /// each directory.
+    init(branch names: [String], files: [[String: IgnoreFile]]) {
+        precondition(files.count == names.count + 1)
+        self.init(files: files[names.count])
+        for (name, files) in zip(names, files).reversed() {
+            self = IgnoreFiles(files: files, children: [name: self])
+        }
+    }
+
     var known: IgnoreFiles {
         IgnoreFiles(
             files: files.filter { $0.value != .remote },

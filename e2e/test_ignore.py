@@ -51,3 +51,17 @@ def test_remote_ignore_file_applies_locally(
     make_tree(local, CONTENT)
     logs.expect_all([excluded("build"), excluded("src/debug.log")], timeout=30)
     wait_for_tree(remote, SYNCED, on_poll=logs.check)
+
+
+def test_ignored_items_stay_remote(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    make_tree(remote, TREE)
+    local = enable(app, logs, profile)
+    wait_for_tree(local, SYNCED, on_poll=logs.check)
+
+    added: Tree = {"notes.log": File(b"notes\n"), "keep.txt": File(b"keep\n")}
+    make_tree(remote, added)
+    app.send("poll", name=profile)
+    wait_for_tree(local, SYNCED | {"keep.txt": added["keep.txt"]}, on_poll=logs.check)
+    wait_for_tree(remote, TREE | added)

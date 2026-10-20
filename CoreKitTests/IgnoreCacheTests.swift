@@ -18,6 +18,17 @@ struct IgnoreCacheTests {
         #expect(cache.rule(ignoring: "a.log", in: "src", isDirectory: false) == nil)
     }
 
+    @Test func knowsRecordedDirectories() {
+        var cache = IgnoreCache(filenames: [ignore])
+        #expect(!cache.knows(""))
+
+        cache.update(IgnoreFiles(children: ["src": IgnoreFiles()]))
+
+        #expect(cache.knows(""))
+        #expect(cache.knows("src"))
+        #expect(!cache.knows("src/lib"))
+    }
+
     @Test func rulesApplyFromEachLevel() {
         var cache = IgnoreCache(filenames: [ignore])
         cache.update(
