@@ -307,28 +307,36 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
     public func move(
         _ itemId: NSFileProviderItemIdentifier,
         toParent newParentId: NSFileProviderItemIdentifier,
-        name newName: String
+        name newName: String,
+        ignoreFiles: IgnoreFiles? = nil
     ) async throws(CoreError) -> Item {
         let response = try await perform(
             MoveRequest(
                 itemId: itemId.rawValue,
                 newParentId: newParentId.rawValue,
-                newName: newName
+                newName: newName,
+                ignoreFiles: ignoreFiles
             )
         )
         return response.item
     }
 
     public func removeFile(
-        for itemId: NSFileProviderItemIdentifier
+        for itemId: NSFileProviderItemIdentifier,
+        ignoreFiles: IgnoreFiles? = nil
     ) async throws(CoreError) {
-        _ = try await perform(RemoveFileRequest(itemId: itemId.rawValue))
+        _ = try await perform(
+            RemoveFileRequest(itemId: itemId.rawValue, ignoreFiles: ignoreFiles)
+        )
     }
 
     public func removeDirectory(
-        for itemId: NSFileProviderItemIdentifier
+        for itemId: NSFileProviderItemIdentifier,
+        ignoreFiles: IgnoreFiles? = nil
     ) async throws(CoreError) {
-        _ = try await perform(RemoveDirectoryRequest(itemId: itemId.rawValue))
+        _ = try await perform(
+            RemoveDirectoryRequest(itemId: itemId.rawValue, ignoreFiles: ignoreFiles)
+        )
     }
 
     public func limits() async throws(CoreError) -> Limits {

@@ -327,7 +327,8 @@ final class CoreService: Sendable, CoreXPC {
         let item = try await session.move(
             NSFileProviderItemIdentifier(request.itemId),
             to: NSFileProviderItemIdentifier(request.newParentId),
-            name: request.newName
+            name: request.newName,
+            ignoreFiles: request.ignoreFiles
         )
         return MoveResponse(item: item)
     }
@@ -337,7 +338,8 @@ final class CoreService: Sendable, CoreXPC {
         _ request: RemoveFileRequest
     ) async throws -> RemoveFileResponse {
         try await session.removeFile(
-            for: NSFileProviderItemIdentifier(request.itemId)
+            for: NSFileProviderItemIdentifier(request.itemId),
+            ignoreFiles: request.ignoreFiles
         )
         return RemoveFileResponse()
     }
@@ -347,7 +349,8 @@ final class CoreService: Sendable, CoreXPC {
         _ request: RemoveDirectoryRequest
     ) async throws -> RemoveDirectoryResponse {
         try await session.removeDirectory(
-            for: NSFileProviderItemIdentifier(request.itemId)
+            for: NSFileProviderItemIdentifier(request.itemId),
+            ignoreFiles: request.ignoreFiles
         )
         return RemoveDirectoryResponse()
     }

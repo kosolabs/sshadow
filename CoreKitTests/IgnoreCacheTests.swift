@@ -53,6 +53,20 @@ struct IgnoreCacheTests {
         #expect(source == nil)
     }
 
+    @Test func ignoredAncestorIgnoresEverythingBelow() {
+        var cache = IgnoreCache(filenames: [ignore])
+        cache.update(
+            IgnoreFiles(
+                files: [ignore: .contents("data/\n")],
+                children: ["data": IgnoreFiles(children: ["sub": IgnoreFiles()])]
+            )
+        )
+
+        let rule = cache.rule(ignoring: "a.txt", in: "data/sub", isDirectory: false)
+
+        #expect(rule?.original == "data/")
+    }
+
     @Test func whitelistedIgnoresNothing() {
         var cache = IgnoreCache(filenames: [ignore])
         cache.update(IgnoreFiles(files: [ignore: .contents("*.log\n!keep.log\n")]))

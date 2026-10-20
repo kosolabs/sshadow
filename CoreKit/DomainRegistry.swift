@@ -19,6 +19,11 @@ public actor DomainRegistry {
                 for: .workingSet
             )
         },
+        resolveExcluded: { config in
+            try await config.domain.manager.signalErrorResolved(
+                NSFileProviderError(.excludedFromSync)
+            )
+        },
         pollInterval: .seconds(300),
         connections: Connections.shared,
         transfers: Transfers.shared,
@@ -27,6 +32,7 @@ public actor DomainRegistry {
 
     private let sharedUrl: URL
     private let signalEnumerator: EnumeratorSignal
+    private let resolveExcluded: EnumeratorSignal
     private let pollInterval: Duration?
     private let connections: Connections
     private let transfers: Transfers<ContinuousClock>
@@ -41,6 +47,7 @@ public actor DomainRegistry {
     init(
         sharedUrl: URL = SSHadow.groupUrl,
         signalEnumerator: @escaping EnumeratorSignal,
+        resolveExcluded: @escaping EnumeratorSignal = { _ in },
         pollInterval: Duration? = nil,
         connections: Connections,
         transfers: Transfers<ContinuousClock>,
@@ -57,6 +64,7 @@ public actor DomainRegistry {
     ) {
         self.sharedUrl = sharedUrl
         self.signalEnumerator = signalEnumerator
+        self.resolveExcluded = resolveExcluded
         self.pollInterval = pollInterval
         self.connections = connections
         self.transfers = transfers
@@ -82,6 +90,7 @@ public actor DomainRegistry {
                     domainDb: domainDb,
                     sharedUrl: sharedUrl,
                     signalEnumerator: signalEnumerator,
+                    resolveExcluded: resolveExcluded,
                     transfers: transfers,
                     events: events
                 ),

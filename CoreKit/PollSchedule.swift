@@ -14,6 +14,7 @@ class PollSchedule {
     private let watchedInterval: Duration
     private let watchedIdleThreshold: Duration
     private var lastPollWatched: ContinuousClock.Instant?
+    private var pollAllRequested = false
 
     init(
         begin now: ContinuousClock.Instant,
@@ -35,6 +36,9 @@ class PollSchedule {
         now: ContinuousClock.Instant,
         userIdle: Duration
     ) -> Operation {
+        if pollAllRequested {
+            return .pollAll
+        }
         if isDue(
             now,
             since: lastPollAll,
@@ -56,7 +60,12 @@ class PollSchedule {
         return .wait
     }
 
+    func requestPollAll() {
+        pollAllRequested = true
+    }
+
     func recordPollAll(at now: ContinuousClock.Instant) {
+        pollAllRequested = false
         lastPollAll = now
         lastPollWatched = now
     }

@@ -27,6 +27,21 @@ struct IgnoreCache {
         in dir: String,
         isDirectory: Bool
     ) -> Glob? {
+        var parent = ""
+        for component in dir.split(separator: "/").map(String.init) {
+            if let glob = matched(component, in: parent, isDirectory: true) {
+                return glob
+            }
+            parent = parent.isEmpty ? component : "\(parent)/\(component)"
+        }
+        return matched(name, in: dir, isDirectory: isDirectory)
+    }
+
+    private func matched(
+        _ name: String,
+        in dir: String,
+        isDirectory: Bool
+    ) -> Glob? {
         guard
             case .ignore(let glob) = ignore(for: dir)?.matched(
                 name,

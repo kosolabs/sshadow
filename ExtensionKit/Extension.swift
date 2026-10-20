@@ -276,7 +276,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 let item = try await self.client.createDirectory(
                     parentId: parentId,
                     name: filename,
-                    flags: .init(from: fileSystemFlags)
+                    flags: .init(from: fileSystemFlags),
+                    ifExists: .succeed
                 )
                 itemId = item.id
             }
@@ -349,6 +350,16 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 + "options: \(options), " + "request: \(request)"
         )
 
+        if item.parentItemIdentifier != .trashContainer,
+            try await isExcluded(
+                item.filename,
+                in: item.parentItemIdentifier,
+                isDirectory: item.contentType?.conforms(to: .directory) ?? false
+            )
+        {
+            throw CoreError.excludedFromSync
+        }
+
         var remaining = changedFields
         let steps = progress.steps()
 
@@ -385,10 +396,17 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         if remaining.intersects(with: .nameFields) {
             remaining.subtract(.nameFields)
             steps.add {
+                let ignoreFiles =
+                    item.parentId == .trashContainer
+                    ? try await self.ignoreFiles(
+                        in: self.client.parent(of: item.itemIdentifier)
+                    )
+                    : nil
                 _ = try await self.client.move(
                     item.itemIdentifier,
                     toParent: item.parentId,
-                    name: item.filename
+                    name: item.filename,
+                    ignoreFiles: ignoreFiles
                 )
             }
         }
@@ -451,10 +469,19 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         )
         return try await progress.withChild {
             let item = try await client.item(for: identifier)
-            if item.kind == .folder || item.kind == .package {
-                try await client.removeDirectory(for: identifier)
+            let ignoreFiles = try await ignoreFiles(
+                in: client.parent(of: identifier)
+            )
+            if item.kind.isDirectory {
+                try await client.removeDirectory(
+                    for: identifier,
+                    ignoreFiles: ignoreFiles
+                )
             } else {
-                try await client.removeFile(for: identifier)
+                try await client.removeFile(
+                    for: identifier,
+                    ignoreFiles: ignoreFiles
+                )
             }
         }
     }
@@ -484,28 +511,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         in parentId: NSFileProviderItemIdentifier,
         isDirectory: Bool
     ) async throws(CoreError) -> Bool {
-        guard let domain, let manager = NSFileProviderManager(for: domain),
-            parentId != .trashContainer
-        else { return false }
-
-        let filenames = try await client.ignoreFilenames()
-        guard !filenames.isEmpty else { return false }
-
-        let root: URL
-        let parent: URL
-        do {
-            root = try await manager.getUserVisibleURL(for: .rootContainer)
-            parent = try await manager.getUserVisibleURL(for: parentId)
-        } catch {
-            logger.error("Failed to locate ignore files for \(name): \(error)")
-            return false
-        }
-
-        let scoped = root.startAccessingSecurityScopedResource()
-        defer { if scoped { root.stopAccessingSecurityScopedResource() } }
-        guard let ignoreFiles = IgnoreFiles.read(filenames, from: root, to: parent)
-        else {
-            logger.error("Failed to locate ignore files for \(name): \(parent) is outside \(root)")
+        guard let ignoreFiles = try await ignoreFiles(in: parentId) else {
             return false
         }
         return try await client.isExcluded(
@@ -514,6 +520,38 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             isDirectory: isDirectory,
             ignoreFiles: ignoreFiles
         )
+    }
+
+    /// The local ignore files from the root down to `parentId`, or nil if
+    /// ignore rules don't apply there.
+    private func ignoreFiles(
+        in parentId: NSFileProviderItemIdentifier
+    ) async throws(CoreError) -> IgnoreFiles? {
+        guard let domain, let manager = NSFileProviderManager(for: domain),
+            parentId != .trashContainer
+        else { return nil }
+
+        let filenames = try await client.ignoreFilenames()
+        guard !filenames.isEmpty else { return nil }
+
+        let root: URL
+        let parent: URL
+        do {
+            root = try await manager.getUserVisibleURL(for: .rootContainer)
+            parent = try await manager.getUserVisibleURL(for: parentId)
+        } catch {
+            logger.error("Failed to locate ignore files in \(parentId): \(error)")
+            return nil
+        }
+
+        let scoped = root.startAccessingSecurityScopedResource()
+        defer { if scoped { root.stopAccessingSecurityScopedResource() } }
+        guard let ignoreFiles = IgnoreFiles.read(filenames, from: root, to: parent)
+        else {
+            logger.error("Failed to locate ignore files: \(parent) is outside \(root)")
+            return nil
+        }
+        return ignoreFiles
     }
 
     private func size(of file: URL) throws(CoreError) -> UInt64 {

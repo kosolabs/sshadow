@@ -14,6 +14,10 @@ public struct Item: Message, PrettyDescribable {
                     (name as NSString).pathExtension.lowercased()
                 ) ? .package : .folder
         }
+
+        public var isDirectory: Bool {
+            self == .folder || self == .package
+        }
     }
 
     public struct Flags: OptionSet, Message, CustomStringConvertible {

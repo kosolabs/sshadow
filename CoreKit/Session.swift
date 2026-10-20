@@ -21,6 +21,7 @@ actor Session {
     private let db: DomainDB
     private let sharedUrl: URL
     private let changesDetectedHandler: ChangesDetectedHandler
+    private let ignoreRulesChangedHandler: ChangesDetectedHandler
     private let connectionLostHandler: ConnectionLostHandler
     private let idleTimeProvider: IdleTimeProvider
     private let transfers: Transfers<ContinuousClock>
@@ -44,6 +45,7 @@ actor Session {
         domainDb: DomainDB,
         sharedUrl: URL,
         signalEnumerator: @escaping DomainRegistry.EnumeratorSignal,
+        resolveExcluded: @escaping DomainRegistry.EnumeratorSignal = { _ in },
         transfers: Transfers<ContinuousClock>,
         events: Events<ContinuousClock>
     ) -> Provider {
@@ -56,6 +58,7 @@ actor Session {
                 db: domainDb,
                 sharedUrl: sharedUrl,
                 changesDetectedHandler: { try await signalEnumerator(config) },
+                ignoreRulesChangedHandler: { try await resolveExcluded(config) },
                 connectionLostHandler: handler,
                 idleTimeProvider: SystemIdle.duration,
                 transfers: transfers,
@@ -73,6 +76,7 @@ actor Session {
         db: DomainDB,
         sharedUrl: URL = SSHadow.groupUrl,
         changesDetectedHandler: @escaping ChangesDetectedHandler,
+        ignoreRulesChangedHandler: @escaping ChangesDetectedHandler = {},
         connectionLostHandler: @escaping ConnectionLostHandler,
         idleTimeProvider: @escaping IdleTimeProvider,
         transfers: Transfers<ContinuousClock>,
@@ -84,6 +88,7 @@ actor Session {
         self.db = db
         self.sharedUrl = sharedUrl
         self.changesDetectedHandler = changesDetectedHandler
+        self.ignoreRulesChangedHandler = ignoreRulesChangedHandler
         self.connectionLostHandler = connectionLostHandler
         self.idleTimeProvider = idleTimeProvider
         self.transfers = transfers
@@ -127,9 +132,7 @@ actor Session {
         }
 
         let resolved = try await readRemote(ignoreFiles)
-        for dir in ignores.update(resolved) {
-            logger.info("Ignore rules changed in \(dir.isEmpty ? "/" : dir)")
-        }
+        ignoresChanged(ignores.update(resolved), poll: true)
 
         guard
             let glob = ignores.rule(
@@ -143,6 +146,49 @@ actor Session {
             "Excluded from sync: \(path) (\(glob.from ?? "global"): \(glob.original))"
         )
         return true
+    }
+
+    func isExcluded(
+        _ itemId: NSFileProviderItemIdentifier,
+        ignoreFiles: IgnoreFiles
+    ) async throws -> Bool {
+        let item = try await db.item(for: itemId)
+        return try await isExcluded(
+            item.name,
+            in: db.parent(of: itemId).id,
+            isDirectory: item.kind.isDirectory,
+            ignoreFiles: ignoreFiles
+        )
+    }
+
+    private func isIgnored(_ item: Item, in dir: String) -> Bool {
+        ignores.rule(
+            ignoring: item.name,
+            in: dir,
+            isDirectory: item.kind.isDirectory
+        ) != nil
+    }
+
+    private func ignoresChanged(_ dirs: [String], poll: Bool) {
+        guard !dirs.isEmpty else { return }
+        for dir in dirs {
+            logger.info("Ignore rules changed in \(dir.isEmpty ? "/" : dir)")
+        }
+        if poll { schedule?.requestPollAll() }
+        let handler = ignoreRulesChangedHandler
+        Task {
+            do {
+                try await handler()
+            } catch {
+                logger.error("Failed to retry excluded items: \(error)")
+            }
+        }
+    }
+
+    private func forget(_ itemId: NSFileProviderItemIdentifier) async throws {
+        logger.info("Kept ignored item on server: \(await ref(for: itemId))")
+        try await db.remove(itemId)
+        await cache.invalidate(itemId)
     }
 
     private func readRemote(
@@ -402,7 +448,9 @@ actor Session {
             }
         }
 
+        let dir = try await db.path(for: folder.id)
         for (name, dbItem) in dbItems where sshItems[name] == nil {
+            guard !isIgnored(dbItem, in: dir) else { continue }
             logger.info("Reconcile deleted: \(dbItem)")
             try await db.remove(dbItem.id)
             await cache.invalidate(dbItem.id)
@@ -413,6 +461,12 @@ actor Session {
     }
 
     private func reconcile(file dbItem: Item) async throws -> [Change] {
+        if let parentId = dbItem.parentId,
+            try await isIgnored(dbItem, in: db.path(for: parentId))
+        {
+            return []
+        }
+
         let attrs: SFTPAttributes
         do {
             attrs = try await attributes(for: dbItem.id)
@@ -679,21 +733,30 @@ actor Session {
                 ifExists: ifExists
             )
         }
-        return try await record(
+        let item = try await record(
             name,
             in: parentId,
             kind: .init(directoryNamed: name)
         )
+        try await db.markEnumerated(item.id)
+        return item
     }
 
     @discardableResult
     func move(
         _ itemId: NSFileProviderItemIdentifier,
         to newParentId: NSFileProviderItemIdentifier,
-        name newName: String
+        name newName: String,
+        ignoreFiles: IgnoreFiles? = nil
     ) async throws -> Item {
         await gate.enter()
         defer { gate.leave() }
+
+        if newParentId == .trashContainer, let ignoreFiles,
+            try await isExcluded(itemId, ignoreFiles: ignoreFiles)
+        {
+            throw CoreError.excludedFromSync
+        }
 
         let oldPath = try await path(for: itemId)
         let newPath = try await path(for: newName, in: newParentId)
@@ -721,10 +784,15 @@ actor Session {
     }
 
     func removeFile(
-        for itemId: NSFileProviderItemIdentifier
+        for itemId: NSFileProviderItemIdentifier,
+        ignoreFiles: IgnoreFiles? = nil
     ) async throws {
         await gate.enter()
         defer { gate.leave() }
+
+        if let ignoreFiles, try await isExcluded(itemId, ignoreFiles: ignoreFiles) {
+            return try await forget(itemId)
+        }
 
         try await perform(
             with: itemId,
@@ -737,10 +805,15 @@ actor Session {
     }
 
     func removeDirectory(
-        for itemId: NSFileProviderItemIdentifier
+        for itemId: NSFileProviderItemIdentifier,
+        ignoreFiles: IgnoreFiles? = nil
     ) async throws {
         await gate.enter()
         defer { gate.leave() }
+
+        if let ignoreFiles, try await isExcluded(itemId, ignoreFiles: ignoreFiles) {
+            return try await forget(itemId)
+        }
 
         try await perform(
             with: itemId,
@@ -1289,9 +1362,10 @@ actor Session {
         }
         levels.append(files)
 
-        for changed in ignores.update(IgnoreFiles(branch: names, files: levels)) {
-            logger.info("Ignore rules changed in \(changed.isEmpty ? "/" : changed)")
-        }
+        ignoresChanged(
+            ignores.update(IgnoreFiles(branch: names, files: levels)),
+            poll: false
+        )
     }
 
     private func sshItem(

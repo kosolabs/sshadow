@@ -451,17 +451,20 @@ public struct MoveRequest: CoreRequestType, PrettyDescribable {
     public let itemId: String
     public let newParentId: String
     public let newName: String
+    public let ignoreFiles: IgnoreFiles?
 
     public var wrapped: CoreRequest { .move(self) }
 
     public init(
         itemId: String,
         newParentId: String,
-        newName: String
+        newName: String,
+        ignoreFiles: IgnoreFiles? = nil
     ) {
         self.itemId = itemId
         self.newParentId = newParentId
         self.newName = newName
+        self.ignoreFiles = ignoreFiles
     }
 }
 
@@ -476,11 +479,13 @@ public struct MoveResponse: Message, PrettyDescribable {
 public struct RemoveFileRequest: CoreRequestType, PrettyDescribable {
     public typealias Response = RemoveFileResponse
     public let itemId: String
+    public let ignoreFiles: IgnoreFiles?
 
     public var wrapped: CoreRequest { .removeFile(self) }
 
-    public init(itemId: String) {
+    public init(itemId: String, ignoreFiles: IgnoreFiles? = nil) {
         self.itemId = itemId
+        self.ignoreFiles = ignoreFiles
     }
 }
 
@@ -491,11 +496,13 @@ public struct RemoveFileResponse: Message, PrettyDescribable {
 public struct RemoveDirectoryRequest: CoreRequestType, PrettyDescribable {
     public typealias Response = RemoveDirectoryResponse
     public let itemId: String
+    public let ignoreFiles: IgnoreFiles?
 
     public var wrapped: CoreRequest { .removeDirectory(self) }
 
-    public init(itemId: String) {
+    public init(itemId: String, ignoreFiles: IgnoreFiles? = nil) {
         self.itemId = itemId
+        self.ignoreFiles = ignoreFiles
     }
 }
 
