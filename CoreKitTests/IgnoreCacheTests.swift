@@ -1,10 +1,15 @@
 import Common
+import Foundation
 import IgnoreModule
 import Testing
 
 @testable import CoreKit
 
 private let ignore = ".sshadowignore"
+
+private func text(_ contents: String, at seconds: TimeInterval = 0) -> IgnoreFile {
+    .contents(contents, modified: Date(timeIntervalSince1970: seconds))
+}
 
 struct IgnoreCacheTests {
     @Test func unknownRootIgnoresNothing() {
@@ -14,7 +19,7 @@ struct IgnoreCacheTests {
 
     @Test func unknownChildIgnoresNothing() {
         var cache = IgnoreCache(filenames: [ignore])
-        cache.update(IgnoreFiles(files: [ignore: .contents("*.log\n")]))
+        cache.update(IgnoreFiles(files: [ignore: text("*.log\n")]), from: .remote)
         #expect(cache.rule(ignoring: "a.log", in: "src", isDirectory: false) == nil)
     }
 
@@ -22,7 +27,7 @@ struct IgnoreCacheTests {
         var cache = IgnoreCache(filenames: [ignore])
         #expect(!cache.knows(""))
 
-        cache.update(IgnoreFiles(children: ["src": IgnoreFiles()]))
+        cache.update(IgnoreFiles(children: ["src": IgnoreFiles()]), from: .remote)
 
         #expect(cache.knows(""))
         #expect(cache.knows("src"))
@@ -33,13 +38,14 @@ struct IgnoreCacheTests {
         var cache = IgnoreCache(filenames: [ignore])
         cache.update(
             IgnoreFiles(
-                files: [ignore: .contents("build/\n")],
+                files: [ignore: text("build/\n")],
                 children: [
                     "src": IgnoreFiles(children: [
-                        "lib": IgnoreFiles(files: [ignore: .contents("*.log\n")])
+                        "lib": IgnoreFiles(files: [ignore: text("*.log\n")])
                     ])
                 ]
-            )
+            ),
+            from: .remote
         )
 
         let build = cache.rule(ignoring: "build", in: "src/lib", isDirectory: true)
@@ -57,9 +63,10 @@ struct IgnoreCacheTests {
         var cache = IgnoreCache(filenames: [ignore])
         cache.update(
             IgnoreFiles(
-                files: [ignore: .contents("data/\n")],
+                files: [ignore: text("data/\n")],
                 children: ["data": IgnoreFiles(children: ["sub": IgnoreFiles()])]
-            )
+            ),
+            from: .remote
         )
 
         let rule = cache.rule(ignoring: "a.txt", in: "data/sub", isDirectory: false)
@@ -69,36 +76,70 @@ struct IgnoreCacheTests {
 
     @Test func whitelistedIgnoresNothing() {
         var cache = IgnoreCache(filenames: [ignore])
-        cache.update(IgnoreFiles(files: [ignore: .contents("*.log\n!keep.log\n")]))
+        cache.update(IgnoreFiles(files: [ignore: text("*.log\n!keep.log\n")]), from: .remote)
         #expect(cache.rule(ignoring: "keep.log", in: "", isDirectory: false) == nil)
     }
 
     @Test func onlyConfiguredFilenamesApply() {
         var cache = IgnoreCache(filenames: [ignore])
-        cache.update(IgnoreFiles(files: [".gitignore": .contents("build/\n")]))
+        cache.update(IgnoreFiles(files: [".gitignore": text("build/\n")]), from: .remote)
         #expect(cache.rule(ignoring: "build", in: "", isDirectory: true) == nil)
     }
 
     @Test func unknownRemoteFileHasNoRules() {
         var cache = IgnoreCache(filenames: [ignore])
-        cache.update(IgnoreFiles(files: [ignore: .remote]))
+        cache.update(IgnoreFiles(files: [ignore: .remote]), from: .remote)
         #expect(cache.rule(ignoring: "build", in: "", isDirectory: true) == nil)
     }
 
     @Test func firstUpdateIsNotAChange() {
         var cache = IgnoreCache(filenames: [ignore])
-        let changed = cache.update(IgnoreFiles(files: [ignore: .contents("build/\n")]))
+        let changed = cache.update(IgnoreFiles(files: [ignore: text("build/\n")]), from: .remote)
         #expect(changed == [])
+    }
+
+    @Test func lastChangeAffectingDirectoryRecordsItsOrigin() {
+        var cache = IgnoreCache(filenames: [ignore])
+        cache.update(IgnoreFiles(children: ["src": IgnoreFiles()]), from: .remote)
+        #expect(cache.lastChange(affecting: "src") == nil)
+
+        cache.update(
+            IgnoreFiles(children: ["src": IgnoreFiles(files: [ignore: text("a\n", at: 10)])]),
+            from: .local
+        )
+        #expect(cache.lastChange(affecting: "src") == .local)
+        #expect(cache.lastChange(affecting: "") == nil)
+
+        cache.update(
+            IgnoreFiles(files: [ignore: text("b\n", at: 20)], children: ["src": IgnoreFiles()]),
+            from: .remote
+        )
+        #expect(cache.lastChange(affecting: "src") == .remote)
+        #expect(cache.lastChange(affecting: "") == .remote)
+    }
+
+    @Test func removeForgetsRulesAsALocalChange() {
+        var cache = IgnoreCache(filenames: [ignore])
+        cache.update(IgnoreFiles(files: [ignore: text("build/\n")]), from: .remote)
+
+        let removed = cache.remove(ignore, in: "")
+        let again = cache.remove(ignore, in: "")
+
+        #expect(removed)
+        #expect(!again)
+        #expect(cache.rule(ignoring: "build", in: "", isDirectory: true) == nil)
+        #expect(cache.lastChange(affecting: "") == .local)
     }
 
     @Test func changedRulesApplyToDescendants() {
         var cache = IgnoreCache(filenames: [ignore])
         cache.update(
-            IgnoreFiles(files: [ignore: .contents("*.log\n")], children: ["src": IgnoreFiles()])
+            IgnoreFiles(files: [ignore: text("*.log\n")], children: ["src": IgnoreFiles()]),
+            from: .remote
         )
         let before = cache.rule(ignoring: "a.log", in: "src", isDirectory: false)
 
-        cache.update(IgnoreFiles())
+        cache.update(IgnoreFiles(), from: .remote)
         let after = cache.rule(ignoring: "a.log", in: "src", isDirectory: false)
 
         #expect(before != nil)

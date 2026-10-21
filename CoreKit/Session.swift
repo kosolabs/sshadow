@@ -132,7 +132,7 @@ actor Session {
         }
 
         let resolved = try await readRemote(ignoreFiles)
-        ignoresChanged(ignores.update(resolved), poll: true)
+        ignoresChanged(ignores.update(resolved, from: .local), poll: true)
 
         guard
             let glob = ignores.rule(
@@ -199,9 +199,7 @@ actor Session {
         for (filename, file) in ignoreFiles.files
         where file == .remote && !ignores.knows(dir) {
             let path = dir.isEmpty ? filename : "\(dir)/\(filename)"
-            resolved.files[filename] = try await readIgnoreFile(at: path).map(
-                IgnoreFile.contents
-            )
+            resolved.files[filename] = try await readIgnoreFile(at: path)
         }
         for (name, child) in ignoreFiles.children {
             let path = dir.isEmpty ? name : "\(dir)/\(name)"
@@ -210,19 +208,35 @@ actor Session {
         return resolved
     }
 
-    private func readIgnoreFile(at path: String) async throws -> String? {
-        try await perform(with: .rootContainer) { () async throws -> String? in
+    private func readIgnoreFile(at path: String) async throws -> IgnoreFile? {
+        try await perform(with: .rootContainer) { () async throws -> IgnoreFile? in
             do {
-                let data = try await sftp.withSftpFile(
+                let (data, modified) = try await sftp.withSftpFile(
                     at: config.path(for: path),
                     accessType: .readOnly
                 ) { file in
-                    try await file.read()
+                    try await (file.read(), file.attributes().modifyTime)
                 }
-                return String(decoding: data, as: UTF8.self)
+                return .contents(
+                    String(decoding: data, as: UTF8.self),
+                    modified: modified ?? .distantPast
+                )
             } catch SSHError.sftpError(.noSuchFile, _) {
                 return nil
             }
+        }
+    }
+
+    /// Forgets the rules from an ignore file that was deleted or moved away
+    /// locally.
+    private func removeIgnoreFile(
+        _ name: String,
+        in parentId: NSFileProviderItemIdentifier
+    ) async throws {
+        guard config.ignoreFilenames.contains(name) else { return }
+        let dir = try await db.path(for: parentId)
+        if ignores.remove(name, in: dir) {
+            ignoresChanged([dir], poll: true)
         }
     }
 
@@ -760,6 +774,8 @@ actor Session {
 
         let oldPath = try await path(for: itemId)
         let newPath = try await path(for: newName, in: newParentId)
+        let oldName = try await db.item(for: itemId).name
+        let oldParentId = try await db.parent(of: itemId).id
 
         try await perform(
             with: itemId,
@@ -780,6 +796,9 @@ actor Session {
         }
         try await refresh(newParentId)
         try await db.move(itemId, toParent: newParentId, name: newName)
+        if oldName != newName || oldParentId != newParentId {
+            try await removeIgnoreFile(oldName, in: oldParentId)
+        }
         return try await item(for: itemId)
     }
 
@@ -800,8 +819,11 @@ actor Session {
         ) {
             try await sftp.removeFile(at: path(for: itemId))
         }
-        try await refresh(db.parent(of: itemId).id)
+        let parentId = try await db.parent(of: itemId).id
+        let name = try await db.item(for: itemId).name
+        try await refresh(parentId)
         try await db.remove(itemId)
+        try await removeIgnoreFile(name, in: parentId)
     }
 
     func removeDirectory(
@@ -1319,7 +1341,7 @@ actor Session {
         var files: [String: IgnoreFile] = [:]
         for filename in config.ignoreFilenames where listed.contains(filename) {
             let path = dir.isEmpty ? filename : "\(dir)/\(filename)"
-            files[filename] = try await readIgnoreFile(at: path).map(IgnoreFile.contents)
+            files[filename] = try await readIgnoreFile(at: path)
         }
         try await updateIgnores(files, in: dir)
 
@@ -1354,16 +1376,14 @@ actor Session {
             for filename in config.ignoreFilenames {
                 let path = ancestor.isEmpty ? filename : "\(ancestor)/\(filename)"
                 level[filename] =
-                    known
-                    ? .remote
-                    : try await readIgnoreFile(at: path).map(IgnoreFile.contents)
+                    known ? .remote : try await readIgnoreFile(at: path)
             }
             levels.append(level)
         }
         levels.append(files)
 
         ignoresChanged(
-            ignores.update(IgnoreFiles(branch: names, files: levels)),
+            ignores.update(IgnoreFiles(branch: names, files: levels), from: .remote),
             poll: false
         )
     }

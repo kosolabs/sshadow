@@ -1,5 +1,7 @@
+import Foundation
+
 public enum IgnoreFile: Message, PrettyDescribable {
-    case contents(String)
+    case contents(String, modified: Date)
     case remote
 }
 

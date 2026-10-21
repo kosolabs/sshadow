@@ -300,3 +300,29 @@ def test_moving_ignore_file_applies_to_both_folders(
     }
     wait_for_tree(remote, expected, on_poll=logs.check)
     wait_for_tree(local, expected, on_poll=logs.check)
+
+
+def test_deleting_ignore_file_locally_unignores_items(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = enable(app, logs, profile)
+    make_tree(local, {".sshadowignore": File(b"build/\n")})
+    wait_for_tree(remote, {".sshadowignore": File(b"build/\n")}, on_poll=logs.check)
+    make_tree(local, {"build/x.o": File(b"x\n")})
+    logs.expect(excluded("build"), timeout=30)
+
+    (local / ".sshadowignore").unlink()
+    expected: Tree = {"build": Dir(), "build/x.o": File(b"x\n")}
+    wait_for_tree(remote, expected, on_poll=logs.check)
+
+
+def test_deleting_ignore_file_remotely_unignores_items(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    make_tree(remote, TREE)
+    local = enable(app, logs, profile)
+    wait_for_tree(local, SYNCED, on_poll=logs.check)
+
+    (remote / ".sshadowignore").unlink()
+    app.send("poll", name=profile)
+    wait_for_tree(local, CONTENT, on_poll=logs.check)

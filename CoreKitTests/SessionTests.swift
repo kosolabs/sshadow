@@ -7,6 +7,10 @@ import Testing
 
 @testable import CoreKit
 
+private func text(_ contents: String, at seconds: TimeInterval = 0) -> IgnoreFile {
+    .contents(contents, modified: Date(timeIntervalSince1970: seconds))
+}
+
 extension TestSandbox {
     fileprivate func getSession(
         idleTimeProvider: @escaping Session.IdleTimeProvider =
@@ -2066,7 +2070,7 @@ struct SessionTests {
 
     struct IgnoreEditTests {
         private let rules = IgnoreFiles(
-            files: [".sshadowignore": .contents("data/\nb.txt\n")]
+            files: [".sshadowignore": text("data/\nb.txt\n")]
         )
 
         @Test func remoteEditsToIgnoredWatchedFileAreSkipped() async throws {
@@ -2131,7 +2135,7 @@ struct SessionTests {
 
             try await session.removeDirectory(
                 for: dataId,
-                ignoreFiles: IgnoreFiles(files: [".sshadowignore": .contents("data/\n")])
+                ignoreFiles: IgnoreFiles(files: [".sshadowignore": text("data/\n")])
             )
 
             #expect(sandbox.exists(at: "data/a.txt"))
@@ -2176,17 +2180,17 @@ struct SessionTests {
             let session = try await sandbox.getSession(
                 ignoreRulesChangedHandler: { call.yield() }
             )
-            func check(_ contents: String) async throws {
+            func check(_ contents: String, at seconds: TimeInterval) async throws {
                 _ = try await session.isExcluded(
                     "build",
                     in: .rootContainer,
                     isDirectory: true,
-                    ignoreFiles: IgnoreFiles(files: [".sshadowignore": .contents(contents)])
+                    ignoreFiles: IgnoreFiles(files: [".sshadowignore": text(contents, at: seconds)])
                 )
             }
 
-            try await check("build/\n")
-            try await check("")
+            try await check("build/\n", at: 10)
+            try await check("", at: 20)
 
             var iterator = calls.makeAsyncIterator()
             #expect(await iterator.next() != nil)
@@ -2202,7 +2206,7 @@ struct SessionTests {
                 "build",
                 in: .rootContainer,
                 isDirectory: true,
-                ignoreFiles: IgnoreFiles(files: [".sshadowignore": .contents("build/\n")])
+                ignoreFiles: IgnoreFiles(files: [".sshadowignore": text("build/\n")])
             )
 
             #expect(excluded)
@@ -2216,7 +2220,7 @@ struct SessionTests {
                 "build",
                 in: .rootContainer,
                 isDirectory: false,
-                ignoreFiles: IgnoreFiles(files: [".sshadowignore": .contents("build/\n")])
+                ignoreFiles: IgnoreFiles(files: [".sshadowignore": text("build/\n")])
             )
 
             #expect(!excluded)
@@ -2228,8 +2232,8 @@ struct SessionTests {
             let session = try await sandbox.getSession()
             let srcId = try await session.child(name: "src")
             let ignoreFiles = IgnoreFiles(
-                files: [".sshadowignore": .contents("*.log\n")],
-                children: ["src": IgnoreFiles(files: [".sshadowignore": .contents("!keep.log\n")])]
+                files: [".sshadowignore": text("*.log\n")],
+                children: ["src": IgnoreFiles(files: [".sshadowignore": text("!keep.log\n")])]
             )
 
             let keep = try await session.isExcluded(
@@ -2289,13 +2293,13 @@ struct SessionTests {
                 "build",
                 in: .rootContainer,
                 isDirectory: true,
-                ignoreFiles: IgnoreFiles(files: [".gitignore": .contents("build/\n")])
+                ignoreFiles: IgnoreFiles(files: [".gitignore": text("build/\n")])
             )
 
             #expect(!excluded)
         }
 
-        @Test func laterRulesReplaceEarlierOnes() async throws {
+        @Test func newerLocalRulesReplaceEarlierOnes() async throws {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
 
@@ -2303,17 +2307,84 @@ struct SessionTests {
                 "build",
                 in: .rootContainer,
                 isDirectory: true,
-                ignoreFiles: IgnoreFiles(files: [".sshadowignore": .contents("build/\n")])
+                ignoreFiles: IgnoreFiles(files: [".sshadowignore": text("build/\n", at: 10)])
             )
             let after = try await session.isExcluded(
                 "build",
                 in: .rootContainer,
                 isDirectory: true,
-                ignoreFiles: IgnoreFiles()
+                ignoreFiles: IgnoreFiles(files: [".sshadowignore": text("", at: 20)])
             )
 
             #expect(before)
             #expect(!after)
+        }
+
+        @Test func staleLocalCopyKeepsNewerRemoteRules() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
+            let session = try await sandbox.getSession()
+
+            let excluded = try await session.isExcluded(
+                "a.log",
+                in: .rootContainer,
+                isDirectory: false,
+                ignoreFiles: IgnoreFiles(files: [".sshadowignore": text("", at: 0)])
+            )
+
+            #expect(excluded)
+        }
+
+        @Test func ignoreFileMissingLocallyKeepsRemoteRules() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
+            let session = try await sandbox.getSession()
+
+            let excluded = try await session.isExcluded(
+                "a.log",
+                in: .rootContainer,
+                isDirectory: false,
+                ignoreFiles: IgnoreFiles()
+            )
+
+            #expect(excluded)
+        }
+
+        @Test func removingIgnoreFileDropsItsRules() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
+            let session = try await sandbox.getSession()
+            let ignoreId = try await session.child(name: ".sshadowignore")
+
+            try await session.removeFile(for: ignoreId)
+            let excluded = try await session.isExcluded(
+                "a.log",
+                in: .rootContainer,
+                isDirectory: false,
+                ignoreFiles: IgnoreFiles()
+            )
+
+            #expect(!excluded)
+        }
+
+        @Test func movingIgnoreFileDropsItsRulesAtTheOldLocation() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "src/.sshadowignore", contents: "*.log\n")
+            try sandbox.createFolder(at: "docs")
+            let session = try await sandbox.getSession()
+            let srcId = try await session.child(name: "src")
+            let docsId = try await session.child(name: "docs")
+            let ignoreId = try await session.child(of: srcId, name: ".sshadowignore")
+
+            _ = try await session.move(ignoreId, to: docsId, name: ".sshadowignore")
+            let excluded = try await session.isExcluded(
+                "a.log",
+                in: srcId,
+                isDirectory: false,
+                ignoreFiles: IgnoreFiles(children: ["src": IgnoreFiles()])
+            )
+
+            #expect(!excluded)
         }
 
         @Test func mismatchedDirectoriesAreNotExcluded() async throws {
@@ -2327,7 +2398,7 @@ struct SessionTests {
                 in: srcId,
                 isDirectory: true,
                 ignoreFiles: IgnoreFiles(
-                    files: [".sshadowignore": .contents("build/\n")],
+                    files: [".sshadowignore": text("build/\n")],
                     children: ["lib": IgnoreFiles()]
                 )
             )

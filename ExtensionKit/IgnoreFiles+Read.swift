@@ -53,7 +53,11 @@ extension IgnoreFiles {
                 files[filename] = .remote
             } else if let data = try? Data(contentsOf: url) {
                 files[filename] = .contents(
-                    String(decoding: data, as: UTF8.self)
+                    String(decoding: data, as: UTF8.self),
+                    modified: Date(
+                        timeIntervalSince1970: TimeInterval(st.st_mtimespec.tv_sec)
+                            + TimeInterval(st.st_mtimespec.tv_nsec) / 1e9
+                    )
                 )
             } else {
                 files[filename] = .remote
