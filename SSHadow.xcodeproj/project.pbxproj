@@ -33,6 +33,8 @@
 		738D63F12F3FD43300FED311 /* Common.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; };
 		738D63F22F3FD43300FED311 /* Common.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		7393A9CD2F3134FB00213730 /* Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7393A9C02F3134FB00213730 /* Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		73E6C86B3089644300472449 /* Ignore in Frameworks */ = {isa = PBXBuildFile; productRef = 73E6C86A3089644300472449 /* Ignore */; };
+		73E6C86D3089645700472449 /* Ignore in Frameworks */ = {isa = PBXBuildFile; productRef = 73E6C86C3089645700472449 /* Ignore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -369,6 +371,7 @@
 			files = (
 				73799A642F98129E00A15109 /* Common.framework in Frameworks */,
 				73799A6A2F9812A200A15109 /* SwiftLibSSH in Frameworks */,
+				73E6C86B3089644300472449 /* Ignore in Frameworks */,
 				737720C92FBD039600FC5390 /* OrderedCollections in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -377,6 +380,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				73E6C86D3089645700472449 /* Ignore in Frameworks */,
 				73799A492F9811DD00A15109 /* CoreKit.framework in Frameworks */,
 				73799A6C2F9812D100A15109 /* SwiftLibSSH in Frameworks */,
 			);
@@ -605,6 +609,7 @@
 			packageProductDependencies = (
 				73799A692F9812A200A15109 /* SwiftLibSSH */,
 				737720C82FBD039600FC5390 /* OrderedCollections */,
+				73E6C86A3089644300472449 /* Ignore */,
 			);
 			productName = CoreKit;
 			productReference = 73799A3E2F9811DD00A15109 /* CoreKit.framework */;
@@ -630,6 +635,7 @@
 			name = CoreKitTests;
 			packageProductDependencies = (
 				73799A6B2F9812D100A15109 /* SwiftLibSSH */,
+				73E6C86C3089645700472449 /* Ignore */,
 			);
 			productName = CoreKitTests;
 			productReference = 73799A482F9811DD00A15109 /* CoreKitTests.xctest */;
@@ -762,6 +768,7 @@
 			packageReferences = (
 				7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */,
 				737720C72FBD039600FC5390 /* XCRemoteSwiftPackageReference "swift-collections" */,
+				73E6C8693089644300472449 /* XCRemoteSwiftPackageReference "swift-ignore" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7334708A2F22037100B8181D /* Products */;
@@ -1778,6 +1785,14 @@
 				minimumVersion = 1.6.0;
 			};
 		};
+		73E6C8693089644300472449 /* XCRemoteSwiftPackageReference "swift-ignore" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kosolabs/swift-ignore.git";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 0.2.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1810,6 +1825,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */;
 			productName = SwiftLibSSH;
+		};
+		73E6C86A3089644300472449 /* Ignore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 73E6C8693089644300472449 /* XCRemoteSwiftPackageReference "swift-ignore" */;
+			productName = Ignore;
+		};
+		73E6C86C3089645700472449 /* Ignore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 73E6C8693089644300472449 /* XCRemoteSwiftPackageReference "swift-ignore" */;
+			productName = Ignore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
