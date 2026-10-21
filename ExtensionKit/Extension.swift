@@ -468,7 +468,13 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 + "request: \(request)"
         )
         return try await progress.withChild {
-            let item = try await client.item(for: identifier)
+            let item: Item
+            do {
+                item = try await client.item(for: identifier)
+            } catch CoreError.itemNotFound {
+                logger.info("Already deleted: \(identifier)")
+                return
+            }
             let ignoreFiles = try await ignoreFiles(
                 in: client.parent(of: identifier)
             )

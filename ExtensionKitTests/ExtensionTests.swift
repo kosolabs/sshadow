@@ -1273,6 +1273,30 @@ struct ExtensionTests {
         #expect(progress.isFinished)
     }
 
+    @Test func deleteChildOfDeletedFolderSucceeds() async throws {
+        // rm -r folder, then the system deletes folder/file.txt too
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "folder/file.txt", contents: "Hello")
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+        let folderId = try await client.child(name: "folder")
+        let fileId = try await client.child(of: folderId, name: "file.txt")
+
+        try await ext.deleteItem(
+            identifier: folderId,
+            baseVersion: NSFileProviderItemVersion(),
+            request: NSFileProviderRequest(),
+            progress: Progress()
+        )
+        try await ext.deleteItem(
+            identifier: fileId,
+            baseVersion: NSFileProviderItemVersion(),
+            request: NSFileProviderRequest(),
+            progress: Progress()
+        )
+
+        #expect(!sandbox.exists(at: "folder"))
+    }
+
     @Test func deleteFileSucceeds() async throws {
         // rm file.txt
         let sandbox = TestSandbox()

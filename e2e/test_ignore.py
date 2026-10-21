@@ -192,3 +192,111 @@ def test_trashing_ignored_item_keeps_remote_copy(
     assert (remote / "b.txt").read_bytes() == b"b\n"
     assert not (remote / ".sshadow/trash/b.txt").exists()
     assert trashed.read_bytes() == b"b\n"
+
+
+def test_renaming_synced_item_to_ignored_name_deletes_remote_copy(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = enable(app, logs, profile)
+    synced: Tree = {".sshadowignore": File(b"*.log\n"), "a.txt": File(b"a\n")}
+    make_tree(local, synced)
+    wait_for_tree(remote, synced, on_poll=logs.check)
+
+    (local / "a.txt").rename(local / "a.log")
+    logs.expect(excluded("a.log"), timeout=30)
+    wait_for_tree(remote, {".sshadowignore": File(b"*.log\n")}, on_poll=logs.check)
+    assert (local / "a.log").read_bytes() == b"a\n"
+
+
+def test_moving_synced_items_into_ignored_folder_deletes_remote_copies(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = enable(app, logs, profile)
+    synced: Tree = {
+        ".sshadowignore": File(b"build/\n"),
+        "a.txt": File(b"a\n"),
+        "docs": Dir(),
+        "docs/d.txt": File(b"d\n"),
+    }
+    make_tree(local, synced)
+    wait_for_tree(remote, synced, on_poll=logs.check)
+    make_tree(local, {"build/x.o": File(b"x\n")})
+    logs.expect(excluded("build"), timeout=30)
+
+    (local / "a.txt").rename(local / "build/a.txt")
+    (local / "docs").rename(local / "build/docs")
+    wait_for_tree(remote, {".sshadowignore": File(b"build/\n")}, on_poll=logs.check)
+    assert (local / "build/a.txt").read_bytes() == b"a\n"
+    assert (local / "build/docs/d.txt").read_bytes() == b"d\n"
+
+
+def test_renaming_ignored_items_to_synced_names_uploads_them(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = enable(app, logs, profile)
+    make_tree(local, {".sshadowignore": File(b"build/\n*.log\n")})
+    wait_for_tree(remote, {".sshadowignore": File(b"build/\n*.log\n")}, on_poll=logs.check)
+    make_tree(local, {"x.log": File(b"x\n"), "build/y.o": File(b"y\n")})
+    logs.expect_all([excluded("x.log"), excluded("build")], timeout=30)
+
+    (local / "x.log").rename(local / "x.txt")
+    (local / "build").rename(local / "out")
+    expected: Tree = {
+        ".sshadowignore": File(b"build/\n*.log\n"),
+        "x.txt": File(b"x\n"),
+        "out": Dir(),
+        "out/y.o": File(b"y\n"),
+    }
+    wait_for_tree(remote, expected, on_poll=logs.check)
+
+
+def test_remote_rename_into_ignored_name_removes_local_copy(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    synced: Tree = {".sshadowignore": File(b"*.log\n"), "a.txt": File(b"a\n")}
+    make_tree(remote, synced)
+    local = enable(app, logs, profile)
+    wait_for_tree(local, synced, on_poll=logs.check)
+
+    (remote / "a.txt").rename(remote / "a.log")
+    app.send("poll", name=profile)
+    wait_for_tree(local, {".sshadowignore": File(b"*.log\n")}, on_poll=logs.check)
+
+
+def test_remote_rename_out_of_ignored_name_downloads(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    make_tree(remote, {".sshadowignore": File(b"*.log\n"), "a.log": File(b"a\n")})
+    local = enable(app, logs, profile)
+    wait_for_tree(local, {".sshadowignore": File(b"*.log\n")}, on_poll=logs.check)
+
+    (remote / "a.log").rename(remote / "a.txt")
+    app.send("poll", name=profile)
+    expected: Tree = {".sshadowignore": File(b"*.log\n"), "a.txt": File(b"a\n")}
+    wait_for_tree(local, expected, on_poll=logs.check)
+
+
+def test_moving_ignore_file_applies_to_both_folders(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = enable(app, logs, profile)
+    synced: Tree = {"src": Dir(), "src/.sshadowignore": File(b"*.log\n"), "docs": Dir()}
+    make_tree(local, synced)
+    wait_for_tree(remote, synced, on_poll=logs.check)
+    make_tree(local, {"src/x.log": File(b"x\n")})
+    logs.expect(excluded("src/x.log"), timeout=30)
+    make_tree(remote, {"src/y.log": File(b"y\n")})
+    poll_until(app, logs, profile, remote, local, "marker.md")
+    assert not (local / "src/y.log").exists()
+
+    (local / "src/.sshadowignore").rename(local / "docs/.sshadowignore")
+    expected: Tree = {
+        "src": Dir(),
+        "src/x.log": File(b"x\n"),
+        "src/y.log": File(b"y\n"),
+        "docs": Dir(),
+        "docs/.sshadowignore": File(b"*.log\n"),
+        "marker.md": File(b"marker\n"),
+    }
+    wait_for_tree(remote, expected, on_poll=logs.check)
+    wait_for_tree(local, expected, on_poll=logs.check)
