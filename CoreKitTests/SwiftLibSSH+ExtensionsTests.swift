@@ -17,6 +17,7 @@ import XPC
             user: "user",
             path: "/home/user",
             authMethod: .none,
+            ignoreFilenames: [],
         )
 
         await #expect(throws: ConnectionError.unknownHost) {
@@ -33,6 +34,7 @@ import XPC
             user: "user",
             path: "/home/user",
             authMethod: .none,
+            ignoreFilenames: [],
         )
 
         await #expect(throws: ConnectionError.connectionRefused) {
@@ -95,6 +97,7 @@ extension TestSandbox {
             path: path.map { getUrl(for: $0).path(percentEncoded: false) }
                 ?? base.path,
             authMethod: authMethod ?? base.authMethod,
+            ignoreFilenames: base.ignoreFilenames,
         )
     }
 }

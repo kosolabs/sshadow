@@ -35,7 +35,7 @@ extension ConnectionError {
         case .connectionRefused, .connectionTimedOut, .unknown:
             true
         case .unknownHost, .invalidPrivateKey, .authenticationFailed,
-                .remotePathNotFound, .remotePathNotDirectory, .cancelled:
+            .remotePathNotFound, .remotePathNotDirectory, .cancelled:
             false
         }
     }
@@ -123,6 +123,7 @@ class TestSandbox {
                     contents: privateKeyContents,
                     passphrase: nil
                 ),
+                ignoreFilenames: [".sshadowignore"],
             )
         }
     }

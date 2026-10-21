@@ -36,6 +36,7 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
     public let user: String
     public let path: String
     public let authMethod: AuthMethod
+    public let ignoreFilenames: [String]
 
     public init(
         id: UUID,
@@ -45,6 +46,7 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
         user: String,
         path: String,
         authMethod: AuthMethod,
+        ignoreFilenames: [String],
     ) {
         self.id = id
         self.name = name
@@ -53,6 +55,7 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
         self.user = user
         self.path = path.hasSuffix("/") ? String(path.dropLast()) : path
         self.authMethod = authMethod
+        self.ignoreFilenames = ignoreFilenames
     }
 
     public var socket: String {

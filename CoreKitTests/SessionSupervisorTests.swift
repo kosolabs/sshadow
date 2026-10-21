@@ -853,7 +853,8 @@ struct SessionSupervisorTests {
             port: original.port,
             user: original.user,
             path: original.path,
-            authMethod: original.authMethod
+            authMethod: original.authMethod,
+            ignoreFilenames: original.ignoreFilenames
         )
         try await supervisor.connect(config: edited)
         try await waitUntilOnline(supervisor)
