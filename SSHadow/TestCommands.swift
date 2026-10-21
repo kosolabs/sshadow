@@ -74,7 +74,8 @@ final class TestCommands {
                 }),
                 user: params.optional("user"),
                 path: params.optional("path"),
-                key: params.required("key")
+                key: params.required("key"),
+                ignore: params.optional("ignore")
             )
         case "delete":
             try await delete(name: params.required("name"))
@@ -107,7 +108,8 @@ final class TestCommands {
         port: UInt16?,
         user: String?,
         path: String?,
-        key: String
+        key: String,
+        ignore: String?
     ) async throws {
         let config = ConnectionConfigModel(
             name: name,
@@ -116,7 +118,9 @@ final class TestCommands {
             user: user,
             path: path,
             authMethod: .privateKey,
-            bookmark: try bookmark(forPrivateKeyAt: key)
+            bookmark: try bookmark(forPrivateKeyAt: key),
+            ignoreFilenames: ignore.map { $0.split(separator: ",").map(String.init) }
+                ?? ConnectionConfig.defaultIgnoreFilenames
         )
 
         let context = SSHadowApp.modelContainer.mainContext

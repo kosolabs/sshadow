@@ -201,8 +201,12 @@ def create_profile(
     path: Path = REMOTE_ROOT,
     host: str = "localhost",
     port: int = SERVER_PORT,
+    ignore: Sequence[str] | None = None,
 ) -> None:
     path.mkdir(parents=True, exist_ok=True)
+    params: dict[str, str | int | Path] = {}
+    if ignore is not None:
+        params["ignore"] = ",".join(ignore)
     app.send(
         "create",
         name=name,
@@ -211,6 +215,7 @@ def create_profile(
         user=getpass.getuser(),
         path=path,
         key=key,
+        **params,
     )
     logs.expect(msg(rf"Profile created: .*{named(name)}"))
 
@@ -231,9 +236,17 @@ class Profiles:
         path: Path = REMOTE_ROOT,
         host: str = "localhost",
         port: int = SERVER_PORT,
+        ignore: Sequence[str] | None = None,
     ) -> str:
         create_profile(
-            self.app, self.logs, name, self.key, path=path, host=host, port=port
+            self.app,
+            self.logs,
+            name,
+            self.key,
+            path=path,
+            host=host,
+            port=port,
+            ignore=ignore,
         )
         if name not in self.names:
             self.names.append(name)

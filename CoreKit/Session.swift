@@ -67,6 +67,11 @@ actor Session {
                 events: events
             )
             await session.removeStaleUploads()
+            do {
+                try await resolveExcluded(config)
+            } catch {
+                logger.error("Failed to retry excluded items: \(error)")
+            }
             return session
         }
     }

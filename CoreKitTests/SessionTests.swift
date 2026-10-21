@@ -2214,6 +2214,33 @@ struct SessionTests {
         }
     }
 
+    struct ProviderTests {
+        @Test func newSessionRetriesExcludedItems() async throws {
+            let sandbox = TestSandbox()
+            let (calls, call) = AsyncStream.makeStream(of: UUID.self)
+            let provider = try await Session.provider(
+                domainDb: DomainDB.open(
+                    config: ModelConfiguration(isStoredInMemoryOnly: true)
+                ),
+                sharedUrl: sandbox.shared,
+                signalEnumerator: { _ in },
+                resolveExcluded: { call.yield($0.id) },
+                transfers: Transfers(),
+                events: Events()
+            )
+            let config = try sandbox.config
+
+            let session = try await withConnectRetries {
+                () async throws(ConnectionError) -> Session in
+                try await provider(config) { _ in }
+            }
+            await session.close()
+
+            var iterator = calls.makeAsyncIterator()
+            #expect(await iterator.next() == config.id)
+        }
+    }
+
     struct CreateActionTests {
         private let early = Date(timeIntervalSince1970: 1_000)
         private let late = Date(timeIntervalSince1970: 2_000)

@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 
 from logwatch import LogWatcher, Matcher, msg
-from sshadow import App, dataless, enable, evict, trash
+from sshadow import PROFILE_NAME, App, Profiles, dataless, enable, evict, trash
 from tree import Dir, File, Tree, make_tree, wait_for, wait_for_tree
 
 IGNORE: Tree = {".sshadowignore": File(b"build/\n*.log\n")}
@@ -514,3 +514,31 @@ def test_remote_delete_of_detached_item_keeps_local_copy(
     poll_until(app, logs, profile, remote, local, "marker-2.md")
 
     assert (local / "data/a.txt").read_bytes() == b"a\n"
+
+
+def test_later_ignore_files_take_precedence(
+    app: App, logs: LogWatcher, profiles: Profiles, remote: Path
+) -> None:
+    profile = profiles.create(PROFILE_NAME, ignore=[".gitignore", ".sshadowignore"])
+    local = enable(app, logs, profile)
+    rules: Tree = {
+        ".gitignore": File(b"*.log\n"),
+        ".sshadowignore": File(b"!keep.log\n"),
+    }
+    make_tree(local, rules)
+    wait_for_tree(remote, rules, on_poll=logs.check)
+
+    files: Tree = {"a.log": File(b"a\n"), "keep.log": File(b"k\n"), "b.txt": File(b"b\n")}
+    make_tree(local, files)
+    logs.expect(excluded("a.log"), timeout=30)
+    expected = rules | {k: v for k, v in files.items() if k != "a.log"}
+    wait_for_tree(remote, expected, on_poll=logs.check)
+
+
+def test_unlisted_ignore_files_do_not_apply(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = enable(app, logs, profile)
+    tree: Tree = {".gitignore": File(b"*.log\n"), "a.log": File(b"a\n")}
+    make_tree(local, tree)
+    wait_for_tree(remote, tree, on_poll=logs.check)

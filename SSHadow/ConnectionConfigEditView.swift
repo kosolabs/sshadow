@@ -14,6 +14,7 @@ struct ConnectionConfigEditView: View {
     @State private var isImportingKey: Bool = false
     @State private var passwordText: String = ""
     @State private var validationError: ConnectionConfig.ValidationError?
+    @State private var ignoreFilenames: String = ""
 
     private var name: Binding<String> {
         Binding<String>(
@@ -212,6 +213,24 @@ struct ConnectionConfigEditView: View {
                     .disabled(locked)
                     .accessibilityIdentifier("pathField")
                 }
+                Section {
+                    TextField(
+                        "Ignore Files",
+                        text: $ignoreFilenames,
+                        prompt: Text(".sshadowignore")
+                    )
+                    .disabled(locked)
+                    .accessibilityIdentifier("ignoreFilenamesField")
+                } header: {
+                    Text("Ignore Files")
+                } footer: {
+                    Text(
+                        "Files named here list paths that shouldn't sync, "
+                            + "like .gitignore. Separate names with commas; "
+                            + "later files take precedence."
+                    )
+                    .foregroundStyle(.secondary)
+                }
                 Section("Authentication") {
                     TextField(
                         "Username",
@@ -281,7 +300,14 @@ struct ConnectionConfigEditView: View {
             .formStyle(.grouped)
             .onAppear {
                 passwordText = config.getPassword() ?? ""
+                ignoreFilenames = config.ignoreFilenames.joined(separator: ", ")
                 validate()
+            }
+            .onChange(of: ignoreFilenames) { _, newValue in
+                config.ignoreFilenames = newValue
+                    .split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
             }
             .onChange(of: config.authMethod) { validate() }
             .onChange(of: config.bookmark) { validate() }
