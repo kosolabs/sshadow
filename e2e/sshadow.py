@@ -22,6 +22,8 @@ from Foundation import (
 from logwatch import APP, LogWatcher, Matcher, msg
 from tree import File, Tree, make_tree, wait_for_tree
 
+SF_DATALESS = 0x40000000
+
 REPO = Path(__file__).parent.parent
 ENABLE_TEST_COMMANDS = "-enableTestCommands"
 COMMAND_NOTIFICATION = "com.kosolabs.SSHadow.command"
@@ -199,8 +201,12 @@ def create_profile(
     path: Path = REMOTE_ROOT,
     host: str = "localhost",
     port: int = SERVER_PORT,
+    ignore: Sequence[str] | None = None,
 ) -> None:
     path.mkdir(parents=True, exist_ok=True)
+    params: dict[str, str | int | Path] = {}
+    if ignore is not None:
+        params["ignore"] = ",".join(ignore)
     app.send(
         "create",
         name=name,
@@ -209,6 +215,7 @@ def create_profile(
         user=getpass.getuser(),
         path=path,
         key=key,
+        **params,
     )
     logs.expect(msg(rf"Profile created: .*{named(name)}"))
 
@@ -229,9 +236,17 @@ class Profiles:
         path: Path = REMOTE_ROOT,
         host: str = "localhost",
         port: int = SERVER_PORT,
+        ignore: Sequence[str] | None = None,
     ) -> str:
         create_profile(
-            self.app, self.logs, name, self.key, path=path, host=host, port=port
+            self.app,
+            self.logs,
+            name,
+            self.key,
+            path=path,
+            host=host,
+            port=port,
+            ignore=ignore,
         )
         if name not in self.names:
             self.names.append(name)
@@ -267,6 +282,11 @@ def evict(path: Path) -> None:
     )
     if not ok:
         raise OSError(f"can't evict {path}: {error}")
+
+
+def dataless(path: Path) -> bool:
+    """Whether a File Provider item's contents haven't been downloaded."""
+    return bool(os.lstat(path).st_flags & SF_DATALESS)
 
 
 def trash(path: Path) -> Path:
