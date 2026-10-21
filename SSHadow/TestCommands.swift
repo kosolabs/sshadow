@@ -38,19 +38,17 @@ final class TestCommands {
         logger.notice("Test commands enabled")
     }
 
-    private static func params(from object: Any?) throws -> [String: String] {
-        guard let string = object as? String,
-            let params = try? JSONDecoder().decode(
-                [String: String].self,
-                from: Data(string.utf8)
-            )
-        else {
+    private static func params(from object: Any?) throws -> [String: Param] {
+        guard let string = object as? String else {
             throw Error(message: "invalid command")
         }
-        return params
+        return try JSONDecoder().decode(
+            [String: Param].self,
+            from: Data(string.utf8)
+        )
     }
 
-    private func handle(_ params: [String: String]) async throws {
+    private func handle(_ params: [String: Param]) async throws {
         logger.notice("Handle \(params)")
         let command = try params.required("command")
         switch command {
@@ -66,15 +64,16 @@ final class TestCommands {
             try await create(
                 name: params.required("name"),
                 host: params.required("host"),
-                port: params.optional("port").map({
-                    guard let port = UInt16($0) else {
-                        throw Error(message: "invalid port: \"\($0)\"")
+                port: params.int("port").map({
+                    guard let port = UInt16(exactly: $0) else {
+                        throw Error(message: "invalid port: \($0)")
                     }
                     return port
                 }),
-                user: params.optional("user"),
-                path: params.optional("path"),
-                key: params.required("key")
+                user: params.string("user"),
+                path: params.string("path"),
+                key: params.required("key"),
+                ignoreFilenames: params.strings("ignore_filenames"),
             )
         case "delete":
             try await delete(name: params.required("name"))
@@ -107,7 +106,8 @@ final class TestCommands {
         port: UInt16?,
         user: String?,
         path: String?,
-        key: String
+        key: String,
+        ignoreFilenames: [String]?,
     ) async throws {
         let config = ConnectionConfigModel(
             name: name,
@@ -116,7 +116,8 @@ final class TestCommands {
             user: user,
             path: path,
             authMethod: .privateKey,
-            bookmark: try bookmark(forPrivateKeyAt: key)
+            bookmark: try bookmark(forPrivateKeyAt: key),
+            ignoreFilenames: ignoreFilenames
         )
 
         let context = SSHadowApp.modelContainer.mainContext
@@ -165,16 +166,61 @@ final class TestCommands {
     }
 }
 
-extension [String: String] {
+private enum Param: Decodable {
+    case string(String)
+    case strings([String])
+    case int(Int)
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let value = try? container.decode(Int.self) {
+            self = .int(value)
+        } else if let values = try? container.decode([String].self) {
+            self = .strings(values)
+        } else {
+            self = .string(try container.decode(String.self))
+        }
+    }
+}
+
+extension [String: Param] {
     fileprivate func required(_ name: String) throws -> String {
-        guard let value = optional(name) else {
+        guard let value = try string(name) else {
             throw TestCommands.Error(message: "missing parameter: \"\(name)\"")
         }
         return value
     }
 
-    fileprivate func optional(_ name: String) -> String? {
-        guard let value = self[name], !value.isEmpty else { return nil }
-        return value
+    fileprivate func string(_ name: String) throws -> String? {
+        switch self[name] {
+        case nil: nil
+        case .string(let value): value.isEmpty ? nil : value
+        default:
+            throw TestCommands.Error(
+                message: "parameter \"\(name)\" must be a string"
+            )
+        }
+    }
+
+    fileprivate func int(_ name: String) throws -> Int? {
+        switch self[name] {
+        case nil: nil
+        case .int(let value): value
+        default:
+            throw TestCommands.Error(
+                message: "parameter \"\(name)\" must be a number"
+            )
+        }
+    }
+
+    fileprivate func strings(_ name: String) throws -> [String]? {
+        switch self[name] {
+        case nil: nil
+        case .strings(let values): values
+        default:
+            throw TestCommands.Error(
+                message: "parameter \"\(name)\" must be a list"
+            )
+        }
     }
 }

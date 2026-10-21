@@ -12,7 +12,8 @@ struct ConnectionConfigTests {
             port: 22,
             user: "user",
             path: "",
-            authMethod: .none
+            authMethod: .none,
+            ignoreFilenames: []
         )
 
         #expect(config.path(for: "file.txt") == "file.txt")
@@ -26,7 +27,8 @@ struct ConnectionConfigTests {
             port: 22,
             user: "user",
             path: "",
-            authMethod: .none
+            authMethod: .none,
+            ignoreFilenames: []
         )
 
         #expect(config.path(for: "") == ".")
@@ -40,7 +42,8 @@ struct ConnectionConfigTests {
             port: 22,
             user: "user",
             path: "base",
-            authMethod: .none
+            authMethod: .none,
+            ignoreFilenames: []
         )
 
         #expect(config.path(for: "file.txt") == "base/file.txt")
@@ -54,7 +57,8 @@ struct ConnectionConfigTests {
             port: 22,
             user: "user",
             path: "base",
-            authMethod: .none
+            authMethod: .none,
+            ignoreFilenames: []
         )
 
         #expect(config.path(for: "") == "base")
@@ -68,7 +72,8 @@ struct ConnectionConfigTests {
             port: 22,
             user: "user",
             path: "base/",
-            authMethod: .none
+            authMethod: .none,
+            ignoreFilenames: []
         )
 
         #expect(config.path(for: "file.txt") == "base/file.txt")
@@ -82,7 +87,8 @@ struct ConnectionConfigTests {
             port: 22,
             user: "user",
             path: "/base",
-            authMethod: .none
+            authMethod: .none,
+            ignoreFilenames: []
         )
 
         #expect(config.path(for: "file.txt") == "/base/file.txt")

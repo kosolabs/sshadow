@@ -30,6 +30,7 @@ public class ConnectionConfigModel: CustomStringConvertible {
     public var path: String?
     public var authMethod: AuthMethod
     public var bookmark: Data?
+    public var ignoreFilenames: [String]?
 
     public init(
         id: UUID = UUID(),
@@ -41,6 +42,7 @@ public class ConnectionConfigModel: CustomStringConvertible {
         path: String? = nil,
         authMethod: AuthMethod = .password,
         bookmark: Data? = nil,
+        ignoreFilenames: [String]? = nil,
     ) {
         self.id = id
         self.name = name
@@ -51,6 +53,7 @@ public class ConnectionConfigModel: CustomStringConvertible {
         self.path = path
         self.authMethod = authMethod
         self.bookmark = bookmark
+        self.ignoreFilenames = ignoreFilenames
     }
 
     // MARK: - Effective Values
@@ -90,6 +93,10 @@ public class ConnectionConfigModel: CustomStringConvertible {
     public var effectivePath: String {
         let p = path ?? ""
         return p.count > 1 && p.hasSuffix("/") ? String(p.dropLast()) : p
+    }
+
+    public var effectiveIgnoreFilenames: [String] {
+        ignoreFilenames ?? [".sshadowignore"]
     }
 
     public var description: String {
@@ -293,14 +300,19 @@ extension ModelContext {
 
 extension ConnectionConfig {
     public init(from profile: ConnectionConfigModel) throws(ValidationError) {
-        try self.init(
+        try self.init(from: profile, authMethod: profile.resolveConfigAuthMethod())
+    }
+
+    init(from profile: ConnectionConfigModel, authMethod: AuthMethod) {
+        self.init(
             id: profile.id,
             name: profile.displayName,
             host: profile.host,
             port: profile.effectivePort,
             user: profile.effectiveUser,
             path: profile.effectivePath,
-            authMethod: profile.resolveConfigAuthMethod()
+            authMethod: authMethod,
+            ignoreFilenames: profile.effectiveIgnoreFilenames
         )
     }
 }

@@ -137,11 +137,13 @@ class App:
     def kill_extension(self, timeout: float = 10) -> None:
         kill(self.extension, timeout)
 
-    def send(self, command: str, **params: str | int | Path) -> None:
+    def send(self, command: str, **params: str | int | Path | Sequence[str]) -> None:
         if self.started() is None:
             raise RuntimeError(f"{self.path} isn't running")
-        payload = {"command": command} | {k: str(v) for k, v in params.items()}
-        post_distributed_notification(COMMAND_NOTIFICATION, json.dumps(payload))
+        post_distributed_notification(
+            COMMAND_NOTIFICATION,
+            json.dumps({"command": command, **params}, default=str),
+        )
 
 
 def cloud_storage(profile: str) -> Path:
@@ -201,12 +203,12 @@ def create_profile(
     path: Path = REMOTE_ROOT,
     host: str = "localhost",
     port: int = SERVER_PORT,
-    ignore: Sequence[str] | None = None,
+    ignore_filenames: Sequence[str] | None = None,
 ) -> None:
     path.mkdir(parents=True, exist_ok=True)
-    params: dict[str, str | int | Path] = {}
-    if ignore is not None:
-        params["ignore"] = ",".join(ignore)
+    params: dict[str, str | int | Path | Sequence[str]] = {}
+    if ignore_filenames is not None:
+        params["ignore_filenames"] = ignore_filenames
     app.send(
         "create",
         name=name,
@@ -236,7 +238,7 @@ class Profiles:
         path: Path = REMOTE_ROOT,
         host: str = "localhost",
         port: int = SERVER_PORT,
-        ignore: Sequence[str] | None = None,
+        ignore_filenames: Sequence[str] | None = None,
     ) -> str:
         create_profile(
             self.app,
@@ -246,7 +248,7 @@ class Profiles:
             path=path,
             host=host,
             port=port,
-            ignore=ignore,
+            ignore_filenames=ignore_filenames,
         )
         if name not in self.names:
             self.names.append(name)

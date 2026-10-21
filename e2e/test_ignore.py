@@ -592,7 +592,9 @@ def test_remote_delete_of_detached_item_keeps_local_copy(
 def test_later_ignore_files_take_precedence(
     app: App, logs: LogWatcher, profiles: Profiles, remote: Path
 ) -> None:
-    profile = profiles.create(PROFILE_NAME, ignore=[".gitignore", ".sshadowignore"])
+    profile = profiles.create(
+        PROFILE_NAME, ignore_filenames=[".gitignore", ".sshadowignore"]
+    )
     local = enable(app, logs, profile)
     rules: Tree = {
         ".gitignore": File(b"*.log\n"),
