@@ -1,5 +1,5 @@
 {
-  "originHash" : "61c624fc7c85dad9479aae7f374f1961a1eb958c47e149b1b7d6dfd104e8dc74",
+  "originHash" : "6ea7657611e2ce0a5e289bee61025c0790efd063618700eb664df6f260fc60d5",
   "pins" : [
     {
       "identity" : "swift-collections",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/kosolabs/swift-ignore.git",
       "state" : {
-        "revision" : "02f213577c6bf0158c1a19a2df5764e435f21bcf",
-        "version" : "0.1.0"
+        "revision" : "8e4d38ea9febb7c806d78afe227f0f128a315845",
+        "version" : "0.2.0"
       }
     },
     {

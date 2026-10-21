@@ -1,26 +1,34 @@
 import Common
-import IgnoreModule
+import Foundation
+import Ignore
 
 struct IgnoreCache {
-    private let filenames: [String]
-    private var root: IgnoreFiles?
+    private var tree: IgnoreTree
+    private var modified: [String: [String: Date]] = [:]
     private var changes: [String: (origin: IgnoreOrigin, order: Int)] = [:]
     private var changeCount = 0
 
     init(filenames: [String]) {
-        self.filenames = filenames
+        self.tree = IgnoreTree(filenames: filenames)
     }
 
+    /// Merges in what one side observed, and returns the directories whose
+    /// rules changed. The newer copy of each file wins, and a file left to the
+    /// remote keeps what's known. A file missing remotely is dropped, but one
+    /// missing locally is kept: it may not have arrived yet, and local deletes
+    /// reach `remove` instead.
     @discardableResult
     mutating func update(
         _ ignoreFiles: IgnoreFiles,
         from origin: IgnoreOrigin
     ) -> [String] {
-        guard root != nil else {
-            root = ignoreFiles.known
-            return []
+        var changed: [String] = []
+        for (dir, files) in ignoreFiles.levels {
+            let known = tree.knows(dir)
+            if merge(files, in: dir, from: origin), known {
+                changed.append(dir)
+            }
         }
-        let changed = root!.merge(ignoreFiles, from: origin)
         record(changed, from: origin)
         return changed
     }
@@ -28,8 +36,8 @@ struct IgnoreCache {
     /// Forgets `filename` in `dir` after it was deleted or moved locally.
     @discardableResult
     mutating func remove(_ filename: String, in dir: String) -> Bool {
-        let names = dir.split(separator: "/").map(String.init)
-        guard root?.remove(filename, in: names[...]) == true else { return false }
+        guard tree.remove(filename, in: dir) else { return false }
+        modified[dir]?[filename] = nil
         record([dir], from: .local)
         return true
     }
@@ -48,64 +56,47 @@ struct IgnoreCache {
     }
 
     func knows(_ dir: String) -> Bool {
-        node(at: dir) != nil
+        tree.knows(dir)
     }
 
     func rule(
         ignoring name: String,
         in dir: String,
         isDirectory: Bool
-    ) -> Glob? {
-        var parent = ""
-        for component in dir.split(separator: "/").map(String.init) {
-            if let glob = matched(component, in: parent, isDirectory: true) {
-                return glob
-            }
-            parent = parent.isEmpty ? component : "\(parent)/\(component)"
-        }
-        return matched(name, in: dir, isDirectory: isDirectory)
-    }
-
-    private func matched(
-        _ name: String,
-        in dir: String,
-        isDirectory: Bool
-    ) -> Glob? {
+    ) -> Rule? {
+        let path = dir.isEmpty ? name : "\(dir)/\(name)"
         guard
-            case .ignore(let glob) = ignore(for: dir)?.matched(
-                name,
-                isDir: isDirectory
+            case .ignored(let rule)? = tree.matched(
+                path,
+                isDirectory: isDirectory
             )
         else { return nil }
-        return glob
+        return rule
     }
 
-    private func node(at dir: String) -> IgnoreFiles? {
-        var node = root
-        for name in dir.split(separator: "/").map(String.init) {
-            node = node?.children[name]
+    private mutating func merge(
+        _ files: [String: IgnoreFile],
+        in dir: String,
+        from origin: IgnoreOrigin
+    ) -> Bool {
+        let known = tree.files(in: dir) ?? [:]
+        let knownDates = modified[dir] ?? [:]
+        var texts = origin == .local ? known : [:]
+        var dates = origin == .local ? knownDates : [:]
+        for (filename, file) in files {
+            guard case .contents(let text, let date) = file,
+                known[filename] == nil
+                    || date.seconds > knownDates[filename]?.seconds ?? .min
+            else {
+                texts[filename] = known[filename]
+                dates[filename] = knownDates[filename]
+                continue
+            }
+            texts[filename] = text
+            dates[filename] = date
         }
-        return node
-    }
-
-    private func ignore(for dir: String) -> Ignore? {
-        guard var node = root else { return nil }
-        var ignore = Ignore(
-            filenames: filenames,
-            files: Self.contents(of: node)
-        )
-        for name in dir.split(separator: "/").map(String.init) {
-            guard let child = node.children[name] else { return nil }
-            node = child
-            ignore = ignore.child(name, files: Self.contents(of: node))
-        }
-        return ignore
-    }
-
-    private static func contents(of node: IgnoreFiles) -> [String: String] {
-        node.files.compactMapValues { file in
-            if case .contents(let text, _) = file { text } else { nil }
-        }
+        modified[dir] = dates
+        return tree.set(texts, in: dir)
     }
 
     private mutating func record(_ dirs: [String], from origin: IgnoreOrigin) {
@@ -114,4 +105,13 @@ struct IgnoreCache {
             changes[dir] = (origin, changeCount)
         }
     }
+}
+
+enum IgnoreOrigin: Equatable {
+    case local
+    case remote
+}
+
+extension Date {
+    fileprivate var seconds: Int64 { Int64(timeIntervalSince1970.rounded(.down)) }
 }

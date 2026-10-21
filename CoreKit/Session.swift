@@ -1,7 +1,7 @@
 import Common
 import FileProvider
 import Foundation
-import IgnoreModule
+import Ignore
 import SwiftData
 import SwiftLibSSH
 
@@ -145,7 +145,7 @@ actor Session {
         pushUnignored(in: changed, before: before)
 
         guard
-            let glob = ignores.rule(
+            let rule = ignores.rule(
                 ignoring: name,
                 in: parent,
                 isDirectory: isDirectory
@@ -153,7 +153,7 @@ actor Session {
         else { return false }
         let path = parent.isEmpty ? name : "\(parent)/\(name)"
         logger.info(
-            "Excluded from sync: \(path) (\(glob.from ?? "global"): \(glob.original))"
+            "Excluded from sync: \(path) (\(rule.file ?? "global"): \(rule.original))"
         )
         excludedLocally.insert(path)
         return true
@@ -1509,7 +1509,7 @@ actor Session {
 
         return listing.filter { attrs in
             guard let name = attrs.name,
-                let glob = ignores.rule(
+                let rule = ignores.rule(
                     ignoring: name,
                     in: dir,
                     isDirectory: attrs.type == .directory
@@ -1517,7 +1517,7 @@ actor Session {
             else { return true }
             let path = dir.isEmpty ? name : "\(dir)/\(name)"
             logger.debug(
-                "Excluded from sync: \(path) (\(glob.from ?? "global"): \(glob.original))"
+                "Excluded from sync: \(path) (\(rule.file ?? "global"): \(rule.original))"
             )
             return false
         }
