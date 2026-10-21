@@ -427,3 +427,54 @@ def test_removing_rule_remotely_pulls_synced_item(
         | {"marker-1.md": File(b"marker\n"), "marker-2.md": File(b"marker\n")}
     )
     wait_for_tree(local, expected, on_poll=logs.check)
+
+
+def test_removing_rule_locally_drops_remote_additions_to_synced_folder(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = enable(app, logs, profile)
+    synced: Tree = {"data": Dir(), "data/a.txt": File(b"a\n")}
+    make_tree(local, synced)
+    wait_for_tree(remote, synced, on_poll=logs.check)
+    make_tree(local, {".sshadowignore": File(b"data/\n")})
+    wait_for(lambda: "" if (remote / ".sshadowignore").exists() else "missing")
+    make_tree(
+        remote,
+        {
+            "data/a.txt": File(b"remote edit\n"),
+            "data/new.txt": File(b"new\n"),
+            "data/sub": Dir(),
+            "data/sub/deep.txt": File(b"deep\n"),
+        },
+    )
+    poll_until(app, logs, profile, remote, local, "marker.md")
+
+    (local / ".sshadowignore").write_bytes(b"")
+    expected = {".sshadowignore": File(b"")} | MARKER | synced
+    wait_for_tree(remote, expected, on_poll=logs.check)
+
+
+def test_removing_rule_locally_skips_items_never_downloaded(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    synced: Tree = {"data": Dir(), "data/a.txt": File(b"a\n")}
+    make_tree(remote, synced)
+    local = enable(app, logs, profile)
+    wait_for(lambda: "" if (local / "data/a.txt").exists() else "missing", on_poll=logs.check)
+    if not dataless(local / "data/a.txt"):
+        evict(local / "data/a.txt")
+    wait_for(lambda: "" if dataless(local / "data/a.txt") else "downloaded", on_poll=logs.check)
+
+    make_tree(local, {".sshadowignore": File(b"data/\n")})
+    wait_for(lambda: "" if (remote / ".sshadowignore").exists() else "missing")
+    make_tree(remote, {"data/a.txt": File(b"remote edit\n")})
+    poll_until(app, logs, profile, remote, local, "marker.md")
+
+    (local / ".sshadowignore").write_bytes(b"")
+    app.send("poll", name=profile)
+    expected = (
+        {".sshadowignore": File(b""), "data": Dir(), "data/a.txt": File(b"remote edit\n")}
+        | MARKER
+    )
+    wait_for_tree(local, expected, on_poll=logs.check)
+    wait_for_tree(remote, expected, on_poll=logs.check)
