@@ -478,3 +478,39 @@ def test_removing_rule_locally_skips_items_never_downloaded(
     )
     wait_for_tree(local, expected, on_poll=logs.check)
     wait_for_tree(remote, expected, on_poll=logs.check)
+
+
+def test_renaming_detached_item_within_ignored_paths_keeps_remote_copy(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = enable(app, logs, profile)
+    synced: Tree = {"data": Dir(), "data/a.txt": File(b"a\n")}
+    make_tree(local, synced)
+    wait_for_tree(remote, synced, on_poll=logs.check)
+    make_tree(local, {".sshadowignore": File(b"data/\n")})
+    wait_for(lambda: "" if (remote / ".sshadowignore").exists() else "missing")
+
+    (local / "data/a.txt").rename(local / "data/b.txt")
+    logs.expect(excluded("data/b.txt"), timeout=30)
+    poll_until(app, logs, profile, remote, local, "marker.md")
+
+    assert (remote / "data/a.txt").read_bytes() == b"a\n"
+    assert not (remote / "data/b.txt").exists()
+    assert (local / "data/b.txt").read_bytes() == b"a\n"
+    assert not (local / "data/a.txt").exists()
+
+
+def test_remote_delete_of_detached_item_keeps_local_copy(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    synced: Tree = {"data": Dir(), "data/a.txt": File(b"a\n")}
+    make_tree(remote, synced)
+    local = enable(app, logs, profile)
+    wait_for_tree(local, synced, on_poll=logs.check)
+    make_tree(remote, {".sshadowignore": File(b"data/\n")})
+    poll_until(app, logs, profile, remote, local, "marker-1.md")
+
+    (remote / "data/a.txt").unlink()
+    poll_until(app, logs, profile, remote, local, "marker-2.md")
+
+    assert (local / "data/a.txt").read_bytes() == b"a\n"
