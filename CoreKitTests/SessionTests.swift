@@ -1614,6 +1614,23 @@ struct SessionTests {
             #expect(changes.count == 1)
         }
 
+        @Test func createDirectoryWithReplaceRemovesExistingContents()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+            try sandbox.createFile(at: "x/old.txt", contents: "old")
+
+            _ = try await session.createDirectory(
+                "x",
+                in: .rootContainer,
+                ifExists: .replace
+            )
+
+            #expect(sandbox.exists(at: "x"))
+            #expect(!sandbox.exists(at: "x/old.txt"))
+        }
+
         @Test func createDirectorySucceeds() async throws {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
@@ -2194,6 +2211,158 @@ struct SessionTests {
 
             var iterator = calls.makeAsyncIterator()
             #expect(await iterator.next() != nil)
+        }
+    }
+
+    struct CreateActionTests {
+        private let early = Date(timeIntervalSince1970: 1_000)
+        private let late = Date(timeIntervalSince1970: 2_000)
+
+        private func rules(_ contents: String, at seconds: TimeInterval) -> IgnoreFiles {
+            IgnoreFiles(files: [".sshadowignore": text(contents, at: seconds)])
+        }
+
+        private func action(
+            _ session: Session,
+            _ name: String,
+            in parentId: NSFileProviderItemIdentifier = .rootContainer,
+            isDirectory: Bool = false,
+            createTime: Date? = nil,
+            ignoreFiles: IgnoreFiles
+        ) async throws -> CreateAction {
+            try await session.createAction(
+                name,
+                in: parentId,
+                isDirectory: isDirectory,
+                createTime: createTime,
+                ignoreFiles: ignoreFiles
+            )
+        }
+
+        @Test func newItemIsCreated() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            let result = try await action(session, "a.txt", ignoreFiles: rules("*.log\n", at: 10))
+
+            #expect(result == .create(replace: false))
+        }
+
+        @Test func ignoredItemIsExcluded() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            let result = try await action(session, "a.log", ignoreFiles: rules("*.log\n", at: 10))
+
+            #expect(result == .exclude)
+        }
+
+        @Test func collisionWithoutExclusionKeepsCreating() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+            try sandbox.createFile(at: "a.txt", contents: "remote")
+
+            let result = try await action(session, "a.txt", ignoreFiles: rules("", at: 10))
+
+            #expect(result == .create(replace: false))
+        }
+
+        @Test func localRuleRemovalCreatesOverRemoteCopy() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+            _ = try await action(session, "x.log", ignoreFiles: rules("*.log\nbuild/\n", at: 10))
+            _ = try await action(
+                session,
+                "build",
+                isDirectory: true,
+                ignoreFiles: rules("*.log\nbuild/\n", at: 10)
+            )
+            try sandbox.createFile(at: "x.log", contents: "remote")
+            try sandbox.createFile(at: "build/a.o", contents: "remote")
+
+            let file = try await action(session, "x.log", ignoreFiles: rules("", at: 20))
+            let folder = try await action(
+                session,
+                "build",
+                isDirectory: true,
+                ignoreFiles: rules("", at: 20)
+            )
+
+            #expect(file == .create(replace: false))
+            #expect(folder == .create(replace: true))
+        }
+
+        @Test func remoteRuleRemovalLinksToRemoteCopy() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: ".sshadowignore",
+                contents: "*.log\nbuild/\n",
+                modifyDate: early
+            )
+            let session = try await sandbox.getSession()
+            let local = IgnoreFiles(files: [".sshadowignore": .remote])
+            _ = try await action(session, "x.log", ignoreFiles: local)
+            _ = try await action(session, "build", isDirectory: true, ignoreFiles: local)
+            try sandbox.createFile(at: "x.log", contents: "remote")
+            try sandbox.createFile(at: "build/a.o", contents: "remote")
+            try sandbox.createFile(at: ".sshadowignore", contents: "", modifyDate: late)
+            _ = try await session.reconcileAll()
+
+            let file = try await action(session, "x.log", ignoreFiles: local)
+            let folder = try await action(session, "build", isDirectory: true, ignoreFiles: local)
+
+            guard case .link(let fileItem, let fetchFile) = file,
+                case .link(let folderItem, let fetchFolder) = folder
+            else {
+                Issue.record("expected links, got \(file) and \(folder)")
+                return
+            }
+            #expect(fileItem.name == "x.log")
+            #expect(fetchFile)
+            #expect(folderItem.name == "build")
+            #expect(!fetchFolder)
+        }
+
+        @Test func childrenOfFolderTheRemoteWonFollowTheRemote() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadowignore", contents: "build/\n", modifyDate: early)
+            let session = try await sandbox.getSession()
+            let local = IgnoreFiles(files: [".sshadowignore": .remote])
+            _ = try await action(session, "build", isDirectory: true, ignoreFiles: local)
+            try sandbox.createFile(at: "build/a.o", contents: "remote")
+            try sandbox.createFile(at: ".sshadowignore", contents: "", modifyDate: late)
+            _ = try await session.reconcileAll()
+            guard case .link(let build, _) = try await action(
+                session,
+                "build",
+                isDirectory: true,
+                ignoreFiles: local
+            ) else {
+                Issue.record("expected the folder to link")
+                return
+            }
+            let buildFiles = IgnoreFiles(
+                files: [".sshadowignore": .remote],
+                children: ["build": IgnoreFiles()]
+            )
+
+            let colliding = try await action(
+                session, "a.o", in: build.id, createTime: early, ignoreFiles: buildFiles
+            )
+            let leftover = try await action(
+                session, "old.o", in: build.id, createTime: early, ignoreFiles: buildFiles
+            )
+            let new = try await action(
+                session, "new.o", in: build.id, createTime: Date(), ignoreFiles: buildFiles
+            )
+
+            if case .link(let item, true) = colliding {
+                #expect(item.name == "a.o")
+            } else {
+                Issue.record("expected a.o to link, got \(colliding)")
+            }
+            #expect(leftover == .exclude)
+            #expect(new == .create(replace: false))
         }
     }
 

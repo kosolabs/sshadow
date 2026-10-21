@@ -32,6 +32,8 @@ actor Session {
 
     private lazy var cache = FileCache(read: read)
     private lazy var ignores = IgnoreCache(filenames: config.ignoreFilenames)
+    private var excludedLocally: Set<String> = []
+    private var remoteWon: [String: Date] = [:]
 
     private var watched: [NSFileProviderItemIdentifier: Int] = [:]
     private var schedule: PollSchedule?
@@ -132,7 +134,10 @@ actor Session {
         }
 
         let resolved = try await readRemote(ignoreFiles)
-        ignoresChanged(ignores.update(resolved, from: .local), poll: true)
+        let before = ignores
+        let changed = ignores.update(resolved, from: .local)
+        ignoresChanged(changed, poll: true)
+        pushUnignored(in: changed, before: before)
 
         guard
             let glob = ignores.rule(
@@ -145,7 +150,61 @@ actor Session {
         logger.info(
             "Excluded from sync: \(path) (\(glob.from ?? "global"): \(glob.original))"
         )
+        excludedLocally.insert(path)
         return true
+    }
+
+    /// What `createItem` should do with a local item. An item that was
+    /// excluded locally while the remote had its own copy goes to whichever
+    /// side last changed the rules: local replaces the remote copy, and remote
+    /// links to it. Items left over inside a folder the remote replaced stay
+    /// excluded.
+    func createAction(
+        _ name: String,
+        in parentId: NSFileProviderItemIdentifier,
+        isDirectory: Bool,
+        createTime: Date?,
+        ignoreFiles: IgnoreFiles
+    ) async throws -> CreateAction {
+        if try await isExcluded(
+            name,
+            in: parentId,
+            isDirectory: isDirectory,
+            ignoreFiles: ignoreFiles
+        ) {
+            return .exclude
+        }
+
+        let dir = try await db.path(for: parentId)
+        let path = dir.isEmpty ? name : "\(dir)/\(name)"
+        let wasExcluded = excludedLocally.remove(path) != nil
+        let wonAt = remoteWon.first { path.hasPrefix($0.key + "/") }?.value
+        let remotePath = config.path(for: path)
+        let exists = try await perform(with: parentId) {
+            try await sftp.attributesIfExists(at: remotePath)
+        } != nil
+
+        if !exists, let wonAt, let createTime, createTime < wonAt {
+            logger.info("Left over from a folder the remote replaced: \(path)")
+            return .exclude
+        }
+        guard exists, wasExcluded || wonAt != nil else {
+            return .create(replace: false)
+        }
+
+        let kind: Item.Kind = isDirectory ? .init(directoryNamed: name) : .file
+        if wonAt != nil || ignores.lastChange(affecting: dir) == .remote {
+            logger.info("Remote copy wins: \(path)")
+            let item = try await record(name, in: parentId, kind: kind)
+            if kind == .folder {
+                remoteWon[path] = Date()
+                try await db.markEnumerated(item.id)
+                schedule?.requestPollAll()
+            }
+            return .link(item, fetch: kind != .folder)
+        }
+        logger.info("Local copy wins: \(path)")
+        return .create(replace: kind == .folder)
     }
 
     func isExcluded(
@@ -183,6 +242,96 @@ actor Session {
                 logger.error("Failed to retry excluded items: \(error)")
             }
         }
+    }
+
+    /// Pushes the local copy of each synced item that a local rule change
+    /// stopped ignoring, since the local side wins.
+    private func pushUnignored(in dirs: [String], before: IgnoreCache) {
+        guard !dirs.isEmpty else { return }
+        Task {
+            do {
+                for dir in dirs {
+                    var id = NSFileProviderItemIdentifier.rootContainer
+                    for name in dir.split(separator: "/") {
+                        id = try await child(of: id, name: String(name))
+                    }
+                    try await pushUnignored(below: id, in: dir, before: before)
+                }
+            } catch {
+                logger.error("Failed to push items that are no longer ignored: \(error)")
+            }
+        }
+    }
+
+    private func pushUnignored(
+        below folderId: NSFileProviderItemIdentifier,
+        in dir: String,
+        before: IgnoreCache
+    ) async throws {
+        for item in try await db.children(of: folderId) {
+            let path = dir.isEmpty ? item.name : "\(dir)/\(item.name)"
+            let isDirectory = item.kind.isDirectory
+            if before.rule(ignoring: item.name, in: dir, isDirectory: isDirectory) != nil,
+                ignores.rule(ignoring: item.name, in: dir, isDirectory: isDirectory) == nil
+            {
+                try await pushLocal(item, at: path)
+            } else if item.kind == .folder {
+                try await pushUnignored(below: item.id, in: path, before: before)
+            }
+        }
+    }
+
+    private func pushLocal(_ item: Item, at path: String) async throws {
+        guard let parentId = item.parentId else { return }
+        if item.kind == .folder {
+            let names = Set(try await db.children(of: item.id).map(\.name))
+            let remotePath = config.path(for: path)
+            let entries = try await perform(with: item.id) {
+                try await sftp.withDirectory(at: remotePath) { dir in
+                    var entries: [(String, Bool)] = []
+                    for try await attrs in dir {
+                        if let name = attrs.name {
+                            entries.append((name, attrs.type == .directory))
+                        }
+                    }
+                    return entries
+                }
+            }
+            for (name, isDirectory) in entries where !names.contains(name) {
+                logger.info("Local copy wins, removing \(path)/\(name)")
+                let entryPath = "\(remotePath)/\(name)"
+                try await perform(with: item.id) {
+                    if isDirectory {
+                        try await sftp.removeDirectoryRecursively(at: entryPath)
+                    } else {
+                        try await sftp.removeFile(at: entryPath)
+                    }
+                }
+            }
+            for child in try await db.children(of: item.id) {
+                try await pushLocal(child, at: "\(path)/\(child.name)")
+            }
+            return
+        }
+        guard item.kind == .file,
+            let manager = NSFileProviderManager(for: config.domain)
+        else { return }
+
+        let root = try await manager.getUserVisibleURL(for: .rootContainer)
+        let scoped = root.startAccessingSecurityScopedResource()
+        defer { if scoped { root.stopAccessingSecurityScopedResource() } }
+        let url = root.appending(path: path)
+        var st = stat()
+        guard lstat(url.path(percentEncoded: false), &st) == 0,
+            st.st_flags & UInt32(SF_DATALESS) == 0
+        else { return }
+
+        logger.info("Local copy wins: \(path)")
+        _ = try await upload(item.name, to: parentId, file: url, progress: Progress())
+        let modified = Date(
+            timeIntervalSince1970: TimeInterval(st.st_mtimespec.tv_sec)
+        )
+        _ = try await setAttributes(for: item.id, modifyTime: modified)
     }
 
     private func forget(_ itemId: NSFileProviderItemIdentifier) async throws {
@@ -235,8 +384,10 @@ actor Session {
     ) async throws {
         guard config.ignoreFilenames.contains(name) else { return }
         let dir = try await db.path(for: parentId)
+        let before = ignores
         if ignores.remove(name, in: dir) {
             ignoresChanged([dir], poll: true)
+            pushUnignored(in: [dir], before: before)
         }
     }
 
@@ -741,10 +892,16 @@ actor Session {
             with: parentId,
             recording: "Create directory at \(ref)"
         ) {
+            let path = try await path(for: name, in: parentId)
+            if ifExists == .replace,
+                try await sftp.attributesIfExists(at: path) != nil
+            {
+                try await sftp.removeDirectoryRecursively(at: path)
+            }
             try await sftp.makeDirectory(
-                at: path(for: name, in: parentId),
+                at: path,
                 mode: flags.mode,
-                ifExists: ifExists
+                ifExists: ifExists == .replace ? .fail : ifExists
             )
         }
         let item = try await record(

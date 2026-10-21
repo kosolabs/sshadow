@@ -221,12 +221,25 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             }
         }
 
-        if try await isExcluded(
-            filename,
-            in: parentId,
-            isDirectory: type.conforms(to: .directory)
-        ) {
-            throw CoreError.excludedFromSync
+        var replace = false
+        if type.conforms(to: .symbolicLink) {
+            if try await isExcluded(filename, in: parentId, isDirectory: false) {
+                throw CoreError.excludedFromSync
+            }
+        } else {
+            switch try await createAction(
+                filename,
+                in: parentId,
+                isDirectory: type.conforms(to: .directory),
+                createTime: item.creationDate ?? nil
+            ) {
+            case .exclude:
+                throw CoreError.excludedFromSync
+            case .link(let linked, let fetch):
+                return (FPItem(item: linked), [], fetch)
+            case .create(let replaceExisting):
+                replace = replaceExisting
+            }
         }
 
         var remaining = fields.subtracting(.nameFields)
@@ -277,7 +290,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     parentId: parentId,
                     name: filename,
                     flags: .init(from: fileSystemFlags),
-                    ifExists: .succeed
+                    ifExists: replace ? .replace : .succeed
                 )
                 itemId = item.id
             }
@@ -510,6 +523,24 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         for identifier: NSFileProviderItemIdentifier,
     ) async throws(CoreError) -> FPItem {
         try await FPItem(item: client.item(for: identifier))
+    }
+
+    private func createAction(
+        _ name: String,
+        in parentId: NSFileProviderItemIdentifier,
+        isDirectory: Bool,
+        createTime: Date?
+    ) async throws(CoreError) -> CreateAction {
+        guard let ignoreFiles = try await ignoreFiles(in: parentId) else {
+            return .create(replace: false)
+        }
+        return try await client.createAction(
+            name,
+            in: parentId,
+            isDirectory: isDirectory,
+            createTime: createTime,
+            ignoreFiles: ignoreFiles
+        )
     }
 
     private func isExcluded(

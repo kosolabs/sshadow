@@ -152,30 +152,6 @@ def test_deleting_ignored_item_keeps_remote_copy(
     assert not (local / "b.txt").exists()
 
 
-def test_unignored_directory_on_both_sides_merges(
-    app: App, logs: LogWatcher, profile: str, remote: Path
-) -> None:
-    local = enable(app, logs, profile)
-    make_tree(local, {".sshadowignore": File(b"build/\n")})
-    wait_for_tree(remote, {".sshadowignore": File(b"build/\n")}, on_poll=logs.check)
-    make_tree(local, {"build/x.o": File(b"x\n")})
-    logs.expect(excluded("build"), timeout=30)
-    make_tree(remote, {"build/y.o": File(b"y\n")})
-    poll_until(app, logs, profile, remote, local, "marker.md")
-
-    (local / ".sshadowignore").write_bytes(b"")
-    expected: Tree = {
-        ".sshadowignore": File(b""),
-        "marker.md": File(b"marker\n"),
-        "build": Dir(),
-        "build/x.o": File(b"x\n"),
-        "build/y.o": File(b"y\n"),
-    }
-    wait_for_tree(remote, expected, on_poll=logs.check)
-    app.send("poll", name=profile)
-    wait_for_tree(local, expected, on_poll=logs.check)
-
-
 def test_trashing_ignored_item_keeps_remote_copy(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -326,3 +302,128 @@ def test_deleting_ignore_file_remotely_unignores_items(
     (remote / ".sshadowignore").unlink()
     app.send("poll", name=profile)
     wait_for_tree(local, CONTENT, on_poll=logs.check)
+
+
+def detach_on_both_sides(
+    app: App, logs: LogWatcher, profile: str, remote: Path, rules: bytes, both: Tree,
+    local_only: Tree, remote_only: Tree, rules_from_remote: bool,
+) -> Path:
+    """Create `both` on each side with different contents while `rules` ignore it."""
+    if rules_from_remote:
+        make_tree(remote, {".sshadowignore": File(rules)})
+        local = enable(app, logs, profile)
+        wait_for(lambda: "" if (local / ".sshadowignore").exists() else "missing", on_poll=logs.check)
+    else:
+        local = enable(app, logs, profile)
+        make_tree(local, {".sshadowignore": File(rules)})
+        wait_for_tree(remote, {".sshadowignore": File(rules)}, on_poll=logs.check)
+    make_tree(local, {k: File(b"local " + v.contents) if isinstance(v, File) else v for k, v in both.items()} | local_only)
+    top = sorted(both)[0]
+    logs.expect(excluded(top), timeout=30)
+    make_tree(remote, {k: File(b"remote " + v.contents) if isinstance(v, File) else v for k, v in both.items()} | remote_only)
+    poll_until(app, logs, profile, remote, local, "marker.md")
+    return local
+
+
+def side(tree: Tree, prefix: bytes) -> Tree:
+    return {k: File(prefix + v.contents) if isinstance(v, File) else v for k, v in tree.items()}
+
+
+FILE: Tree = {"x.log": File(b"x\n")}
+FOLDER: Tree = {"build": Dir(), "build/a.o": File(b"a\n")}
+LOCAL_ONLY: Tree = {"build/local-only.o": File(b"l\n")}
+REMOTE_ONLY: Tree = {"build/remote-only.o": File(b"r\n")}
+MARKER: Tree = {"marker.md": File(b"marker\n")}
+
+
+def test_removing_rule_locally_pushes_local_file(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = detach_on_both_sides(app, logs, profile, remote, b"*.log\n", FILE, {}, {}, False)
+
+    (local / ".sshadowignore").write_bytes(b"")
+    expected = {".sshadowignore": File(b"")} | MARKER | side(FILE, b"local ")
+    wait_for_tree(remote, expected, on_poll=logs.check)
+    wait_for_tree(local, expected, on_poll=logs.check)
+
+
+def test_removing_rule_locally_replaces_remote_folder(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = detach_on_both_sides(
+        app, logs, profile, remote, b"build/\n", FOLDER, LOCAL_ONLY, REMOTE_ONLY, False
+    )
+
+    (local / ".sshadowignore").write_bytes(b"")
+    expected = {".sshadowignore": File(b"")} | MARKER | side(FOLDER, b"local ") | LOCAL_ONLY
+    wait_for_tree(remote, expected, on_poll=logs.check)
+    app.send("poll", name=profile)
+    wait_for_tree(local, expected, on_poll=logs.check)
+
+
+def test_removing_rule_remotely_pulls_remote_file(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = detach_on_both_sides(app, logs, profile, remote, b"*.log\n", FILE, {}, {}, True)
+
+    (remote / ".sshadowignore").write_bytes(b"")
+    app.send("poll", name=profile)
+    expected = {".sshadowignore": File(b"")} | MARKER | side(FILE, b"remote ")
+    wait_for_tree(local, expected, on_poll=logs.check)
+    wait_for_tree(remote, expected, on_poll=logs.check)
+
+
+def test_removing_rule_remotely_replaces_local_folder(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = detach_on_both_sides(
+        app, logs, profile, remote, b"build/\n", FOLDER, LOCAL_ONLY, REMOTE_ONLY, True
+    )
+
+    (remote / ".sshadowignore").write_bytes(b"")
+    app.send("poll", name=profile)
+    expected = {".sshadowignore": File(b"")} | MARKER | side(FOLDER, b"remote ") | REMOTE_ONLY
+    # Files only the local side had stay local, and excluded.
+    wait_for_tree(local, expected | LOCAL_ONLY, on_poll=logs.check)
+    wait_for_tree(remote, expected, on_poll=logs.check)
+
+
+def test_removing_rule_locally_pushes_synced_item(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = enable(app, logs, profile)
+    synced: Tree = {"data": Dir(), "data/a.txt": File(b"a\n")}
+    make_tree(local, synced)
+    wait_for_tree(remote, synced, on_poll=logs.check)
+    make_tree(local, {".sshadowignore": File(b"data/\n")})
+    wait_for(lambda: "" if (remote / ".sshadowignore").exists() else "missing")
+    make_tree(remote, {"data/a.txt": File(b"remote edit\n")})
+    poll_until(app, logs, profile, remote, local, "marker.md")
+
+    (local / ".sshadowignore").write_bytes(b"")
+    expected = {".sshadowignore": File(b"")} | MARKER | synced
+    wait_for_tree(remote, expected, on_poll=logs.check)
+    app.send("poll", name=profile)
+    wait_for_tree(local, expected, on_poll=logs.check)
+
+
+def test_removing_rule_remotely_pulls_synced_item(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    synced: Tree = {"data": Dir(), "data/a.txt": File(b"a\n")}
+    make_tree(remote, synced)
+    local = enable(app, logs, profile)
+    wait_for_tree(local, synced, on_poll=logs.check)
+    make_tree(remote, {".sshadowignore": File(b"data/\n")})
+    poll_until(app, logs, profile, remote, local, "marker-1.md")
+    make_tree(remote, {"data/a.txt": File(b"remote edit\n")})
+    poll_until(app, logs, profile, remote, local, "marker-2.md")
+    assert (local / "data/a.txt").read_bytes() == b"a\n"
+
+    (remote / ".sshadowignore").write_bytes(b"")
+    app.send("poll", name=profile)
+    expected = (
+        {".sshadowignore": File(b""), "data": Dir(), "data/a.txt": File(b"remote edit\n")}
+        | {"marker-1.md": File(b"marker\n"), "marker-2.md": File(b"marker\n")}
+    )
+    wait_for_tree(local, expected, on_poll=logs.check)

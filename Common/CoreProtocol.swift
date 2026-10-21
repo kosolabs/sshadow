@@ -64,6 +64,7 @@ extension Result where Failure == any Error {
 public enum OnExists: Message, PrettyDescribable {
     case fail
     case succeed
+    case replace
 }
 
 public enum CoreRequest: Message, PrettyDescribable {
@@ -85,6 +86,7 @@ public enum CoreRequest: Message, PrettyDescribable {
     case limits(LimitsRequest)
     case ignoreFilenames(IgnoreFilenamesRequest)
     case excluded(ExcludedRequest)
+    case createAction(CreateActionRequest)
 
     public func encoded() throws -> Data {
         try JSONEncoder().encode(self)
@@ -559,6 +561,45 @@ public struct ExcludedRequest: CoreRequestType, PrettyDescribable {
         self.name = name
         self.isDirectory = isDirectory
         self.ignoreFiles = ignoreFiles
+    }
+}
+
+public enum CreateAction: Message, PrettyDescribable {
+    case exclude
+    case create(replace: Bool)
+    case link(Item, fetch: Bool)
+}
+
+public struct CreateActionRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = CreateActionResponse
+    public let parentId: String
+    public let name: String
+    public let isDirectory: Bool
+    public let createTime: Date?
+    public let ignoreFiles: IgnoreFiles
+
+    public var wrapped: CoreRequest { .createAction(self) }
+
+    public init(
+        parentId: String,
+        name: String,
+        isDirectory: Bool,
+        createTime: Date?,
+        ignoreFiles: IgnoreFiles
+    ) {
+        self.parentId = parentId
+        self.name = name
+        self.isDirectory = isDirectory
+        self.createTime = createTime
+        self.ignoreFiles = ignoreFiles
+    }
+}
+
+public struct CreateActionResponse: Message, PrettyDescribable {
+    public let action: CreateAction
+
+    public init(action: CreateAction) {
+        self.action = action
     }
 }
 

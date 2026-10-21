@@ -129,6 +129,10 @@ final class CoreService: Sendable, CoreXPC {
             try await respond { session in
                 try await self.excluded(session, request)
             }
+        case .createAction(let request):
+            try await respond { session in
+                try await self.createAction(session, request)
+            }
         }
     }
 
@@ -367,6 +371,20 @@ final class CoreService: Sendable, CoreXPC {
         _ request: IgnoreFilenamesRequest
     ) async throws -> IgnoreFilenamesResponse {
         await IgnoreFilenamesResponse(filenames: session.ignoreFilenames)
+    }
+
+    func createAction(
+        _ session: Session,
+        _ request: CreateActionRequest
+    ) async throws -> CreateActionResponse {
+        let action = try await session.createAction(
+            request.name,
+            in: NSFileProviderItemIdentifier(request.parentId),
+            isDirectory: request.isDirectory,
+            createTime: request.createTime,
+            ignoreFiles: request.ignoreFiles
+        )
+        return CreateActionResponse(action: action)
     }
 
     func excluded(

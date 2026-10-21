@@ -349,6 +349,25 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         return response.filenames
     }
 
+    public func createAction(
+        _ name: String,
+        in parentId: NSFileProviderItemIdentifier,
+        isDirectory: Bool,
+        createTime: Date?,
+        ignoreFiles: IgnoreFiles
+    ) async throws(CoreError) -> CreateAction {
+        let response = try await perform(
+            CreateActionRequest(
+                parentId: parentId.rawValue,
+                name: name,
+                isDirectory: isDirectory,
+                createTime: createTime,
+                ignoreFiles: ignoreFiles
+            )
+        )
+        return response.action
+    }
+
     public func isExcluded(
         _ name: String,
         in parentId: NSFileProviderItemIdentifier,
