@@ -39,7 +39,6 @@ def test_ignored_items_stay_local(
     wait_for_tree(local, TREE, on_poll=logs.check)
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_remote_ignore_file_applies_locally(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
