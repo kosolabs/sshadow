@@ -29,7 +29,6 @@ def excluded(path: str) -> Matcher:
     return msg(rf"^Excluded from sync: {re.escape(path)} ")
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_ignored_items_stay_local(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -195,7 +194,6 @@ def test_renaming_synced_item_to_ignored_name_deletes_remote_copy(
     assert (local / "a.log").read_bytes() == b"a\n"
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_moving_synced_items_into_ignored_folder_deletes_remote_copies(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -218,7 +216,6 @@ def test_moving_synced_items_into_ignored_folder_deletes_remote_copies(
     assert (local / "build/docs/d.txt").read_bytes() == b"d\n"
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_renaming_ignored_items_to_synced_names_uploads_them(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -588,7 +585,6 @@ def test_remote_delete_of_detached_item_keeps_local_copy(
     assert (local / "data/a.txt").read_bytes() == b"a\n"
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_later_ignore_files_take_precedence(
     app: App, logs: LogWatcher, profiles: Profiles, remote: Path
 ) -> None:

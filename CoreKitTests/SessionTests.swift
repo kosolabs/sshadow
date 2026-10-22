@@ -7,6 +7,10 @@ import Testing
 
 @testable import CoreKit
 
+private func text(_ contents: String) -> IgnoreFile {
+    .contents(contents)
+}
+
 extension TestSandbox {
     fileprivate func getSession(
         idleTimeProvider: @escaping Session.IdleTimeProvider =
@@ -42,7 +46,7 @@ extension TestSandbox {
             ssh: ssh,
             sftp: sftp,
             db: db,
-            sharedUrl: shared,
+            sharedUrl: group,
             changesDetectedHandler: {},
             connectionLostHandler: connectionLostHandler,
             idleTimeProvider: idleTimeProvider,
@@ -137,25 +141,22 @@ extension TestSandbox {
     @discardableResult
     fileprivate func createPackage(
         at root: String,
-        relativeTo: TestSandbox.Root = .remote,
+        in location: TestSandbox.Location = .remote,
         files: [Thing] = [.file(path: "TXT.rtf", contents: "{\rtf1 hello}")]
     ) throws -> URL {
-        let url = try createFolder(
-            at: root,
-            relativeTo: relativeTo
-        )
+        let url = try createFolder(at: root, in: location)
         for file in files {
             switch file {
             case .file(let path, let contents):
                 try createFile(
                     at: "\(root)/\(path)",
-                    relativeTo: relativeTo,
+                    in: location,
                     contents: contents
                 )
             case .link(let path, let target):
                 try createSymlink(
                     at: "\(root)/\(path)",
-                    relativeTo: relativeTo,
+                    in: location,
                     target: target
                 )
             }
@@ -272,7 +273,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let path = try await session.path(for: .rootContainer)
-            #expect(path == sandbox.mount.path())
+            #expect(path == sandbox.remote.path())
         }
 
         @Test func pathForItemReturnsCombinedPath() async throws {
@@ -283,7 +284,7 @@ struct SessionTests {
             let folderId = try await session.child(name: "folder")
             let itemId = try await session.child(of: folderId, name: "file.txt")
             let path = try await session.path(for: itemId)
-            #expect(path == "\(sandbox.mount.path())/folder/file.txt")
+            #expect(path == "\(sandbox.remote.path())/folder/file.txt")
         }
 
         @Test func pathForNameInParentReturnsCombinedPath() async throws {
@@ -292,11 +293,8 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let folderId = try await session.child(name: "folder")
-            let path = try await session.path(
-                for: "file.txt",
-                in: folderId
-            )
-            #expect(path == "\(sandbox.mount.path())/folder/file.txt")
+            let path = try await session.path(for: "file.txt", in: folderId)
+            #expect(path == "\(sandbox.remote.path())/folder/file.txt")
         }
 
         @Test func pathForNameInRootReturnsCombinedPath() async throws {
@@ -308,7 +306,7 @@ struct SessionTests {
                 for: "file.txt",
                 in: .rootContainer
             )
-            #expect(path == "\(sandbox.mount.path())/file.txt")
+            #expect(path == "\(sandbox.remote.path())/file.txt")
         }
     }
 
@@ -1958,15 +1956,115 @@ struct SessionTests {
         }
     }
 
+    struct IsExcludedTests {
+        @Test func matchingNameIsExcluded() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            let excluded = try await session.isExcluded(
+                "build",
+                in: .rootContainer,
+                isDirectory: true,
+                ignoreFiles: IgnoreFiles(files: [
+                    ".sshadowignore": text("build/\n")
+                ])
+            )
+
+            #expect(excluded)
+        }
+
+        @Test func otherNameIsNotExcluded() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            let excluded = try await session.isExcluded(
+                "build",
+                in: .rootContainer,
+                isDirectory: false,
+                ignoreFiles: IgnoreFiles(
+                    files: [".sshadowignore": text("build/\n")]
+                )
+            )
+
+            #expect(!excluded)
+        }
+
+        @Test func nestedRulesOverrideParentRules() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "src")
+            let session = try await sandbox.getSession()
+            let srcId = try await session.child(name: "src")
+            let ignoreFiles = IgnoreFiles(
+                files: [".sshadowignore": text("*.log\n")],
+                children: [
+                    "src": IgnoreFiles(
+                        files: [".sshadowignore": text("!keep.log\n")]
+                    )
+                ]
+            )
+
+            let keep = try await session.isExcluded(
+                "keep.log",
+                in: srcId,
+                isDirectory: false,
+                ignoreFiles: ignoreFiles
+            )
+            let other = try await session.isExcluded(
+                "other.log",
+                in: srcId,
+                isDirectory: false,
+                ignoreFiles: ignoreFiles
+            )
+
+            #expect(!keep)
+            #expect(other)
+        }
+
+        @Test func onlyConfiguredFilenamesApply() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            let excluded = try await session.isExcluded(
+                "build",
+                in: .rootContainer,
+                isDirectory: true,
+                ignoreFiles: IgnoreFiles(
+                    files: [".gitignore": text("build/\n")]
+                )
+            )
+
+            #expect(!excluded)
+        }
+
+        @Test func mismatchedDirectoriesAreNotExcluded() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "src")
+            let session = try await sandbox.getSession()
+            let srcId = try await session.child(name: "src")
+
+            let excluded = try await session.isExcluded(
+                "build",
+                in: srcId,
+                isDirectory: true,
+                ignoreFiles: IgnoreFiles(
+                    files: [".sshadowignore": text("build/\n")],
+                    children: ["lib": IgnoreFiles()]
+                )
+            )
+
+            #expect(!excluded)
+        }
+    }
+
     struct UploadTests {
         @Test func uploadPackageRecordsPackageKind() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(
                 at: "src.rtfd/TXT.rtf",
-                relativeTo: .shared,
+                in: .group,
                 contents: "rtf"
             )
-            let source = sandbox.getUrl(for: "src.rtfd", relativeTo: .shared)
+            let source = sandbox.getUrl(for: "src.rtfd", in: .group)
             let session = try await sandbox.getSession()
 
             let item = try await session.upload(
@@ -1983,7 +2081,7 @@ struct SessionTests {
 
         @Test func uploadSmallFileSucceeds() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
             let data = "Hello, World!\n"
             try data.write(to: uploadUrl, atomically: false, encoding: .utf8)
 
@@ -2013,7 +2111,7 @@ struct SessionTests {
 
         @Test func uploadLargeFileSucceeds() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
             let data = Data(count: 10_485_760)
             try data.write(to: uploadUrl)
 
@@ -2046,7 +2144,7 @@ struct SessionTests {
             try sandbox.createFolder(at: "collide-upload")
             let session = try await sandbox.getSession()
 
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
             try Data("data".utf8).write(to: uploadUrl)
 
             await #expect(throws: CoreError.cannotSynchronize) {
@@ -2063,7 +2161,7 @@ struct SessionTests {
 
         @Test func uploadCancelledThrowsUserCancelled() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
             let data = Data(count: 10_485_760)
             try data.write(to: uploadUrl)
 
@@ -2084,7 +2182,7 @@ struct SessionTests {
 
         @Test func uploadCancelledMidwayRemovesPartialFile() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
             try Data(count: 256 << 20).write(to: uploadUrl)
             let session = try await sandbox.getSession()
 
@@ -2113,7 +2211,7 @@ struct SessionTests {
 
         @Test func closeDuringUploadLeavesNoPartialFile() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
             try Data(count: 256 << 20).write(to: uploadUrl)
             let session = try await sandbox.getSession()
 
@@ -2144,7 +2242,7 @@ struct SessionTests {
         {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "existing.txt", contents: "original")
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
             try Data("replacement".utf8).write(to: uploadUrl)
             let session = try await sandbox.getSession()
 
@@ -2166,7 +2264,7 @@ struct SessionTests {
         @Test func uploadCancelledMidwayKeepsExistingFile() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "existing.dat", contents: "original")
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
             try Data(count: 256 << 20).write(to: uploadUrl)
             let session = try await sandbox.getSession()
 
@@ -2192,7 +2290,7 @@ struct SessionTests {
         @Test func closeDuringUploadKeepsExistingFile() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "existing.dat", contents: "original")
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
             try Data(count: 256 << 20).write(to: uploadUrl)
             let session = try await sandbox.getSession()
 
@@ -2224,7 +2322,7 @@ struct SessionTests {
             )
             let source = try sandbox.createPackage(
                 at: "src.rtfd",
-                relativeTo: .shared,
+                in: .group,
                 files: [.file(path: "text.rtf", contents: "new")]
             )
             try Data(count: 256 << 20).write(
@@ -2257,7 +2355,7 @@ struct SessionTests {
         {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "existing.txt", contents: "original")
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
             try Data("replacement".utf8).write(to: uploadUrl)
             let session = try await sandbox.getSession()
             let itemId = try await session.child(name: "existing.txt")
@@ -2287,7 +2385,7 @@ struct SessionTests {
             )
             try sandbox.touch("locked", permissions: 0o555)
             defer { try? sandbox.touch("locked", permissions: 0o755) }
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
             try Data("replacement".utf8).write(to: uploadUrl)
             let session = try await sandbox.getSession()
             let lockedId = try await session.child(name: "locked")
@@ -2308,7 +2406,7 @@ struct SessionTests {
 
         @Test func uploadRecreatesDeletedUploadsFolder() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
             try Data("contents".utf8).write(to: uploadUrl)
             let session = try await sandbox.getSession()
 
@@ -2336,7 +2434,7 @@ struct SessionTests {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: ".sshadow", contents: "not a folder")
             try sandbox.createFile(at: "existing.txt", contents: "original")
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
             try Data("replacement".utf8).write(to: uploadUrl)
             let session = try await sandbox.getSession()
 
@@ -2391,7 +2489,7 @@ struct SessionTests {
         @Test func uploadEmptyFileToFolderSucceeds() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFolder(at: "folder")
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
             try Data().write(to: uploadUrl)
 
             let url = sandbox.getUrl(for: "folder/file.txt")
@@ -2422,7 +2520,7 @@ struct SessionTests {
             let sandbox = TestSandbox()
             let source = try sandbox.createPackage(
                 at: "Source.rtfd",
-                relativeTo: .shared,
+                in: .group,
                 files: [
                     .file(path: "TXT.rtf", contents: "{\rtf1 hello}"),
                     .file(path: "image.png", contents: "png"),
@@ -2458,7 +2556,7 @@ struct SessionTests {
             let sandbox = TestSandbox()
             let source = try sandbox.createPackage(
                 at: "Source.rtfd",
-                relativeTo: .shared,
+                in: .group,
                 files: []
             )
             let session = try await sandbox.getSession()
@@ -2486,22 +2584,18 @@ struct SessionTests {
             let sandbox = TestSandbox()
             try sandbox.createFile(
                 at: "Doc.rtfd/Locked/inside.txt",
-                relativeTo: .shared,
+                in: .group,
                 contents: "locked"
             )
-            try sandbox.touch(
-                "Doc.rtfd/Locked",
-                relativeTo: .shared,
-                permissions: 0o555
-            )
+            try sandbox.touch("Doc.rtfd/Locked", in: .group, permissions: 0o555)
             defer {
                 try? sandbox.touch(
                     "Doc.rtfd/Locked",
-                    relativeTo: .shared,
+                    in: .group,
                     permissions: 0o755
                 )
             }
-            let source = sandbox.getUrl(for: "Doc.rtfd", relativeTo: .shared)
+            let source = sandbox.getUrl(for: "Doc.rtfd", in: .group)
             let session = try await sandbox.getSession()
 
             await #expect(throws: CoreError.cannotSynchronize) {
@@ -2517,10 +2611,7 @@ struct SessionTests {
 
         @Test func uploadPackageCancelledThrowsUserCancelled() async throws {
             let sandbox = TestSandbox()
-            let source = try sandbox.createPackage(
-                at: "Doc.rtfd",
-                relativeTo: .shared
-            )
+            let source = try sandbox.createPackage(at: "Doc.rtfd", in: .group)
             let session = try await sandbox.getSession()
 
             let progress = Progress()
@@ -2549,7 +2640,7 @@ struct SessionTests {
 
             let source = try sandbox.createPackage(
                 at: "src.rtfd",
-                relativeTo: .shared,
+                in: .group,
                 files: [
                     .file(path: "text.rtf", contents: "new"),
                     .file(path: "fresh.jpg", contents: "jpg"),
@@ -2686,7 +2777,7 @@ struct SessionTests {
             #expect(item.id == itemId)
             #expect(item.kind == .package)
             #expect(
-                url == sandbox.getUrl(for: itemId.rawValue, relativeTo: .shared)
+                url == sandbox.getUrl(for: itemId.rawValue, in: .group)
             )
             #expect(try Manifest(from: url) == Manifest(from: source))
             #expect(try contents(of: url) == contents(of: source))
@@ -2737,10 +2828,7 @@ struct SessionTests {
             }
             #expect(
                 !FileManager.default.fileExists(
-                    at: sandbox.getUrl(
-                        for: itemId.rawValue,
-                        relativeTo: .shared
-                    )
+                    at: sandbox.getUrl(for: itemId.rawValue, in: .group)
                 )
             )
         }
@@ -2899,7 +2987,7 @@ struct SessionTests {
             )
             #expect(try Data(contentsOf: warmUrl).prefix(1) == old.prefix(1))
 
-            let uploadUrl = sandbox.shared.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
             try new.write(to: uploadUrl)
             let item = try await session.upload(
                 "edited.dat",

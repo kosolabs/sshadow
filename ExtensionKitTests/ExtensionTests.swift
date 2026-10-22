@@ -11,8 +11,54 @@ extension TestSandbox {
         Extension, CoreClient
     ) {
         let client = try await client
-        let ext = Extension(client: client)
+        let ext = Extension(client: client) { id in
+            var names: [String] = []
+            var id = id
+            while id != .rootContainer {
+                let item = try await client.item(for: id)
+                names.insert(item.name, at: 0)
+                guard let parent = item.parentId else {
+                    throw CoreError.itemNotFound
+                }
+                id = parent
+            }
+            return names.reduce(self.local) {
+                $0.appending(path: $1, directoryHint: .isDirectory)
+            }
+        }
         return (ext, client)
+    }
+
+    @discardableResult
+    fileprivate func create(
+        file filename: String,
+        in parentId: NSFileProviderItemIdentifier,
+        with ext: Extension
+    ) async throws -> NSFileProviderItem {
+        let contents = try createFile(
+            at: UUID().uuidString,
+            in: .group,
+            contents: filename
+        )
+        let (item, _, _) = try await ext.createItem(
+            basedOn: ItemTemplate(
+                parentItemIdentifier: parentId,
+                filename: filename,
+                contentType: .text,
+                capabilities: [.allowsReading, .allowsWriting],
+                fileSystemFlags: .rw,
+                documentSize: NSNumber(value: filename.utf8.count)
+            ),
+            fields: [
+                .contents, .filename, .parentItemIdentifier, .fileSystemFlags,
+                .typeAndCreator,
+            ],
+            contents: contents,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: Progress()
+        )
+        return item
     }
 }
 
@@ -266,7 +312,7 @@ struct ExtensionTests {
         let contents = "Hello, World!"
         let fileToUploadUrl = try sandbox.createFile(
             at: UUID().uuidString,
-            relativeTo: .shared,
+            in: .group,
             contents: contents
         )
 
@@ -344,7 +390,7 @@ struct ExtensionTests {
         let contents = "read only"
         let fileToUploadUrl = try sandbox.createFile(
             at: UUID().uuidString,
-            relativeTo: .shared,
+            in: .group,
             contents: contents,
             permissions: 0o444
         )
@@ -393,7 +439,7 @@ struct ExtensionTests {
         let data = Data(count: 10_485_760)
         let fileToUploadUrl = try sandbox.createFile(
             at: UUID().uuidString,
-            relativeTo: .shared,
+            in: .group,
             data: data
         )
 
@@ -471,11 +517,11 @@ struct ExtensionTests {
         let contents = "{\rtf1 hello}"
         let packageUrl = try sandbox.createFolder(
             at: "Document.rtfd",
-            relativeTo: .shared
+            in: .group
         )
         try sandbox.createFile(
             at: "Document.rtfd/TXT.rtf",
-            relativeTo: .shared,
+            in: .group,
             contents: contents
         )
 
@@ -571,6 +617,41 @@ struct ExtensionTests {
             )
         }
         #expect(!sandbox.exists(at: "Document"))
+    }
+
+    @Test func createItemMatchingLocalRuleIsExcluded() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: ".sshadowignore", in: .local, contents: "*.log\n")
+        let (ext, _) = try await sandbox.getExtensionAndClient()
+
+        await #expect(throws: CoreError.excludedFromSync) {
+            try await sandbox.create(file: "a.log", in: .rootContainer, with: ext)
+        }
+        try await sandbox.create(file: "a.txt", in: .rootContainer, with: ext)
+
+        #expect(!sandbox.exists(at: "a.log"))
+        #expect(sandbox.exists(at: "a.txt"))
+    }
+
+    @Test func createItemInNestedFolderUsesEachLevel() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFolder(at: "parent")
+        try sandbox.createFile(at: ".sshadowignore", in: .local, contents: "*.log\n")
+        try sandbox.createFile(
+            at: "parent/.sshadowignore",
+            in: .local,
+            contents: "!keep.log\n"
+        )
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+        let parentId = try await client.child(name: "parent")
+
+        try await sandbox.create(file: "keep.log", in: parentId, with: ext)
+        await #expect(throws: CoreError.excludedFromSync) {
+            try await sandbox.create(file: "a.log", in: parentId, with: ext)
+        }
+
+        #expect(sandbox.exists(at: "parent/keep.log"))
+        #expect(!sandbox.exists(at: "parent/a.log"))
     }
 
     @Test func createSymlinkSucceeds() async throws {
@@ -996,7 +1077,7 @@ struct ExtensionTests {
         let newContents = "Hello, World!\n"
         let newContentsUrl = try sandbox.createFile(
             at: UUID().uuidString,
-            relativeTo: .shared,
+            in: .group,
             contents: newContents
         )
 
@@ -1062,11 +1143,11 @@ struct ExtensionTests {
         let newContents = "{\\rtf1 new}"
         let packageUrl = try sandbox.createFolder(
             at: UUID().uuidString,
-            relativeTo: .shared
+            in: .group
         )
         try sandbox.createFile(
             at: "\(packageUrl.lastPathComponent)/TXT.rtf",
-            relativeTo: .shared,
+            in: .group,
             contents: newContents
         )
 
@@ -1324,7 +1405,7 @@ struct ExtensionTests {
         let localContents = "edited locally"
         let localContentsUrl = try sandbox.createFile(
             at: UUID().uuidString,
-            relativeTo: .shared,
+            in: .group,
             contents: localContents
         )
         _ = try await ext.modifyItem(
@@ -1369,7 +1450,7 @@ struct ExtensionTests {
         let localContents = "edited locally"
         let localContentsUrl = try sandbox.createFile(
             at: UUID().uuidString,
-            relativeTo: .shared,
+            in: .group,
             contents: localContents
         )
         _ = try await ext.modifyItem(
