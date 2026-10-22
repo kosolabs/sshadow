@@ -1,6 +1,7 @@
 import Common
 import FileProvider
 import Foundation
+import Ignore
 import SwiftData
 import SwiftLibSSH
 
@@ -29,6 +30,7 @@ actor Session {
     nonisolated private let fileLog: Events<ContinuousClock>.Logger
 
     private lazy var cache = FileCache(read: read)
+    private lazy var ignores = IgnoreCache(filenames: config.ignoreFilenames)
 
     private var watched: [NSFileProviderItemIdentifier: Int] = [:]
     private var schedule: PollSchedule?
@@ -103,6 +105,42 @@ actor Session {
     }
 
     var outstanding: Int { gate.operations }
+
+    var ignoreFilenames: [String] { config.ignoreFilenames }
+
+    func isExcluded(
+        _ name: String,
+        in parentId: NSFileProviderItemIdentifier,
+        isDirectory: Bool,
+        ignoreFiles: IgnoreFiles
+    ) async throws -> Bool {
+        let parent = try await db.path(for: parentId)
+        let dirs = parent.split(separator: "/").map(String.init)
+        let branch = ignoreFiles.branch
+        guard branch == dirs else {
+            let ref = await ref(for: name, in: parentId)
+            logger.error(
+                "Ignore files are for \(String(describing: branch)), "
+                    + "expected \(dirs): \(ref)"
+            )
+            return false
+        }
+
+        ignores.update(ignoreFiles)
+
+        guard
+            let rule = ignores.rule(
+                ignoring: name,
+                in: parent,
+                isDirectory: isDirectory
+            )
+        else { return false }
+        let path = parent.isEmpty ? name : "\(parent)/\(name)"
+        logger.info(
+            "Excluded from sync: \(path) (\(rule.file ?? "global"): \(rule.original))"
+        )
+        return true
+    }
 
     func close() async {
         await sftp.close()

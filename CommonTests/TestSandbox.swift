@@ -63,9 +63,10 @@ func withConnectRetries<T>(
 }
 
 class TestSandbox {
-    enum Root {
+    enum Location {
+        case local
+        case group
         case remote
-        case shared
     }
 
     let id: UUID
@@ -73,9 +74,11 @@ class TestSandbox {
     let host: String
     let port: UInt16
     let user: String
-    let root: URL
-    let mount: URL
-    let shared: URL
+    
+    private let root: URL
+    let local: URL
+    let group: URL
+    let remote: URL
     let domain: NSFileProviderDomain
 
     private var connection: NSXPCConnection?
@@ -91,14 +94,19 @@ class TestSandbox {
 
         self.root = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString)
-        self.mount = self.root.appending(path: "mount")
+        self.local = self.root.appending(path: "local")
         try? FileManager.default.createDirectory(
-            at: self.mount,
+            at: self.local,
             withIntermediateDirectories: true
         )
-        self.shared = self.root.appending(path: "shared")
+        self.group = self.root.appending(path: "group")
         try? FileManager.default.createDirectory(
-            at: self.shared,
+            at: self.group,
+            withIntermediateDirectories: true
+        )
+        self.remote = self.root.appending(path: "remote")
+        try? FileManager.default.createDirectory(
+            at: self.remote,
             withIntermediateDirectories: true
         )
 
@@ -118,7 +126,7 @@ class TestSandbox {
                 host: host,
                 port: port,
                 user: user,
-                path: mount.path(),
+                path: remote.path(),
                 authMethod: .privateKey(
                     contents: privateKeyContents,
                     passphrase: nil
@@ -151,7 +159,7 @@ class TestSandbox {
             domainDb: DomainDB.open(
                 config: ModelConfiguration(isStoredInMemoryOnly: true)
             ),
-            sharedUrl: shared,
+            sharedUrl: group,
             signalEnumerator: { _ in },
             transfers: Transfers(),
             events: Events()
@@ -199,7 +207,7 @@ class TestSandbox {
             }
 
             let service = CoreService(supervisor: try await supervisor)
-            let client = CoreClient(domain: domain, sharedUrl: shared)
+            let client = CoreClient(domain: domain, sharedUrl: group)
 
             let connection = NSXPCConnection(
                 listenerEndpoint: try client.makeListenerEndpoint()
@@ -233,12 +241,14 @@ class TestSandbox {
         }
     }
 
-    func getUrl(for path: String, relativeTo root: Root = .remote) -> URL {
+    func getUrl(for path: String, in root: Location = .remote) -> URL {
         switch root {
+        case .local:
+            local.appending(path: path)
         case .remote:
-            mount.appending(path: path)
-        case .shared:
-            shared.appending(path: path)
+            remote.appending(path: path)
+        case .group:
+            group.appending(path: path)
         }
     }
 
@@ -286,10 +296,10 @@ class TestSandbox {
     func move(
         from src: String,
         to dest: String,
-        relativeTo: Root = .remote
+        in location: Location = .remote
     ) throws {
-        let srcUrl = getUrl(for: src, relativeTo: relativeTo)
-        let destUrl = getUrl(for: dest, relativeTo: relativeTo)
+        let srcUrl = getUrl(for: src, in: location)
+        let destUrl = getUrl(for: dest, in: location)
         try FileManager.default.moveItem(at: srcUrl, to: destUrl)
     }
 
@@ -304,12 +314,12 @@ class TestSandbox {
 
     func touch(
         _ path: String,
-        relativeTo: Root = .remote,
+        in location: Location = .remote,
         permissions: mode_t? = nil,
         modifyDate: Date? = nil
     ) throws {
         try touch(
-            getUrl(for: path, relativeTo: relativeTo),
+            getUrl(for: path, in: location),
             permissions: permissions,
             modifyDate: modifyDate
         )
@@ -364,11 +374,11 @@ class TestSandbox {
     @discardableResult
     func createFolder(
         at path: String,
-        relativeTo: Root = .remote,
+        in location: Location = .remote,
         permissions: mode_t? = nil,
         modifyDate: Date? = nil
     ) throws -> URL {
-        let folder = getUrl(for: path, relativeTo: relativeTo)
+        let folder = getUrl(for: path, in: location)
         try withAncestors(for: folder, modifyDate: modifyDate) {
             try FileManager.default.createDirectory(
                 at: folder,
@@ -382,11 +392,11 @@ class TestSandbox {
     @discardableResult
     func createSymlink(
         at path: String,
-        relativeTo: Root = .remote,
+        in location: Location = .remote,
         target: String,
         modifyDate: Date? = nil
     ) throws -> URL {
-        let link = getUrl(for: path, relativeTo: relativeTo)
+        let link = getUrl(for: path, in: location)
         try withAncestors(for: link, modifyDate: modifyDate) {
             try? FileManager.default.removeItem(at: link)
             try FileManager.default.createSymbolicLink(
@@ -401,7 +411,7 @@ class TestSandbox {
     @discardableResult
     func createFile(
         at path: String,
-        relativeTo: Root = .remote,
+        in location: Location = .remote,
         contents: String = "",
         permissions: mode_t? = nil,
         modifyDate: Date? = nil
@@ -418,7 +428,7 @@ class TestSandbox {
 
         return try createFile(
             at: path,
-            relativeTo: relativeTo,
+            in: location,
             data: data,
             permissions: permissions,
             modifyDate: modifyDate
@@ -428,12 +438,12 @@ class TestSandbox {
     @discardableResult
     func createFile(
         at path: String,
-        relativeTo: Root = .remote,
+        in location: Location = .remote,
         data: Data,
         permissions: mode_t? = nil,
         modifyDate: Date? = nil
     ) throws -> URL {
-        let file = getUrl(for: path, relativeTo: relativeTo)
+        let file = getUrl(for: path, in: location)
         try withAncestors(for: file, modifyDate: modifyDate) {
             FileManager.default.createFile(atPath: file.path(), contents: data)
             try touch(file, permissions: permissions, modifyDate: modifyDate)

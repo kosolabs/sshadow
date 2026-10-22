@@ -336,6 +336,28 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         return response.limits
     }
 
+    public func ignoreFilenames() async throws(CoreError) -> [String] {
+        let response = try await perform(IgnoreFilenamesRequest())
+        return response.filenames
+    }
+
+    public func isExcluded(
+        _ name: String,
+        in parentId: NSFileProviderItemIdentifier,
+        isDirectory: Bool,
+        ignoreFiles: IgnoreFiles
+    ) async throws(CoreError) -> Bool {
+        let response = try await perform(
+            ExcludedRequest(
+                parentId: parentId.rawValue,
+                name: name,
+                isDirectory: isDirectory,
+                ignoreFiles: ignoreFiles
+            )
+        )
+        return response.excluded
+    }
+
     public func upload(
         parentId: NSFileProviderItemIdentifier,
         name: String,
