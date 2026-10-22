@@ -665,6 +665,19 @@ struct ExtensionTests {
         #expect(!sandbox.exists(at: "parent/a.log"))
     }
 
+    @Test func createItemUsesServerCopyOfUnreadableIgnoreFile() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
+        try sandbox.createFolder(at: ".sshadowignore", in: .local)
+        let (ext, _) = try await sandbox.getExtensionAndClient()
+
+        await #expect(throws: CoreError.excludedFromSync) {
+            try await sandbox.create(file: "a.log", in: .rootContainer, with: ext)
+        }
+
+        #expect(!sandbox.exists(at: "a.log"))
+    }
+
     @Test func createSymlinkSucceeds() async throws {
         // ln -s target.md parent/symlink.md
         let oldDate = Date(timeIntervalSince1970: 1_767_225_600)

@@ -11,9 +11,12 @@ package actor Session {
     package typealias Provider =
         @Sendable (ConnectionConfig, @escaping ConnectionLostHandler)
         async throws(ConnectionError) -> Session
-    typealias ChangesDetectedHandler = @Sendable () async throws -> Void
-    package typealias ConnectionLostHandler = @Sendable (ConnectionError) async -> Void
-    typealias IdleTimeProvider = @Sendable () -> Duration
+    package typealias ChangesDetectedHandler =
+        @Sendable () async throws -> Void
+    package typealias ConnectionLostHandler =
+        @Sendable (ConnectionError) async -> Void
+    package typealias IdleTimeProvider =
+        @Sendable () -> Duration
 
     private let config: ConnectionConfig
     private let ssh: SSHClient
@@ -126,7 +129,8 @@ package actor Session {
             return false
         }
 
-        ignores.update(ignoreFiles)
+        let resolved = try await readRemote(ignoreFiles)
+        ignores.update(resolved)
 
         guard
             let rule = ignores.rule(
@@ -140,6 +144,42 @@ package actor Session {
             "Excluded from sync: \(path) (\(rule.file ?? "global"): \(rule.original))"
         )
         return true
+    }
+
+    private func readRemote(
+        _ ignoreFiles: IgnoreFiles,
+        in dir: String = ""
+    ) async throws -> IgnoreFiles {
+        var resolved = ignoreFiles
+        for (filename, file) in ignoreFiles.files where file == .remote {
+            let path = dir.isEmpty ? filename : "\(dir)/\(filename)"
+            resolved.files[filename] = try await readIgnoreFile(at: path)
+        }
+        for (name, child) in ignoreFiles.children {
+            let path = dir.isEmpty ? name : "\(dir)/\(name)"
+            resolved.children[name] = try await readRemote(child, in: path)
+        }
+        return resolved
+    }
+
+    private func readIgnoreFile(at path: String) async throws -> IgnoreFile? {
+        try await perform(
+            with: .rootContainer,
+            recording: "Read ignore file at \(path)"
+        ) {
+            () async throws -> IgnoreFile? in
+            do {
+                let data = try await sftp.withSftpFile(
+                    at: config.path(for: path),
+                    accessType: .readOnly
+                ) { file in
+                    try await file.read()
+                }
+                return .contents(String(decoding: data, as: UTF8.self))
+            } catch SSHError.sftpError(.noSuchFile, _) {
+                return nil
+            }
+        }
     }
 
     func close() async {

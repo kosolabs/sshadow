@@ -2021,6 +2021,38 @@ struct SessionTests {
             #expect(other)
         }
 
+        @Test func remoteIgnoreFileIsReadFromServer() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "src/.sshadowignore", contents: "*.o\n")
+            let session = try await sandbox.getSession()
+            let srcId = try await session.child(name: "src")
+
+            let excluded = try await session.isExcluded(
+                "out.o",
+                in: srcId,
+                isDirectory: false,
+                ignoreFiles: IgnoreFiles(children: [
+                    "src": IgnoreFiles(files: [".sshadowignore": .remote])
+                ])
+            )
+
+            #expect(excluded)
+        }
+
+        @Test func missingRemoteIgnoreFileHasNoRules() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            let excluded = try await session.isExcluded(
+                "out.o",
+                in: .rootContainer,
+                isDirectory: false,
+                ignoreFiles: IgnoreFiles(files: [".sshadowignore": .remote])
+            )
+
+            #expect(!excluded)
+        }
+
         @Test func onlyConfiguredFilenamesApply() async throws {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
