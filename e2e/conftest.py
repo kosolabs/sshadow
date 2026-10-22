@@ -25,7 +25,7 @@ from sshadow import (
 
 PREDICATE = 'subsystem BEGINSWITH "com.kosolabs.SSHadow"'
 LOG_DIR = REPO / "logs"
-TEST_KEY = REPO / "CommonTests" / "id_ed25519"
+TEST_KEY = REPO / "TestKit" / "id_ed25519"
 APPROVAL_PROFILE_NAME = "Test-E2E-Approval"
 DOMAINS_PLIST = (
     Path.home()

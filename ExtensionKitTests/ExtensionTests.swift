@@ -1,6 +1,7 @@
 import Common
 import FileProvider
 import SwiftData
+import TestKit
 import Testing
 import UniformTypeIdentifiers
 

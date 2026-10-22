@@ -1,5 +1,6 @@
 import FileProvider
 import Foundation
+import TestKit
 import Testing
 
 @testable import Common

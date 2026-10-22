@@ -5,7 +5,7 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "SessionSupervisor")
 
-actor SessionSupervisor {
+package actor SessionSupervisor {
     typealias StatusChangeHandler = @Sendable (ConnectionStatus) -> Void
     typealias ConnectTask = Task<Result<Void, ConnectionError>, Never>
     typealias ReconnectTask = Task<Void, Never>

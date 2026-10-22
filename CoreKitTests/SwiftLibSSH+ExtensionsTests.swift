@@ -2,6 +2,7 @@ import Common
 import Foundation
 import SwiftData
 import SwiftLibSSH
+import TestKit
 import Testing
 import XPC
 

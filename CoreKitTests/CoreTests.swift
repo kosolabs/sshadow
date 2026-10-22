@@ -1,5 +1,6 @@
 import Common
 import SwiftData
+import TestKit
 import Testing
 
 @testable import CoreKit

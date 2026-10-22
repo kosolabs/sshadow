@@ -7,12 +7,12 @@ import SwiftLibSSH
 
 private let logger = Logger(category: "Session")
 
-actor Session {
-    typealias Provider =
+package actor Session {
+    package typealias Provider =
         @Sendable (ConnectionConfig, @escaping ConnectionLostHandler)
         async throws(ConnectionError) -> Session
     typealias ChangesDetectedHandler = @Sendable () async throws -> Void
-    typealias ConnectionLostHandler = @Sendable (ConnectionError) async -> Void
+    package typealias ConnectionLostHandler = @Sendable (ConnectionError) async -> Void
     typealias IdleTimeProvider = @Sendable () -> Duration
 
     private let config: ConnectionConfig

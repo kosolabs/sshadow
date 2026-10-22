@@ -1,6 +1,7 @@
 import Common
 import FileProvider
 import Synchronization
+import TestKit
 import Testing
 
 @testable import CoreKit
