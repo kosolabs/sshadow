@@ -19,7 +19,7 @@ package actor Session {
     private let ssh: SSHClient
     private let sftp: SFTPClient
     private let db: DomainDB
-    private let sharedUrl: URL
+    private let groupUrl: URL
     private let changesDetectedHandler: ChangesDetectedHandler
     private let connectionLostHandler: ConnectionLostHandler
     private let idleTimeProvider: IdleTimeProvider
@@ -42,7 +42,7 @@ package actor Session {
 
     static func provider(
         domainDb: DomainDB,
-        sharedUrl: URL,
+        groupUrl: URL,
         signalEnumerator: @escaping DomainRegistry.EnumeratorSignal,
         transfers: Transfers<ContinuousClock>,
         events: Events<ContinuousClock>
@@ -54,7 +54,7 @@ package actor Session {
                 ssh: ssh,
                 sftp: sftp,
                 db: domainDb,
-                sharedUrl: sharedUrl,
+                groupUrl: groupUrl,
                 changesDetectedHandler: { try await signalEnumerator(config) },
                 connectionLostHandler: handler,
                 idleTimeProvider: SystemIdle.duration,
@@ -71,7 +71,7 @@ package actor Session {
         ssh: SSHClient,
         sftp: SFTPClient,
         db: DomainDB,
-        sharedUrl: URL = SSHadow.groupUrl,
+        groupUrl: URL = SSHadow.groupUrl,
         changesDetectedHandler: @escaping ChangesDetectedHandler,
         connectionLostHandler: @escaping ConnectionLostHandler,
         idleTimeProvider: @escaping IdleTimeProvider,
@@ -82,7 +82,7 @@ package actor Session {
         self.ssh = ssh
         self.sftp = sftp
         self.db = db
-        self.sharedUrl = sharedUrl
+        self.groupUrl = groupUrl
         self.changesDetectedHandler = changesDetectedHandler
         self.connectionLostHandler = connectionLostHandler
         self.idleTimeProvider = idleTimeProvider
@@ -932,7 +932,7 @@ package actor Session {
         defer { gate.leave() }
 
         let item = try await item(for: itemId)
-        let url = sharedUrl.appending(path: itemId.rawValue)
+        let url = groupUrl.appending(path: itemId.rawValue)
         let manifest = try await manifest(for: item)
 
         let fm = FileManager.default
@@ -1028,7 +1028,7 @@ package actor Session {
 
         let item = try await item(for: itemId)
         let file = File(item: item)
-        let url = sharedUrl.appending(path: "\(itemId.rawValue)")
+        let url = groupUrl.appending(path: "\(itemId.rawValue)")
         let slice = file.slice(for: range)
 
         logger.info("Stream \(range) -> \(slice) into \(url)")

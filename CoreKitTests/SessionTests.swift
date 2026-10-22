@@ -47,7 +47,7 @@ extension TestSandbox {
             ssh: ssh,
             sftp: sftp,
             db: db,
-            sharedUrl: group,
+            groupUrl: url(in: .group),
             changesDetectedHandler: {},
             connectionLostHandler: connectionLostHandler,
             idleTimeProvider: idleTimeProvider,
@@ -168,7 +168,7 @@ extension TestSandbox {
 
 extension TestSandbox {
     fileprivate func stagedUploads() throws -> [String] {
-        let url = getUrl(for: ".sshadow/uploads")
+        let url = url(for: ".sshadow/uploads")
         guard FileManager.default.fileExists(at: url) else { return [] }
         return try FileManager.default.contentsOfDirectory(atPath: url.path)
     }
@@ -274,7 +274,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let path = try await session.path(for: .rootContainer)
-            #expect(path == sandbox.remote.path())
+            #expect(path == sandbox.path(in: .remote))
         }
 
         @Test func pathForItemReturnsCombinedPath() async throws {
@@ -285,7 +285,7 @@ struct SessionTests {
             let folderId = try await session.child(name: "folder")
             let itemId = try await session.child(of: folderId, name: "file.txt")
             let path = try await session.path(for: itemId)
-            #expect(path == "\(sandbox.remote.path())/folder/file.txt")
+            #expect(path == sandbox.path(for: "folder/file.txt", in: .remote))
         }
 
         @Test func pathForNameInParentReturnsCombinedPath() async throws {
@@ -295,7 +295,7 @@ struct SessionTests {
 
             let folderId = try await session.child(name: "folder")
             let path = try await session.path(for: "file.txt", in: folderId)
-            #expect(path == "\(sandbox.remote.path())/folder/file.txt")
+            #expect(path == sandbox.path(for: "folder/file.txt", in: .remote))
         }
 
         @Test func pathForNameInRootReturnsCombinedPath() async throws {
@@ -307,7 +307,7 @@ struct SessionTests {
                 for: "file.txt",
                 in: .rootContainer
             )
-            #expect(path == "\(sandbox.remote.path())/file.txt")
+            #expect(path == sandbox.path(for: "file.txt", in: .remote))
         }
     }
 
@@ -2065,7 +2065,7 @@ struct SessionTests {
                 in: .group,
                 contents: "rtf"
             )
-            let source = sandbox.getUrl(for: "src.rtfd", in: .group)
+            let source = sandbox.url(for: "src.rtfd", in: .group)
             let session = try await sandbox.getSession()
 
             let item = try await session.upload(
@@ -2082,12 +2082,12 @@ struct SessionTests {
 
         @Test func uploadSmallFileSucceeds() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
             let data = "Hello, World!\n"
             try data.write(to: uploadUrl, atomically: false, encoding: .utf8)
 
             let filename = "small-file.txt"
-            let url = sandbox.getUrl(for: filename)
+            let url = sandbox.url(for: filename)
             let session = try await sandbox.getSession()
 
             let progress = Progress()
@@ -2112,12 +2112,12 @@ struct SessionTests {
 
         @Test func uploadLargeFileSucceeds() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
             let data = Data(count: 10_485_760)
             try data.write(to: uploadUrl)
 
             let filename = "large-file.txt"
-            let url = sandbox.getUrl(for: filename)
+            let url = sandbox.url(for: filename)
             let session = try await sandbox.getSession()
 
             let progress = Progress()
@@ -2145,7 +2145,7 @@ struct SessionTests {
             try sandbox.createFolder(at: "collide-upload")
             let session = try await sandbox.getSession()
 
-            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
             try Data("data".utf8).write(to: uploadUrl)
 
             await #expect(throws: CoreError.cannotSynchronize) {
@@ -2162,7 +2162,7 @@ struct SessionTests {
 
         @Test func uploadCancelledThrowsUserCancelled() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
             let data = Data(count: 10_485_760)
             try data.write(to: uploadUrl)
 
@@ -2183,7 +2183,7 @@ struct SessionTests {
 
         @Test func uploadCancelledMidwayRemovesPartialFile() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
             try Data(count: 256 << 20).write(to: uploadUrl)
             let session = try await sandbox.getSession()
 
@@ -2204,7 +2204,7 @@ struct SessionTests {
             }
             #expect(
                 !FileManager.default.fileExists(
-                    at: sandbox.getUrl(for: "partial.dat")
+                    at: sandbox.url(for: "partial.dat")
                 )
             )
             #expect(try sandbox.stagedUploads() == [])
@@ -2212,7 +2212,7 @@ struct SessionTests {
 
         @Test func closeDuringUploadLeavesNoPartialFile() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
             try Data(count: 256 << 20).write(to: uploadUrl)
             let session = try await sandbox.getSession()
 
@@ -2233,7 +2233,7 @@ struct SessionTests {
             }
             #expect(
                 !FileManager.default.fileExists(
-                    at: sandbox.getUrl(for: "partial.dat")
+                    at: sandbox.url(for: "partial.dat")
                 )
             )
         }
@@ -2243,7 +2243,7 @@ struct SessionTests {
         {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "existing.txt", contents: "original")
-            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
             try Data("replacement".utf8).write(to: uploadUrl)
             let session = try await sandbox.getSession()
 
@@ -2258,14 +2258,14 @@ struct SessionTests {
                     progress: progress
                 )
             }
-            let url = sandbox.getUrl(for: "existing.txt")
+            let url = sandbox.url(for: "existing.txt")
             #expect(try String(contentsOf: url, encoding: .utf8) == "original")
         }
 
         @Test func uploadCancelledMidwayKeepsExistingFile() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "existing.dat", contents: "original")
-            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
             try Data(count: 256 << 20).write(to: uploadUrl)
             let session = try await sandbox.getSession()
 
@@ -2291,7 +2291,7 @@ struct SessionTests {
         @Test func closeDuringUploadKeepsExistingFile() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "existing.dat", contents: "original")
-            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
             try Data(count: 256 << 20).write(to: uploadUrl)
             let session = try await sandbox.getSession()
 
@@ -2356,7 +2356,7 @@ struct SessionTests {
         {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "existing.txt", contents: "original")
-            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
             try Data("replacement".utf8).write(to: uploadUrl)
             let session = try await sandbox.getSession()
             let itemId = try await session.child(name: "existing.txt")
@@ -2386,7 +2386,7 @@ struct SessionTests {
             )
             try sandbox.touch("locked", permissions: 0o555)
             defer { try? sandbox.touch("locked", permissions: 0o755) }
-            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
             try Data("replacement".utf8).write(to: uploadUrl)
             let session = try await sandbox.getSession()
             let lockedId = try await session.child(name: "locked")
@@ -2407,7 +2407,7 @@ struct SessionTests {
 
         @Test func uploadRecreatesDeletedUploadsFolder() async throws {
             let sandbox = TestSandbox()
-            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
             try Data("contents".utf8).write(to: uploadUrl)
             let session = try await sandbox.getSession()
 
@@ -2435,7 +2435,7 @@ struct SessionTests {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: ".sshadow", contents: "not a folder")
             try sandbox.createFile(at: "existing.txt", contents: "original")
-            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
             try Data("replacement".utf8).write(to: uploadUrl)
             let session = try await sandbox.getSession()
 
@@ -2490,10 +2490,10 @@ struct SessionTests {
         @Test func uploadEmptyFileToFolderSucceeds() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFolder(at: "folder")
-            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
             try Data().write(to: uploadUrl)
 
-            let url = sandbox.getUrl(for: "folder/file.txt")
+            let url = sandbox.url(for: "folder/file.txt")
             let session = try await sandbox.getSession()
 
             let progress = Progress()
@@ -2529,7 +2529,7 @@ struct SessionTests {
                     .link(path: "broken", target: "missing"),
                 ]
             )
-            let dest = sandbox.getUrl(for: "Doc.rtfd")
+            let dest = sandbox.url(for: "Doc.rtfd")
             let session = try await sandbox.getSession()
 
             let progress = Progress()
@@ -2573,7 +2573,7 @@ struct SessionTests {
             #expect(item.kind == .package)
             #expect(try sandbox.permissions(of: "Empty.rtfd") == 0o755)
             #expect(
-                try Manifest(from: sandbox.getUrl(for: "Empty.rtfd")).entries
+                try Manifest(from: sandbox.url(for: "Empty.rtfd")).entries
                     .count == 1
             )
             #expect(progress.isFinished)
@@ -2596,7 +2596,7 @@ struct SessionTests {
                     permissions: 0o755
                 )
             }
-            let source = sandbox.getUrl(for: "Doc.rtfd", in: .group)
+            let source = sandbox.url(for: "Doc.rtfd", in: .group)
             let session = try await sandbox.getSession()
 
             await #expect(throws: CoreError.cannotSynchronize) {
@@ -2778,7 +2778,7 @@ struct SessionTests {
             #expect(item.id == itemId)
             #expect(item.kind == .package)
             #expect(
-                url == sandbox.getUrl(for: itemId.rawValue, in: .group)
+                url == sandbox.url(for: itemId.rawValue, in: .group)
             )
             #expect(try Manifest(from: url) == Manifest(from: source))
             #expect(try contents(of: url) == contents(of: source))
@@ -2829,7 +2829,7 @@ struct SessionTests {
             }
             #expect(
                 !FileManager.default.fileExists(
-                    at: sandbox.getUrl(for: itemId.rawValue, in: .group)
+                    at: sandbox.url(for: itemId.rawValue, in: .group)
                 )
             )
         }
@@ -2988,7 +2988,7 @@ struct SessionTests {
             )
             #expect(try Data(contentsOf: warmUrl).prefix(1) == old.prefix(1))
 
-            let uploadUrl = sandbox.group.appending(path: UUID().uuidString)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
             try new.write(to: uploadUrl)
             let item = try await session.upload(
                 "edited.dat",

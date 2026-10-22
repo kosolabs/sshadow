@@ -95,7 +95,7 @@ extension TestSandbox {
             host: base.host,
             port: base.port,
             user: base.user,
-            path: path.map { getUrl(for: $0).path(percentEncoded: false) }
+            path: path.map { url(for: $0).path(percentEncoded: false) }
                 ?? base.path,
             authMethod: authMethod ?? base.authMethod,
             ignoreFilenames: base.ignoreFilenames,
@@ -127,7 +127,7 @@ private let unauthorizedKey = """
     }
 
     private func path(_ name: String, in sandbox: TestSandbox) -> String {
-        sandbox.getUrl(for: name).path(percentEncoded: false)
+        sandbox.url(for: name).path(percentEncoded: false)
     }
 
     @Test func makeDirectoryOverFolderThrowsAlreadyExists() async throws {

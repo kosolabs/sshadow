@@ -40,7 +40,7 @@ struct DomainRegistryTests {
         let store = SpyDomainStore(domains: [enabled, orphan])
 
         let registry = DomainRegistry(
-            sharedUrl: FileManager.default.temporaryDirectory,
+            groupUrl: FileManager.default.temporaryDirectory,
             signalEnumerator: { _ in },
             connections: Connections(),
             transfers: Transfers(),
