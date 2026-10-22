@@ -25,7 +25,7 @@ public actor DomainRegistry {
         events: Events.shared
     )
 
-    private let sharedUrl: URL
+    private let groupUrl: URL
     private let signalEnumerator: EnumeratorSignal
     private let pollInterval: Duration?
     private let connections: Connections
@@ -39,7 +39,7 @@ public actor DomainRegistry {
     private var pending: [UUID: Task<SessionSupervisor, Error>] = [:]
 
     init(
-        sharedUrl: URL = SSHadow.groupUrl,
+        groupUrl: URL = SSHadow.groupUrl,
         signalEnumerator: @escaping EnumeratorSignal,
         pollInterval: Duration? = nil,
         connections: Connections,
@@ -55,7 +55,7 @@ public actor DomainRegistry {
             DomainDB.delete(id: $0)
         }
     ) {
-        self.sharedUrl = sharedUrl
+        self.groupUrl = groupUrl
         self.signalEnumerator = signalEnumerator
         self.pollInterval = pollInterval
         self.connections = connections
@@ -80,7 +80,7 @@ public actor DomainRegistry {
                 pollInterval: pollInterval,
                 openSession: Session.provider(
                     domainDb: domainDb,
-                    sharedUrl: sharedUrl,
+                    groupUrl: groupUrl,
                     signalEnumerator: signalEnumerator,
                     transfers: transfers,
                     events: events

@@ -19,7 +19,7 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
     public let serviceName = SSHadow.extensionServiceName
     private let domain: NSFileProviderDomain
     private let listener = NSXPCListener.anonymous()
-    private let sharedUrl: URL
+    private let groupUrl: URL
     private let state = Mutex(State.idle)
 
     private static let clients = Mutex<
@@ -40,10 +40,10 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
 
     public init(
         domain: NSFileProviderDomain,
-        sharedUrl: URL = SSHadow.groupUrl
+        groupUrl: URL = SSHadow.groupUrl
     ) {
         self.domain = domain
-        self.sharedUrl = sharedUrl
+        self.groupUrl = groupUrl
 
         super.init()
         listener.delegate = self
@@ -365,7 +365,7 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         chunkSize: UInt64 = Limits.defaultBufferSize,
         progress: Progress
     ) async throws(CoreError) -> Item {
-        let stagedUrl = sharedUrl.appending(path: UUID().uuidString)
+        let stagedUrl = groupUrl.appending(path: UUID().uuidString)
         do {
             try FileManager.default.moveItem(at: file, to: stagedUrl)
         } catch {

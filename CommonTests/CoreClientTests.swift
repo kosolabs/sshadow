@@ -174,7 +174,7 @@ struct CoreClientTests {
         let sandbox = TestSandbox()
         let client = try await sandbox.client
         let contents = "uploaded content"
-        let localFile = sandbox.group.appending(path: UUID().uuidString)
+        let localFile = sandbox.url(for: UUID().uuidString, in: .group)
         try contents.write(to: localFile, atomically: true, encoding: .utf8)
 
         let item = try await client.upload(

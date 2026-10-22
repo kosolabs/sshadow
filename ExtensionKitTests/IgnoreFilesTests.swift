@@ -13,19 +13,21 @@ struct IgnoreFilesTests {
         let sandbox = TestSandbox()
         try sandbox.createFile(
             at: ".sshadowignore",
+            in: .local,
             contents: "build/\n",
             modifyDate: date
         )
         try sandbox.createFile(
             at: "src/lib/.sshadowignore",
+            in: .local,
             contents: "*.log\n",
             modifyDate: date
         )
 
         let files = IgnoreFiles.read(
             [".sshadowignore"],
-            from: sandbox.remote,
-            to: sandbox.remote.appending(path: "src/lib")
+            from: sandbox.url(in: .local),
+            to: sandbox.url(for: "src/lib", in: .local)
         )
 
         #expect(
@@ -47,24 +49,27 @@ struct IgnoreFilesTests {
         let sandbox = TestSandbox()
         try sandbox.createFile(
             at: ".gitignore",
+            in: .local,
             contents: "a\n",
             modifyDate: date
         )
         try sandbox.createFile(
             at: ".sshadowignore",
+            in: .local,
             contents: "b\n",
             modifyDate: date
         )
         try sandbox.createFile(
             at: ".otherignore",
+            in: .local,
             contents: "c\n",
             modifyDate: date
         )
 
         let files = IgnoreFiles.read(
             [".gitignore", ".sshadowignore"],
-            from: sandbox.remote,
-            to: sandbox.remote
+            from: sandbox.url(in: .local),
+            to: sandbox.url(in: .local)
         )
 
         #expect(
@@ -78,12 +83,12 @@ struct IgnoreFilesTests {
 
     @Test func leavesUnreadableFilesToTheRemote() throws {
         let sandbox = TestSandbox()
-        try sandbox.createFolder(at: ".sshadowignore")
+        try sandbox.createFolder(at: ".sshadowignore", in: .local)
 
         let files = IgnoreFiles.read(
             [".sshadowignore"],
-            from: sandbox.remote,
-            to: sandbox.remote
+            from: sandbox.url(in: .local),
+            to: sandbox.url(in: .local)
         )
 
         #expect(files == IgnoreFiles(files: [".sshadowignore": .remote]))
@@ -94,8 +99,8 @@ struct IgnoreFilesTests {
 
         let files = IgnoreFiles.read(
             [".sshadowignore"],
-            from: sandbox.remote,
-            to: sandbox.group
+            from: sandbox.url(in: .local),
+            to: sandbox.url(in: .group)
         )
 
         #expect(files == nil)

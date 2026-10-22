@@ -74,12 +74,12 @@ package class TestSandbox {
     package let host: String
     package let port: UInt16
     package let user: String
-    
-    private let root: URL
-    package let local: URL
-    package let group: URL
-    package let remote: URL
     package let domain: NSFileProviderDomain
+
+    private let root: URL
+    private let local: URL
+    private let group: URL
+    private let remote: URL
 
     private var connection: NSXPCConnection?
     private var _supervisor: SessionSupervisor?
@@ -94,21 +94,9 @@ package class TestSandbox {
 
         self.root = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString)
-        self.local = self.root.appending(path: "local")
-        try? FileManager.default.createDirectory(
-            at: self.local,
-            withIntermediateDirectories: true
-        )
-        self.group = self.root.appending(path: "group")
-        try? FileManager.default.createDirectory(
-            at: self.group,
-            withIntermediateDirectories: true
-        )
-        self.remote = self.root.appending(path: "remote")
-        try? FileManager.default.createDirectory(
-            at: self.remote,
-            withIntermediateDirectories: true
-        )
+        self.local = mkdir("local", in: root)
+        self.group = mkdir("group", in: root)
+        self.remote = mkdir("remote", in: root)
 
         self.domain = NSFileProviderDomain(id: id, displayName: "Test")
     }
@@ -159,7 +147,7 @@ package class TestSandbox {
             domainDb: DomainDB.open(
                 config: ModelConfiguration(isStoredInMemoryOnly: true)
             ),
-            sharedUrl: group,
+            groupUrl: group,
             signalEnumerator: { _ in },
             transfers: Transfers(),
             events: Events()
@@ -207,7 +195,7 @@ package class TestSandbox {
             }
 
             let service = CoreService(supervisor: try await supervisor)
-            let client = CoreClient(domain: domain, sharedUrl: group)
+            let client = CoreClient(domain: domain, groupUrl: group)
 
             let connection = NSXPCConnection(
                 listenerEndpoint: try client.makeListenerEndpoint()
@@ -241,28 +229,37 @@ package class TestSandbox {
         }
     }
 
-    package func getUrl(for path: String, in root: Location = .remote) -> URL {
-        switch root {
-        case .local:
-            local.appending(path: path)
-        case .remote:
-            remote.appending(path: path)
-        case .group:
-            group.appending(path: path)
-        }
+    package func path(
+        for path: String = "",
+        in location: Location = .remote
+    ) -> String {
+        url(for: path, in: location).path()
+    }
+
+    package func url(
+        for path: String = "",
+        in location: Location = .remote
+    ) -> URL {
+        let base =
+            switch location {
+            case .local: local
+            case .remote: remote
+            case .group: group
+            }
+        return path.isEmpty ? base : base.appending(path: path)
     }
 
     package func exists(at path: String) -> Bool {
-        FileManager.default.fileExists(at: getUrl(for: path))
+        FileManager.default.fileExists(at: url(for: path))
     }
 
     package func size(of path: String) throws -> UInt64 {
-        try FileManager.default.size(of: getUrl(for: path))
+        try FileManager.default.size(of: url(for: path))
     }
 
     private func status(of path: String) throws -> stat {
         var status = stat()
-        guard lstat(getUrl(for: path).path(), &status) == 0 else {
+        guard lstat(url(for: path).path(), &status) == 0 else {
             throw TestSandboxError.lstat
         }
         return status
@@ -282,15 +279,15 @@ package class TestSandbox {
 
     package func target(of path: String) throws -> String {
         try FileManager.default
-            .destinationOfSymbolicLink(at: getUrl(for: path))
+            .destinationOfSymbolicLink(at: url(for: path))
     }
 
     package func contents(of path: String) throws -> String {
-        try String(contentsOf: getUrl(for: path), encoding: .utf8)
+        try String(contentsOf: url(for: path), encoding: .utf8)
     }
 
     package func data(at path: String) throws -> Data {
-        try Data(contentsOf: getUrl(for: path))
+        try Data(contentsOf: url(for: path))
     }
 
     package func move(
@@ -298,14 +295,14 @@ package class TestSandbox {
         to dest: String,
         in location: Location = .remote
     ) throws {
-        let srcUrl = getUrl(for: src, in: location)
-        let destUrl = getUrl(for: dest, in: location)
+        let srcUrl = url(for: src, in: location)
+        let destUrl = url(for: dest, in: location)
         try FileManager.default.moveItem(at: srcUrl, to: destUrl)
     }
 
     @discardableResult
     package func removeItem(at path: String) throws -> URL {
-        let url = getUrl(for: path)
+        let url = url(for: path)
         if FileManager.default.fileExists(atPath: url.path()) {
             try FileManager.default.removeItem(at: url)
         }
@@ -319,7 +316,7 @@ package class TestSandbox {
         modifyDate: Date? = nil
     ) throws {
         try touch(
-            getUrl(for: path, in: location),
+            url(for: path, in: location),
             permissions: permissions,
             modifyDate: modifyDate
         )
@@ -378,7 +375,7 @@ package class TestSandbox {
         permissions: mode_t? = nil,
         modifyDate: Date? = nil
     ) throws -> URL {
-        let folder = getUrl(for: path, in: location)
+        let folder = url(for: path, in: location)
         try withAncestors(for: folder, modifyDate: modifyDate) {
             try FileManager.default.createDirectory(
                 at: folder,
@@ -396,7 +393,7 @@ package class TestSandbox {
         target: String,
         modifyDate: Date? = nil
     ) throws -> URL {
-        let link = getUrl(for: path, in: location)
+        let link = url(for: path, in: location)
         try withAncestors(for: link, modifyDate: modifyDate) {
             try? FileManager.default.removeItem(at: link)
             try FileManager.default.createSymbolicLink(
@@ -443,13 +440,22 @@ package class TestSandbox {
         permissions: mode_t? = nil,
         modifyDate: Date? = nil
     ) throws -> URL {
-        let file = getUrl(for: path, in: location)
+        let file = url(for: path, in: location)
         try withAncestors(for: file, modifyDate: modifyDate) {
             FileManager.default.createFile(atPath: file.path(), contents: data)
             try touch(file, permissions: permissions, modifyDate: modifyDate)
         }
         return file
     }
+}
+
+private func mkdir(_ name: String, in root: URL) -> URL {
+    let url = root.appending(path: name)
+    try? FileManager.default.createDirectory(
+        at: url,
+        withIntermediateDirectories: true
+    )
+    return url
 }
 
 extension Date {

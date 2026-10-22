@@ -23,9 +23,7 @@ extension TestSandbox {
                 }
                 id = parent
             }
-            return names.reduce(self.local) {
-                $0.appending(path: $1, directoryHint: .isDirectory)
-            }
+            return self.url(for: names.joined(separator: "/"), in: .local)
         }
         return (ext, client)
     }
@@ -622,11 +620,19 @@ struct ExtensionTests {
 
     @Test func createItemMatchingLocalRuleIsExcluded() async throws {
         let sandbox = TestSandbox()
-        try sandbox.createFile(at: ".sshadowignore", in: .local, contents: "*.log\n")
+        try sandbox.createFile(
+            at: ".sshadowignore",
+            in: .local,
+            contents: "*.log\n"
+        )
         let (ext, _) = try await sandbox.getExtensionAndClient()
 
         await #expect(throws: CoreError.excludedFromSync) {
-            try await sandbox.create(file: "a.log", in: .rootContainer, with: ext)
+            try await sandbox.create(
+                file: "a.log",
+                in: .rootContainer,
+                with: ext
+            )
         }
         try await sandbox.create(file: "a.txt", in: .rootContainer, with: ext)
 
@@ -637,7 +643,11 @@ struct ExtensionTests {
     @Test func createItemInNestedFolderUsesEachLevel() async throws {
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: "parent")
-        try sandbox.createFile(at: ".sshadowignore", in: .local, contents: "*.log\n")
+        try sandbox.createFile(
+            at: ".sshadowignore",
+            in: .local,
+            contents: "*.log\n"
+        )
         try sandbox.createFile(
             at: "parent/.sshadowignore",
             in: .local,
