@@ -3,6 +3,7 @@ import FileProvider
 import Foundation
 import SwiftData
 import SwiftLibSSH
+import TestKit
 import Testing
 
 @testable import CoreKit

@@ -1,5 +1,6 @@
 import Common
 import Foundation
+import TestKit
 import Testing
 
 @testable import CoreKit

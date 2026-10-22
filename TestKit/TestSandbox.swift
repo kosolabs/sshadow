@@ -41,7 +41,7 @@ extension ConnectionError {
     }
 }
 
-func withConnectRetries<T>(
+package func withConnectRetries<T>(
     attempts: Int = 5,
     backoff: Duration = .milliseconds(100),
     _ connect: () async throws(ConnectionError) -> T
@@ -62,30 +62,30 @@ func withConnectRetries<T>(
     return try await connect()
 }
 
-class TestSandbox {
-    enum Location {
+package class TestSandbox {
+    package enum Location {
         case local
         case group
         case remote
     }
 
-    let id: UUID
-    let name: String
-    let host: String
-    let port: UInt16
-    let user: String
+    package let id: UUID
+    package let name: String
+    package let host: String
+    package let port: UInt16
+    package let user: String
     
     private let root: URL
-    let local: URL
-    let group: URL
-    let remote: URL
-    let domain: NSFileProviderDomain
+    package let local: URL
+    package let group: URL
+    package let remote: URL
+    package let domain: NSFileProviderDomain
 
     private var connection: NSXPCConnection?
     private var _supervisor: SessionSupervisor?
     private var _client: CoreClient?
 
-    init() {
+    package init() {
         self.id = UUID()
         self.name = "test"
         self.host = "localhost"
@@ -118,7 +118,7 @@ class TestSandbox {
         try? FileManager.default.removeItem(at: root)
     }
 
-    var config: ConnectionConfig {
+    package var config: ConnectionConfig {
         get throws {
             try ConnectionConfig(
                 id: id,
@@ -136,13 +136,13 @@ class TestSandbox {
         }
     }
 
-    var privateKeyContents: String {
+    package var privateKeyContents: String {
         get throws {
             try String(contentsOf: privateKeyUrl, encoding: .utf8)
         }
     }
 
-    var privateKeyUrl: URL {
+    package var privateKeyUrl: URL {
         get throws {
             try #require(
                 Bundle(for: BundleMarker.self).url(
@@ -154,7 +154,7 @@ class TestSandbox {
         }
     }
 
-    func sessionProvider() async throws -> Session.Provider {
+    package func sessionProvider() async throws -> Session.Provider {
         let provider = try await Session.provider(
             domainDb: DomainDB.open(
                 config: ModelConfiguration(isStoredInMemoryOnly: true)
@@ -172,7 +172,7 @@ class TestSandbox {
         }
     }
 
-    var supervisor: SessionSupervisor {
+    package var supervisor: SessionSupervisor {
         get async throws {
             if let _supervisor {
                 return _supervisor
@@ -196,11 +196,11 @@ class TestSandbox {
         }
     }
 
-    func pollAll() async throws {
+    package func pollAll() async throws {
         try await supervisor.withSession { try await $0.pollAll() }
     }
 
-    var client: CoreClient {
+    package var client: CoreClient {
         get async throws {
             if let _client {
                 return _client
@@ -241,7 +241,7 @@ class TestSandbox {
         }
     }
 
-    func getUrl(for path: String, in root: Location = .remote) -> URL {
+    package func getUrl(for path: String, in root: Location = .remote) -> URL {
         switch root {
         case .local:
             local.appending(path: path)
@@ -252,11 +252,11 @@ class TestSandbox {
         }
     }
 
-    func exists(at path: String) -> Bool {
+    package func exists(at path: String) -> Bool {
         FileManager.default.fileExists(at: getUrl(for: path))
     }
 
-    func size(of path: String) throws -> UInt64 {
+    package func size(of path: String) throws -> UInt64 {
         try FileManager.default.size(of: getUrl(for: path))
     }
 
@@ -268,32 +268,32 @@ class TestSandbox {
         return status
     }
 
-    func permissions(of path: String) throws -> mode_t {
+    package func permissions(of path: String) throws -> mode_t {
         try status(of: path).st_mode & 0o7777
     }
 
-    func modifyDate(of path: String) throws -> Date {
+    package func modifyDate(of path: String) throws -> Date {
         try Date(for: status(of: path).st_mtimespec)
     }
 
-    func accessDate(of path: String) throws -> Date {
+    package func accessDate(of path: String) throws -> Date {
         try Date(for: status(of: path).st_atimespec)
     }
 
-    func target(of path: String) throws -> String {
+    package func target(of path: String) throws -> String {
         try FileManager.default
             .destinationOfSymbolicLink(at: getUrl(for: path))
     }
 
-    func contents(of path: String) throws -> String {
+    package func contents(of path: String) throws -> String {
         try String(contentsOf: getUrl(for: path), encoding: .utf8)
     }
 
-    func data(at path: String) throws -> Data {
+    package func data(at path: String) throws -> Data {
         try Data(contentsOf: getUrl(for: path))
     }
 
-    func move(
+    package func move(
         from src: String,
         to dest: String,
         in location: Location = .remote
@@ -304,7 +304,7 @@ class TestSandbox {
     }
 
     @discardableResult
-    func removeItem(at path: String) throws -> URL {
+    package func removeItem(at path: String) throws -> URL {
         let url = getUrl(for: path)
         if FileManager.default.fileExists(atPath: url.path()) {
             try FileManager.default.removeItem(at: url)
@@ -312,7 +312,7 @@ class TestSandbox {
         return url
     }
 
-    func touch(
+    package func touch(
         _ path: String,
         in location: Location = .remote,
         permissions: mode_t? = nil,
@@ -372,7 +372,7 @@ class TestSandbox {
     }
 
     @discardableResult
-    func createFolder(
+    package func createFolder(
         at path: String,
         in location: Location = .remote,
         permissions: mode_t? = nil,
@@ -390,7 +390,7 @@ class TestSandbox {
     }
 
     @discardableResult
-    func createSymlink(
+    package func createSymlink(
         at path: String,
         in location: Location = .remote,
         target: String,
@@ -409,7 +409,7 @@ class TestSandbox {
     }
 
     @discardableResult
-    func createFile(
+    package func createFile(
         at path: String,
         in location: Location = .remote,
         contents: String = "",
@@ -436,7 +436,7 @@ class TestSandbox {
     }
 
     @discardableResult
-    func createFile(
+    package func createFile(
         at path: String,
         in location: Location = .remote,
         data: Data,
