@@ -2,16 +2,6 @@ import Common
 import Foundation
 
 struct SSHItem: Message, PrettyDescribable {
-    typealias Stream = AsyncSequence<SSHItem, any Error> & Sendable
-    
-    struct EmptyStream: Stream {
-        struct AsyncIterator: AsyncIteratorProtocol {
-            mutating func next() async throws -> SSHItem? { nil }
-        }
-        
-        func makeAsyncIterator() -> AsyncIterator { AsyncIterator() }
-    }
-
     let name: String
     let kind: Item.Kind
     let size: UInt64?

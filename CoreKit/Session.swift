@@ -151,7 +151,8 @@ package actor Session {
         in dir: String = ""
     ) async throws -> IgnoreFiles {
         var resolved = ignoreFiles
-        for (filename, file) in ignoreFiles.files where file == .remote {
+        for (filename, file) in ignoreFiles.files
+        where file == .remote && !ignores.knows(dir) {
             let path = dir.isEmpty ? filename : "\(dir)/\(filename)"
             resolved.files[filename] = try await readIgnoreFile(at: path)
         }
@@ -163,23 +164,8 @@ package actor Session {
     }
 
     private func readIgnoreFile(at path: String) async throws -> IgnoreFile? {
-        try await perform(
-            with: .rootContainer,
-            recording: "Read ignore file at \(path)"
-        ) {
-            () async throws -> IgnoreFile? in
-            do {
-                let data = try await sftp.withSftpFile(
-                    at: config.path(for: path),
-                    accessType: .readOnly
-                ) { file in
-                    try await file.read()
-                }
-                return .contents(String(decoding: data, as: UTF8.self))
-            } catch SSHError.sftpError(.noSuchFile, _) {
-                return nil
-            }
-        }
+        guard let data = try await read(file: path) else { return nil }
+        return .contents(String(decoding: data, as: UTF8.self))
     }
 
     func close() async {
@@ -377,12 +363,9 @@ package actor Session {
             }
         )
 
-        let sshItems = try await withEntries(of: folder.id) { entries in
-            var sshItems: [String: SSHItem] = [:]
-            for try await sshItem in entries {
-                sshItems[sshItem.name] = sshItem
-            }
-            return sshItems
+        var sshItems: [String: SSHItem] = [:]
+        for sshItem in try await entries(of: folder.id) {
+            sshItems[sshItem.name] = sshItem
         }
 
         for (name, sshItem) in sshItems {
@@ -588,11 +571,9 @@ package actor Session {
 
     private func enumerate(itemId: NSFileProviderItemIdentifier) async throws {
         await logger.info("Enumerating \(ref(for: itemId))")
-        try await withEntries(of: itemId) { entries in
-            for try await sshItem in entries {
-                try await upsert(parentId: itemId, sshItem: sshItem)
-                logger.info("Enumerate new: \(sshItem)")
-            }
+        for sshItem in try await entries(of: itemId) {
+            try await upsert(parentId: itemId, sshItem: sshItem)
+            logger.info("Enumerate new: \(sshItem)")
         }
         try await db.markEnumerated(itemId)
     }
@@ -1162,6 +1143,22 @@ package actor Session {
         }
     }
 
+    private func read(file path: String) async throws -> Data? {
+        try await perform(with: .rootContainer) {
+            do {
+                logger.info("Read \"\(path)\"")
+                return try await sftp.withSftpFile(
+                    at: config.path(for: path),
+                    accessType: .readOnly
+                ) { file in
+                    try await file.read()
+                }
+            } catch SSHError.sftpError(.noSuchFile, _) {
+                return nil
+            }
+        }
+    }
+
     private func read(
         _ itemId: NSFileProviderItemIdentifier,
         range: Range<UInt64>
@@ -1190,6 +1187,93 @@ package actor Session {
         }
     }
 
+    private func entries(
+        of itemId: NSFileProviderItemIdentifier
+    ) async throws -> [SSHItem] {
+        var listing: [SFTPAttributes]
+        do {
+            listing = try await withDirectory(for: itemId) { dir in
+                var listing: [SFTPAttributes] = []
+                for try await attrs in dir { listing.append(attrs) }
+                return listing
+            }
+        } catch CoreError.itemNotFound where itemId == .trashContainer {
+            return []
+        }
+
+        if itemId == .rootContainer {
+            listing.removeAll { $0.name == ".sshadow" }
+        }
+        listing = try await excludingIgnored(listing, in: itemId)
+
+        var entries: [SSHItem] = []
+        for attrs in listing {
+            guard let name = attrs.name else { continue }
+            entries.append(
+                try await sshItem(for: name, in: itemId, from: attrs)
+            )
+        }
+        return entries
+    }
+
+    private func excludingIgnored(
+        _ listing: [SFTPAttributes],
+        in itemId: NSFileProviderItemIdentifier
+    ) async throws -> [SFTPAttributes] {
+        guard itemId != .trashContainer, !config.ignoreFilenames.isEmpty
+        else { return listing }
+        let dir = try await db.path(for: itemId)
+        guard !dir.hasPrefix(".sshadow/") else { return listing }
+
+        let listed = Set(
+            listing.filter { $0.type != .directory }.compactMap(\.name)
+        )
+        var files: [String: IgnoreFile] = [:]
+        for filename in config.ignoreFilenames where listed.contains(filename) {
+            let path = dir.isEmpty ? filename : "\(dir)/\(filename)"
+            files[filename] = try await readIgnoreFile(at: path)
+        }
+        try await updateIgnores(files, in: dir)
+
+        return listing.filter { attrs in
+            guard let name = attrs.name,
+                let rule = ignores.rule(
+                    ignoring: name,
+                    in: dir,
+                    isDirectory: attrs.type == .directory
+                )
+            else { return true }
+            let path = dir.isEmpty ? name : "\(dir)/\(name)"
+            logger.debug(
+                "Excluded from sync: \(path) (\(rule.file ?? "global"): \(rule.original))"
+            )
+            return false
+        }
+    }
+
+    private func updateIgnores(
+        _ files: [String: IgnoreFile],
+        in dir: String
+    ) async throws {
+        let names = dir.split(separator: "/").map(String.init)
+        var levels: [[String: IgnoreFile]] = []
+        for depth in 0..<names.count {
+            let ancestor = names.prefix(depth).joined(separator: "/")
+            let known = ignores.knows(ancestor)
+            var level: [String: IgnoreFile] = [:]
+            for filename in config.ignoreFilenames {
+                let path =
+                    ancestor.isEmpty ? filename : "\(ancestor)/\(filename)"
+                level[filename] =
+                    known ? .remote : try await readIgnoreFile(at: path)
+            }
+            levels.append(level)
+        }
+        levels.append(files)
+
+        ignores.update(IgnoreFiles(branch: names, files: levels))
+    }
+
     private func withDirectory<T: Sendable>(
         for itemId: NSFileProviderItemIdentifier,
         _ work: @Sendable (SFTPDirectory) async throws -> T
@@ -1199,30 +1283,6 @@ package actor Session {
                 at: path(for: itemId),
                 perform: work
             )
-        }
-    }
-
-    private func withEntries<T: Sendable>(
-        of itemId: NSFileProviderItemIdentifier,
-        _ work: @Sendable (any SSHItem.Stream) async throws -> T
-    ) async throws -> T {
-        do {
-            return try await withDirectory(for: itemId) { dir in
-                let entries = dir.compactMap { attrs -> SSHItem? in
-                    guard let name = attrs.name else { return nil }
-                    if itemId == .rootContainer, name == ".sshadow" {
-                        return nil
-                    }
-                    return try await self.sshItem(
-                        for: name,
-                        in: itemId,
-                        from: attrs
-                    )
-                }
-                return try await work(entries)
-            }
-        } catch CoreError.itemNotFound where itemId == .trashContainer {
-            return try await work(SSHItem.EmptyStream())
         }
     }
 
