@@ -605,6 +605,77 @@ struct SessionTests {
         }
     }
 
+    struct ListIgnoreTests {
+        @Test func listExcludesIgnoredEntries() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: ".sshadowignore",
+                contents: "build/\n*.log\n"
+            )
+            try sandbox.createFolder(at: "build")
+            try sandbox.createFile(at: "debug.log")
+            try sandbox.createFile(at: "keep.txt")
+            let session = try await sandbox.getSession()
+
+            let items = try await session.list(for: .rootContainer)
+
+            #expect(Set(items.map(\.name)) == [".sshadowignore", "keep.txt"])
+        }
+
+        @Test func nestedIgnoreFileAppliesToItsDirectory() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "src/.sshadowignore", contents: "*.o\n")
+            try sandbox.createFile(at: "src/a.o")
+            try sandbox.createFile(at: "b.o")
+            let session = try await sandbox.getSession()
+            let srcId = try await session.child(name: "src")
+
+            let root = try await session.list(for: .rootContainer)
+            let src = try await session.list(for: srcId)
+
+            #expect(Set(root.map(\.name)) == ["src", "b.o"])
+            #expect(Set(src.map(\.name)) == [".sshadowignore"])
+        }
+
+        @Test func ignoredRemoteAdditionIsNoChange() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
+            let session = try await sandbox.getSession()
+
+            try sandbox.createFile(at: "new.log")
+            let changes = try await session.reconcileAll()
+
+            #expect(changes == [])
+        }
+
+        @Test func trashIsNotFiltered() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
+            try sandbox.createFile(at: ".sshadow/trash/old.log")
+            let session = try await sandbox.getSession()
+
+            let items = try await session.list(for: .trashContainer)
+
+            #expect(items.map(\.name) == ["old.log"])
+        }
+
+        @Test func uploadUsesListedRemoteIgnoreFile() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadowignore", contents: "build/\n")
+            let session = try await sandbox.getSession()
+            try sandbox.removeItem(at: ".sshadowignore")
+
+            let excluded = try await session.isExcluded(
+                "build",
+                in: .rootContainer,
+                isDirectory: true,
+                ignoreFiles: IgnoreFiles(files: [".sshadowignore": .remote])
+            )
+
+            #expect(excluded)
+        }
+    }
+
     struct ReconcileAllTests {
         let start: Date = Date(timeIntervalSince1970: 1_750_000_000)
         let end: Date = Date(timeIntervalSince1970: 1_760_000_000)

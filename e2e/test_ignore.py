@@ -55,7 +55,6 @@ def test_remote_ignore_file_applies_locally(
     wait_for_tree(remote, SYNCED, on_poll=logs.check)
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_ignored_items_stay_remote(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -89,7 +88,6 @@ def test_unignored_local_items_upload(
     wait_for_tree(remote, expected, on_poll=logs.check)
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_unignored_remote_items_download(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -237,7 +235,6 @@ def test_renaming_ignored_items_to_synced_names_uploads_them(
     wait_for_tree(remote, expected, on_poll=logs.check)
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_remote_rename_into_ignored_name_removes_local_copy(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -251,7 +248,6 @@ def test_remote_rename_into_ignored_name_removes_local_copy(
     wait_for_tree(local, {".sshadowignore": File(b"*.log\n")}, on_poll=logs.check)
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_remote_rename_out_of_ignored_name_downloads(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -307,7 +303,6 @@ def test_deleting_ignore_file_locally_unignores_items(
     wait_for_tree(remote, expected, on_poll=logs.check)
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_deleting_ignore_file_remotely_unignores_items(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
