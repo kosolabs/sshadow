@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.17.0](https://github.com/kosolabs/sshadow/compare/v0.16.5...v0.17.0) (2026-10-24)
+
+
+### Features
+
+* add ignore file names to connection settings ([#414](https://github.com/kosolabs/sshadow/issues/414)) ([7388d31](https://github.com/kosolabs/sshadow/commit/7388d31dc85420c0a638283d6792f06f4587957e))
+* do not download ignored items ([#420](https://github.com/kosolabs/sshadow/issues/420)) ([13f35ca](https://github.com/kosolabs/sshadow/commit/13f35ca95575fa151ea692237f9a1d48f24cbf85))
+* do not upload ignored items ([#416](https://github.com/kosolabs/sshadow/issues/416)) ([bacce29](https://github.com/kosolabs/sshadow/commit/bacce29a700aa73433b402932de82bd7e4dff604))
+* read ignore files that haven't been downloaded from the server ([#419](https://github.com/kosolabs/sshadow/issues/419)) ([96370b3](https://github.com/kosolabs/sshadow/commit/96370b3a6ea1f2a9d3fed00fc59f6cacc9c24c81))
+* retry excluded items when ignore rules change ([#423](https://github.com/kosolabs/sshadow/issues/423)) ([72e51c9](https://github.com/kosolabs/sshadow/commit/72e51c97eb9ffbd989099a27b718560d04f02fd7))
+* stop syncing remote changes to items that become ignored ([#424](https://github.com/kosolabs/sshadow/issues/424)) ([05fc66f](https://github.com/kosolabs/sshadow/commit/05fc66f9205fcade53c88b4395dd14eabd09f90a))
+
+
+### Bug Fixes
+
+* reconcile remote changes inside folders created locally ([#422](https://github.com/kosolabs/sshadow/issues/422)) ([ca2ef33](https://github.com/kosolabs/sshadow/commit/ca2ef33eb8ed83b8ad0a76482177d8316f02cea8))
+
 ## [0.16.5](https://github.com/kosolabs/sshadow/compare/v0.16.4...v0.16.5) (2026-10-17)
 
 
