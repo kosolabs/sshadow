@@ -538,7 +538,7 @@ public struct ExcludedRequest: CoreRequestType, PrettyDescribable {
     public let parentId: String
     public let name: String
     public let isDirectory: Bool
-    public let ignoreFiles: IgnoreFiles
+    public let ignoreFiles: IgnoreLevels
 
     public var wrapped: CoreRequest { .excluded(self) }
 
@@ -546,7 +546,7 @@ public struct ExcludedRequest: CoreRequestType, PrettyDescribable {
         parentId: String,
         name: String,
         isDirectory: Bool,
-        ignoreFiles: IgnoreFiles
+        ignoreFiles: IgnoreLevels
     ) {
         self.parentId = parentId
         self.name = name

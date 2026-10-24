@@ -345,7 +345,7 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         _ name: String,
         in parentId: NSFileProviderItemIdentifier,
         isDirectory: Bool,
-        ignoreFiles: IgnoreFiles
+        ignoreFiles: IgnoreLevels
     ) async throws(CoreError) -> Bool {
         let response = try await perform(
             ExcludedRequest(

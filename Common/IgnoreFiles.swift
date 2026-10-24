@@ -1,17 +1,7 @@
 public enum IgnoreFile: Message, PrettyDescribable {
     case contents(String)
-    case remote
+    case unresolved
 }
 
-public struct IgnoreFiles: Message, PrettyDescribable {
-    public var files: [String: IgnoreFile]
-    public var children: [String: IgnoreFiles]
-
-    public init(
-        files: [String: IgnoreFile] = [:],
-        children: [String: IgnoreFiles] = [:]
-    ) {
-        self.files = files
-        self.children = children
-    }
-}
+/// The ignore files in each folder from the root down to a parent, root first.
+public typealias IgnoreLevels = [[String: IgnoreFile]]

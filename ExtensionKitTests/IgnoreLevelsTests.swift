@@ -8,7 +8,7 @@ import Testing
 
 private let date = Date(timeIntervalSince1970: 1_767_225_600)
 
-struct IgnoreFilesTests {
+struct IgnoreLevelsTests {
     @Test func readsEachLevelFromRootToDirectory() throws {
         let sandbox = TestSandbox()
         try sandbox.createFile(
@@ -24,24 +24,18 @@ struct IgnoreFilesTests {
             modifyDate: date
         )
 
-        let files = IgnoreFiles.read(
+        let files = IgnoreLevels.read(
             [".sshadowignore"],
             from: sandbox.url(in: .local),
             to: sandbox.url(for: "src/lib", in: .local)
         )
 
         #expect(
-            files
-                == IgnoreFiles(
-                    files: [".sshadowignore": .contents("build/\n")],
-                    children: [
-                        "src": IgnoreFiles(children: [
-                            "lib": IgnoreFiles(files: [
-                                ".sshadowignore": .contents("*.log\n")
-                            ])
-                        ])
-                    ]
-                )
+            files == [
+                [".sshadowignore": .contents("build/\n")],
+                [:],
+                [".sshadowignore": .contents("*.log\n")],
+            ]
         )
     }
 
@@ -66,7 +60,7 @@ struct IgnoreFilesTests {
             modifyDate: date
         )
 
-        let files = IgnoreFiles.read(
+        let files = IgnoreLevels.read(
             [".gitignore", ".sshadowignore"],
             from: sandbox.url(in: .local),
             to: sandbox.url(in: .local)
@@ -74,30 +68,30 @@ struct IgnoreFilesTests {
 
         #expect(
             files
-                == IgnoreFiles(files: [
+                == [[
                     ".gitignore": .contents("a\n"),
                     ".sshadowignore": .contents("b\n"),
-                ])
+                ]]
         )
     }
 
-    @Test func leavesUnreadableFilesToTheRemote() throws {
+    @Test func marksUnreadableFilesUnresolved() throws {
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: ".sshadowignore", in: .local)
 
-        let files = IgnoreFiles.read(
+        let files = IgnoreLevels.read(
             [".sshadowignore"],
             from: sandbox.url(in: .local),
             to: sandbox.url(in: .local)
         )
 
-        #expect(files == IgnoreFiles(files: [".sshadowignore": .remote]))
+        #expect(files == [[".sshadowignore": .unresolved]])
     }
 
     @Test func directoryOutsideRootReadsNothing() {
         let sandbox = TestSandbox()
 
-        let files = IgnoreFiles.read(
+        let files = IgnoreLevels.read(
             [".sshadowignore"],
             from: sandbox.url(in: .local),
             to: sandbox.url(in: .group)
