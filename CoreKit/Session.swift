@@ -11,19 +11,18 @@ package actor Session {
     package typealias Provider =
         @Sendable (ConnectionConfig, @escaping ConnectionLostHandler)
         async throws(ConnectionError) -> Session
-    package typealias ChangesDetectedHandler =
-        @Sendable () async throws -> Void
+    package typealias Signal = @Sendable () async -> Void
     package typealias ConnectionLostHandler =
         @Sendable (ConnectionError) async -> Void
-    package typealias IdleTimeProvider =
-        @Sendable () -> Duration
+    package typealias IdleTimeProvider = @Sendable () -> Duration
 
     private let config: ConnectionConfig
     private let ssh: SSHClient
     private let sftp: SFTPClient
     private let db: DomainDB
     private let groupUrl: URL
-    private let changesDetectedHandler: ChangesDetectedHandler
+    private let changesDetectedHandler: Signal
+    private let ignoreRulesChangedHandler: Signal
     private let connectionLostHandler: ConnectionLostHandler
     private let idleTimeProvider: IdleTimeProvider
     private let transfers: Transfers<ContinuousClock>
@@ -46,7 +45,8 @@ package actor Session {
     static func provider(
         domainDb: DomainDB,
         groupUrl: URL,
-        signalEnumerator: @escaping DomainRegistry.EnumeratorSignal,
+        signalChanges: @escaping DomainRegistry.DomainSignal,
+        retryExcluded: @escaping DomainRegistry.DomainSignal,
         transfers: Transfers<ContinuousClock>,
         events: Events<ContinuousClock>
     ) -> Provider {
@@ -58,13 +58,15 @@ package actor Session {
                 sftp: sftp,
                 db: domainDb,
                 groupUrl: groupUrl,
-                changesDetectedHandler: { try await signalEnumerator(config) },
+                changesDetectedHandler: { await signalChanges(config) },
+                ignoreRulesChangedHandler: { await retryExcluded(config) },
                 connectionLostHandler: handler,
                 idleTimeProvider: SystemIdle.duration,
                 transfers: transfers,
                 events: events
             )
             await session.removeStaleUploads()
+            await retryExcluded(config)
             return session
         }
     }
@@ -75,7 +77,8 @@ package actor Session {
         sftp: SFTPClient,
         db: DomainDB,
         groupUrl: URL = SSHadow.groupUrl,
-        changesDetectedHandler: @escaping ChangesDetectedHandler,
+        changesDetectedHandler: @escaping Signal,
+        ignoreRulesChangedHandler: @escaping Signal,
         connectionLostHandler: @escaping ConnectionLostHandler,
         idleTimeProvider: @escaping IdleTimeProvider,
         transfers: Transfers<ContinuousClock>,
@@ -87,6 +90,7 @@ package actor Session {
         self.db = db
         self.groupUrl = groupUrl
         self.changesDetectedHandler = changesDetectedHandler
+        self.ignoreRulesChangedHandler = ignoreRulesChangedHandler
         self.connectionLostHandler = connectionLostHandler
         self.idleTimeProvider = idleTimeProvider
         self.transfers = transfers
@@ -152,10 +156,8 @@ package actor Session {
         ) {
         case .pollAll:
             try await pollAll()
-            schedule.recordPollAll(at: ContinuousClock.now)
         case .pollWatched:
             try await pollWatched()
-            schedule.recordPollWatched(at: ContinuousClock.now)
         case .wait:
             break
         }
@@ -176,6 +178,8 @@ package actor Session {
             defer { self.reconcileTask = nil }
             return try await reconcileTask.value
         }
+
+        schedule?.recordPollAll(at: ContinuousClock.now)
         guard !newChanges.isEmpty else {
             return
         }
@@ -186,7 +190,7 @@ package actor Session {
             "Polled: \(newChanges.count) change(s), anchor: \(anchor)"
         )
         log.notice("Detected \(newChanges.count) change(s) on server")
-        try await changesDetectedHandler()
+        await changesDetectedHandler()
     }
 
     func reconcileAll() async throws -> [Change] {
@@ -255,6 +259,8 @@ package actor Session {
             defer { self.reconcileTask = nil }
             return try await reconcileTask.value
         }
+
+        schedule?.recordPollWatched(at: ContinuousClock.now)
         guard !newChanges.isEmpty else {
             return
         }
@@ -265,7 +271,7 @@ package actor Session {
             "Polled: \(newChanges.count) change(s), anchor: \(anchor), items: \(watched.keys)"
         )
         log.notice("Detected \(newChanges.count) change(s) on server")
-        try await changesDetectedHandler()
+        await changesDetectedHandler()
     }
 
     func reconcileWatched() async throws -> [Change] {
@@ -1105,9 +1111,10 @@ package actor Session {
             return false
         }
 
-        try await updateIgnores(
+        let changed = try await updateIgnores(
             zip(dirs, ignoreFiles).map { (dir: $0, files: $1) }
         )
+        await ignoresChanged(changed, poll: true)
 
         guard
             let rule = ignores.rule(
@@ -1170,11 +1177,12 @@ package actor Session {
         let unresolved = Dictionary(
             config.ignoreFilenames.map { ($0, IgnoreFile.unresolved) }
         ) { first, _ in first }
-        try await updateIgnores(
+        let changed = try await updateIgnores(
             ancestors(of: dir).map {
                 (dir: $0, files: unresolved)
             } + [(dir, files)]
         )
+        await ignoresChanged(changed, poll: false)
 
         return listing.filter { attrs in
             guard let name = attrs.name,
@@ -1191,7 +1199,9 @@ package actor Session {
         }
     }
 
-    private func updateIgnores(_ levels: [FolderIgnoreFiles]) async throws {
+    private func updateIgnores(
+        _ levels: [FolderIgnoreFiles]
+    ) async throws -> [String] {
         var resolved: [FolderIgnoreFiles] = []
         for (dir, files) in levels {
             var files = files
@@ -1204,7 +1214,16 @@ package actor Session {
             }
             resolved.append((dir, files))
         }
-        ignores.update(resolved)
+        return ignores.update(resolved)
+    }
+
+    private func ignoresChanged(_ dirs: [String], poll: Bool) async {
+        guard !dirs.isEmpty else { return }
+        for dir in dirs {
+            logger.info("Ignore rules changed in \(dir.isEmpty ? "/" : dir)")
+        }
+        if poll { schedule?.requestPollAll() }
+        await ignoreRulesChangedHandler()
     }
 
     private func readIgnoreFiles(

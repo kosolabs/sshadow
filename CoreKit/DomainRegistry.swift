@@ -7,17 +7,17 @@ import SwiftLibSSH
 private let logger = Logger(category: "DomainRegistry")
 
 public actor DomainRegistry {
-    typealias EnumeratorSignal =
-        @Sendable (ConnectionConfig) async throws -> Void
+    typealias DomainSignal = @Sendable (ConnectionConfig) async -> Void
     typealias DomainLister = @Sendable () async -> [NSFileProviderDomain]
     typealias DomainRemover = @Sendable (NSFileProviderDomain) async -> Void
     typealias DomainDeleter = @Sendable (UUID) -> Void
 
     public static let shared: DomainRegistry = DomainRegistry(
-        signalEnumerator: { config in
-            try await config.domain.manager.signalEnumerator(
-                for: .workingSet
-            )
+        signalChanges: { config in
+            await config.domain.signalChanges()
+        },
+        retryExcluded: { config in
+            await config.domain.retryExcluded()
         },
         pollInterval: .seconds(300),
         connections: Connections.shared,
@@ -26,7 +26,8 @@ public actor DomainRegistry {
     )
 
     private let groupUrl: URL
-    private let signalEnumerator: EnumeratorSignal
+    private let signalChanges: DomainSignal
+    private let retryExcluded: DomainSignal
     private let pollInterval: Duration?
     private let connections: Connections
     private let transfers: Transfers<ContinuousClock>
@@ -40,7 +41,8 @@ public actor DomainRegistry {
 
     init(
         groupUrl: URL = SSHadow.groupUrl,
-        signalEnumerator: @escaping EnumeratorSignal,
+        signalChanges: @escaping DomainSignal,
+        retryExcluded: @escaping DomainSignal,
         pollInterval: Duration? = nil,
         connections: Connections,
         transfers: Transfers<ContinuousClock>,
@@ -56,7 +58,8 @@ public actor DomainRegistry {
         }
     ) {
         self.groupUrl = groupUrl
-        self.signalEnumerator = signalEnumerator
+        self.signalChanges = signalChanges
+        self.retryExcluded = retryExcluded
         self.pollInterval = pollInterval
         self.connections = connections
         self.transfers = transfers
@@ -81,7 +84,8 @@ public actor DomainRegistry {
                 openSession: Session.provider(
                     domainDb: domainDb,
                     groupUrl: groupUrl,
-                    signalEnumerator: signalEnumerator,
+                    signalChanges: signalChanges,
+                    retryExcluded: retryExcluded,
                     transfers: transfers,
                     events: events
                 ),

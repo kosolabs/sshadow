@@ -90,6 +90,25 @@ extension NSFileProviderDomain {
         }
     }
 
+    public func signalChanges() async {
+        do {
+            try await manager.signalEnumerator(for: .workingSet)
+        } catch {
+            logger.error("Failed to signal changes \(self): \(error)")
+        }
+    }
+
+    public func retryExcluded() async {
+        do {
+            try await manager.signalErrorResolved(
+                NSFileProviderError(.excludedFromSync)
+            )
+            logger.info("Retrying excluded items: \(self)")
+        } catch {
+            logger.error("Failed to retry excluded items for \(self): \(error)")
+        }
+    }
+
     public override var description: String {
         var fields = [
             "identifier: \(identifier.rawValue)",
