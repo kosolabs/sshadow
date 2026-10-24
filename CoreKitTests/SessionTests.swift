@@ -637,6 +637,31 @@ struct SessionTests {
             #expect(Set(src.map(\.name)) == [".sshadowignore"])
         }
 
+        @Test func pollRereadsChangedIgnoreFile() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
+            let session = try await sandbox.getSession()
+
+            try sandbox.createFile(at: ".sshadowignore", contents: "*.tmp\n")
+            try await session.reconcileAll()
+            let ignoreFiles: IgnoreLevels = [[".sshadowignore": .unresolved]]
+            let log = try await session.isExcluded(
+                "a.log",
+                in: .rootContainer,
+                isDirectory: false,
+                ignoreFiles: ignoreFiles
+            )
+            let tmp = try await session.isExcluded(
+                "a.tmp",
+                in: .rootContainer,
+                isDirectory: false,
+                ignoreFiles: ignoreFiles
+            )
+
+            #expect(!log)
+            #expect(tmp)
+        }
+
         @Test func ignoredRemoteAdditionIsNoChange() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
@@ -669,7 +694,7 @@ struct SessionTests {
                 "build",
                 in: .rootContainer,
                 isDirectory: true,
-                ignoreFiles: IgnoreFiles(files: [".sshadowignore": .remote])
+                ignoreFiles: [[".sshadowignore": .unresolved]]
             )
 
             #expect(excluded)
@@ -2037,9 +2062,7 @@ struct SessionTests {
                 "build",
                 in: .rootContainer,
                 isDirectory: true,
-                ignoreFiles: IgnoreFiles(files: [
-                    ".sshadowignore": text("build/\n")
-                ])
+                ignoreFiles: [[".sshadowignore": text("build/\n")]]
             )
 
             #expect(excluded)
@@ -2053,9 +2076,7 @@ struct SessionTests {
                 "build",
                 in: .rootContainer,
                 isDirectory: false,
-                ignoreFiles: IgnoreFiles(
-                    files: [".sshadowignore": text("build/\n")]
-                )
+                ignoreFiles: [[".sshadowignore": text("build/\n")]]
             )
 
             #expect(!excluded)
@@ -2066,14 +2087,10 @@ struct SessionTests {
             try sandbox.createFolder(at: "src")
             let session = try await sandbox.getSession()
             let srcId = try await session.child(name: "src")
-            let ignoreFiles = IgnoreFiles(
-                files: [".sshadowignore": text("*.log\n")],
-                children: [
-                    "src": IgnoreFiles(
-                        files: [".sshadowignore": text("!keep.log\n")]
-                    )
-                ]
-            )
+            let ignoreFiles: IgnoreLevels = [
+                [".sshadowignore": text("*.log\n")],
+                [".sshadowignore": text("!keep.log\n")],
+            ]
 
             let keep = try await session.isExcluded(
                 "keep.log",
@@ -2102,9 +2119,7 @@ struct SessionTests {
                 "out.o",
                 in: srcId,
                 isDirectory: false,
-                ignoreFiles: IgnoreFiles(children: [
-                    "src": IgnoreFiles(files: [".sshadowignore": .remote])
-                ])
+                ignoreFiles: [[:], [".sshadowignore": .unresolved]]
             )
 
             #expect(excluded)
@@ -2118,7 +2133,7 @@ struct SessionTests {
                 "out.o",
                 in: .rootContainer,
                 isDirectory: false,
-                ignoreFiles: IgnoreFiles(files: [".sshadowignore": .remote])
+                ignoreFiles: [[".sshadowignore": .unresolved]]
             )
 
             #expect(!excluded)
@@ -2132,9 +2147,7 @@ struct SessionTests {
                 "build",
                 in: .rootContainer,
                 isDirectory: true,
-                ignoreFiles: IgnoreFiles(
-                    files: [".gitignore": text("build/\n")]
-                )
+                ignoreFiles: [[".gitignore": text("build/\n")]]
             )
 
             #expect(!excluded)
@@ -2150,10 +2163,7 @@ struct SessionTests {
                 "build",
                 in: srcId,
                 isDirectory: true,
-                ignoreFiles: IgnoreFiles(
-                    files: [".sshadowignore": text("build/\n")],
-                    children: ["lib": IgnoreFiles()]
-                )
+                ignoreFiles: [[".sshadowignore": text("build/\n")], [:], [:]]
             )
 
             #expect(!excluded)

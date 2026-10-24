@@ -501,7 +501,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
 
     private func ignoreFiles(
         in parentId: NSFileProviderItemIdentifier
-    ) async throws(CoreError) -> IgnoreFiles? {
+    ) async throws(CoreError) -> IgnoreLevels? {
         guard parentId != .trashContainer else { return nil }
 
         let filenames = try await client.ignoreFilenames()
@@ -522,7 +522,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         let scoped = root.startAccessingSecurityScopedResource()
         defer { if scoped { root.stopAccessingSecurityScopedResource() } }
         guard
-            let ignoreFiles = IgnoreFiles.read(
+            let ignoreFiles = IgnoreLevels.read(
                 filenames,
                 from: root,
                 to: parent
