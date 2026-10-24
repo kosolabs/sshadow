@@ -592,15 +592,13 @@ struct SessionTests {
         @Test func listThrowsForMissingNonTrashFolder() async throws {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
-
-            let ghost = try await session.createDirectory(
-                "ghost",
-                in: .rootContainer
-            )
+            try sandbox.createFolder(at: "ghost")
+            _ = try await session.reconcileAll()
+            let ghost = try await session.child(name: "ghost")
             try sandbox.removeItem(at: "ghost")
 
-            await #expect(throws: CoreError.itemNotFound(ghost.id.rawValue)) {
-                try await session.list(for: ghost.id)
+            await #expect(throws: CoreError.itemNotFound(ghost.rawValue)) {
+                try await session.list(for: ghost)
             }
         }
     }
@@ -643,7 +641,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             try sandbox.createFile(at: ".sshadowignore", contents: "*.tmp\n")
-            try await session.reconcileAll()
+            _ = try await session.reconcileAll()
             let ignoreFiles: IgnoreLevels = [[".sshadowignore": .unresolved]]
             let log = try await session.isExcluded(
                 "a.log",
@@ -1715,6 +1713,36 @@ struct SessionTests {
             #expect(item.kind == .folder)
             let changes = try await session.reconcileAll()
             #expect(changes == [])
+        }
+
+        @Test func reconcileFindsRemoteAdditionsInCreatedDirectory()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+            _ = try await session.createDirectory("x", in: .rootContainer)
+
+            try sandbox.createFile(at: "x/child.txt", contents: "c")
+            let (updates, _) = try await session.reconcileAll().split()
+
+            #expect(updates.map(\.name) == ["child.txt"])
+        }
+
+        @Test func createDirectoryOverExistingDirectoryFindsItsChildren()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+            try sandbox.createFile(at: "x/child.txt", contents: "c")
+
+            _ = try await session.createDirectory(
+                "x",
+                in: .rootContainer,
+                ifExists: .succeed
+            )
+            let (updates, _) = try await session.reconcileAll().split()
+
+            #expect(updates.map(\.name) == ["child.txt"])
         }
 
         @Test func createDirectoryWithIfExistsSucceedOverFileThrows()

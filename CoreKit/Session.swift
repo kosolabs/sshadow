@@ -605,11 +605,13 @@ package actor Session {
                 ifExists: ifExists
             )
         }
-        return try await record(
+        let item = try await record(
             name,
             in: parentId,
             kind: .init(directoryNamed: name)
         )
+        try await db.markEnumerated(item.id)
+        return item
     }
 
     @discardableResult
