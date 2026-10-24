@@ -353,6 +353,18 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 + "options: \(options), " + "request: \(request)"
         )
 
+        let excluded =
+            item.parentItemIdentifier == .trashContainer
+            ? try await isExcluded(client.item(for: item.itemIdentifier))
+            : try await isExcluded(
+                item.filename,
+                in: item.parentItemIdentifier,
+                isDirectory: item.contentType?.conforms(to: .directory) ?? false
+            )
+        if excluded {
+            throw CoreError.excludedFromSync
+        }
+
         var remaining = changedFields
         let steps = progress.steps()
 
@@ -454,8 +466,16 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 + "request: \(request)"
         )
         return try await progress.withChild {
-            let item = try await client.item(for: identifier)
-            if item.kind.isDirectory {
+            let item: Item
+            do {
+                item = try await client.item(for: identifier)
+            } catch CoreError.itemNotFound {
+                logger.info("Already deleted: \(identifier)")
+                return
+            }
+            if try await isExcluded(item) {
+                try await client.forget(identifier)
+            } else if item.kind.isDirectory {
                 try await client.removeDirectory(for: identifier)
             } else {
                 try await client.removeFile(for: identifier)
@@ -496,6 +516,15 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             in: parentId,
             isDirectory: isDirectory,
             ignoreFiles: ignoreFiles
+        )
+    }
+
+    private func isExcluded(_ item: Item) async throws(CoreError) -> Bool {
+        guard let parentId = item.parentId else { return false }
+        return try await isExcluded(
+            item.name,
+            in: parentId,
+            isDirectory: item.kind.isDirectory
         )
     }
 

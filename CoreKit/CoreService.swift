@@ -121,6 +121,10 @@ final class CoreService: Sendable, CoreXPC {
             try await respond { session in
                 try await self.limits(session, request)
             }
+        case .forget(let request):
+            try await respond { session in
+                try await self.forget(session, request)
+            }
         case .ignoreFilenames(let request):
             try await respond { session in
                 try await self.ignoreFilenames(session, request)
@@ -357,6 +361,14 @@ final class CoreService: Sendable, CoreXPC {
         _ request: LimitsRequest
     ) async throws -> LimitsResponse {
         await LimitsResponse(limits: session.limits)
+    }
+    
+    func forget(
+        _ session: Session,
+        _ request: ForgetRequest
+    ) async throws -> ForgetResponse {
+        try await session.forget(NSFileProviderItemIdentifier(request.itemId))
+        return ForgetResponse()
     }
 
     func ignoreFilenames(
