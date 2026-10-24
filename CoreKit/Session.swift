@@ -694,6 +694,15 @@ package actor Session {
         try await db.remove(itemId)
     }
 
+    func forget(_ itemId: NSFileProviderItemIdentifier) async throws {
+        await gate.enter()
+        defer { gate.leave() }
+
+        logger.info("Kept ignored item on server: \(await ref(for: itemId))")
+        try await db.remove(itemId)
+        await cache.invalidate(itemId)
+    }
+
     func upload(
         _ name: String,
         to parentId: NSFileProviderItemIdentifier,

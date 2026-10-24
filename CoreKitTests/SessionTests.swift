@@ -2160,6 +2160,20 @@ struct SessionTests {
     }
 
     struct IsExcludedTests {
+        @Test func forgetKeepsRemoteCopy() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "b.txt", contents: "b")
+            let session = try await sandbox.getSession()
+            let bId = try await session.child(name: "b.txt")
+
+            try await session.forget(bId)
+
+            #expect(sandbox.exists(at: "b.txt"))
+            await #expect(throws: CoreError.itemNotFound(bId.rawValue)) {
+                try await session.item(for: bId)
+            }
+        }
+
         @Test func changedRulesCallHandler() async throws {
             let sandbox = TestSandbox()
             let ignoreFiles: IgnoreLevels = [

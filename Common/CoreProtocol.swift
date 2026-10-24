@@ -83,6 +83,7 @@ public enum CoreRequest: Message, PrettyDescribable {
     case removeFile(RemoveFileRequest)
     case removeDirectory(RemoveDirectoryRequest)
     case limits(LimitsRequest)
+    case forget(ForgetRequest)
     case ignoreFilenames(IgnoreFilenamesRequest)
     case excluded(ExcludedRequest)
 
@@ -516,6 +517,21 @@ public struct LimitsResponse: Message, PrettyDescribable {
     public init(limits: Limits) {
         self.limits = limits
     }
+}
+
+public struct ForgetRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = ForgetResponse
+    public let itemId: String
+
+    public var wrapped: CoreRequest { .forget(self) }
+
+    public init(itemId: String) {
+        self.itemId = itemId
+    }
+}
+
+public struct ForgetResponse: Message, PrettyDescribable {
+    public init() {}
 }
 
 public struct IgnoreFilenamesRequest: CoreRequestType, PrettyDescribable {

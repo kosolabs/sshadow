@@ -59,6 +59,40 @@ extension TestSandbox {
         )
         return item
     }
+
+    fileprivate func move(
+        _ itemId: NSFileProviderItemIdentifier,
+        to parentId: NSFileProviderItemIdentifier,
+        name: String,
+        with ext: Extension
+    ) async throws {
+        _ = try await ext.modifyItem(
+            ItemTemplate(
+                itemIdentifier: itemId,
+                parentItemIdentifier: parentId,
+                filename: name,
+                contentType: .text
+            ),
+            baseVersion: NSFileProviderItemVersion(),
+            changedFields: [.filename, .parentItemIdentifier],
+            contents: nil,
+            options: [],
+            request: NSFileProviderRequest(),
+            progress: Progress()
+        )
+    }
+
+    fileprivate func delete(
+        _ itemId: NSFileProviderItemIdentifier,
+        with ext: Extension
+    ) async throws {
+        try await ext.deleteItem(
+            identifier: itemId,
+            baseVersion: NSFileProviderItemVersion(),
+            request: NSFileProviderRequest(),
+            progress: Progress()
+        )
+    }
 }
 
 struct ExtensionTests {
@@ -676,6 +710,97 @@ struct ExtensionTests {
         }
 
         #expect(!sandbox.exists(at: "a.log"))
+    }
+
+    @Test func renamingToIgnoredNameDeletesRemoteCopy() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "a.txt", contents: "a")
+        try sandbox.createFile(
+            at: ".sshadowignore",
+            in: .local,
+            contents: "*.log\n"
+        )
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+        let aId = try await client.child(name: "a.txt")
+
+        await #expect(throws: CoreError.excludedFromSync) {
+            try await sandbox.move(aId, to: .rootContainer, name: "a.log", with: ext)
+        }
+        try await sandbox.delete(aId, with: ext)
+
+        #expect(!sandbox.exists(at: "a.txt"))
+        #expect(!sandbox.exists(at: "a.log"))
+    }
+
+    @Test func renamingWithinIgnoredFolderKeepsRemoteCopy() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "data/a.txt", contents: "a")
+        try sandbox.createFile(
+            at: ".sshadowignore",
+            in: .local,
+            contents: "data/\n"
+        )
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+        let dataId = try await client.child(name: "data")
+        let aId = try await client.child(of: dataId, name: "a.txt")
+
+        await #expect(throws: CoreError.excludedFromSync) {
+            try await sandbox.move(aId, to: dataId, name: "b.txt", with: ext)
+        }
+        try await sandbox.delete(aId, with: ext)
+
+        #expect(sandbox.exists(at: "data/a.txt"))
+        #expect(!sandbox.exists(at: "data/b.txt"))
+    }
+
+    @Test func trashingIgnoredItemKeepsRemoteCopy() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "b.txt", contents: "b")
+        try sandbox.createFile(
+            at: ".sshadowignore",
+            in: .local,
+            contents: "b.txt\n"
+        )
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+        let bId = try await client.child(name: "b.txt")
+
+        await #expect(throws: CoreError.excludedFromSync) {
+            try await sandbox.move(bId, to: .trashContainer, name: "b.txt", with: ext)
+        }
+        try await sandbox.delete(bId, with: ext)
+
+        #expect(sandbox.exists(at: "b.txt"))
+        #expect(!sandbox.exists(at: ".sshadow/trash/b.txt"))
+    }
+
+    @Test func deletingIgnoredItemKeepsRemoteCopy() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "b.txt", contents: "b")
+        try sandbox.createFile(
+            at: ".sshadowignore",
+            in: .local,
+            contents: "b.txt\n"
+        )
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+        let bId = try await client.child(name: "b.txt")
+
+        try await sandbox.delete(bId, with: ext)
+
+        #expect(sandbox.exists(at: "b.txt"))
+    }
+
+    @Test func deleteChildOfDeletedFolderSucceeds() async throws {
+        // rm -r folder, then the system deletes folder/file.txt too
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "folder/file.txt", contents: "Hello")
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+        let folderId = try await client.child(name: "folder")
+        let fileId = try await client.child(of: folderId, name: "file.txt")
+
+        try await sandbox.delete(folderId, with: ext)
+        try await sandbox.delete(fileId, with: ext)
+
+        #expect(!sandbox.exists(at: "folder"))
     }
 
     @Test func createSymlinkSucceeds() async throws {

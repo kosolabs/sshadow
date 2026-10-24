@@ -111,7 +111,6 @@ def poll_until(
     )
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_newly_ignored_items_stop_syncing(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -139,7 +138,6 @@ def test_newly_ignored_items_stop_syncing(
     assert (local / "b.txt").read_bytes() == b"local b\n"
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_deleting_ignored_item_keeps_remote_copy(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -157,7 +155,6 @@ def test_deleting_ignored_item_keeps_remote_copy(
     assert not (local / "b.txt").exists()
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_trashing_ignored_item_keeps_remote_copy(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -176,7 +173,6 @@ def test_trashing_ignored_item_keeps_remote_copy(
     assert trashed.read_bytes() == b"b\n"
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_renaming_synced_item_to_ignored_name_deletes_remote_copy(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -261,7 +257,6 @@ def test_remote_rename_out_of_ignored_name_downloads(
     wait_for_tree(local, expected, on_poll=logs.check)
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_moving_ignore_file_applies_to_both_folders(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -458,7 +453,6 @@ def test_removing_rule_locally_pushes_synced_item(
     wait_for_tree(local, expected, on_poll=logs.check)
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_removing_rule_remotely_pulls_synced_item(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -541,7 +535,6 @@ def test_removing_rule_locally_skips_items_never_downloaded(
     wait_for_tree(remote, expected, on_poll=logs.check)
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_renaming_detached_item_within_ignored_paths_keeps_remote_copy(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -562,7 +555,6 @@ def test_renaming_detached_item_within_ignored_paths_keeps_remote_copy(
     assert not (local / "data/a.txt").exists()
 
 
-@pytest.mark.skip(reason="ignore files not implemented")
 def test_remote_delete_of_detached_item_keeps_local_copy(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:

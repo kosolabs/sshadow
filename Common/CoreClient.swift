@@ -335,6 +335,12 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         let response = try await perform(LimitsRequest())
         return response.limits
     }
+    
+    public func forget(
+        _ itemId: NSFileProviderItemIdentifier
+    ) async throws(CoreError) {
+        _ = try await perform(ForgetRequest(itemId: itemId.rawValue))
+    }
 
     public func ignoreFilenames() async throws(CoreError) -> [String] {
         let response = try await perform(IgnoreFilenamesRequest())
