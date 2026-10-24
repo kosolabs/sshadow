@@ -148,7 +148,8 @@ package class TestSandbox {
                 config: ModelConfiguration(isStoredInMemoryOnly: true)
             ),
             groupUrl: group,
-            signalEnumerator: { _ in },
+            signalChanges: { _ in },
+            retryExcluded: { _ in },
             transfers: Transfers(),
             events: Events()
         )

@@ -20,6 +20,15 @@ struct PollScheduleTests {
         #expect(schedule.next(now: now, userIdle: .zero) == .wait)
     }
 
+    @Test func requestedPollAllIsDueImmediately() {
+        let schedule = schedule()
+        schedule.requestPollAll()
+        #expect(schedule.next(now: now, userIdle: .seconds(3600)) == .pollAll)
+
+        schedule.recordPollAll(at: now)
+        #expect(schedule.next(now: now, userIdle: .zero) == .wait)
+    }
+
     @Test func pollAllBecomesDueAfterInterval() {
         let schedule = schedule()
         #expect(

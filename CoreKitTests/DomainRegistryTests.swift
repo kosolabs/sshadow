@@ -41,7 +41,8 @@ struct DomainRegistryTests {
 
         let registry = DomainRegistry(
             groupUrl: FileManager.default.temporaryDirectory,
-            signalEnumerator: { _ in },
+            signalChanges: { _ in },
+            retryExcluded: { _ in },
             connections: Connections(),
             transfers: Transfers(),
             events: Events(),

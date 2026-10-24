@@ -14,24 +14,29 @@ private func text(_ contents: String) -> IgnoreFile {
 
 extension TestSandbox {
     fileprivate func getSession(
-        idleTimeProvider: @escaping Session.IdleTimeProvider =
-            SystemIdle.duration,
-        connectionLostHandler: @escaping Session.ConnectionLostHandler =
-            { _ in }
+        idleTimeProvider:
+            @escaping Session.IdleTimeProvider = SystemIdle.duration,
+        connectionLostHandler:
+            @escaping Session.ConnectionLostHandler = { _ in },
+        ignoreRulesChangedHandler:
+            @escaping Session.Signal = {}
     ) async throws -> Session {
         try await makeSession(
             idleTimeProvider: idleTimeProvider,
-            connectionLostHandler: connectionLostHandler
+            connectionLostHandler: connectionLostHandler,
+            ignoreRulesChangedHandler: ignoreRulesChangedHandler
         ).session
     }
 
     // Like `getSession`, but also hands back the underlying `SSHClient` so a
     // test can drop the transport out from under the session.
     fileprivate func makeSession(
-        idleTimeProvider: @escaping Session.IdleTimeProvider =
-            SystemIdle.duration,
-        connectionLostHandler: @escaping Session.ConnectionLostHandler =
-            { _ in }
+        idleTimeProvider:
+            @escaping Session.IdleTimeProvider = SystemIdle.duration,
+        connectionLostHandler:
+            @escaping Session.ConnectionLostHandler = { _ in },
+        ignoreRulesChangedHandler:
+            @escaping Session.Signal = {}
     ) async throws -> (session: Session, ssh: SSHClient) {
         let config = try config
         let (ssh, sftp) = try await withConnectRetries {
@@ -49,6 +54,7 @@ extension TestSandbox {
             db: db,
             groupUrl: url(in: .group),
             changesDetectedHandler: {},
+            ignoreRulesChangedHandler: ignoreRulesChangedHandler,
             connectionLostHandler: connectionLostHandler,
             idleTimeProvider: idleTimeProvider,
             transfers: Transfers(),
@@ -635,6 +641,22 @@ struct SessionTests {
             #expect(Set(src.map(\.name)) == [".sshadowignore"])
         }
 
+        @Test func remoteRuleChangeCallsHandler() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
+
+            try await confirmation { called in
+                let session = try await sandbox.getSession(
+                    ignoreRulesChangedHandler: { called() }
+                )
+                try sandbox.createFile(
+                    at: ".sshadowignore",
+                    contents: "*.tmp\n"
+                )
+                _ = try await session.reconcileAll()
+            }
+        }
+
         @Test func pollRereadsChangedIgnoreFile() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
@@ -696,6 +718,31 @@ struct SessionTests {
             )
 
             #expect(excluded)
+        }
+    }
+
+    struct ProviderTests {
+        @Test func newSessionRetriesExcludedItems() async throws {
+            let sandbox = TestSandbox()
+            let config = try sandbox.config
+
+            try await confirmation { called in
+                let provider = try await Session.provider(
+                    domainDb: DomainDB.open(
+                        config: ModelConfiguration(isStoredInMemoryOnly: true)
+                    ),
+                    groupUrl: sandbox.url(in: .group),
+                    signalChanges: { _ in },
+                    retryExcluded: { if $0.id == config.id { called() } },
+                    transfers: Transfers(),
+                    events: Events()
+                )
+                let session = try await withConnectRetries {
+                    () async throws(ConnectionError) -> Session in
+                    try await provider(config) { _ in }
+                }
+                await session.close()
+            }
         }
     }
 
@@ -2082,6 +2129,27 @@ struct SessionTests {
     }
 
     struct IsExcludedTests {
+        @Test func changedRulesCallHandler() async throws {
+            let sandbox = TestSandbox()
+            let ignoreFiles: IgnoreLevels = [
+                [".sshadowignore": .contents("build/\n")]
+            ]
+
+            try await confirmation { called in
+                let session = try await sandbox.getSession(
+                    ignoreRulesChangedHandler: { called() }
+                )
+                for _ in 0..<2 {
+                    _ = try await session.isExcluded(
+                        "build",
+                        in: .rootContainer,
+                        isDirectory: true,
+                        ignoreFiles: ignoreFiles
+                    )
+                }
+            }
+        }
+
         @Test func matchingNameIsExcluded() async throws {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
