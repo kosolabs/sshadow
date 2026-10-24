@@ -641,6 +641,37 @@ struct SessionTests {
             #expect(Set(src.map(\.name)) == [".sshadowignore"])
         }
 
+        @Test func newlyIgnoredItemsStayOnReconcile() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
+            try sandbox.createFile(at: "a.txt")
+            let session = try await sandbox.getSession()
+            let aId = try await session.child(name: "a.txt")
+
+            try sandbox.createFile(at: ".sshadowignore", contents: "*.txt\n")
+            try sandbox.createFile(at: "b.log")
+            let changes = try await session.reconcileAll()
+            let items = try await session.list(for: .rootContainer)
+
+            #expect(!changes.contains(.delete(itemId: aId.rawValue)))
+            #expect(Set(items.map(\.name)) == [".sshadowignore", "a.txt", "b.log"])
+        }
+
+        @Test func remoteEditsToIgnoredWatchedFileAreSkipped() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "b.txt", contents: "b")
+            let session = try await sandbox.getSession()
+            let bId = try await session.child(name: "b.txt")
+            await session.watch(itemId: bId)
+
+            try sandbox.createFile(at: ".sshadowignore", contents: "b.txt\n")
+            _ = try await session.reconcileAll()
+            try sandbox.createFile(at: "b.txt", contents: "remote edit")
+            let changes = try await session.reconcileWatched()
+
+            #expect(changes == [])
+        }
+
         @Test func remoteRuleChangeCallsHandler() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")

@@ -336,7 +336,9 @@ package actor Session {
             }
         }
 
+        let dir = try await db.path(for: folder.id)
         for (name, dbItem) in dbItems where sshItems[name] == nil {
+            guard !isIgnored(dbItem, in: dir) else { continue }
             logger.info("Reconcile deleted: \(dbItem)")
             try await db.remove(dbItem.id)
             await cache.invalidate(dbItem.id)
@@ -347,6 +349,12 @@ package actor Session {
     }
 
     private func reconcile(file dbItem: Item) async throws -> [Change] {
+        if let parentId = dbItem.parentId,
+            try await isIgnored(dbItem, in: db.path(for: parentId))
+        {
+            return []
+        }
+
         let attrs: SFTPAttributes
         do {
             attrs = try await attributes(for: dbItem.id)
@@ -979,7 +987,7 @@ package actor Session {
     }
 
     private func manifest(for item: Item) async throws -> Manifest {
-        guard item.kind == .folder || item.kind == .package else {
+        guard item.kind.isDirectory else {
             let kind = Manifest.Entry.Kind.file(size: item.size ?? 0)
             return try Manifest(entries: [
                 Manifest.Entry(path: "", kind: kind)
@@ -1197,6 +1205,15 @@ package actor Session {
             )
             return false
         }
+    }
+
+    private func isIgnored(_ item: Item, in dir: String) -> Bool {
+        ignores.knows(dir)
+            && ignores.rule(
+                ignoring: item.name,
+                in: dir,
+                isDirectory: item.kind.isDirectory
+            ) != nil
     }
 
     private func updateIgnores(

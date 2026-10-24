@@ -455,7 +455,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         )
         return try await progress.withChild {
             let item = try await client.item(for: identifier)
-            if item.kind == .folder || item.kind == .package {
+            if item.kind.isDirectory {
                 try await client.removeDirectory(for: identifier)
             } else {
                 try await client.removeFile(for: identifier)
