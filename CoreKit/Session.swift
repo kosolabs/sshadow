@@ -722,12 +722,9 @@ extension Session {
         let dir = try await db.path(for: itemId)
         guard !dir.hasPrefix(".sshadow/") else { return listing }
 
-        let listedFiles = Set(
-            listing.filter { $0.type != .directory }.compactMap(\.name)
-        )
-        let files = try await readIgnoreFiles(
-            named: config.ignoreFilenames.filter(listedFiles.contains),
-            in: dir
+        let (files, versions) = try await listedIgnoreFiles(
+            in: listing,
+            at: dir
         )
         let unresolved = Dictionary(
             config.ignoreFilenames.map { ($0, IgnoreFile.unresolved) }
@@ -737,6 +734,9 @@ extension Session {
                 (dir: $0, files: unresolved)
             } + [(dir, files)]
         )
+        for (filename, version) in versions {
+            ignores.record(version, of: filename, in: dir)
+        }
         await ignoresChanged(changed, poll: false)
 
         return listing.filter { attrs in
@@ -754,17 +754,34 @@ extension Session {
         }
     }
 
-    private func readIgnoreFiles(
-        named filenames: [String],
-        in dir: String
-    ) async throws -> [String: IgnoreFile] {
+    private func listedIgnoreFiles(
+        in listing: [SFTPAttributes],
+        at dir: String
+    ) async throws -> (
+        files: [String: IgnoreFile],
+        versions: [String: IgnoreFileVersion]
+    ) {
         var files: [String: IgnoreFile] = [:]
-        for filename in filenames {
-            files[filename] = try await readIgnoreFile(
-                at: subpath(filename, in: dir)
+        var versions: [String: IgnoreFileVersion] = [:]
+        for attrs in listing {
+            guard attrs.type != .directory, let name = attrs.name,
+                config.ignoreFilenames.contains(name)
+            else { continue }
+            let version = IgnoreFileVersion(
+                modifyTime: attrs.modifyTime,
+                modifyTimeNanos: attrs.modifyTimeNanos,
+                size: attrs.itemSize
             )
+            if ignores.isCurrent(name, in: dir, at: version) {
+                files[name] = .unresolved
+            } else if let file = try await readIgnoreFile(
+                at: subpath(name, in: dir)
+            ) {
+                files[name] = file
+                versions[name] = version
+            }
         }
-        return files
+        return (files, versions)
     }
 
     private func isIgnored(_ item: Item, in dir: String) -> Bool {

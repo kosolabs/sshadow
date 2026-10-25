@@ -22,6 +22,12 @@ private func branch(
     ]
 }
 
+private let version = IgnoreFileVersion(
+    modifyTime: Date(timeIntervalSince1970: 1),
+    modifyTimeNanos: nil,
+    size: 6
+)
+
 extension IgnoreCache {
     fileprivate func ignores(_ name: String, in dir: String = "") -> Bool {
         rule(ignoring: name, in: dir, isDirectory: false) != nil
@@ -205,6 +211,52 @@ struct IgnoreCacheTests {
         cache.update([("", [:]), ("src", [:])])
 
         #expect(cache.ignores("a.o", in: "srcs"))
+    }
+
+    @Test func recordedVersionIsCurrent() {
+        var cache = IgnoreCache(filenames: [ignore])
+        cache.update([("", [ignore: text("*.log\n")])])
+        cache.record(version, of: ignore, in: "")
+
+        let other = IgnoreFileVersion(
+            modifyTime: Date(timeIntervalSince1970: 2),
+            modifyTimeNanos: nil,
+            size: 6
+        )
+        #expect(cache.isCurrent(ignore, in: "", at: version))
+        #expect(!cache.isCurrent(ignore, in: "", at: other))
+        #expect(!cache.isCurrent(ignore, in: "src", at: version))
+    }
+
+    @Test func unchangedContentsKeepVersion() {
+        var cache = IgnoreCache(filenames: [ignore])
+        cache.update([("", [ignore: text("*.log\n")])])
+        cache.record(version, of: ignore, in: "")
+
+        cache.update([("", [ignore: text("*.log\n")])])
+        cache.update([("", [ignore: .unresolved])])
+
+        #expect(cache.isCurrent(ignore, in: "", at: version))
+    }
+
+    @Test func changedContentsClearVersion() {
+        var cache = IgnoreCache(filenames: [ignore])
+        cache.update([("", [ignore: text("*.log\n")])])
+        cache.record(version, of: ignore, in: "")
+
+        cache.update([("", [ignore: text("*.tmp\n")])])
+
+        #expect(!cache.isCurrent(ignore, in: "", at: version))
+    }
+
+    @Test func removedFileClearsVersion() {
+        var cache = IgnoreCache(filenames: [ignore])
+        cache.update([("", [ignore: text("*.log\n")])])
+        cache.record(version, of: ignore, in: "")
+
+        cache.update([("", [:])])
+
+        #expect(!cache.isCurrent(ignore, in: "", at: version))
     }
 
     @Test func ancestorsListParentFoldersFromTheRoot() {
