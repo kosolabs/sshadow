@@ -654,7 +654,9 @@ struct SessionTests {
             let items = try await session.list(for: .rootContainer)
 
             #expect(!changes.contains(.delete(itemId: aId.rawValue)))
-            #expect(Set(items.map(\.name)) == [".sshadowignore", "a.txt", "b.log"])
+            #expect(
+                Set(items.map(\.name)) == [".sshadowignore", "a.txt", "b.log"]
+            )
         }
 
         @Test func remoteEditsToIgnoredWatchedFileAreSkipped() async throws {
@@ -686,6 +688,29 @@ struct SessionTests {
                 )
                 _ = try await session.reconcileAll()
             }
+        }
+
+        @Test func listingSkipsIgnoreFileWithSameVersion() async throws {
+            let sandbox = TestSandbox()
+            let modified = Date(timeIntervalSince1970: 1_000_000)
+            try sandbox.createFile(
+                at: ".sshadowignore",
+                contents: "*.log\n",
+                modifyDate: modified
+            )
+            try sandbox.createFile(at: "a.log")
+            try sandbox.createFile(at: "a.tmp")
+            let session = try await sandbox.getSession()
+            _ = try await session.list(for: .rootContainer)
+
+            try sandbox.createFile(
+                at: ".sshadowignore",
+                contents: "*.tmp\n",
+                modifyDate: modified
+            )
+            let items = try await session.list(for: .rootContainer)
+
+            #expect(Set(items.map(\.name)) == [".sshadowignore", "a.tmp"])
         }
 
         @Test func pollRereadsChangedIgnoreFile() async throws {
