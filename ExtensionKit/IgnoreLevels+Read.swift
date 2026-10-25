@@ -39,12 +39,24 @@ extension IgnoreLevels {
                 files[filename] = .unresolved
             } else if let data = try? Data(contentsOf: url) {
                 files[filename] = .contents(
-                    String(decoding: data, as: UTF8.self)
+                    String(decoding: data, as: UTF8.self),
+                    version: IgnoreFile.Version(st)
                 )
             } else {
                 files[filename] = .unresolved
             }
         }
         return files
+    }
+}
+
+extension IgnoreFile.Version {
+    fileprivate init(_ st: stat) {
+        self.init(
+            modifyTime: Date(
+                timeIntervalSince1970: TimeInterval(st.st_mtimespec.tv_sec)
+            ),
+            size: UInt64(st.st_size)
+        )
     }
 }

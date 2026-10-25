@@ -134,4 +134,11 @@ extension SFTPAttributes {
     var itemSize: UInt64? {
         type == .directory ? nil : size
     }
+
+    var ignoreFileVersion: IgnoreFile.Version {
+        IgnoreFile.Version(
+            modifyTime: modifyTime ?? Date(timeIntervalSince1970: 0),
+            size: size ?? 0
+        )
+    }
 }

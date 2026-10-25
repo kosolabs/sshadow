@@ -722,10 +722,7 @@ extension Session {
         let dir = try await db.path(for: itemId)
         guard !dir.hasPrefix(".sshadow/") else { return listing }
 
-        let (files, versions) = try await listedIgnoreFiles(
-            in: listing,
-            at: dir
-        )
+        let files = try await listedIgnoreFiles(in: listing, at: dir)
         let unresolved = Dictionary(
             config.ignoreFilenames.map { ($0, IgnoreFile.unresolved) }
         ) { first, _ in first }
@@ -734,9 +731,6 @@ extension Session {
                 (dir: $0, files: unresolved)
             } + [(dir, files)]
         )
-        for (filename, version) in versions {
-            ignores.record(version, of: filename, in: dir)
-        }
         await ignoresChanged(changed, poll: false)
 
         return listing.filter { attrs in
@@ -757,31 +751,21 @@ extension Session {
     private func listedIgnoreFiles(
         in listing: [SFTPAttributes],
         at dir: String
-    ) async throws -> (
-        files: [String: IgnoreFile],
-        versions: [String: IgnoreFileVersion]
-    ) {
+    ) async throws -> [String: IgnoreFile] {
         var files: [String: IgnoreFile] = [:]
-        var versions: [String: IgnoreFileVersion] = [:]
         for attrs in listing {
             guard attrs.type != .directory, let name = attrs.name,
                 config.ignoreFilenames.contains(name)
             else { continue }
-            let version = IgnoreFileVersion(
-                modifyTime: attrs.modifyTime,
-                modifyTimeNanos: attrs.modifyTimeNanos,
-                size: attrs.itemSize
-            )
-            if ignores.isCurrent(name, in: dir, at: version) {
+            if ignores.isCurrent(name, in: dir, at: attrs.ignoreFileVersion) {
                 files[name] = .unresolved
-            } else if let file = try await readIgnoreFile(
-                at: subpath(name, in: dir)
-            ) {
-                files[name] = file
-                versions[name] = version
+            } else {
+                files[name] = try await readIgnoreFile(
+                    at: subpath(name, in: dir)
+                )
             }
         }
-        return (files, versions)
+        return files
     }
 
     private func isIgnored(_ item: Item, in dir: String) -> Bool {
@@ -821,11 +805,6 @@ extension Session {
     }
 
     private func readIgnoreFile(at path: String) async throws -> IgnoreFile? {
-        guard let data = try await read(file: path) else { return nil }
-        return .contents(String(decoding: data, as: UTF8.self))
-    }
-
-    private func read(file path: String) async throws -> Data? {
         try await perform(with: .rootContainer) {
             do {
                 logger.info("Read \"\(path)\"")
@@ -833,7 +812,12 @@ extension Session {
                     at: config.path(for: path),
                     accessType: .readOnly
                 ) { file in
-                    try await file.read()
+                    let data = try await file.read()
+                    let version = try await file.attributes().ignoreFileVersion
+                    return .contents(
+                        String(decoding: data, as: UTF8.self),
+                        version: version
+                    )
                 }
             } catch SSHError.sftpError(.noSuchFile, _) {
                 return nil
