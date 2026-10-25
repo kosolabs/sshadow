@@ -1,20 +1,13 @@
 import Common
-import Foundation
 import Ignore
 
 private let logger = Logger(category: "IgnoreCache")
 
 typealias FolderIgnoreFiles = (dir: String, files: [String: IgnoreFile])
 
-struct IgnoreFileVersion: Equatable {
-    let modifyTime: Date?
-    let modifyTimeNanos: UInt32?
-    let size: UInt64?
-}
-
 struct IgnoreCache {
     private var tree: IgnoreTree
-    private var versions: [String: IgnoreFileVersion] = [:]
+    private var versions: [String: IgnoreFile.Version] = [:]
 
     init(filenames: [String]) {
         self.tree = IgnoreTree(filenames: filenames)
@@ -29,14 +22,14 @@ struct IgnoreCache {
             var texts: [String: String] = [:]
             for (filename, file) in files {
                 switch file {
-                case .contents(let text):
+                case .contents(let text, let version):
                     texts[filename] = text
+                    versions[subpath(filename, in: dir)] = version
                 case .unresolved:
                     texts[filename] = old[filename]
                 }
             }
-            for filename in Set(old.keys).union(texts.keys)
-            where old[filename] != texts[filename] {
+            for filename in old.keys where texts[filename] == nil {
                 versions[subpath(filename, in: dir)] = nil
             }
             if tree.set(texts, in: dir), known {
@@ -46,18 +39,10 @@ struct IgnoreCache {
         return changed
     }
 
-    mutating func record(
-        _ version: IgnoreFileVersion,
-        of filename: String,
-        in dir: String
-    ) {
-        versions[subpath(filename, in: dir)] = version
-    }
-
     func isCurrent(
         _ filename: String,
         in dir: String,
-        at version: IgnoreFileVersion
+        at version: IgnoreFile.Version
     ) -> Bool {
         versions[subpath(filename, in: dir)] == version
     }

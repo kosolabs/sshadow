@@ -9,7 +9,10 @@ import Testing
 @testable import CoreKit
 
 private func text(_ contents: String) -> IgnoreFile {
-    .contents(contents)
+    .contents(
+        contents,
+        version: IgnoreFile.Version(modifyTime: .distantPast, size: 0)
+    )
 }
 
 extension TestSandbox {
@@ -2202,7 +2205,7 @@ struct SessionTests {
         @Test func changedRulesCallHandler() async throws {
             let sandbox = TestSandbox()
             let ignoreFiles: IgnoreLevels = [
-                [".sshadowignore": .contents("build/\n")]
+                [".sshadowignore": text("build/\n")]
             ]
 
             try await confirmation { called in

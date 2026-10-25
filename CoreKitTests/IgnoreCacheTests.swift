@@ -7,8 +7,11 @@ import Testing
 
 private let ignore = ".sshadowignore"
 
-private func text(_ contents: String) -> IgnoreFile {
-    .contents(contents)
+private func text(
+    _ contents: String,
+    version: IgnoreFile.Version = version
+) -> IgnoreFile {
+    .contents(contents, version: version)
 }
 
 private func branch(
@@ -22,9 +25,13 @@ private func branch(
     ]
 }
 
-private let version = IgnoreFileVersion(
+private let version = IgnoreFile.Version(
     modifyTime: Date(timeIntervalSince1970: 1),
-    modifyTimeNanos: nil,
+    size: 6
+)
+
+private let newer = IgnoreFile.Version(
+    modifyTime: Date(timeIntervalSince1970: 2),
     size: 6
 )
 
@@ -213,46 +220,37 @@ struct IgnoreCacheTests {
         #expect(cache.ignores("a.o", in: "srcs"))
     }
 
-    @Test func recordedVersionIsCurrent() {
+    @Test func contentsVersionIsCurrent() {
         var cache = IgnoreCache(filenames: [ignore])
         cache.update([("", [ignore: text("*.log\n")])])
-        cache.record(version, of: ignore, in: "")
 
-        let other = IgnoreFileVersion(
-            modifyTime: Date(timeIntervalSince1970: 2),
-            modifyTimeNanos: nil,
-            size: 6
-        )
         #expect(cache.isCurrent(ignore, in: "", at: version))
-        #expect(!cache.isCurrent(ignore, in: "", at: other))
+        #expect(!cache.isCurrent(ignore, in: "", at: newer))
         #expect(!cache.isCurrent(ignore, in: "src", at: version))
     }
 
-    @Test func unchangedContentsKeepVersion() {
+    @Test func unresolvedFileKeepsVersion() {
         var cache = IgnoreCache(filenames: [ignore])
         cache.update([("", [ignore: text("*.log\n")])])
-        cache.record(version, of: ignore, in: "")
 
-        cache.update([("", [ignore: text("*.log\n")])])
         cache.update([("", [ignore: .unresolved])])
 
         #expect(cache.isCurrent(ignore, in: "", at: version))
     }
 
-    @Test func changedContentsClearVersion() {
+    @Test func newContentsReplaceVersion() {
         var cache = IgnoreCache(filenames: [ignore])
         cache.update([("", [ignore: text("*.log\n")])])
-        cache.record(version, of: ignore, in: "")
 
-        cache.update([("", [ignore: text("*.tmp\n")])])
+        cache.update([("", [ignore: text("*.log\n", version: newer)])])
 
         #expect(!cache.isCurrent(ignore, in: "", at: version))
+        #expect(cache.isCurrent(ignore, in: "", at: newer))
     }
 
     @Test func removedFileClearsVersion() {
         var cache = IgnoreCache(filenames: [ignore])
         cache.update([("", [ignore: text("*.log\n")])])
-        cache.record(version, of: ignore, in: "")
 
         cache.update([("", [:])])
 

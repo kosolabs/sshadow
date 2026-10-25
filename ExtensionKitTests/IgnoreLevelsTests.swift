@@ -8,6 +8,16 @@ import Testing
 
 private let date = Date(timeIntervalSince1970: 1_767_225_600)
 
+private func text(_ contents: String) -> IgnoreFile {
+    .contents(
+        contents,
+        version: IgnoreFile.Version(
+            modifyTime: date,
+            size: UInt64(contents.utf8.count)
+        )
+    )
+}
+
 struct IgnoreLevelsTests {
     @Test func readsEachLevelFromRootToDirectory() throws {
         let sandbox = TestSandbox()
@@ -32,9 +42,9 @@ struct IgnoreLevelsTests {
 
         #expect(
             files == [
-                [".sshadowignore": .contents("build/\n")],
+                [".sshadowignore": text("build/\n")],
                 [:],
-                [".sshadowignore": .contents("*.log\n")],
+                [".sshadowignore": text("*.log\n")],
             ]
         )
     }
@@ -68,10 +78,12 @@ struct IgnoreLevelsTests {
 
         #expect(
             files
-                == [[
-                    ".gitignore": .contents("a\n"),
-                    ".sshadowignore": .contents("b\n"),
-                ]]
+                == [
+                    [
+                        ".gitignore": text("a\n"),
+                        ".sshadowignore": text("b\n"),
+                    ]
+                ]
         )
     }
 
