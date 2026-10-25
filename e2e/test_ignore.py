@@ -1,9 +1,31 @@
 import re
+import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 from logwatch import LogWatcher, Matcher, msg
-from sshadow import PROFILE_NAME, App, Profiles, dataless, enable, evict, trash
-from tree import Dir, File, Tree, make_tree, wait_for, wait_for_tree
+from sshadow import (
+    PROFILE_NAME,
+    App,
+    Profiles,
+    brokered,
+    connected,
+    dataless,
+    enable,
+    evict,
+    trash,
+)
+from tree import (
+    Dir,
+    File,
+    Link,
+    Tree,
+    diff_trees,
+    make_tree,
+    read_tree,
+    wait_for,
+    wait_for_tree,
+)
 
 IGNORE: Tree = {".sshadowignore": File(b"build/\n*.log\n")}
 
@@ -25,6 +47,22 @@ SYNCED: Tree = {
 
 def excluded(path: str) -> Matcher:
     return msg(rf"^Excluded from sync: {re.escape(path)} ")
+
+
+def wait_for_entries(
+    root: Path,
+    expected: Tree,
+    *,
+    timeout: float = 30,
+    on_poll: Callable[[], None] = lambda: None,
+) -> None:
+    """Like `wait_for_tree`, but ignores entries `expected` doesn't name."""
+
+    def check() -> str:
+        actual = {k: v for k, v in read_tree(root).items() if k in expected}
+        return diff_trees(actual, expected)
+
+    wait_for(check, timeout=timeout, on_poll=on_poll)
 
 
 def test_ignored_items_stay_local(
@@ -133,6 +171,23 @@ def test_newly_ignored_items_stop_syncing(
 
     assert (local / "data/a.txt").read_bytes() == b"local a\n"
     assert (local / "b.txt").read_bytes() == b"local b\n"
+
+
+def test_creating_item_inside_detached_folder_stays_local(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = enable(app, logs, profile)
+    synced: Tree = {"data": Dir(), "data/a.txt": File(b"a\n")}
+    make_tree(local, synced)
+    wait_for_tree(remote, synced, on_poll=logs.check)
+    make_tree(local, {".sshadowignore": File(b"data/\n")})
+    wait_for(lambda: "" if (remote / ".sshadowignore").exists() else "missing")
+
+    make_tree(local, {"data/new.txt": File(b"new\n")})
+    poll_until(app, logs, profile, remote, local, "marker.md")
+
+    assert not (remote / "data/new.txt").exists()
+    assert (local / "data/new.txt").read_bytes() == b"new\n"
 
 
 def test_deleting_ignored_item_keeps_remote_copy(
@@ -337,7 +392,7 @@ def detach_on_both_sides(
         }
         | local_only,
     )
-    top = sorted(both)[0]
+    top = min(both)
     logs.expect(excluded(top), timeout=30)
     make_tree(
         remote,
@@ -373,6 +428,87 @@ def test_removing_rule_locally_pushes_local_file(
     expected = {".sshadowignore": File(b"")} | MARKER | side(FILE, b"local ")
     wait_for_tree(remote, expected, on_poll=logs.check)
     wait_for_tree(local, expected, on_poll=logs.check)
+
+
+def test_renaming_detached_item_to_synced_name_uploads_it(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = detach_on_both_sides(
+        app, logs, profile, remote, b"*.log\n", FILE, {}, {}, False
+    )
+
+    (local / "x.log").rename(local / "x.txt")
+    expected = (
+        {".sshadowignore": File(b"*.log\n"), "x.txt": File(b"local x\n")}
+        | MARKER
+        | side(FILE, b"remote ")
+    )
+    wait_for_tree(remote, expected, on_poll=logs.check)
+
+
+def test_removing_rule_remotely_pushes_local_file(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = detach_on_both_sides(
+        app, logs, profile, remote, b"*.log\n", FILE, {}, {}, True
+    )
+
+    (remote / ".sshadowignore").write_bytes(b"")
+    app.send("poll", name=profile)
+    expected = {".sshadowignore": File(b"")} | MARKER | side(FILE, b"local ")
+    wait_for_tree(remote, expected, on_poll=logs.check)
+    wait_for_entries(local, side(FILE, b"local "), on_poll=logs.check)
+
+
+FOLDER: Tree = {"build": Dir(), "build/data.txt": File(b"data\n")}
+LOCAL_ONLY: Tree = {"build/local.txt": File(b"l\n")}
+REMOTE_ONLY: Tree = {"build/remote.txt": File(b"r\n")}
+LOCAL_FOLDER: Tree = side(FOLDER, b"local ") | LOCAL_ONLY
+REMOTE_FOLDER: Tree = side(FOLDER, b"remote ") | REMOTE_ONLY
+
+
+def renamed(tree: Tree, name: str) -> Tree:
+    """`tree` with its top folder renamed, as File Provider does on a collision."""
+    top = min(tree)
+    return {name + k.removeprefix(top): v for k, v in tree.items()}
+
+
+def test_removing_rule_locally_keeps_both_folders_until_one_is_deleted(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = detach_on_both_sides(
+        app, logs, profile, remote, b"build/\n", FOLDER, LOCAL_ONLY, REMOTE_ONLY, False
+    )
+
+    (local / ".sshadowignore").write_bytes(b"")
+    base = {".sshadowignore": File(b"")} | MARKER
+    expected = REMOTE_FOLDER | renamed(LOCAL_FOLDER, "build 2")
+    wait_for_entries(local, expected, timeout=60, on_poll=logs.check)
+    wait_for_tree(remote, base | REMOTE_FOLDER, on_poll=logs.check)
+
+    shutil.rmtree(local / "build")
+    wait_for_tree(remote, base | LOCAL_FOLDER, timeout=60, on_poll=logs.check)
+    wait_for_tree(local, base | LOCAL_FOLDER, on_poll=logs.check)
+
+
+def test_removing_rule_remotely_keeps_both_folders_until_one_is_deleted(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = detach_on_both_sides(
+        app, logs, profile, remote, b"build/\n", FOLDER, LOCAL_ONLY, REMOTE_ONLY, True
+    )
+
+    (remote / ".sshadowignore").write_bytes(b"")
+    app.send("poll", name=profile)
+    base = {".sshadowignore": File(b"")} | MARKER
+    expected = REMOTE_FOLDER | renamed(LOCAL_FOLDER, "build 2")
+    wait_for_entries(local, expected, timeout=60, on_poll=logs.check)
+    wait_for_tree(remote, base | REMOTE_FOLDER, on_poll=logs.check)
+
+    shutil.rmtree(local / "build 2")
+    app.send("poll", name=profile)
+    wait_for_tree(local, base | REMOTE_FOLDER, timeout=60, on_poll=logs.check)
+    wait_for_tree(remote, base | REMOTE_FOLDER, on_poll=logs.check)
 
 
 def test_removing_rule_locally_pulls_remote_edit_to_synced_item(
@@ -441,6 +577,25 @@ def test_renaming_detached_item_within_ignored_paths_keeps_remote_copy(
     assert not (local / "data/a.txt").exists()
 
 
+def test_moving_detached_item_out_of_ignored_folder_moves_remote_copy(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = enable(app, logs, profile)
+    synced: Tree = {"data": Dir(), "data/a.txt": File(b"a\n")}
+    make_tree(local, synced)
+    wait_for_tree(remote, synced, on_poll=logs.check)
+    make_tree(local, {".sshadowignore": File(b"data/\n")})
+    wait_for(lambda: "" if (remote / ".sshadowignore").exists() else "missing")
+
+    (local / "data/a.txt").rename(local / "a.txt")
+    expected: Tree = {
+        ".sshadowignore": File(b"data/\n"),
+        "data": Dir(),
+        "a.txt": File(b"a\n"),
+    }
+    wait_for_tree(remote, expected, on_poll=logs.check)
+
+
 def test_remote_delete_of_detached_item_keeps_local_copy(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -455,6 +610,49 @@ def test_remote_delete_of_detached_item_keeps_local_copy(
     poll_until(app, logs, profile, remote, local, "marker-2.md")
 
     assert (local / "data/a.txt").read_bytes() == b"a\n"
+
+
+def test_symlinks_at_ignored_paths_stay_on_their_side(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = enable(app, logs, profile)
+    synced: Tree = {".sshadowignore": File(b"*.log\n"), "a.txt": File(b"a\n")}
+    make_tree(local, synced)
+    wait_for_tree(remote, synced, on_poll=logs.check)
+
+    make_tree(remote, {"remote.log": Link("a.txt")})
+    make_tree(local, {"local.log": Link("a.txt")})
+    logs.expect(excluded("local.log"), timeout=30)
+    poll_until(app, logs, profile, remote, local, "marker.md")
+
+    assert not (remote / "local.log").is_symlink()
+    assert not (local / "remote.log").is_symlink()
+
+
+def test_removing_rule_remotely_while_quit_uploads_excluded_items(
+    app: App,
+    logs: LogWatcher,
+    profile: str,
+    remote: Path,
+    relaunch_app: Callable[[], None],
+) -> None:
+    local = enable(app, logs, profile)
+    make_tree(local, {".sshadowignore": File(b"build/\n")})
+    wait_for_tree(remote, {".sshadowignore": File(b"build/\n")}, on_poll=logs.check)
+    make_tree(local, {"build/x.o": File(b"x\n")})
+    logs.expect(excluded("build"), timeout=30)
+
+    app.quit()
+    (remote / ".sshadowignore").write_bytes(b"")
+    relaunch_app()
+    logs.expect_all([brokered(profile), connected(profile)], timeout=60)
+    app.send("poll", name=profile)
+    expected: Tree = {
+        ".sshadowignore": File(b""),
+        "build": Dir(),
+        "build/x.o": File(b"x\n"),
+    }
+    wait_for_tree(remote, expected, timeout=60, on_poll=logs.check)
 
 
 def test_later_ignore_files_take_precedence(
