@@ -42,6 +42,19 @@ package actor Session {
     private var changes: [(UInt64, [Change])] = []
     private(set) var anchor: UInt64 = 0
 
+    var limits: Limits {
+        Limits(
+            maxReadLength: sftp.limits.maxReadLength,
+            maxWriteLength: sftp.limits.maxWriteLength
+        )
+    }
+
+    var ignoreFilenames: [String] {
+        config.ignoreFilenames
+    }
+
+    var outstanding: Int { gate.operations }
+
     static func provider(
         domainDb: DomainDB,
         groupUrl: URL,
@@ -103,18 +116,11 @@ package actor Session {
         let dbPath = dbConfig?.url.path ?? "in-memory"
         logger.notice("SSH connected: \(config), DB: \(dbPath)")
     }
+}
 
-    var limits: Limits {
-        Limits(
-            maxReadLength: sftp.limits.maxReadLength,
-            maxWriteLength: sftp.limits.maxWriteLength
-        )
-    }
+// MARK: - Lifecycle
 
-    var outstanding: Int { gate.operations }
-
-    var ignoreFilenames: [String] { config.ignoreFilenames }
-
+extension Session {
     func close() async {
         await sftp.close()
         await ssh.close()
@@ -168,6 +174,104 @@ package actor Session {
         pollTask?.cancel()
         pollTask = nil
     }
+}
+
+// MARK: - Lookups
+
+extension Session {
+    func name(
+        of itemId: NSFileProviderItemIdentifier
+    ) async throws -> String {
+        try await db.name(of: itemId)
+    }
+
+    func child(
+        of parentId: NSFileProviderItemIdentifier = .rootContainer,
+        name: String
+    ) async throws -> NSFileProviderItemIdentifier {
+        try await db.child(of: parentId, name: name).id
+    }
+
+    func parent(
+        of itemId: NSFileProviderItemIdentifier
+    ) async throws -> NSFileProviderItemIdentifier {
+        try await db.parent(of: itemId).id
+    }
+
+    func item(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> Item {
+        try await db.item(for: itemId)
+    }
+
+    func list(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> [Item] {
+        await gate.enter()
+        defer { gate.leave() }
+
+        if try await !db.isEnumerated(itemId) {
+            try await enumerate(itemId: itemId)
+        }
+        return try await db.children(of: itemId)
+    }
+
+    private func enumerate(itemId: NSFileProviderItemIdentifier) async throws {
+        await logger.info("Enumerating \(ref(for: itemId))")
+        for sshItem in try await entries(of: itemId) {
+            try await upsert(parentId: itemId, sshItem: sshItem)
+            logger.info("Enumerate new: \(sshItem)")
+        }
+        try await db.markEnumerated(itemId)
+    }
+}
+
+// MARK: - Change Tracking
+
+extension Session {
+    func watch(itemId: NSFileProviderItemIdentifier) async {
+        guard itemId != .workingSet, itemId != .trashContainer else { return }
+        let ref = await ref(for: itemId)
+
+        watched[itemId, default: 0] += 1
+        schedule?.recordWatchStarted()
+
+        let newCount = watched[itemId, default: 0]
+        logger.info("Watch on \(ref): \(newCount)")
+        if newCount == 1 {
+            logger.notice("Started watching: \(ref)")
+        }
+    }
+
+    func unwatch(itemId: NSFileProviderItemIdentifier) async {
+        guard itemId != .workingSet, itemId != .trashContainer else { return }
+        guard watched[itemId] != nil else { return }
+        let ref = await ref(for: itemId)
+
+        guard let count = watched[itemId] else { return }
+        if count <= 1 {
+            watched.removeValue(forKey: itemId)
+        } else {
+            watched[itemId] = count - 1
+        }
+
+        let newCount = watched[itemId, default: 0]
+        logger.info("Unwatch on \(ref): \(newCount)")
+        if newCount == 0 {
+            logger.notice("Stopped watching: \(ref)")
+        }
+    }
+
+    func changes(since prevAnchor: UInt64) -> (UInt64, [Change]) {
+        let result =
+            changes
+            .filter { anchor, _ in anchor > prevAnchor }
+            .flatMap { _, rowChanges in rowChanges }
+
+        changes.removeAll { anchor, _ in anchor <= prevAnchor }
+
+        return (anchor, result)
+    }
 
     func pollAll() async throws {
         let newChanges = try await gate.reconcile {
@@ -211,39 +315,6 @@ package actor Session {
         }
 
         return allChanges
-    }
-
-    func watch(itemId: NSFileProviderItemIdentifier) async {
-        guard itemId != .workingSet, itemId != .trashContainer else { return }
-        let ref = await ref(for: itemId)
-
-        watched[itemId, default: 0] += 1
-        schedule?.recordWatchStarted()
-
-        let newCount = watched[itemId, default: 0]
-        logger.info("Watch on \(ref): \(newCount)")
-        if newCount == 1 {
-            logger.notice("Started watching: \(ref)")
-        }
-    }
-
-    func unwatch(itemId: NSFileProviderItemIdentifier) async {
-        guard itemId != .workingSet, itemId != .trashContainer else { return }
-        guard watched[itemId] != nil else { return }
-        let ref = await ref(for: itemId)
-
-        guard let count = watched[itemId] else { return }
-        if count <= 1 {
-            watched.removeValue(forKey: itemId)
-        } else {
-            watched[itemId] = count - 1
-        }
-
-        let newCount = watched[itemId, default: 0]
-        logger.info("Unwatch on \(ref): \(newCount)")
-        if newCount == 0 {
-            logger.notice("Stopped watching: \(ref)")
-        }
     }
 
     func pollWatched() async throws {
@@ -302,6 +373,33 @@ package actor Session {
         return allChanges
     }
 
+    private func reconcile(file dbItem: Item) async throws -> [Change] {
+        if let parentId = dbItem.parentId,
+            try await isIgnored(dbItem, in: db.path(for: parentId))
+        {
+            return []
+        }
+
+        let attrs: SFTPAttributes
+        do {
+            attrs = try await attributes(for: dbItem.id)
+        } catch CoreError.itemNotFound {
+            logger.info("Reconcile deleted: \(dbItem)")
+            try await db.remove(dbItem.id)
+            await cache.invalidate(dbItem.id)
+            watched.removeValue(forKey: dbItem.id)
+            return [.delete(itemId: dbItem.rawId)]
+        }
+
+        guard let parentId = dbItem.parentId else { return [] }
+        let sshItem = try await sshItem(
+            for: dbItem.name,
+            in: parentId,
+            from: attrs
+        )
+        return try await reconcile(dbItem, against: sshItem, parentId: parentId)
+    }
+
     private func reconcile(folder: Item) async throws -> ([Change], [Item]) {
         var changes: [Change] = []
         var remainder: [Item] = []
@@ -346,33 +444,6 @@ package actor Session {
         }
 
         return (changes, remainder)
-    }
-
-    private func reconcile(file dbItem: Item) async throws -> [Change] {
-        if let parentId = dbItem.parentId,
-            try await isIgnored(dbItem, in: db.path(for: parentId))
-        {
-            return []
-        }
-
-        let attrs: SFTPAttributes
-        do {
-            attrs = try await attributes(for: dbItem.id)
-        } catch CoreError.itemNotFound {
-            logger.info("Reconcile deleted: \(dbItem)")
-            try await db.remove(dbItem.id)
-            await cache.invalidate(dbItem.id)
-            watched.removeValue(forKey: dbItem.id)
-            return [.delete(itemId: dbItem.rawId)]
-        }
-
-        guard let parentId = dbItem.parentId else { return [] }
-        let sshItem = try await sshItem(
-            for: dbItem.name,
-            in: parentId,
-            from: attrs
-        )
-        return try await reconcile(dbItem, against: sshItem, parentId: parentId)
     }
 
     private func reconcile(
@@ -430,111 +501,11 @@ package actor Session {
         anchor = max(now, anchor + 1)
         changes.append((anchor, newChanges))
     }
+}
 
-    func changes(since prevAnchor: UInt64) -> (UInt64, [Change]) {
-        let result =
-            changes
-            .filter { anchor, _ in anchor > prevAnchor }
-            .flatMap { _, rowChanges in rowChanges }
+// MARK: - Mutations
 
-        changes.removeAll { anchor, _ in anchor <= prevAnchor }
-
-        return (anchor, result)
-    }
-
-    func ref(for itemId: NSFileProviderItemIdentifier) async -> Ref {
-        Ref(
-            path: try? await db.path(for: itemId),
-            anchor: .item(id: itemId.rawValue)
-        )
-    }
-
-    func ref(
-        for name: String,
-        in parentId: NSFileProviderItemIdentifier
-    ) async -> Ref {
-        Ref(
-            path: try? await db.path(for: name, in: parentId),
-            anchor: .parent(id: parentId.rawValue)
-        )
-    }
-
-    func name(
-        of itemId: NSFileProviderItemIdentifier
-    ) async throws -> String {
-        try await db.name(of: itemId)
-    }
-
-    func child(
-        of parentId: NSFileProviderItemIdentifier = .rootContainer,
-        name: String
-    ) async throws -> NSFileProviderItemIdentifier {
-        try await db.child(of: parentId, name: name).id
-    }
-
-    func parent(
-        of itemId: NSFileProviderItemIdentifier
-    ) async throws -> NSFileProviderItemIdentifier {
-        try await db.parent(of: itemId).id
-    }
-
-    func path(
-        for itemId: NSFileProviderItemIdentifier
-    ) async throws -> String {
-        try await config.path(for: db.path(for: itemId))
-    }
-
-    func path(
-        for name: String,
-        in parentId: NSFileProviderItemIdentifier
-    ) async throws -> String {
-        try await config.path(for: db.path(for: name, in: parentId))
-    }
-
-    func item(
-        for itemId: NSFileProviderItemIdentifier
-    ) async throws -> Item {
-        try await db.item(for: itemId)
-    }
-
-    func list(
-        for itemId: NSFileProviderItemIdentifier
-    ) async throws -> [Item] {
-        await gate.enter()
-        defer { gate.leave() }
-
-        if try await !db.isEnumerated(itemId) {
-            try await enumerate(itemId: itemId)
-        }
-        return try await db.children(of: itemId)
-    }
-
-    @discardableResult
-    func upsert(
-        parentId: NSFileProviderItemIdentifier,
-        sshItem: SSHItem
-    ) async throws -> Item {
-        try await db.upsert(
-            parentId: parentId,
-            name: sshItem.name,
-            kind: sshItem.kind,
-            size: sshItem.size,
-            flags: sshItem.flags,
-            accessTime: sshItem.accessTime,
-            modifyTime: sshItem.modifyTime,
-            createTime: sshItem.createTime
-        )
-    }
-
-    private func enumerate(itemId: NSFileProviderItemIdentifier) async throws {
-        await logger.info("Enumerating \(ref(for: itemId))")
-        for sshItem in try await entries(of: itemId) {
-            try await upsert(parentId: itemId, sshItem: sshItem)
-            logger.info("Enumerate new: \(sshItem)")
-        }
-        try await db.markEnumerated(itemId)
-    }
-
+extension Session {
     @discardableResult
     func setAttributes(
         for itemId: NSFileProviderItemIdentifier,
@@ -702,7 +673,161 @@ package actor Session {
         try await db.remove(itemId)
         await cache.invalidate(itemId)
     }
+}
 
+// MARK: - Ignore Rules
+
+extension Session {
+    func isExcluded(
+        _ name: String,
+        in parentId: NSFileProviderItemIdentifier,
+        isDirectory: Bool,
+        ignoreFiles: IgnoreLevels
+    ) async throws -> Bool {
+        let parent = try await db.path(for: parentId)
+        let dirs = ancestors(of: parent) + [parent]
+        guard ignoreFiles.count == dirs.count else {
+            let ref = await ref(for: name, in: parentId)
+            logger.error(
+                "Ignore files are for \(ignoreFiles.count) folders, "
+                    + "expected \(dirs.count): \(ref)"
+            )
+            return false
+        }
+
+        let changed = try await updateIgnores(
+            zip(dirs, ignoreFiles).map { (dir: $0, files: $1) }
+        )
+        await ignoresChanged(changed, poll: true)
+
+        guard
+            let rule = ignores.rule(
+                ignoring: name,
+                in: parent,
+                isDirectory: isDirectory
+            )
+        else { return false }
+        logger.info(
+            "Excluded from sync: \(subpath(name, in: parent)) (\(rule.source))"
+        )
+        return true
+    }
+
+    private func excludingIgnored(
+        _ listing: [SFTPAttributes],
+        in itemId: NSFileProviderItemIdentifier
+    ) async throws -> [SFTPAttributes] {
+        guard itemId != .trashContainer, !config.ignoreFilenames.isEmpty
+        else { return listing }
+        let dir = try await db.path(for: itemId)
+        guard !dir.hasPrefix(".sshadow/") else { return listing }
+
+        let listedFiles = Set(
+            listing.filter { $0.type != .directory }.compactMap(\.name)
+        )
+        let files = try await readIgnoreFiles(
+            named: config.ignoreFilenames.filter(listedFiles.contains),
+            in: dir
+        )
+        let unresolved = Dictionary(
+            config.ignoreFilenames.map { ($0, IgnoreFile.unresolved) }
+        ) { first, _ in first }
+        let changed = try await updateIgnores(
+            ancestors(of: dir).map {
+                (dir: $0, files: unresolved)
+            } + [(dir, files)]
+        )
+        await ignoresChanged(changed, poll: false)
+
+        return listing.filter { attrs in
+            guard let name = attrs.name,
+                let rule = ignores.rule(
+                    ignoring: name,
+                    in: dir,
+                    isDirectory: attrs.type == .directory
+                )
+            else { return true }
+            logger.debug(
+                "Excluded from sync: \(subpath(name, in: dir)) (\(rule.source))"
+            )
+            return false
+        }
+    }
+
+    private func readIgnoreFiles(
+        named filenames: [String],
+        in dir: String
+    ) async throws -> [String: IgnoreFile] {
+        var files: [String: IgnoreFile] = [:]
+        for filename in filenames {
+            files[filename] = try await readIgnoreFile(
+                at: subpath(filename, in: dir)
+            )
+        }
+        return files
+    }
+
+    private func isIgnored(_ item: Item, in dir: String) -> Bool {
+        ignores.knows(dir)
+            && ignores.rule(
+                ignoring: item.name,
+                in: dir,
+                isDirectory: item.kind.isDirectory
+            ) != nil
+    }
+
+    private func updateIgnores(
+        _ levels: [FolderIgnoreFiles]
+    ) async throws -> [String] {
+        var resolved: [FolderIgnoreFiles] = []
+        for (dir, files) in levels {
+            var files = files
+            if !ignores.knows(dir) {
+                for (filename, file) in files where file == .unresolved {
+                    files[filename] = try await readIgnoreFile(
+                        at: subpath(filename, in: dir)
+                    )
+                }
+            }
+            resolved.append((dir, files))
+        }
+        return ignores.update(resolved)
+    }
+
+    private func ignoresChanged(_ dirs: [String], poll: Bool) async {
+        guard !dirs.isEmpty else { return }
+        for dir in dirs {
+            logger.info("Ignore rules changed in \(dir.isEmpty ? "/" : dir)")
+        }
+        if poll { schedule?.requestPollAll() }
+        await ignoreRulesChangedHandler()
+    }
+
+    private func readIgnoreFile(at path: String) async throws -> IgnoreFile? {
+        guard let data = try await read(file: path) else { return nil }
+        return .contents(String(decoding: data, as: UTF8.self))
+    }
+
+    private func read(file path: String) async throws -> Data? {
+        try await perform(with: .rootContainer) {
+            do {
+                logger.info("Read \"\(path)\"")
+                return try await sftp.withSftpFile(
+                    at: config.path(for: path),
+                    accessType: .readOnly
+                ) { file in
+                    try await file.read()
+                }
+            } catch SSHError.sftpError(.noSuchFile, _) {
+                return nil
+            }
+        }
+    }
+}
+
+// MARK: - Transfers
+
+extension Session {
     func upload(
         _ name: String,
         to parentId: NSFileProviderItemIdentifier,
@@ -851,67 +976,6 @@ package actor Session {
         }
     }
 
-    func removeStaleUploads(
-        olderThan age: TimeInterval = 24 * 60 * 60
-    ) async {
-        let cutoff = Date.now.addingTimeInterval(-age)
-        let stale: [(String, Manifest.Entry.Kind)]
-        do {
-            stale = try await sftp.withDirectory(at: stagingPath) { dir in
-                var stale: [(String, Manifest.Entry.Kind)] = []
-                for try await attrs in dir {
-                    guard let name = attrs.name,
-                        let modifyTime = attrs.modifyTime,
-                        modifyTime < cutoff
-                    else { continue }
-                    let kind: Manifest.Entry.Kind =
-                        attrs.type == .directory ? .folder : .file(size: 0)
-                    stale.append((name, kind))
-                }
-                return stale
-            }
-        } catch SSHError.sftpError(.noSuchFile, _) {
-            return
-        } catch {
-            logger.error("Failed to list \(stagingPath): \(error)")
-            return
-        }
-        for (name, kind) in stale {
-            await removeStaged(name, kind: kind)
-        }
-    }
-
-    private func removeStaged(
-        _ name: String,
-        kind: Manifest.Entry.Kind
-    ) async {
-        let path = stagingPath(name)
-        do {
-            if kind == .folder {
-                try await sftp.removeDirectoryRecursively(at: path)
-            } else {
-                try await sftp.removeFile(at: path)
-            }
-            logger.notice("Removed staged upload: \(path)")
-        } catch SSHError.sftpError(.noSuchFile, _) {
-            return
-        } catch {
-            logger.error("Failed to remove staged upload \(path): \(error)")
-        }
-    }
-
-    private func stagingName() -> String {
-        UUID().uuidString
-    }
-
-    private var stagingPath: String {
-        config.path(for: ".sshadow/uploads")
-    }
-
-    private func stagingPath(_ name: String) -> String {
-        "\(stagingPath)/\(name)"
-    }
-
     func download(
         itemId: NSFileProviderItemIdentifier,
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
@@ -1057,6 +1121,165 @@ package actor Session {
         return (url, slice.byteRange)
     }
 
+    func removeStaleUploads(
+        olderThan age: TimeInterval = 24 * 60 * 60
+    ) async {
+        let cutoff = Date.now.addingTimeInterval(-age)
+        let stale: [(String, Manifest.Entry.Kind)]
+        do {
+            stale = try await sftp.withDirectory(at: stagingPath) { dir in
+                var stale: [(String, Manifest.Entry.Kind)] = []
+                for try await attrs in dir {
+                    guard let name = attrs.name,
+                        let modifyTime = attrs.modifyTime,
+                        modifyTime < cutoff
+                    else { continue }
+                    let kind: Manifest.Entry.Kind =
+                        attrs.type == .directory ? .folder : .file(size: 0)
+                    stale.append((name, kind))
+                }
+                return stale
+            }
+        } catch SSHError.sftpError(.noSuchFile, _) {
+            return
+        } catch {
+            logger.error("Failed to list \(stagingPath): \(error)")
+            return
+        }
+        for (name, kind) in stale {
+            await removeStaged(name, kind: kind)
+        }
+    }
+
+    private func removeStaged(
+        _ name: String,
+        kind: Manifest.Entry.Kind
+    ) async {
+        let path = stagingPath(name)
+        do {
+            if kind == .folder {
+                try await sftp.removeDirectoryRecursively(at: path)
+            } else {
+                try await sftp.removeFile(at: path)
+            }
+            logger.notice("Removed staged upload: \(path)")
+        } catch SSHError.sftpError(.noSuchFile, _) {
+            return
+        } catch {
+            logger.error("Failed to remove staged upload \(path): \(error)")
+        }
+    }
+
+    private func stagingName() -> String {
+        UUID().uuidString
+    }
+
+    private var stagingPath: String {
+        config.path(for: ".sshadow/uploads")
+    }
+
+    private func stagingPath(_ name: String) -> String {
+        "\(stagingPath)/\(name)"
+    }
+
+    private func performTransfer(
+        with itemId: NSFileProviderItemIdentifier,
+        recording message: LogMessage,
+        estimator: ThroughputEstimator,
+        progress: Progress,
+        _ work: () async throws -> Void
+    ) async throws {
+        logger.info(message.debug)
+        defer { estimator.finalize() }
+        do {
+            try await perform(with: itemId, work)
+            fileLog.info(message.display, detail: progress.report)
+        } catch CoreError.userCancelled {
+            logger.info("Cancelled: \(message.debug)")
+            fileLog.info(message.display, detail: "Cancelled")
+            throw CoreError.userCancelled
+        } catch {
+            logger.error("Failed: \(message.debug): \(error)")
+            fileLog.error(message.display, detail: error.localizedDescription)
+            throw error
+        }
+    }
+
+    private func transferProgressReporter(
+        for transfer: Transfer
+    ) -> ThrottledProgressReporter {
+        ThrottledProgressReporter(
+            frequency: TimeInterval(0.2),
+            onUpdate: { _ in transfer.update() },
+            onFinalize: { _ in transfer.update() }
+        )
+    }
+
+    private func loggingProgressReporter(
+        _ message: LogMessage
+    ) -> ThrottledProgressReporter {
+        ThrottledProgressReporter(
+            frequency: TimeInterval(1.0),
+            onUpdate: {
+                logger.debug("\(message.debug): \($0.report)")
+            },
+            onFinalize: {
+                logger.info("Finished: \(message.debug): \($0.report)")
+            }
+        )
+    }
+}
+
+// MARK: - Shared Plumbing
+
+extension Session {
+    func ref(for itemId: NSFileProviderItemIdentifier) async -> Ref {
+        Ref(
+            path: try? await db.path(for: itemId),
+            anchor: .item(id: itemId.rawValue)
+        )
+    }
+
+    func ref(
+        for name: String,
+        in parentId: NSFileProviderItemIdentifier
+    ) async -> Ref {
+        Ref(
+            path: try? await db.path(for: name, in: parentId),
+            anchor: .parent(id: parentId.rawValue)
+        )
+    }
+
+    func path(
+        for itemId: NSFileProviderItemIdentifier
+    ) async throws -> String {
+        try await config.path(for: db.path(for: itemId))
+    }
+
+    func path(
+        for name: String,
+        in parentId: NSFileProviderItemIdentifier
+    ) async throws -> String {
+        try await config.path(for: db.path(for: name, in: parentId))
+    }
+
+    @discardableResult
+    func upsert(
+        parentId: NSFileProviderItemIdentifier,
+        sshItem: SSHItem
+    ) async throws -> Item {
+        try await db.upsert(
+            parentId: parentId,
+            name: sshItem.name,
+            kind: sshItem.kind,
+            size: sshItem.size,
+            flags: sshItem.flags,
+            accessTime: sshItem.accessTime,
+            modifyTime: sshItem.modifyTime,
+            createTime: sshItem.createTime
+        )
+    }
+
     private func record(
         _ name: String,
         in parentId: NSFileProviderItemIdentifier,
@@ -1074,6 +1297,18 @@ package actor Session {
             modifyTime: attrs.modifyTime,
             createTime: attrs.createTime
         )
+    }
+
+    private func attributes(
+        for name: String,
+        in parentId: NSFileProviderItemIdentifier
+    ) async throws -> SFTPAttributes {
+        try await perform(with: parentId) {
+            try await sftp.attributes(
+                at: path(for: name, in: parentId),
+                followSymlinks: false
+            )
+        }
     }
 
     private func refresh(_ itemId: NSFileProviderItemIdentifier) async throws {
@@ -1097,53 +1332,6 @@ package actor Session {
                 followSymlinks: false
             )
         }
-    }
-
-    private func attributes(
-        for name: String,
-        in parentId: NSFileProviderItemIdentifier
-    ) async throws -> SFTPAttributes {
-        try await perform(with: parentId) {
-            try await sftp.attributes(
-                at: path(for: name, in: parentId),
-                followSymlinks: false
-            )
-        }
-    }
-
-    func isExcluded(
-        _ name: String,
-        in parentId: NSFileProviderItemIdentifier,
-        isDirectory: Bool,
-        ignoreFiles: IgnoreLevels
-    ) async throws -> Bool {
-        let parent = try await db.path(for: parentId)
-        let dirs = ancestors(of: parent) + [parent]
-        guard ignoreFiles.count == dirs.count else {
-            let ref = await ref(for: name, in: parentId)
-            logger.error(
-                "Ignore files are for \(ignoreFiles.count) folders, "
-                    + "expected \(dirs.count): \(ref)"
-            )
-            return false
-        }
-
-        let changed = try await updateIgnores(
-            zip(dirs, ignoreFiles).map { (dir: $0, files: $1) }
-        )
-        await ignoresChanged(changed, poll: true)
-
-        guard
-            let rule = ignores.rule(
-                ignoring: name,
-                in: parent,
-                isDirectory: isDirectory
-            )
-        else { return false }
-        logger.info(
-            "Excluded from sync: \(subpath(name, in: parent)) (\(rule.source))"
-        )
-        return true
     }
 
     private func entries(
@@ -1173,145 +1361,6 @@ package actor Session {
             )
         }
         return entries
-    }
-
-    private func excludingIgnored(
-        _ listing: [SFTPAttributes],
-        in itemId: NSFileProviderItemIdentifier
-    ) async throws -> [SFTPAttributes] {
-        guard itemId != .trashContainer, !config.ignoreFilenames.isEmpty
-        else { return listing }
-        let dir = try await db.path(for: itemId)
-        guard !dir.hasPrefix(".sshadow/") else { return listing }
-
-        let listedFiles = Set(
-            listing.filter { $0.type != .directory }.compactMap(\.name)
-        )
-        let files = try await readIgnoreFiles(
-            named: config.ignoreFilenames.filter(listedFiles.contains),
-            in: dir
-        )
-        let unresolved = Dictionary(
-            config.ignoreFilenames.map { ($0, IgnoreFile.unresolved) }
-        ) { first, _ in first }
-        let changed = try await updateIgnores(
-            ancestors(of: dir).map {
-                (dir: $0, files: unresolved)
-            } + [(dir, files)]
-        )
-        await ignoresChanged(changed, poll: false)
-
-        return listing.filter { attrs in
-            guard let name = attrs.name,
-                let rule = ignores.rule(
-                    ignoring: name,
-                    in: dir,
-                    isDirectory: attrs.type == .directory
-                )
-            else { return true }
-            logger.debug(
-                "Excluded from sync: \(subpath(name, in: dir)) (\(rule.source))"
-            )
-            return false
-        }
-    }
-
-    private func isIgnored(_ item: Item, in dir: String) -> Bool {
-        ignores.knows(dir)
-            && ignores.rule(
-                ignoring: item.name,
-                in: dir,
-                isDirectory: item.kind.isDirectory
-            ) != nil
-    }
-
-    private func updateIgnores(
-        _ levels: [FolderIgnoreFiles]
-    ) async throws -> [String] {
-        var resolved: [FolderIgnoreFiles] = []
-        for (dir, files) in levels {
-            var files = files
-            if !ignores.knows(dir) {
-                for (filename, file) in files where file == .unresolved {
-                    files[filename] = try await readIgnoreFile(
-                        at: subpath(filename, in: dir)
-                    )
-                }
-            }
-            resolved.append((dir, files))
-        }
-        return ignores.update(resolved)
-    }
-
-    private func ignoresChanged(_ dirs: [String], poll: Bool) async {
-        guard !dirs.isEmpty else { return }
-        for dir in dirs {
-            logger.info("Ignore rules changed in \(dir.isEmpty ? "/" : dir)")
-        }
-        if poll { schedule?.requestPollAll() }
-        await ignoreRulesChangedHandler()
-    }
-
-    private func readIgnoreFiles(
-        named filenames: [String],
-        in dir: String
-    ) async throws -> [String: IgnoreFile] {
-        var files: [String: IgnoreFile] = [:]
-        for filename in filenames {
-            files[filename] = try await readIgnoreFile(
-                at: subpath(filename, in: dir)
-            )
-        }
-        return files
-    }
-
-    private func readIgnoreFile(at path: String) async throws -> IgnoreFile? {
-        guard let data = try await read(file: path) else { return nil }
-        return .contents(String(decoding: data, as: UTF8.self))
-    }
-
-    private func read(file path: String) async throws -> Data? {
-        try await perform(with: .rootContainer) {
-            do {
-                logger.info("Read \"\(path)\"")
-                return try await sftp.withSftpFile(
-                    at: config.path(for: path),
-                    accessType: .readOnly
-                ) { file in
-                    try await file.read()
-                }
-            } catch SSHError.sftpError(.noSuchFile, _) {
-                return nil
-            }
-        }
-    }
-
-    private func read(
-        _ itemId: NSFileProviderItemIdentifier,
-        range: Range<UInt64>
-    ) async throws -> Data {
-        try await withFile(
-            for: itemId,
-            accessType: .readOnly
-        ) { file in
-            try await file.read(range: range)
-        }
-    }
-
-    private func withFile<T: Sendable>(
-        for itemId: NSFileProviderItemIdentifier,
-        accessType: AccessType,
-        mode: mode_t = 0o666,
-        _ work: @Sendable (SFTPFile) async throws -> T
-    ) async throws -> T {
-        try await perform(with: itemId) {
-            try await sftp.withSftpFile(
-                at: path(for: itemId),
-                accessType: accessType,
-                mode: mode,
-                perform: work
-            )
-        }
     }
 
     private func withDirectory<T: Sendable>(
@@ -1368,26 +1417,31 @@ package actor Session {
         }
     }
 
-    private func performTransfer(
-        with itemId: NSFileProviderItemIdentifier,
-        recording message: LogMessage,
-        estimator: ThroughputEstimator,
-        progress: Progress,
-        _ work: () async throws -> Void
-    ) async throws {
-        logger.info(message.debug)
-        defer { estimator.finalize() }
-        do {
-            try await perform(with: itemId, work)
-            fileLog.info(message.display, detail: progress.report)
-        } catch CoreError.userCancelled {
-            logger.info("Cancelled: \(message.debug)")
-            fileLog.info(message.display, detail: "Cancelled")
-            throw CoreError.userCancelled
-        } catch {
-            logger.error("Failed: \(message.debug): \(error)")
-            fileLog.error(message.display, detail: error.localizedDescription)
-            throw error
+    private func read(
+        _ itemId: NSFileProviderItemIdentifier,
+        range: Range<UInt64>
+    ) async throws -> Data {
+        try await withFile(
+            for: itemId,
+            accessType: .readOnly
+        ) { file in
+            try await file.read(range: range)
+        }
+    }
+
+    private func withFile<T: Sendable>(
+        for itemId: NSFileProviderItemIdentifier,
+        accessType: AccessType,
+        mode: mode_t = 0o666,
+        _ work: @Sendable (SFTPFile) async throws -> T
+    ) async throws -> T {
+        try await perform(with: itemId) {
+            try await sftp.withSftpFile(
+                at: path(for: itemId),
+                accessType: accessType,
+                mode: mode,
+                perform: work
+            )
         }
     }
 
@@ -1442,29 +1496,5 @@ package actor Session {
         default:
             return error
         }
-    }
-
-    private func transferProgressReporter(
-        for transfer: Transfer
-    ) -> ThrottledProgressReporter {
-        ThrottledProgressReporter(
-            frequency: TimeInterval(0.2),
-            onUpdate: { _ in transfer.update() },
-            onFinalize: { _ in transfer.update() }
-        )
-    }
-
-    private func loggingProgressReporter(
-        _ message: LogMessage
-    ) -> ThrottledProgressReporter {
-        ThrottledProgressReporter(
-            frequency: TimeInterval(1.0),
-            onUpdate: {
-                logger.debug("\(message.debug): \($0.report)")
-            },
-            onFinalize: {
-                logger.info("Finished: \(message.debug): \($0.report)")
-            }
-        )
     }
 }
