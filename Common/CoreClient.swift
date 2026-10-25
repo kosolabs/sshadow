@@ -4,9 +4,7 @@ import Synchronization
 
 private let logger = Logger(category: "CoreClient")
 
-public final class CoreClient: NSObject, NSFileProviderServiceSource,
-    NSXPCListenerDelegate
-{
+public final class CoreClient: NSObject {
     private enum State {
         case idle
         case waiting
@@ -16,15 +14,24 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         case suspended
     }
 
-    public let serviceName = SSHadow.extensionServiceName
+    private static let clients =
+        Mutex<[NSFileProviderDomainIdentifier: CoreClient]>([:])
+
     private let domain: NSFileProviderDomain
     private let listener = NSXPCListener.anonymous()
     private let groupUrl: URL
     private let state = Mutex(State.idle)
 
-    private static let clients = Mutex<
-        [NSFileProviderDomainIdentifier: CoreClient]
-    >([:])
+    private var connection: NSXPCConnection? {
+        state.withLock {
+            switch $0 {
+            case .connected(let connection), .detaching(let connection):
+                connection
+            case .idle, .waiting, .detached, .suspended:
+                nil
+            }
+        }
+    }
 
     // File Provider can create several extensions for a domain in one process.
     public static func shared(for domain: NSFileProviderDomain) -> CoreClient {
@@ -53,35 +60,19 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
     deinit {
         connection?.invalidate()
     }
+}
+
+extension CoreClient: NSFileProviderServiceSource {
+    public var serviceName: NSFileProviderServiceName {
+        SSHadow.extensionServiceName
+    }
 
     public func makeListenerEndpoint() throws -> NSXPCListenerEndpoint {
         listener.endpoint
     }
+}
 
-    private var connection: NSXPCConnection? {
-        state.withLock {
-            switch $0 {
-            case .connected(let connection), .detaching(let connection):
-                connection
-            case .idle, .waiting, .detached, .suspended:
-                nil
-            }
-        }
-    }
-
-    private func suspend() async {
-        let shouldSuspend = state.withLock {
-            guard case .waiting = $0 else { return false }
-            $0 = .suspended
-            return true
-        }
-        guard shouldSuspend else { return }
-        await domain.suspend(
-            reason: "SSHadow needs to be running in order to sync this volume.",
-            options: .temporary
-        )
-    }
-
+extension CoreClient: NSXPCListenerDelegate {
     public func listener(
         _ listener: NSXPCListener,
         shouldAcceptNewConnection connection: NSXPCConnection
@@ -131,56 +122,22 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
             }
         }
     }
+}
 
-    private func requireConnection() async throws(CoreError) -> NSXPCConnection
-    {
-        if connection == nil {
-            logger.info("Waiting for Core XPC to connect")
-            let deadline = ContinuousClock.now + .seconds(1)
-            while connection == nil, ContinuousClock.now < deadline {
-                try? await Task.sleep(for: .milliseconds(50))
-            }
-        }
-        guard let connection else {
-            await suspend()
-            logger.error("Core XPC never connected")
-            throw CoreError.serviceUnreachable
-        }
-        return connection
+extension CoreClient {
+    public func currentAnchor() async throws(CoreError) -> UInt64 {
+        let response = try await perform(CurrentAnchorRequest())
+        return response.anchor
     }
 
-    private func perform<Response: Message>(
-        _ handle: (NSXPCConnection) async throws -> Data
-    ) async throws(CoreError) -> Response {
-        let connection = try await requireConnection()
-        let result: CoreResult<Response>
-        do {
-            result = try CoreResult.decoded(from: try await handle(connection))
-        } catch {
-            logger.error("Request failed: \(error)")
-            throw CoreError(from: error)
-        }
-        return try result.get()
+    public func limits() async throws(CoreError) -> Limits {
+        let response = try await perform(LimitsRequest())
+        return response.limits
     }
 
-    private func perform<Request: CoreRequestType>(
-        _ request: Request
-    ) async throws(CoreError) -> Request.Response {
-        return try await perform {
-            try await $0.handle(request.wrapped.encoded())
-        }
-    }
-
-    private func perform<Request: CoreProgressRequestType>(
-        _ request: Request,
-        progressEndpoint: NSXPCListenerEndpoint
-    ) async throws(CoreError) -> Request.Response {
-        return try await perform {
-            try await $0.handle(
-                request.wrapped.encoded(),
-                progressEndpoint: progressEndpoint
-            )
-        }
+    public func ignoreFilenames() async throws(CoreError) -> [String] {
+        let response = try await perform(IgnoreFilenamesRequest())
+        return response.filenames
     }
 
     public func name(
@@ -239,11 +196,6 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         itemId: NSFileProviderItemIdentifier
     ) async throws(CoreError) {
         _ = try await perform(UnwatchRequest(itemId: itemId.rawValue))
-    }
-
-    public func currentAnchor() async throws(CoreError) -> UInt64 {
-        let response = try await perform(CurrentAnchorRequest())
-        return response.anchor
     }
 
     public func changes(
@@ -331,20 +283,10 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
         _ = try await perform(RemoveDirectoryRequest(itemId: itemId.rawValue))
     }
 
-    public func limits() async throws(CoreError) -> Limits {
-        let response = try await perform(LimitsRequest())
-        return response.limits
-    }
-    
     public func forget(
         _ itemId: NSFileProviderItemIdentifier
     ) async throws(CoreError) {
         _ = try await perform(ForgetRequest(itemId: itemId.rawValue))
-    }
-
-    public func ignoreFilenames() async throws(CoreError) -> [String] {
-        let response = try await perform(IgnoreFilenamesRequest())
-        return response.filenames
     }
 
     public func isExcluded(
@@ -425,6 +367,72 @@ public final class CoreClient: NSObject, NSFileProviderServiceSource,
             progressEndpoint: sync.endpoint
         )
         return (response.url, response.range)
+    }
+
+    private func perform<Request: CoreRequestType>(
+        _ request: Request
+    ) async throws(CoreError) -> Request.Response {
+        return try await perform {
+            try await $0.handle(request.wrapped.encoded())
+        }
+    }
+
+    private func perform<Request: CoreProgressRequestType>(
+        _ request: Request,
+        progressEndpoint: NSXPCListenerEndpoint
+    ) async throws(CoreError) -> Request.Response {
+        return try await perform {
+            try await $0.handle(
+                request.wrapped.encoded(),
+                progressEndpoint: progressEndpoint
+            )
+        }
+    }
+
+    private func perform<Response: Message>(
+        _ handle: (NSXPCConnection) async throws -> Data
+    ) async throws(CoreError) -> Response {
+        let connection = try await requireConnection()
+        let result: CoreResult<Response>
+        do {
+            result = try CoreResult.decoded(from: try await handle(connection))
+        } catch {
+            logger.error("Request failed: \(error)")
+            throw CoreError(from: error)
+        }
+        return try result.get()
+    }
+
+    private func requireConnection() async throws(CoreError) -> NSXPCConnection
+    {
+        if connection == nil {
+            logger.info("Waiting for Core XPC to connect")
+            let deadline = ContinuousClock.now + .seconds(1)
+            while connection == nil, ContinuousClock.now < deadline {
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
+        guard let connection else {
+            await suspend()
+            logger.error("Core XPC never connected")
+            throw CoreError.serviceUnreachable
+        }
+        return connection
+    }
+}
+
+extension CoreClient {
+    private func suspend() async {
+        let shouldSuspend = state.withLock {
+            guard case .waiting = $0 else { return false }
+            $0 = .suspended
+            return true
+        }
+        guard shouldSuspend else { return }
+        await domain.suspend(
+            reason: "SSHadow needs to be running in order to sync this volume.",
+            options: .temporary
+        )
     }
 }
 
