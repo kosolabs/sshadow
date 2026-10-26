@@ -54,6 +54,7 @@ struct Ignores {
         in dir: String,
         isDirectory: Bool
     ) -> Rule? {
+        guard knows(dir) else { return nil }
         let path = subpath(name, in: dir)
         guard let match = tree.matched(path, isDirectory: isDirectory) else {
             logger.fault("Ignore rules not loaded for \(path)")

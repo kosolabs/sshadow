@@ -375,7 +375,11 @@ extension Session {
 
     private func reconcile(file dbItem: Item) async throws -> [Change] {
         if let parentId = dbItem.parentId,
-            try await isIgnored(dbItem, in: db.path(for: parentId))
+            try await ignores.rule(
+                ignoring: dbItem.name,
+                in: db.path(for: parentId),
+                isDirectory: dbItem.kind.isDirectory
+            ) != nil
         {
             return []
         }
@@ -436,7 +440,13 @@ extension Session {
 
         let dir = try await db.path(for: folder.id)
         for (name, dbItem) in dbItems where sshItems[name] == nil {
-            guard !isIgnored(dbItem, in: dir) else { continue }
+            guard
+                ignores.rule(
+                    ignoring: dbItem.name,
+                    in: dir,
+                    isDirectory: dbItem.kind.isDirectory
+                ) == nil
+            else { continue }
             logger.info("Reconcile deleted: \(dbItem)")
             try await db.remove(dbItem.id)
             await cache.invalidate(dbItem.id)
@@ -684,8 +694,7 @@ extension Session {
         isDirectory: Bool,
         snapshot: IgnoreSnapshot
     ) async throws -> Bool {
-        let changed = try await updateIgnores(snapshot)
-        await ignoresChanged(changed, poll: true)
+        try await refreshIgnores(from: snapshot)
 
         let parent = try await db.path(for: parentId)
         guard
@@ -701,9 +710,7 @@ extension Session {
         return true
     }
 
-    private func updateIgnores(
-        _ snapshot: IgnoreSnapshot
-    ) async throws -> [String] {
+    private func refreshIgnores(from snapshot: IgnoreSnapshot) async throws {
         var folders: [IgnoreFolder] = []
         for folder in snapshot {
             if ignores.knows(folder.path) {
@@ -712,7 +719,7 @@ extension Session {
                 folders.append(try await resolved(folder))
             }
         }
-        return ignores.update(folders)
+        await ignoresChanged(ignores.update(folders), poll: true)
     }
 
     private func resolved(_ folder: IgnoreFolder) async throws -> IgnoreFolder {
@@ -729,36 +736,19 @@ extension Session {
         return IgnoreFolder(path: folder.path, files: files)
     }
 
-    private func excludingIgnored(
-        _ listing: [SFTPAttributes],
-        in itemId: NSFileProviderItemIdentifier
-    ) async throws -> [SFTPAttributes] {
-        guard itemId != .trashContainer, !config.ignoreFilenames.isEmpty
-        else { return listing }
-        let dir = try await db.path(for: itemId)
-        guard !dir.hasPrefix(".sshadow/") else { return listing }
+    private func refreshIgnores(
+        from listing: [SFTPAttributes],
+        in dir: String
+    ) async throws {
+        guard !config.ignoreFilenames.isEmpty, !dir.hasPrefix(".sshadow/")
+        else { return }
 
         try await loadIgnores(in: ancestors(of: dir))
         let folder = IgnoreFolder(
             path: dir,
             files: try await listedIgnoreFiles(in: listing, at: dir)
         )
-        let changed = ignores.update([folder])
-        await ignoresChanged(changed, poll: false)
-
-        return listing.filter { attrs in
-            guard let name = attrs.name,
-                let rule = ignores.rule(
-                    ignoring: name,
-                    in: dir,
-                    isDirectory: attrs.type == .directory
-                )
-            else { return true }
-            logger.debug(
-                "Excluded from sync: \(subpath(name, in: dir)) (\(rule.source))"
-            )
-            return false
-        }
+        await ignoresChanged(ignores.update([folder]), poll: false)
     }
 
     private func loadIgnores(in dirs: [String]) async throws {
@@ -791,15 +781,6 @@ extension Session {
             }
         }
         return files
-    }
-
-    private func isIgnored(_ item: Item, in dir: String) -> Bool {
-        ignores.knows(dir)
-            && ignores.rule(
-                ignoring: item.name,
-                in: dir,
-                isDirectory: item.kind.isDirectory
-            ) != nil
     }
 
     private func ignoresChanged(_ dirs: [String], poll: Bool) async {
@@ -1352,7 +1333,7 @@ extension Session {
     private func entries(
         of itemId: NSFileProviderItemIdentifier
     ) async throws -> [SSHItem] {
-        var listing: [SFTPAttributes]
+        let listing: [SFTPAttributes]
         do {
             listing = try await withDirectory(for: itemId) { dir in
                 var listing: [SFTPAttributes] = []
@@ -1363,14 +1344,19 @@ extension Session {
             return []
         }
 
-        if itemId == .rootContainer {
-            listing.removeAll { $0.name == ".sshadow" }
-        }
-        listing = try await excludingIgnored(listing, in: itemId)
+        let dir = try await db.path(for: itemId)
+        try await refreshIgnores(from: listing, in: dir)
 
         var entries: [SSHItem] = []
         for attrs in listing {
             guard let name = attrs.name else { continue }
+            if itemId == .rootContainer, name == ".sshadow" { continue }
+            let isDirectory = attrs.type == .directory
+            if ignores.rule(ignoring: name, in: dir, isDirectory: isDirectory)
+                != nil
+            {
+                continue
+            }
             entries.append(
                 try await sshItem(for: name, in: itemId, from: attrs)
             )
