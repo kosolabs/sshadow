@@ -8,11 +8,25 @@ import Testing
 
 @testable import CoreKit
 
-private func text(_ contents: String) -> IgnoreFile {
-    .contents(
-        contents,
-        version: IgnoreFile.Version(modifyTime: .distantPast, size: 0)
+private func text(
+    _ contents: String,
+    named name: String = ".sshadowignore"
+) -> IgnoreFile {
+    IgnoreFile(
+        name: name,
+        content: .loaded(
+            contents,
+            version: IgnoreFile.Version(modifyTime: .distantPast, size: 0)
+        )
     )
+}
+
+private func unresolved() -> IgnoreFile {
+    IgnoreFile(name: ".sshadowignore", content: .unresolved)
+}
+
+private func folder(_ path: String, _ files: IgnoreFile...) -> IgnoreFolder {
+    IgnoreFolder(path: path, files: files)
 }
 
 extension TestSandbox {
@@ -723,18 +737,18 @@ struct SessionTests {
 
             try sandbox.createFile(at: ".sshadowignore", contents: "*.tmp\n")
             _ = try await session.reconcileAll()
-            let ignoreFiles: IgnoreLevels = [[".sshadowignore": .unresolved]]
+            let files = [folder("", unresolved())]
             let log = try await session.isExcluded(
                 "a.log",
                 in: .rootContainer,
                 isDirectory: false,
-                ignoreFiles: ignoreFiles
+                snapshot: files
             )
             let tmp = try await session.isExcluded(
                 "a.tmp",
                 in: .rootContainer,
                 isDirectory: false,
-                ignoreFiles: ignoreFiles
+                snapshot: files
             )
 
             #expect(!log)
@@ -773,7 +787,7 @@ struct SessionTests {
                 "build",
                 in: .rootContainer,
                 isDirectory: true,
-                ignoreFiles: [[".sshadowignore": .unresolved]]
+                snapshot: [folder("", unresolved())]
             )
 
             #expect(excluded)
@@ -2204,9 +2218,7 @@ struct SessionTests {
 
         @Test func changedRulesCallHandler() async throws {
             let sandbox = TestSandbox()
-            let ignoreFiles: IgnoreLevels = [
-                [".sshadowignore": text("build/\n")]
-            ]
+            let files = [folder("", text("build/\n"))]
 
             try await confirmation { called in
                 let session = try await sandbox.getSession(
@@ -2217,7 +2229,7 @@ struct SessionTests {
                         "build",
                         in: .rootContainer,
                         isDirectory: true,
-                        ignoreFiles: ignoreFiles
+                        snapshot: files
                     )
                 }
             }
@@ -2231,7 +2243,7 @@ struct SessionTests {
                 "build",
                 in: .rootContainer,
                 isDirectory: true,
-                ignoreFiles: [[".sshadowignore": text("build/\n")]]
+                snapshot: [folder("", text("build/\n"))]
             )
 
             #expect(excluded)
@@ -2245,7 +2257,7 @@ struct SessionTests {
                 "build",
                 in: .rootContainer,
                 isDirectory: false,
-                ignoreFiles: [[".sshadowignore": text("build/\n")]]
+                snapshot: [folder("", text("build/\n"))]
             )
 
             #expect(!excluded)
@@ -2256,22 +2268,22 @@ struct SessionTests {
             try sandbox.createFolder(at: "src")
             let session = try await sandbox.getSession()
             let srcId = try await session.child(name: "src")
-            let ignoreFiles: IgnoreLevels = [
-                [".sshadowignore": text("*.log\n")],
-                [".sshadowignore": text("!keep.log\n")],
+            let files = [
+                folder("", text("*.log\n")),
+                folder("src", text("!keep.log\n")),
             ]
 
             let keep = try await session.isExcluded(
                 "keep.log",
                 in: srcId,
                 isDirectory: false,
-                ignoreFiles: ignoreFiles
+                snapshot: files
             )
             let other = try await session.isExcluded(
                 "other.log",
                 in: srcId,
                 isDirectory: false,
-                ignoreFiles: ignoreFiles
+                snapshot: files
             )
 
             #expect(!keep)
@@ -2288,7 +2300,7 @@ struct SessionTests {
                 "out.o",
                 in: srcId,
                 isDirectory: false,
-                ignoreFiles: [[:], [".sshadowignore": .unresolved]]
+                snapshot: [folder(""), folder("src", unresolved())]
             )
 
             #expect(excluded)
@@ -2302,7 +2314,7 @@ struct SessionTests {
                 "out.o",
                 in: .rootContainer,
                 isDirectory: false,
-                ignoreFiles: [[".sshadowignore": .unresolved]]
+                snapshot: [folder("", unresolved())]
             )
 
             #expect(!excluded)
@@ -2316,7 +2328,7 @@ struct SessionTests {
                 "build",
                 in: .rootContainer,
                 isDirectory: true,
-                ignoreFiles: [[".gitignore": text("build/\n")]]
+                snapshot: [folder("", text("build/\n", named: ".gitignore"))]
             )
 
             #expect(!excluded)
@@ -2332,7 +2344,7 @@ struct SessionTests {
                 "build",
                 in: srcId,
                 isDirectory: true,
-                ignoreFiles: [[".sshadowignore": text("build/\n")], [:], [:]]
+                snapshot: [folder(""), folder("lib", text("build/\n"))]
             )
 
             #expect(!excluded)

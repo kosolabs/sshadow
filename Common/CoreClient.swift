@@ -293,14 +293,14 @@ extension CoreClient {
         _ name: String,
         in parentId: NSFileProviderItemIdentifier,
         isDirectory: Bool,
-        ignoreFiles: IgnoreLevels
+        snapshot: IgnoreSnapshot
     ) async throws(CoreError) -> Bool {
         let response = try await perform(
-            ExcludedRequest(
+            IsExcludedRequest(
                 parentId: parentId.rawValue,
                 name: name,
                 isDirectory: isDirectory,
-                ignoreFiles: ignoreFiles
+                snapshot: snapshot
             )
         )
         return response.excluded

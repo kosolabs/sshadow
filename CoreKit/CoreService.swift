@@ -133,9 +133,9 @@ extension CoreService {
             try await respond { session in
                 try await self.forget(session, request)
             }
-        case .excluded(let request):
+        case .isExcluded(let request):
             try await respond { session in
-                try await self.excluded(session, request)
+                try await self.isExcluded(session, request)
             }
         }
     }
@@ -320,17 +320,17 @@ extension CoreService {
         return ForgetResponse()
     }
 
-    private func excluded(
+    private func isExcluded(
         _ session: Session,
-        _ request: ExcludedRequest
-    ) async throws -> ExcludedResponse {
+        _ request: IsExcludedRequest
+    ) async throws -> IsExcludedResponse {
         let excluded = try await session.isExcluded(
             request.name,
             in: NSFileProviderItemIdentifier(request.parentId),
             isDirectory: request.isDirectory,
-            ignoreFiles: request.ignoreFiles
+            snapshot: request.snapshot
         )
-        return ExcludedResponse(excluded: excluded)
+        return IsExcludedResponse(excluded: excluded)
     }
 }
 

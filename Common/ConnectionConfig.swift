@@ -55,7 +55,10 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
         self.user = user
         self.path = path.hasSuffix("/") ? String(path.dropLast()) : path
         self.authMethod = authMethod
-        self.ignoreFilenames = ignoreFilenames
+        var seen = Set<String>()
+        self.ignoreFilenames = ignoreFilenames.filter {
+            seen.insert($0).inserted
+        }
     }
 
     public var socket: String {

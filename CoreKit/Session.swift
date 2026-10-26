@@ -32,7 +32,7 @@ package actor Session {
     nonisolated private let fileLog: Events<ContinuousClock>.Logger
 
     private lazy var cache = FileCache(read: read)
-    private lazy var ignores = IgnoreCache(filenames: config.ignoreFilenames)
+    private lazy var ignores = Ignores(filenames: config.ignoreFilenames)
 
     private var watched: [NSFileProviderItemIdentifier: Int] = [:]
     private var schedule: PollSchedule?
@@ -682,24 +682,12 @@ extension Session {
         _ name: String,
         in parentId: NSFileProviderItemIdentifier,
         isDirectory: Bool,
-        ignoreFiles: IgnoreLevels
+        snapshot: IgnoreSnapshot
     ) async throws -> Bool {
-        let parent = try await db.path(for: parentId)
-        let dirs = ancestors(of: parent) + [parent]
-        guard ignoreFiles.count == dirs.count else {
-            let ref = await ref(for: name, in: parentId)
-            logger.error(
-                "Ignore files are for \(ignoreFiles.count) folders, "
-                    + "expected \(dirs.count): \(ref)"
-            )
-            return false
-        }
-
-        let changed = try await updateIgnores(
-            zip(dirs, ignoreFiles).map { (dir: $0, files: $1) }
-        )
+        let changed = try await updateIgnores(snapshot)
         await ignoresChanged(changed, poll: true)
 
+        let parent = try await db.path(for: parentId)
         guard
             let rule = ignores.rule(
                 ignoring: name,
@@ -713,6 +701,34 @@ extension Session {
         return true
     }
 
+    private func updateIgnores(
+        _ snapshot: IgnoreSnapshot
+    ) async throws -> [String] {
+        var folders: [IgnoreFolder] = []
+        for folder in snapshot {
+            if ignores.knows(folder.path) {
+                folders.append(folder)
+            } else {
+                folders.append(try await resolved(folder))
+            }
+        }
+        return ignores.update(folders)
+    }
+
+    private func resolved(_ folder: IgnoreFolder) async throws -> IgnoreFolder {
+        var files: [IgnoreFile] = []
+        for file in folder.files {
+            guard file.content == .unresolved else {
+                files.append(file)
+                continue
+            }
+            if let file = try await readIgnoreFile(file.name, in: folder.path) {
+                files.append(file)
+            }
+        }
+        return IgnoreFolder(path: folder.path, files: files)
+    }
+
     private func excludingIgnored(
         _ listing: [SFTPAttributes],
         in itemId: NSFileProviderItemIdentifier
@@ -722,15 +738,12 @@ extension Session {
         let dir = try await db.path(for: itemId)
         guard !dir.hasPrefix(".sshadow/") else { return listing }
 
-        let files = try await listedIgnoreFiles(in: listing, at: dir)
-        let unresolved = Dictionary(
-            config.ignoreFilenames.map { ($0, IgnoreFile.unresolved) }
-        ) { first, _ in first }
-        let changed = try await updateIgnores(
-            ancestors(of: dir).map {
-                (dir: $0, files: unresolved)
-            } + [(dir, files)]
+        try await loadIgnores(in: ancestors(of: dir))
+        let folder = IgnoreFolder(
+            path: dir,
+            files: try await listedIgnoreFiles(in: listing, at: dir)
         )
+        let changed = ignores.update([folder])
         await ignoresChanged(changed, poll: false)
 
         return listing.filter { attrs in
@@ -748,21 +761,33 @@ extension Session {
         }
     }
 
+    private func loadIgnores(in dirs: [String]) async throws {
+        var folders: [IgnoreFolder] = []
+        for dir in dirs where !ignores.knows(dir) {
+            var files: [IgnoreFile] = []
+            for name in config.ignoreFilenames {
+                if let file = try await readIgnoreFile(name, in: dir) {
+                    files.append(file)
+                }
+            }
+            folders.append(IgnoreFolder(path: dir, files: files))
+        }
+        ignores.update(folders)
+    }
+
     private func listedIgnoreFiles(
         in listing: [SFTPAttributes],
         at dir: String
-    ) async throws -> [String: IgnoreFile] {
-        var files: [String: IgnoreFile] = [:]
+    ) async throws -> [IgnoreFile] {
+        var files: [IgnoreFile] = []
         for attrs in listing {
             guard attrs.type != .directory, let name = attrs.name,
                 config.ignoreFilenames.contains(name)
             else { continue }
             if ignores.isCurrent(name, in: dir, at: attrs.ignoreFileVersion) {
-                files[name] = .unresolved
-            } else {
-                files[name] = try await readIgnoreFile(
-                    at: subpath(name, in: dir)
-                )
+                files.append(IgnoreFile(name: name, content: .unresolved))
+            } else if let file = try await readIgnoreFile(name, in: dir) {
+                files.append(file)
             }
         }
         return files
@@ -777,24 +802,6 @@ extension Session {
             ) != nil
     }
 
-    private func updateIgnores(
-        _ levels: [FolderIgnoreFiles]
-    ) async throws -> [String] {
-        var resolved: [FolderIgnoreFiles] = []
-        for (dir, files) in levels {
-            var files = files
-            if !ignores.knows(dir) {
-                for (filename, file) in files where file == .unresolved {
-                    files[filename] = try await readIgnoreFile(
-                        at: subpath(filename, in: dir)
-                    )
-                }
-            }
-            resolved.append((dir, files))
-        }
-        return ignores.update(resolved)
-    }
-
     private func ignoresChanged(_ dirs: [String], poll: Bool) async {
         guard !dirs.isEmpty else { return }
         for dir in dirs {
@@ -804,8 +811,12 @@ extension Session {
         await ignoreRulesChangedHandler()
     }
 
-    private func readIgnoreFile(at path: String) async throws -> IgnoreFile? {
-        try await perform(with: .rootContainer) {
+    private func readIgnoreFile(
+        _ name: String,
+        in dir: String
+    ) async throws -> IgnoreFile? {
+        let path = subpath(name, in: dir)
+        return try await perform(with: .rootContainer) {
             do {
                 logger.info("Read \"\(path)\"")
                 return try await sftp.withSftpFile(
@@ -814,9 +825,12 @@ extension Session {
                 ) { file in
                     let data = try await file.read()
                     let version = try await file.attributes().ignoreFileVersion
-                    return .contents(
-                        String(decoding: data, as: UTF8.self),
-                        version: version
+                    return IgnoreFile(
+                        name: name,
+                        content: .loaded(
+                            String(decoding: data, as: UTF8.self),
+                            version: version
+                        )
                     )
                 }
             } catch SSHError.sftpError(.noSuchFile, _) {
