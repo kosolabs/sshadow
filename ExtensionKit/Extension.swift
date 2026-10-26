@@ -508,14 +508,14 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         in parentId: NSFileProviderItemIdentifier,
         isDirectory: Bool
     ) async throws(CoreError) -> Bool {
-        guard let ignoreFiles = try await ignoreFiles(in: parentId) else {
+        guard let snapshot = try await ignoreSnapshot(in: parentId) else {
             return false
         }
         return try await client.isExcluded(
             name,
             in: parentId,
             isDirectory: isDirectory,
-            ignoreFiles: ignoreFiles
+            snapshot: snapshot
         )
     }
 
@@ -528,9 +528,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         )
     }
 
-    private func ignoreFiles(
+    private func ignoreSnapshot(
         in parentId: NSFileProviderItemIdentifier
-    ) async throws(CoreError) -> IgnoreLevels? {
+    ) async throws(CoreError) -> IgnoreSnapshot? {
         guard parentId != .trashContainer else { return nil }
 
         let filenames = try await client.ignoreFilenames()
@@ -551,7 +551,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         let scoped = root.startAccessingSecurityScopedResource()
         defer { if scoped { root.stopAccessingSecurityScopedResource() } }
         guard
-            let ignoreFiles = IgnoreLevels.read(
+            let snapshot = IgnoreSnapshot.read(
                 filenames,
                 from: root,
                 to: parent
@@ -562,7 +562,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             )
             return nil
         }
-        return ignoreFiles
+        return snapshot
     }
 
     private func size(of file: URL) throws(CoreError) -> UInt64 {

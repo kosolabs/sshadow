@@ -8,17 +8,23 @@ import Testing
 
 private let date = Date(timeIntervalSince1970: 1_767_225_600)
 
-private func text(_ contents: String) -> IgnoreFile {
-    .contents(
-        contents,
-        version: IgnoreFile.Version(
-            modifyTime: date,
-            size: UInt64(contents.utf8.count)
+private func text(
+    _ contents: String,
+    named name: String = ".sshadowignore"
+) -> IgnoreFile {
+    IgnoreFile(
+        name: name,
+        content: .loaded(
+            contents,
+            version: IgnoreFile.Version(
+                modifyTime: date,
+                size: UInt64(contents.utf8.count)
+            )
         )
     )
 }
 
-struct IgnoreLevelsTests {
+struct IgnoreSnapshotTests {
     @Test func readsEachLevelFromRootToDirectory() throws {
         let sandbox = TestSandbox()
         try sandbox.createFile(
@@ -34,18 +40,19 @@ struct IgnoreLevelsTests {
             modifyDate: date
         )
 
-        let files = IgnoreLevels.read(
+        let snapshot = IgnoreSnapshot.read(
             [".sshadowignore"],
             from: sandbox.url(in: .local),
             to: sandbox.url(for: "src/lib", in: .local)
         )
 
         #expect(
-            files == [
-                [".sshadowignore": text("build/\n")],
-                [:],
-                [".sshadowignore": text("*.log\n")],
-            ]
+            snapshot
+                == [
+                    IgnoreFolder(path: "", files: [text("build/\n")]),
+                    IgnoreFolder(path: "src", files: []),
+                    IgnoreFolder(path: "src/lib", files: [text("*.log\n")]),
+                ]
         )
     }
 
@@ -70,19 +77,22 @@ struct IgnoreLevelsTests {
             modifyDate: date
         )
 
-        let files = IgnoreLevels.read(
+        let snapshot = IgnoreSnapshot.read(
             [".gitignore", ".sshadowignore"],
             from: sandbox.url(in: .local),
             to: sandbox.url(in: .local)
         )
 
         #expect(
-            files
+            snapshot
                 == [
-                    [
-                        ".gitignore": text("a\n"),
-                        ".sshadowignore": text("b\n"),
-                    ]
+                    IgnoreFolder(
+                        path: "",
+                        files: [
+                            text("a\n", named: ".gitignore"),
+                            text("b\n"),
+                        ]
+                    )
                 ]
         )
     }
@@ -91,24 +101,37 @@ struct IgnoreLevelsTests {
         let sandbox = TestSandbox()
         try sandbox.createFolder(at: ".sshadowignore", in: .local)
 
-        let files = IgnoreLevels.read(
+        let snapshot = IgnoreSnapshot.read(
             [".sshadowignore"],
             from: sandbox.url(in: .local),
             to: sandbox.url(in: .local)
         )
 
-        #expect(files == [[".sshadowignore": .unresolved]])
+        #expect(
+            snapshot
+                == [
+                    IgnoreFolder(
+                        path: "",
+                        files: [
+                            IgnoreFile(
+                                name: ".sshadowignore",
+                                content: .unresolved
+                            )
+                        ]
+                    )
+                ]
+        )
     }
 
     @Test func directoryOutsideRootReadsNothing() {
         let sandbox = TestSandbox()
 
-        let files = IgnoreLevels.read(
+        let snapshot = IgnoreSnapshot.read(
             [".sshadowignore"],
             from: sandbox.url(in: .local),
             to: sandbox.url(in: .group)
         )
 
-        #expect(files == nil)
+        #expect(snapshot == nil)
     }
 }

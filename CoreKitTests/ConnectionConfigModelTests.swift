@@ -25,4 +25,13 @@ struct ConnectionConfigModelTests {
         let config = ConnectionConfig(from: model, authMethod: .password("secret"))
         #expect(config.ignoreFilenames == [])
     }
+
+    @Test func duplicateIgnoreFilenamesAreDropped() {
+        let model = ConnectionConfigModel(
+            host: "example.com",
+            ignoreFilenames: [".gitignore", ".sshadowignore", ".gitignore"]
+        )
+        let config = ConnectionConfig(from: model, authMethod: .password("secret"))
+        #expect(config.ignoreFilenames == [".gitignore", ".sshadowignore"])
+    }
 }

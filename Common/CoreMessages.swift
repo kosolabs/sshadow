@@ -367,29 +367,29 @@ public struct ForgetResponse: Message, PrettyDescribable {
     public init() {}
 }
 
-public struct ExcludedRequest: CoreRequestType, PrettyDescribable {
-    public typealias Response = ExcludedResponse
+public struct IsExcludedRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = IsExcludedResponse
     public let parentId: String
     public let name: String
     public let isDirectory: Bool
-    public let ignoreFiles: IgnoreLevels
+    public let snapshot: IgnoreSnapshot
 
-    public var wrapped: CoreRequest { .excluded(self) }
+    public var wrapped: CoreRequest { .isExcluded(self) }
 
     public init(
         parentId: String,
         name: String,
         isDirectory: Bool,
-        ignoreFiles: IgnoreLevels
+        snapshot: IgnoreSnapshot
     ) {
         self.parentId = parentId
         self.name = name
         self.isDirectory = isDirectory
-        self.ignoreFiles = ignoreFiles
+        self.snapshot = snapshot
     }
 }
 
-public struct ExcludedResponse: Message, PrettyDescribable {
+public struct IsExcludedResponse: Message, PrettyDescribable {
     public let excluded: Bool
 
     public init(excluded: Bool) {

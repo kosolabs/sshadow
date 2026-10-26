@@ -1,39 +1,41 @@
 import Common
 import Ignore
 
-private let logger = Logger(category: "IgnoreCache")
+private let logger = Logger(category: "Ignores")
 
-typealias FolderIgnoreFiles = (dir: String, files: [String: IgnoreFile])
-
-struct IgnoreCache {
+struct Ignores {
     private var tree: IgnoreTree
     private var versions: [String: IgnoreFile.Version] = [:]
+
+    func knows(_ dir: String) -> Bool {
+        tree.knows(dir)
+    }
 
     init(filenames: [String]) {
         self.tree = IgnoreTree(filenames: filenames)
     }
 
     @discardableResult
-    mutating func update(_ levels: [FolderIgnoreFiles]) -> [String] {
+    mutating func update(_ snapshot: IgnoreSnapshot) -> [String] {
         var changed: [String] = []
-        for (dir, files) in levels {
-            let known = tree.knows(dir)
-            let old = tree.files(in: dir) ?? [:]
+        for folder in snapshot {
+            let known = tree.knows(folder.path)
+            let old = tree.files(in: folder.path) ?? [:]
             var texts: [String: String] = [:]
-            for (filename, file) in files {
-                switch file {
-                case .contents(let text, let version):
-                    texts[filename] = text
-                    versions[subpath(filename, in: dir)] = version
+            for file in folder.files {
+                switch file.content {
+                case .loaded(let text, let version):
+                    texts[file.name] = text
+                    versions[subpath(file.name, in: folder.path)] = version
                 case .unresolved:
-                    texts[filename] = old[filename]
+                    texts[file.name] = old[file.name]
                 }
             }
-            for filename in old.keys where texts[filename] == nil {
-                versions[subpath(filename, in: dir)] = nil
+            for name in old.keys where texts[name] == nil {
+                versions[subpath(name, in: folder.path)] = nil
             }
-            if tree.set(texts, in: dir), known {
-                changed.append(dir)
+            if tree.set(texts, in: folder.path), known {
+                changed.append(folder.path)
             }
         }
         return changed
@@ -46,8 +48,6 @@ struct IgnoreCache {
     ) -> Bool {
         versions[subpath(filename, in: dir)] == version
     }
-
-    func knows(_ dir: String) -> Bool { tree.knows(dir) }
 
     func rule(
         ignoring name: String,

@@ -9,19 +9,28 @@ private let ignore = ".sshadowignore"
 
 private func text(
     _ contents: String,
+    named name: String = ignore,
     version: IgnoreFile.Version = version
 ) -> IgnoreFile {
-    .contents(contents, version: version)
+    IgnoreFile(name: name, content: .loaded(contents, version: version))
+}
+
+private func unresolved(_ name: String = ignore) -> IgnoreFile {
+    IgnoreFile(name: name, content: .unresolved)
+}
+
+private func folder(_ path: String, _ files: IgnoreFile...) -> IgnoreFolder {
+    IgnoreFolder(path: path, files: files)
 }
 
 private func branch(
     _ root: IgnoreFile?,
     _ lib: IgnoreFile?
-) -> [FolderIgnoreFiles] {
+) -> IgnoreSnapshot {
     [
-        ("", root.map { [ignore: $0] } ?? [:]),
-        ("src", [:]),
-        ("src/lib", lib.map { [ignore: $0] } ?? [:]),
+        IgnoreFolder(path: "", files: root.map { [$0] } ?? []),
+        folder("src"),
+        IgnoreFolder(path: "src/lib", files: lib.map { [$0] } ?? []),
     ]
 }
 
@@ -35,56 +44,59 @@ private let newer = IgnoreFile.Version(
     size: 6
 )
 
-extension IgnoreCache {
-    fileprivate func ignores(_ name: String, in dir: String = "") -> Bool {
+extension Ignores {
+    fileprivate func ignore(_ name: String, in dir: String = "") -> Bool {
         rule(ignoring: name, in: dir, isDirectory: false) != nil
     }
 }
 
 struct IgnoreCacheTests {
     @Test func unknownRootIgnoresNothing() {
-        let cache = IgnoreCache(filenames: [ignore])
-        #expect(cache.rule(ignoring: "build", in: "", isDirectory: true) == nil)
+        let ignores = Ignores(filenames: [ignore])
+        #expect(
+            ignores.rule(ignoring: "build", in: "", isDirectory: true) == nil
+        )
     }
 
     @Test func unknownChildIgnoresNothing() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([("", [ignore: text("*.log\n")])])
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([folder("", text("*.log\n"))])
         #expect(
-            cache.rule(ignoring: "a.log", in: "src", isDirectory: false) == nil
+            ignores.rule(ignoring: "a.log", in: "src", isDirectory: false)
+                == nil
         )
     }
 
     @Test func knowsRecordedDirectories() {
-        var cache = IgnoreCache(filenames: [ignore])
-        #expect(!cache.knows(""))
+        var ignores = Ignores(filenames: [ignore])
+        #expect(!ignores.knows(""))
 
-        cache.update([("", [:]), ("src", [:])])
+        ignores.update([folder(""), folder("src")])
 
-        #expect(cache.knows(""))
-        #expect(cache.knows("src"))
-        #expect(!cache.knows("src/lib"))
+        #expect(ignores.knows(""))
+        #expect(ignores.knows("src"))
+        #expect(!ignores.knows("src/lib"))
     }
 
     @Test func rulesApplyFromEachLevel() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([
-            ("", [ignore: text("build/\n")]),
-            ("src", [:]),
-            ("src/lib", [ignore: text("*.log\n")]),
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([
+            folder("", text("build/\n")),
+            folder("src"),
+            folder("src/lib", text("*.log\n")),
         ])
 
-        let build = cache.rule(
+        let build = ignores.rule(
             ignoring: "build",
             in: "src/lib",
             isDirectory: true
         )
-        let log = cache.rule(
+        let log = ignores.rule(
             ignoring: "debug.log",
             in: "src/lib",
             isDirectory: false
         )
-        let source = cache.rule(
+        let source = ignores.rule(
             ignoring: "main.c",
             in: "src/lib",
             isDirectory: false
@@ -98,14 +110,14 @@ struct IgnoreCacheTests {
     }
 
     @Test func ignoredAncestorIgnoresEverythingBelow() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([
-            ("", [ignore: text("data/\n")]),
-            ("data", [:]),
-            ("data/sub", [:]),
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([
+            folder("", text("data/\n")),
+            folder("data"),
+            folder("data/sub"),
         ])
 
-        let rule = cache.rule(
+        let rule = ignores.rule(
             ignoring: "a.txt",
             in: "data/sub",
             isDirectory: false
@@ -115,146 +127,154 @@ struct IgnoreCacheTests {
     }
 
     @Test func whitelistedIgnoresNothing() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([("", [ignore: text("*.log\n!keep.log\n")])])
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([folder("", text("*.log\n!keep.log\n"))])
         #expect(
-            cache.rule(ignoring: "keep.log", in: "", isDirectory: false) == nil
+            ignores.rule(ignoring: "keep.log", in: "", isDirectory: false)
+                == nil
         )
     }
 
     @Test func onlyConfiguredFilenamesApply() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([("", [".gitignore": text("build/\n")])])
-        #expect(cache.rule(ignoring: "build", in: "", isDirectory: true) == nil)
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([folder("", text("build/\n", named: ".gitignore"))])
+        #expect(
+            ignores.rule(ignoring: "build", in: "", isDirectory: true) == nil
+        )
     }
 
     @Test func unresolvedFileInUnknownFolderHasNoRules() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([("", [ignore: .unresolved])])
-        #expect(cache.rule(ignoring: "build", in: "", isDirectory: true) == nil)
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([folder("", unresolved())])
+        #expect(
+            ignores.rule(ignoring: "build", in: "", isDirectory: true) == nil
+        )
     }
 
     @Test func firstUpdateIsNotAChange() {
-        var cache = IgnoreCache(filenames: [ignore])
-        let changed = cache.update([("", [ignore: text("build/\n")])])
+        var ignores = Ignores(filenames: [ignore])
+        let changed = ignores.update([folder("", text("build/\n"))])
         #expect(changed == [])
     }
 
     @Test func changedRulesApplyToDescendants() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([("", [ignore: text("*.log\n")]), ("src", [:])])
-        let before = cache.rule(
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([folder("", text("*.log\n")), folder("src")])
+        let before = ignores.rule(
             ignoring: "a.log",
             in: "src",
             isDirectory: false
         )
 
-        cache.update([("", [:])])
-        let after = cache.rule(ignoring: "a.log", in: "src", isDirectory: false)
+        ignores.update([folder("")])
+        let after = ignores.rule(
+            ignoring: "a.log",
+            in: "src",
+            isDirectory: false
+        )
 
         #expect(before != nil)
         #expect(after == nil)
     }
 
     @Test func mergeReportsChangedDirectories() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update(branch(text("a\n"), nil))
-        let same = cache.update(branch(text("a\n"), nil))
-        let changed = cache.update(
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update(branch(text("a\n"), nil))
+        let same = ignores.update(branch(text("a\n"), nil))
+        let changed = ignores.update(
             branch(text("b\n"), text("c\n"))
         )
-        let removed = cache.update(branch(nil, text("c\n")))
+        let removed = ignores.update(branch(nil, text("c\n")))
 
         #expect(same == [])
         #expect(changed == ["", "src/lib"])
         #expect(removed == [""])
-        #expect(!cache.ignores("b"))
-        #expect(cache.ignores("c", in: "src/lib"))
+        #expect(!ignores.ignore("b"))
+        #expect(ignores.ignore("c", in: "src/lib"))
     }
 
     @Test func newDirectoryIsNotAChange() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([("", [:])])
-        let changed = cache.update([("", [:]), ("src", [ignore: text("a\n")])])
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([folder("")])
+        let changed = ignores.update([folder(""), folder("src", text("a\n"))])
 
         #expect(changed == [])
-        #expect(cache.ignores("a", in: "src"))
+        #expect(ignores.ignore("a", in: "src"))
     }
 
     @Test func fileMissingRemotelyDropsRules() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([("", [ignore: text("a\n")])])
-        let changed = cache.update([("", [:])])
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([folder("", text("a\n"))])
+        let changed = ignores.update([folder("")])
 
         #expect(changed == [""])
-        #expect(!cache.ignores("a"))
+        #expect(!ignores.ignore("a"))
     }
 
     @Test func unresolvedFileKeepsKnownContents() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([("", [ignore: text("a\n")])])
-        let changed = cache.update([("", [ignore: .unresolved])])
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([folder("", text("a\n"))])
+        let changed = ignores.update([folder("", unresolved())])
 
         #expect(changed == [])
-        #expect(cache.ignores("a"))
+        #expect(ignores.ignore("a"))
     }
 
     @Test func unresolvedFileWithoutKnownContentsIsDropped() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([("", [:])])
-        let changed = cache.update([
-            ("", [ignore: .unresolved]),
-            ("src", [ignore: .unresolved]),
-        ])
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([folder("")])
+        let changed = ignores.update(
+            [folder("", unresolved()), folder("src", unresolved())]
+        )
 
         #expect(changed == [])
-        #expect(cache.knows("src"))
-        #expect(!cache.ignores("a", in: "src"))
+        #expect(ignores.knows("src"))
+        #expect(!ignores.ignore("a", in: "src"))
     }
 
     @Test func mergeLeavesSiblingsAlone() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([("", [:]), ("srcs", [ignore: text("*.o\n")])])
-        cache.update([("", [:]), ("src", [:])])
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([folder(""), folder("srcs", text("*.o\n"))])
+        ignores.update([folder(""), folder("src")])
 
-        #expect(cache.ignores("a.o", in: "srcs"))
+        #expect(ignores.ignore("a.o", in: "srcs"))
     }
 
     @Test func contentsVersionIsCurrent() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([("", [ignore: text("*.log\n")])])
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([folder("", text("*.log\n"))])
 
-        #expect(cache.isCurrent(ignore, in: "", at: version))
-        #expect(!cache.isCurrent(ignore, in: "", at: newer))
-        #expect(!cache.isCurrent(ignore, in: "src", at: version))
+        #expect(ignores.isCurrent(ignore, in: "", at: version))
+        #expect(!ignores.isCurrent(ignore, in: "", at: newer))
+        #expect(!ignores.isCurrent(ignore, in: "src", at: version))
     }
 
     @Test func unresolvedFileKeepsVersion() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([("", [ignore: text("*.log\n")])])
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([folder("", text("*.log\n"))])
 
-        cache.update([("", [ignore: .unresolved])])
+        ignores.update([folder("", unresolved())])
 
-        #expect(cache.isCurrent(ignore, in: "", at: version))
+        #expect(ignores.isCurrent(ignore, in: "", at: version))
     }
 
     @Test func newContentsReplaceVersion() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([("", [ignore: text("*.log\n")])])
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([folder("", text("*.log\n"))])
 
-        cache.update([("", [ignore: text("*.log\n", version: newer)])])
+        ignores.update([folder("", text("*.log\n", version: newer))])
 
-        #expect(!cache.isCurrent(ignore, in: "", at: version))
-        #expect(cache.isCurrent(ignore, in: "", at: newer))
+        #expect(!ignores.isCurrent(ignore, in: "", at: version))
+        #expect(ignores.isCurrent(ignore, in: "", at: newer))
     }
 
     @Test func removedFileClearsVersion() {
-        var cache = IgnoreCache(filenames: [ignore])
-        cache.update([("", [ignore: text("*.log\n")])])
+        var ignores = Ignores(filenames: [ignore])
+        ignores.update([folder("", text("*.log\n"))])
 
-        cache.update([("", [:])])
+        ignores.update([folder("")])
 
-        #expect(!cache.isCurrent(ignore, in: "", at: version))
+        #expect(!ignores.isCurrent(ignore, in: "", at: version))
     }
 
     @Test func ancestorsListParentFoldersFromTheRoot() {
