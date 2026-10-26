@@ -2482,19 +2482,16 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let progress = Progress()
-            let upload = Task {
-                try await session.upload(
+            let cancellation = cancelOnFirstBytes(progress)
+            defer { cancellation.invalidate() }
+
+            await #expect(throws: CoreError.userCancelled) {
+                _ = try await session.upload(
                     "partial.dat",
                     to: .rootContainer,
                     file: uploadUrl,
                     progress: progress
                 )
-            }
-            try await waitForBytes(progress)
-            progress.cancel()
-
-            await #expect(throws: CoreError.userCancelled) {
-                _ = try await upload.value
             }
             #expect(
                 !FileManager.default.fileExists(
@@ -2516,6 +2513,7 @@ struct SessionTests {
                     "partial.dat",
                     to: .rootContainer,
                     file: uploadUrl,
+                    chunkSize: Self.slowChunkSize,
                     progress: progress
                 )
             }
@@ -2564,19 +2562,16 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let progress = Progress()
-            let upload = Task {
-                try await session.upload(
+            let cancellation = cancelOnFirstBytes(progress)
+            defer { cancellation.invalidate() }
+
+            await #expect(throws: CoreError.userCancelled) {
+                _ = try await session.upload(
                     "existing.dat",
                     to: .rootContainer,
                     file: uploadUrl,
                     progress: progress
                 )
-            }
-            try await waitForBytes(progress)
-            progress.cancel()
-
-            await #expect(throws: CoreError.userCancelled) {
-                _ = try await upload.value
             }
             #expect(try sandbox.contents(of: "existing.dat") == "original")
             #expect(try sandbox.stagedUploads() == [])
@@ -2595,6 +2590,7 @@ struct SessionTests {
                     "existing.dat",
                     to: .rootContainer,
                     file: uploadUrl,
+                    chunkSize: Self.slowChunkSize,
                     progress: progress
                 )
             }
@@ -2626,19 +2622,16 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let progress = Progress()
-            let upload = Task {
-                try await session.upload(
+            let cancellation = cancelOnFirstBytes(progress)
+            defer { cancellation.invalidate() }
+
+            await #expect(throws: CoreError.userCancelled) {
+                _ = try await session.upload(
                     "Doc.rtfd",
                     to: .rootContainer,
                     file: source,
                     progress: progress
                 )
-            }
-            try await waitForBytes(progress)
-            progress.cancel()
-
-            await #expect(throws: CoreError.userCancelled) {
-                _ = try await upload.value
             }
             #expect(try sandbox.contents(of: "Doc.rtfd/text.rtf") == "old")
             #expect(!sandbox.exists(at: "Doc.rtfd/big.dat"))
@@ -2775,9 +2768,19 @@ struct SessionTests {
             #expect(try sandbox.stagedUploads() == [])
         }
 
+        private static let slowChunkSize: UInt64 = 1024
+
         private func waitForBytes(_ progress: Progress) async throws {
             while progress.completedUnitCount == 0 {
                 try await Task.sleep(for: .milliseconds(1))
+            }
+        }
+
+        private func cancelOnFirstBytes(
+            _ progress: Progress
+        ) -> NSKeyValueObservation {
+            progress.observe(\.completedUnitCount) { progress, _ in
+                if progress.completedUnitCount > 0 { progress.cancel() }
             }
         }
 
