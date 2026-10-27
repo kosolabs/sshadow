@@ -51,15 +51,6 @@ extension NSFileProviderDomain {
         }
     }
 
-    public func add() async {
-        do {
-            try await NSFileProviderManager.add(self)
-            logger.notice("Domain added: \(self)")
-        } catch {
-            logger.error("Failed to add domain \(self): \(error)")
-        }
-    }
-
     public func remove() async {
         do {
             try await NSFileProviderManager.remove(self)
