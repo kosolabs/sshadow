@@ -88,7 +88,6 @@ package actor Session {
                 events: events
             )
             await session.removeStaleUploads()
-            await retryIgnored(config)
             return session
         }
     }
@@ -141,6 +140,7 @@ extension Session {
 
     func start(pollInterval: Duration?) async {
         await refreshMaterialized()
+        await ignoreRulesChangedHandler()
         guard pollTask == nil, let pollInterval else { return }
         schedule = PollSchedule(
             begin: ContinuousClock.now,

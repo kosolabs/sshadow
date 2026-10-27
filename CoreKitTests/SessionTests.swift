@@ -801,7 +801,7 @@ struct SessionTests {
     }
 
     struct ProviderTests {
-        @Test func newSessionRetriesExcludedItems() async throws {
+        @Test func startedSessionRetriesIgnoredItems() async throws {
             let sandbox = TestSandbox()
             let config = try sandbox.config
 
@@ -823,6 +823,7 @@ struct SessionTests {
                     () async throws(ConnectionError) -> Session in
                     try await provider(config) { _ in }
                 }
+                await session.start(pollInterval: nil)
                 await session.close()
             }
         }
