@@ -209,6 +209,7 @@ public struct SetAttributesRequest: CoreRequestType, PrettyDescribable {
     public let flags: Item.Flags?
     public let accessTime: Date?
     public let modifyTime: Date?
+    public let snapshot: IgnoreSnapshot?
 
     public var wrapped: CoreRequest { .setAttributes(self) }
 
@@ -216,12 +217,14 @@ public struct SetAttributesRequest: CoreRequestType, PrettyDescribable {
         itemId: String,
         flags: Item.Flags?,
         accessTime: Date?,
-        modifyTime: Date?
+        modifyTime: Date?,
+        snapshot: IgnoreSnapshot?
     ) {
         self.itemId = itemId
         self.flags = flags
         self.accessTime = accessTime
         self.modifyTime = modifyTime
+        self.snapshot = snapshot
     }
 }
 
@@ -238,17 +241,20 @@ public struct CreateSymlinkRequest: CoreRequestType, PrettyDescribable {
     public let parentId: String
     public let name: String
     public let target: String
+    public let snapshot: IgnoreSnapshot?
 
     public var wrapped: CoreRequest { .createSymlink(self) }
 
     public init(
         parentId: String,
         name: String,
-        target: String
+        target: String,
+        snapshot: IgnoreSnapshot?
     ) {
         self.parentId = parentId
         self.name = name
         self.target = target
+        self.snapshot = snapshot
     }
 }
 
@@ -266,6 +272,7 @@ public struct CreateDirectoryRequest: CoreRequestType, PrettyDescribable {
     public let name: String
     public let flags: Item.Flags
     public let ifExists: OnExists
+    public let snapshot: IgnoreSnapshot?
 
     public var wrapped: CoreRequest { .createDirectory(self) }
 
@@ -273,12 +280,14 @@ public struct CreateDirectoryRequest: CoreRequestType, PrettyDescribable {
         parentId: String,
         name: String,
         flags: Item.Flags,
-        ifExists: OnExists
+        ifExists: OnExists,
+        snapshot: IgnoreSnapshot?
     ) {
         self.parentId = parentId
         self.name = name
         self.flags = flags
         self.ifExists = ifExists
+        self.snapshot = snapshot
     }
 }
 
@@ -300,17 +309,20 @@ public struct MoveRequest: CoreRequestType, PrettyDescribable {
     public let itemId: String
     public let newParentId: String
     public let newName: String
+    public let snapshot: IgnoreSnapshot?
 
     public var wrapped: CoreRequest { .move(self) }
 
     public init(
         itemId: String,
         newParentId: String,
-        newName: String
+        newName: String,
+        snapshot: IgnoreSnapshot?
     ) {
         self.itemId = itemId
         self.newParentId = newParentId
         self.newName = newName
+        self.snapshot = snapshot
     }
 }
 
@@ -325,11 +337,13 @@ public struct MoveResponse: Message, PrettyDescribable {
 public struct RemoveFileRequest: CoreRequestType, PrettyDescribable {
     public typealias Response = RemoveFileResponse
     public let itemId: String
+    public let snapshot: IgnoreSnapshot?
 
     public var wrapped: CoreRequest { .removeFile(self) }
 
-    public init(itemId: String) {
+    public init(itemId: String, snapshot: IgnoreSnapshot?) {
         self.itemId = itemId
+        self.snapshot = snapshot
     }
 }
 
@@ -340,61 +354,18 @@ public struct RemoveFileResponse: Message, PrettyDescribable {
 public struct RemoveDirectoryRequest: CoreRequestType, PrettyDescribable {
     public typealias Response = RemoveDirectoryResponse
     public let itemId: String
+    public let snapshot: IgnoreSnapshot?
 
     public var wrapped: CoreRequest { .removeDirectory(self) }
 
-    public init(itemId: String) {
+    public init(itemId: String, snapshot: IgnoreSnapshot?) {
         self.itemId = itemId
+        self.snapshot = snapshot
     }
 }
 
 public struct RemoveDirectoryResponse: Message, PrettyDescribable {
     public init() {}
-}
-
-public struct ForgetRequest: CoreRequestType, PrettyDescribable {
-    public typealias Response = ForgetResponse
-    public let itemId: String
-
-    public var wrapped: CoreRequest { .forget(self) }
-
-    public init(itemId: String) {
-        self.itemId = itemId
-    }
-}
-
-public struct ForgetResponse: Message, PrettyDescribable {
-    public init() {}
-}
-
-public struct IsExcludedRequest: CoreRequestType, PrettyDescribable {
-    public typealias Response = IsExcludedResponse
-    public let parentId: String
-    public let name: String
-    public let isDirectory: Bool
-    public let snapshot: IgnoreSnapshot
-
-    public var wrapped: CoreRequest { .isExcluded(self) }
-
-    public init(
-        parentId: String,
-        name: String,
-        isDirectory: Bool,
-        snapshot: IgnoreSnapshot
-    ) {
-        self.parentId = parentId
-        self.name = name
-        self.isDirectory = isDirectory
-        self.snapshot = snapshot
-    }
-}
-
-public struct IsExcludedResponse: Message, PrettyDescribable {
-    public let excluded: Bool
-
-    public init(excluded: Bool) {
-        self.excluded = excluded
-    }
 }
 
 public protocol CoreProgressRequestType: Message {
@@ -408,6 +379,7 @@ public struct UploadRequest: CoreProgressRequestType, PrettyDescribable {
     public let name: String
     public let file: URL
     public let chunkSize: UInt64
+    public let snapshot: IgnoreSnapshot?
 
     public var wrapped: CoreProgressRequest { .upload(self) }
 
@@ -415,12 +387,14 @@ public struct UploadRequest: CoreProgressRequestType, PrettyDescribable {
         parentId: String,
         name: String,
         file: URL,
-        chunkSize: UInt64
+        chunkSize: UInt64,
+        snapshot: IgnoreSnapshot?
     ) {
         self.parentId = parentId
         self.name = name
         self.file = file
         self.chunkSize = chunkSize
+        self.snapshot = snapshot
     }
 }
 

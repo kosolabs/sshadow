@@ -18,8 +18,6 @@ public enum CoreRequest: Message, PrettyDescribable {
     case move(MoveRequest)
     case removeFile(RemoveFileRequest)
     case removeDirectory(RemoveDirectoryRequest)
-    case forget(ForgetRequest)
-    case isExcluded(IsExcludedRequest)
 
     public func encoded() throws -> Data {
         try JSONEncoder().encode(self)

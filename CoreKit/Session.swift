@@ -59,7 +59,7 @@ package actor Session {
         domainDb: DomainDB,
         groupUrl: URL,
         signalChanges: @escaping DomainRegistry.DomainSignal,
-        retryExcluded: @escaping DomainRegistry.DomainSignal,
+        retryIgnored: @escaping DomainRegistry.DomainSignal,
         transfers: Transfers<ContinuousClock>,
         events: Events<ContinuousClock>
     ) -> Provider {
@@ -72,14 +72,14 @@ package actor Session {
                 db: domainDb,
                 groupUrl: groupUrl,
                 changesDetectedHandler: { await signalChanges(config) },
-                ignoreRulesChangedHandler: { await retryExcluded(config) },
+                ignoreRulesChangedHandler: { await retryIgnored(config) },
                 connectionLostHandler: handler,
                 idleTimeProvider: SystemIdle.duration,
                 transfers: transfers,
                 events: events
             )
             await session.removeStaleUploads()
-            await retryExcluded(config)
+            await retryIgnored(config)
             return session
         }
     }
@@ -521,10 +521,17 @@ extension Session {
         for itemId: NSFileProviderItemIdentifier,
         flags: Item.Flags? = nil,
         accessTime: Date? = nil,
-        modifyTime: Date? = nil
+        modifyTime: Date? = nil,
+        snapshot: IgnoreSnapshot?
     ) async throws -> Item {
         await gate.enter()
         defer { gate.leave() }
+
+        let ref = await ref(for: itemId)
+        if let rule = try await rule(for: itemId, snapshot: snapshot) {
+            skip("Skip set attributes of \(ref)", by: rule)
+            throw CoreError.excludedFromSync
+        }
 
         let changes = {
             var changes: [String] = []
@@ -536,7 +543,7 @@ extension Session {
 
         try await perform(
             with: itemId,
-            recording: "Set attributes of \(ref(for: itemId)) to \(changes)"
+            recording: "Set attributes of \(ref) to \(changes)"
         ) {
             try await sftp.setAttributes(
                 at: path(for: itemId),
@@ -558,15 +565,26 @@ extension Session {
     func createSymlink(
         _ name: String,
         in parentId: NSFileProviderItemIdentifier,
-        target: String
+        target: String,
+        snapshot: IgnoreSnapshot?
     ) async throws -> Item {
         await gate.enter()
         defer { gate.leave() }
 
+        let ref = await ref(for: name, in: parentId)
+        if let rule = try await rule(
+            for: name,
+            in: parentId,
+            isDirectory: false,
+            snapshot: snapshot
+        ) {
+            skip("Skip create symlink at \(ref)", by: rule)
+            throw CoreError.excludedFromSync
+        }
+
         try await perform(
             with: parentId,
-            recording:
-                "Create symlink from \(ref(for: name, in: parentId)) to \(target)"
+            recording: "Create symlink from \(ref) to \(target)"
         ) {
             try await sftp.makeSymlink(
                 to: target,
@@ -584,12 +602,23 @@ extension Session {
         _ name: String,
         in parentId: NSFileProviderItemIdentifier,
         flags: Item.Flags = .all,
-        ifExists: OnExists = .fail
+        ifExists: OnExists = .fail,
+        snapshot: IgnoreSnapshot?
     ) async throws -> Item {
         await gate.enter()
         defer { gate.leave() }
 
         let ref = await ref(for: name, in: parentId)
+        if let rule = try await rule(
+            for: name,
+            in: parentId,
+            isDirectory: true,
+            snapshot: snapshot
+        ) {
+            skip("Skip create directory at \(ref)", by: rule)
+            throw CoreError.excludedFromSync
+        }
+
         try await perform(
             with: parentId,
             recording: "Create directory at \(ref)"
@@ -613,19 +642,32 @@ extension Session {
     func move(
         _ itemId: NSFileProviderItemIdentifier,
         to newParentId: NSFileProviderItemIdentifier,
-        name newName: String
+        name newName: String,
+        snapshot: IgnoreSnapshot?
     ) async throws -> Item {
         await gate.enter()
         defer { gate.leave() }
 
+        let from = await ref(for: itemId)
+        let to = await ref(for: newName, in: newParentId)
+        let rule =
+            newParentId == .trashContainer
+            ? try await rule(for: itemId, snapshot: snapshot)
+            : try await rule(
+                for: newName,
+                in: newParentId,
+                isDirectory: db.item(for: itemId).kind.isDirectory,
+                snapshot: snapshot
+            )
+        if let rule {
+            skip("Skip move of \(from) to \(to)", by: rule)
+            throw CoreError.excludedFromSync
+        }
+
         let oldPath = try await path(for: itemId)
         let newPath = try await path(for: newName, in: newParentId)
 
-        try await perform(
-            with: itemId,
-            recording:
-                "Move \(ref(for: itemId)) to \(ref(for: newName, in: newParentId))"
-        ) {
+        try await perform(with: itemId, recording: "Move \(from) to \(to)") {
             do {
                 try await sftp.move(from: oldPath, to: newPath)
             } catch SSHError.sftpError(.noSuchFile, _)
@@ -644,15 +686,18 @@ extension Session {
     }
 
     func removeFile(
-        for itemId: NSFileProviderItemIdentifier
+        for itemId: NSFileProviderItemIdentifier,
+        snapshot: IgnoreSnapshot?
     ) async throws {
         await gate.enter()
         defer { gate.leave() }
 
-        try await perform(
-            with: itemId,
-            recording: "Remove file \(ref(for: itemId))"
-        ) {
+        guard try await !forgetIfIgnored(itemId, snapshot: snapshot) else {
+            return
+        }
+
+        let ref = await ref(for: itemId)
+        try await perform(with: itemId, recording: "Remove file \(ref)") {
             try await sftp.removeFile(at: path(for: itemId))
         }
         try await refresh(db.parent(of: itemId).id)
@@ -660,10 +705,15 @@ extension Session {
     }
 
     func removeDirectory(
-        for itemId: NSFileProviderItemIdentifier
+        for itemId: NSFileProviderItemIdentifier,
+        snapshot: IgnoreSnapshot?
     ) async throws {
         await gate.enter()
         defer { gate.leave() }
+
+        guard try await !forgetIfIgnored(itemId, snapshot: snapshot) else {
+            return
+        }
 
         try await perform(
             with: itemId,
@@ -675,39 +725,55 @@ extension Session {
         try await db.remove(itemId)
     }
 
-    func forget(_ itemId: NSFileProviderItemIdentifier) async throws {
-        await gate.enter()
-        defer { gate.leave() }
-
-        logger.info("Kept ignored item on server: \(await ref(for: itemId))")
+    private func forgetIfIgnored(
+        _ itemId: NSFileProviderItemIdentifier,
+        snapshot: IgnoreSnapshot?
+    ) async throws -> Bool {
+        guard let rule = try await rule(for: itemId, snapshot: snapshot)
+        else { return false }
+        await skip("Skip remove of \(ref(for: itemId))", by: rule)
         try await db.remove(itemId)
         await cache.invalidate(itemId)
+        return true
     }
 }
 
 // MARK: - Ignore Rules
 
 extension Session {
-    func isExcluded(
-        _ name: String,
+    private func rule(
+        for itemId: NSFileProviderItemIdentifier,
+        snapshot: IgnoreSnapshot?
+    ) async throws -> Rule? {
+        let item = try await db.item(for: itemId)
+        guard let parentId = item.parentId else { return nil }
+        return try await rule(
+            for: item.name,
+            in: parentId,
+            isDirectory: item.kind.isDirectory,
+            snapshot: snapshot
+        )
+    }
+
+    private func rule(
+        for name: String,
         in parentId: NSFileProviderItemIdentifier,
         isDirectory: Bool,
-        snapshot: IgnoreSnapshot
-    ) async throws -> Bool {
+        snapshot: IgnoreSnapshot?
+    ) async throws -> Rule? {
+        guard let snapshot else { return nil }
         try await refreshIgnores(from: snapshot)
 
-        let parent = try await db.path(for: parentId)
-        guard
-            let rule = ignores.rule(
-                ignoring: name,
-                in: parent,
-                isDirectory: isDirectory
-            )
-        else { return false }
-        logger.info(
-            "Excluded from sync: \(subpath(name, in: parent)) (\(rule.source))"
+        return ignores.rule(
+            ignoring: name,
+            in: try await db.path(for: parentId),
+            isDirectory: isDirectory
         )
-        return true
+    }
+
+    private func skip(_ message: LogMessage, by rule: Rule) {
+        logger.info("\(message.debug): \(rule.source)")
+        fileLog.info(message.display, detail: rule.source)
     }
 
     private func refreshIgnores(from snapshot: IgnoreSnapshot) async throws {
@@ -829,12 +895,23 @@ extension Session {
         to parentId: NSFileProviderItemIdentifier,
         file url: URL,
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
+        snapshot: IgnoreSnapshot?,
         progress: Progress
     ) async throws -> Item {
         await gate.enter()
         defer { gate.leave() }
 
+        let ref = await ref(for: name, in: parentId)
         let manifest = try Manifest(from: url)
+        if let rule = try await rule(
+            for: name,
+            in: parentId,
+            isDirectory: manifest.root.kind == .folder,
+            snapshot: snapshot
+        ) {
+            skip("Skip upload of \(ref)", by: rule)
+            throw CoreError.excludedFromSync
+        }
 
         progress.kind = .file
         progress.fileOperationKind = .uploading
@@ -849,7 +926,7 @@ extension Session {
             await cache.invalidate(itemId)
         }
 
-        let message: LogMessage = await "Upload \(ref(for: name, in: parentId))"
+        let message: LogMessage = "Upload \(ref)"
         let estimator = ThroughputEstimator(
             progress: progress,
             totalUnitCount: Int64(manifest.totalSize()),

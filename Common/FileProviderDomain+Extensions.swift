@@ -98,14 +98,14 @@ extension NSFileProviderDomain {
         }
     }
 
-    public func retryExcluded() async {
+    public func retryIgnored() async {
         do {
             try await manager.signalErrorResolved(
                 NSFileProviderError(.excludedFromSync)
             )
-            logger.info("Retrying excluded items: \(self)")
+            logger.info("Retrying ignored items: \(self)")
         } catch {
-            logger.error("Failed to retry excluded items for \(self): \(error)")
+            logger.error("Failed to retry ignored items for \(self): \(error)")
         }
     }
 

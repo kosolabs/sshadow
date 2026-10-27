@@ -738,21 +738,23 @@ struct SessionTests {
             try sandbox.createFile(at: ".sshadowignore", contents: "*.tmp\n")
             _ = try await session.reconcileAll()
             let files = [folder("", unresolved())]
-            let log = try await session.isExcluded(
+            _ = try await session.createSymlink(
                 "a.log",
                 in: .rootContainer,
-                isDirectory: false,
+                target: "/dev/null",
                 snapshot: files
             )
-            let tmp = try await session.isExcluded(
-                "a.tmp",
-                in: .rootContainer,
-                isDirectory: false,
-                snapshot: files
-            )
+            await #expect(throws: CoreError.excludedFromSync) {
+                try await session.createSymlink(
+                    "a.tmp",
+                    in: .rootContainer,
+                    target: "/dev/null",
+                    snapshot: files
+                )
+            }
 
-            #expect(!log)
-            #expect(tmp)
+            #expect(sandbox.exists(at: "a.log"))
+            #expect(!sandbox.exists(at: "a.tmp"))
         }
 
         @Test func ignoredRemoteAdditionIsNoChange() async throws {
@@ -783,14 +785,15 @@ struct SessionTests {
             let session = try await sandbox.getSession()
             try sandbox.removeItem(at: ".sshadowignore")
 
-            let excluded = try await session.isExcluded(
-                "build",
-                in: .rootContainer,
-                isDirectory: true,
-                snapshot: [folder("", unresolved())]
-            )
+            await #expect(throws: CoreError.excludedFromSync) {
+                try await session.createDirectory(
+                    "build",
+                    in: .rootContainer,
+                    snapshot: [folder("", unresolved())]
+                )
+            }
 
-            #expect(excluded)
+            #expect(!sandbox.exists(at: "build"))
         }
     }
 
@@ -806,7 +809,7 @@ struct SessionTests {
                     ),
                     groupUrl: sandbox.url(in: .group),
                     signalChanges: { _ in },
-                    retryExcluded: { if $0.id == config.id { called() } },
+                    retryIgnored: { if $0.id == config.id { called() } },
                     transfers: Transfers(),
                     events: Events()
                 )
@@ -1700,7 +1703,11 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(name: "perms.txt")
-            try await session.setAttributes(for: itemId, flags: .rw)
+            try await session.setAttributes(
+                for: itemId,
+                flags: .rw,
+                snapshot: nil
+            )
 
             #expect(try sandbox.permissions(of: "perms.txt") == 0o644)
             let changes = try await session.reconcileAll()
@@ -1714,7 +1721,11 @@ struct SessionTests {
 
             let itemId = try await session.child(name: "modify-time.txt")
             let date = Date(timeIntervalSince1970: 1_000_000)
-            try await session.setAttributes(for: itemId, modifyTime: date)
+            try await session.setAttributes(
+                for: itemId,
+                modifyTime: date,
+                snapshot: nil
+            )
 
             #expect(try sandbox.modifyDate(of: "modify-time.txt") == date)
             let changes = try await session.reconcileAll()
@@ -1728,7 +1739,11 @@ struct SessionTests {
 
             let itemId = try await session.child(name: "access-time.txt")
             let date = Date(timeIntervalSince1970: 2_000_000)
-            try await session.setAttributes(for: itemId, accessTime: date)
+            try await session.setAttributes(
+                for: itemId,
+                accessTime: date,
+                snapshot: nil
+            )
 
             #expect(try sandbox.accessDate(of: "access-time.txt") == date)
             let changes = try await session.reconcileAll()
@@ -1744,7 +1759,11 @@ struct SessionTests {
             try sandbox.removeItem(at: "missing.txt")
 
             await #expect(throws: CoreError.itemNotFound(itemId.rawValue)) {
-                try await session.setAttributes(for: itemId, flags: .rw)
+                try await session.setAttributes(
+                    for: itemId,
+                    flags: .rw,
+                    snapshot: nil
+                )
             }
         }
 
@@ -1761,7 +1780,11 @@ struct SessionTests {
             defer { try? sandbox.touch("locked", permissions: 0o755) }
 
             await #expect(throws: CoreError.permissionDenied) {
-                try await session.setAttributes(for: itemId, flags: .rw)
+                try await session.setAttributes(
+                    for: itemId,
+                    flags: .rw,
+                    snapshot: nil
+                )
             }
         }
 
@@ -1778,7 +1801,11 @@ struct SessionTests {
                 await ssh.close()
 
                 await #expect(throws: CoreError.serverUnreachable) {
-                    try await session.setAttributes(for: itemId, flags: .rw)
+                    try await session.setAttributes(
+                        for: itemId,
+                        flags: .rw,
+                        snapshot: nil
+                    )
                 }
             }
         }
@@ -1793,7 +1820,8 @@ struct SessionTests {
 
             let item = try await session.createDirectory(
                 "Doc.rtfd",
-                in: .rootContainer
+                in: .rootContainer,
+                snapshot: nil
             )
 
             #expect(item.kind == .package)
@@ -1807,7 +1835,8 @@ struct SessionTests {
 
             let item = try await session.createDirectory(
                 "new-dir",
-                in: .rootContainer
+                in: .rootContainer,
+                snapshot: nil
             )
 
             #expect(item.name == "new-dir")
@@ -1826,7 +1855,8 @@ struct SessionTests {
             let item = try await session.createDirectory(
                 "existing-dir",
                 in: .rootContainer,
-                ifExists: .succeed
+                ifExists: .succeed,
+                snapshot: nil
             )
 
             #expect(item.name == "existing-dir")
@@ -1840,7 +1870,11 @@ struct SessionTests {
         {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
-            _ = try await session.createDirectory("x", in: .rootContainer)
+            _ = try await session.createDirectory(
+                "x",
+                in: .rootContainer,
+                snapshot: nil
+            )
 
             try sandbox.createFile(at: "x/child.txt", contents: "c")
             let (updates, _) = try await session.reconcileAll().split()
@@ -1858,7 +1892,8 @@ struct SessionTests {
             _ = try await session.createDirectory(
                 "x",
                 in: .rootContainer,
-                ifExists: .succeed
+                ifExists: .succeed,
+                snapshot: nil
             )
             let (updates, _) = try await session.reconcileAll().split()
 
@@ -1876,7 +1911,8 @@ struct SessionTests {
                 _ = try await session.createDirectory(
                     "existing-file",
                     in: .rootContainer,
-                    ifExists: .succeed
+                    ifExists: .succeed,
+                    snapshot: nil
                 )
             }
             let changes = try await session.reconcileAll()
@@ -1895,7 +1931,8 @@ struct SessionTests {
                 _ = try await session.createDirectory(
                     "link-dir",
                     in: .rootContainer,
-                    ifExists: .succeed
+                    ifExists: .succeed,
+                    snapshot: nil
                 )
             }
             let changes = try await session.reconcileAll()
@@ -1910,7 +1947,8 @@ struct SessionTests {
             await #expect {
                 try await session.createDirectory(
                     "already-exists",
-                    in: .rootContainer
+                    in: .rootContainer,
+                    snapshot: nil
                 )
             } throws: { error in
                 guard case CoreError.filenameCollision = error else {
@@ -1928,7 +1966,8 @@ struct SessionTests {
 
             let item = try await session.createDirectory(
                 "row-match-dir",
-                in: .rootContainer
+                in: .rootContainer,
+                snapshot: nil
             )
 
             let lookedUpId = try await session.child(name: "row-match-dir")
@@ -1945,7 +1984,8 @@ struct SessionTests {
             await #expect(throws: CoreError.filenameCollision) {
                 _ = try await session.createDirectory(
                     "collide-dir",
-                    in: .rootContainer
+                    in: .rootContainer,
+                    snapshot: nil
                 )
             }
             let changes = try await session.reconcileAll()
@@ -1961,7 +2001,8 @@ struct SessionTests {
             let item = try await session.createSymlink(
                 "link",
                 in: .rootContainer,
-                target: "/etc/hosts"
+                target: "/etc/hosts",
+                snapshot: nil
             )
 
             #expect(item.name == "link")
@@ -1977,7 +2018,8 @@ struct SessionTests {
             let item = try await session.createSymlink(
                 "link",
                 in: .rootContainer,
-                target: "/dev/null"
+                target: "/dev/null",
+                snapshot: nil
             )
 
             let lookedUpId = try await session.child(name: "link")
@@ -1995,7 +2037,8 @@ struct SessionTests {
                 _ = try await session.createSymlink(
                     "collide",
                     in: .rootContainer,
-                    target: "/dev/null"
+                    target: "/dev/null",
+                    snapshot: nil
                 )
             }
             let changes = try await session.reconcileAll()
@@ -2014,7 +2057,8 @@ struct SessionTests {
             let item = try await session.move(
                 itemId,
                 to: .rootContainer,
-                name: "Notes.rtfd"
+                name: "Notes.rtfd",
+                snapshot: nil
             )
 
             #expect(item.id == itemId)
@@ -2036,7 +2080,8 @@ struct SessionTests {
             let item = try await session.move(
                 itemId,
                 to: .rootContainer,
-                name: "Doc"
+                name: "Doc",
+                snapshot: nil
             )
 
             #expect(item.id == itemId)
@@ -2055,7 +2100,8 @@ struct SessionTests {
             try await session.move(
                 itemId,
                 to: .rootContainer,
-                name: "renamed.txt"
+                name: "renamed.txt",
+                snapshot: nil
             )
 
             let newId = try await session.child(name: "renamed.txt")
@@ -2074,7 +2120,12 @@ struct SessionTests {
             let itemId = try await session.child(name: "file.txt")
             let destId = try await session.child(name: "dest")
 
-            try await session.move(itemId, to: destId, name: "file.txt")
+            try await session.move(
+                itemId,
+                to: destId,
+                name: "file.txt",
+                snapshot: nil
+            )
 
             let movedId = try await session.child(of: destId, name: "file.txt")
             #expect(itemId == movedId)
@@ -2092,7 +2143,12 @@ struct SessionTests {
             let itemId = try await session.child(name: "old.txt")
             let destId = try await session.child(name: "dest")
 
-            try await session.move(itemId, to: destId, name: "new.txt")
+            try await session.move(
+                itemId,
+                to: destId,
+                name: "new.txt",
+                snapshot: nil
+            )
 
             let parent = try await session.parent(of: itemId)
             #expect(parent == destId)
@@ -2113,7 +2169,8 @@ struct SessionTests {
             try await session.move(
                 itemId,
                 to: .trashContainer,
-                name: "file.txt"
+                name: "file.txt",
+                snapshot: nil
             )
 
             #expect(!sandbox.exists(at: "file.txt"))
@@ -2133,7 +2190,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(name: "delete.txt")
-            try await session.removeFile(for: itemId)
+            try await session.removeFile(for: itemId, snapshot: nil)
 
             #expect(!sandbox.exists(at: "delete.txt"))
             let changes = try await session.reconcileAll()
@@ -2150,7 +2207,7 @@ struct SessionTests {
                 of: folderId,
                 name: "delete.txt"
             )
-            try await session.removeFile(for: itemId)
+            try await session.removeFile(for: itemId, snapshot: nil)
 
             #expect(!sandbox.exists(at: "folder/delete.txt"))
             let changes = try await session.reconcileAll()
@@ -2163,10 +2220,10 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(name: "missing.txt")
-            try await session.removeFile(for: itemId)
+            try await session.removeFile(for: itemId, snapshot: nil)
 
             await #expect(throws: CoreError.itemNotFound(itemId)) {
-                try await session.removeFile(for: itemId)
+                try await session.removeFile(for: itemId, snapshot: nil)
             }
             let changes = try await session.reconcileAll()
             #expect(changes == [])
@@ -2180,7 +2237,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(name: "delete")
-            try await session.removeDirectory(for: itemId)
+            try await session.removeDirectory(for: itemId, snapshot: nil)
 
             #expect(!sandbox.exists(at: "delete"))
             let changes = try await session.reconcileAll()
@@ -2193,7 +2250,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(name: "non-empty")
-            try await session.removeDirectory(for: itemId)
+            try await session.removeDirectory(for: itemId, snapshot: nil)
 
             #expect(!sandbox.exists(at: "non-empty"))
             let changes = try await session.reconcileAll()
@@ -2201,19 +2258,58 @@ struct SessionTests {
         }
     }
 
-    struct IsExcludedTests {
-        @Test func forgetKeepsRemoteCopy() async throws {
+    struct ExclusionTests {
+        @Test func removingExcludedFileKeepsRemoteCopy() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "b.txt", contents: "b")
             let session = try await sandbox.getSession()
             let bId = try await session.child(name: "b.txt")
 
-            try await session.forget(bId)
+            try await session.removeFile(
+                for: bId,
+                snapshot: [folder("", text("b.txt\n"))]
+            )
 
             #expect(sandbox.exists(at: "b.txt"))
             await #expect(throws: CoreError.itemNotFound(bId.rawValue)) {
                 try await session.item(for: bId)
             }
+        }
+
+        @Test func uploadToExcludedNameIsSkipped() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "a.log", in: .group, contents: "a")
+            let session = try await sandbox.getSession()
+
+            await #expect(throws: CoreError.excludedFromSync) {
+                try await session.upload(
+                    "a.log",
+                    to: .rootContainer,
+                    file: sandbox.url(for: "a.log", in: .group),
+                    snapshot: [folder("", text("*.log\n"))],
+                    progress: Progress()
+                )
+            }
+
+            #expect(!sandbox.exists(at: "a.log"))
+        }
+
+        @Test func trashingExcludedItemIsSkipped() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "b.txt", contents: "b")
+            let session = try await sandbox.getSession()
+            let bId = try await session.child(name: "b.txt")
+
+            await #expect(throws: CoreError.excludedFromSync) {
+                try await session.move(
+                    bId,
+                    to: .trashContainer,
+                    name: "b.txt",
+                    snapshot: [folder("", text("b.txt\n"))]
+                )
+            }
+
+            #expect(sandbox.exists(at: "b.txt"))
         }
 
         @Test func changedRulesCallHandler() async throws {
@@ -2225,12 +2321,13 @@ struct SessionTests {
                     ignoreRulesChangedHandler: { called() }
                 )
                 for _ in 0..<2 {
-                    _ = try await session.isExcluded(
-                        "build",
-                        in: .rootContainer,
-                        isDirectory: true,
-                        snapshot: files
-                    )
+                    await #expect(throws: CoreError.excludedFromSync) {
+                        try await session.createDirectory(
+                            "build",
+                            in: .rootContainer,
+                            snapshot: files
+                        )
+                    }
                 }
             }
         }
@@ -2239,28 +2336,29 @@ struct SessionTests {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
 
-            let excluded = try await session.isExcluded(
-                "build",
-                in: .rootContainer,
-                isDirectory: true,
-                snapshot: [folder("", text("build/\n"))]
-            )
+            await #expect(throws: CoreError.excludedFromSync) {
+                try await session.createDirectory(
+                    "build",
+                    in: .rootContainer,
+                    snapshot: [folder("", text("build/\n"))]
+                )
+            }
 
-            #expect(excluded)
+            #expect(!sandbox.exists(at: "build"))
         }
 
         @Test func otherNameIsNotExcluded() async throws {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
 
-            let excluded = try await session.isExcluded(
+            _ = try await session.createSymlink(
                 "build",
                 in: .rootContainer,
-                isDirectory: false,
+                target: "/dev/null",
                 snapshot: [folder("", text("build/\n"))]
             )
 
-            #expect(!excluded)
+            #expect(sandbox.exists(at: "build"))
         }
 
         @Test func nestedRulesOverrideParentRules() async throws {
@@ -2273,21 +2371,23 @@ struct SessionTests {
                 folder("src", text("!keep.log\n")),
             ]
 
-            let keep = try await session.isExcluded(
+            _ = try await session.createSymlink(
                 "keep.log",
                 in: srcId,
-                isDirectory: false,
+                target: "/dev/null",
                 snapshot: files
             )
-            let other = try await session.isExcluded(
-                "other.log",
-                in: srcId,
-                isDirectory: false,
-                snapshot: files
-            )
+            await #expect(throws: CoreError.excludedFromSync) {
+                try await session.createSymlink(
+                    "other.log",
+                    in: srcId,
+                    target: "/dev/null",
+                    snapshot: files
+                )
+            }
 
-            #expect(!keep)
-            #expect(other)
+            #expect(sandbox.exists(at: "src/keep.log"))
+            #expect(!sandbox.exists(at: "src/other.log"))
         }
 
         @Test func remoteIgnoreFileIsReadFromServer() async throws {
@@ -2296,42 +2396,43 @@ struct SessionTests {
             let session = try await sandbox.getSession()
             let srcId = try await session.child(name: "src")
 
-            let excluded = try await session.isExcluded(
-                "out.o",
-                in: srcId,
-                isDirectory: false,
-                snapshot: [folder(""), folder("src", unresolved())]
-            )
+            await #expect(throws: CoreError.excludedFromSync) {
+                try await session.createSymlink(
+                    "out.o",
+                    in: srcId,
+                    target: "/dev/null",
+                    snapshot: [folder(""), folder("src", unresolved())]
+                )
+            }
 
-            #expect(excluded)
+            #expect(!sandbox.exists(at: "src/out.o"))
         }
 
         @Test func missingRemoteIgnoreFileHasNoRules() async throws {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
 
-            let excluded = try await session.isExcluded(
+            _ = try await session.createSymlink(
                 "out.o",
                 in: .rootContainer,
-                isDirectory: false,
+                target: "/dev/null",
                 snapshot: [folder("", unresolved())]
             )
 
-            #expect(!excluded)
+            #expect(sandbox.exists(at: "out.o"))
         }
 
         @Test func onlyConfiguredFilenamesApply() async throws {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
 
-            let excluded = try await session.isExcluded(
+            _ = try await session.createDirectory(
                 "build",
                 in: .rootContainer,
-                isDirectory: true,
                 snapshot: [folder("", text("build/\n", named: ".gitignore"))]
             )
 
-            #expect(!excluded)
+            #expect(sandbox.exists(at: "build"))
         }
 
         @Test func mismatchedDirectoriesAreNotExcluded() async throws {
@@ -2340,14 +2441,13 @@ struct SessionTests {
             let session = try await sandbox.getSession()
             let srcId = try await session.child(name: "src")
 
-            let excluded = try await session.isExcluded(
+            _ = try await session.createDirectory(
                 "build",
                 in: srcId,
-                isDirectory: true,
                 snapshot: [folder(""), folder("lib", text("build/\n"))]
             )
 
-            #expect(!excluded)
+            #expect(sandbox.exists(at: "src/build"))
         }
     }
 
@@ -2366,6 +2466,7 @@ struct SessionTests {
                 "Doc.rtfd",
                 to: .rootContainer,
                 file: source,
+                snapshot: nil,
                 progress: Progress()
             )
 
@@ -2389,6 +2490,7 @@ struct SessionTests {
                 filename,
                 to: .rootContainer,
                 file: uploadUrl,
+                snapshot: nil,
                 progress: progress
             )
             let currId = try await session.child(name: filename)
@@ -2419,6 +2521,7 @@ struct SessionTests {
                 filename,
                 to: .rootContainer,
                 file: uploadUrl,
+                snapshot: nil,
                 progress: progress
             )
             let currId = try await session.child(name: filename)
@@ -2447,6 +2550,7 @@ struct SessionTests {
                     "collide-upload",
                     to: .rootContainer,
                     file: uploadUrl,
+                    snapshot: nil,
                     progress: Progress()
                 )
             }
@@ -2470,6 +2574,7 @@ struct SessionTests {
                     "cancelled.dat",
                     to: .rootContainer,
                     file: uploadUrl,
+                    snapshot: nil,
                     progress: progress
                 )
             }
@@ -2490,6 +2595,7 @@ struct SessionTests {
                     "partial.dat",
                     to: .rootContainer,
                     file: uploadUrl,
+                    snapshot: nil,
                     progress: progress
                 )
             }
@@ -2514,6 +2620,7 @@ struct SessionTests {
                     to: .rootContainer,
                     file: uploadUrl,
                     chunkSize: Self.slowChunkSize,
+                    snapshot: nil,
                     progress: progress
                 )
             }
@@ -2547,6 +2654,7 @@ struct SessionTests {
                     "existing.txt",
                     to: .rootContainer,
                     file: uploadUrl,
+                    snapshot: nil,
                     progress: progress
                 )
             }
@@ -2570,6 +2678,7 @@ struct SessionTests {
                     "existing.dat",
                     to: .rootContainer,
                     file: uploadUrl,
+                    snapshot: nil,
                     progress: progress
                 )
             }
@@ -2591,6 +2700,7 @@ struct SessionTests {
                     to: .rootContainer,
                     file: uploadUrl,
                     chunkSize: Self.slowChunkSize,
+                    snapshot: nil,
                     progress: progress
                 )
             }
@@ -2630,6 +2740,7 @@ struct SessionTests {
                     "Doc.rtfd",
                     to: .rootContainer,
                     file: source,
+                    snapshot: nil,
                     progress: progress
                 )
             }
@@ -2652,6 +2763,7 @@ struct SessionTests {
                 "existing.txt",
                 to: .rootContainer,
                 file: uploadUrl,
+                snapshot: nil,
                 progress: Progress()
             )
 
@@ -2683,6 +2795,7 @@ struct SessionTests {
                     "existing.txt",
                     to: lockedId,
                     file: uploadUrl,
+                    snapshot: nil,
                     progress: Progress()
                 )
             }
@@ -2702,6 +2815,7 @@ struct SessionTests {
                 "first.txt",
                 to: .rootContainer,
                 file: uploadUrl,
+                snapshot: nil,
                 progress: Progress()
             )
             _ = try sandbox.removeItem(at: ".sshadow")
@@ -2709,6 +2823,7 @@ struct SessionTests {
                 "second.txt",
                 to: .rootContainer,
                 file: uploadUrl,
+                snapshot: nil,
                 progress: Progress()
             )
 
@@ -2731,6 +2846,7 @@ struct SessionTests {
                     "existing.txt",
                     to: .rootContainer,
                     file: uploadUrl,
+                    snapshot: nil,
                     progress: Progress()
                 )
             }
@@ -2799,6 +2915,7 @@ struct SessionTests {
                 "file.txt",
                 to: folderId,
                 file: uploadUrl,
+                snapshot: nil,
                 progress: progress
             )
             let currId = try await session.child(of: folderId, name: "file.txt")
@@ -2834,6 +2951,7 @@ struct SessionTests {
                 "Doc.rtfd",
                 to: .rootContainer,
                 file: source,
+                snapshot: nil,
                 progress: progress
             )
 
@@ -2864,6 +2982,7 @@ struct SessionTests {
                 "Empty.rtfd",
                 to: .rootContainer,
                 file: source,
+                snapshot: nil,
                 progress: progress
             )
 
@@ -2901,6 +3020,7 @@ struct SessionTests {
                     "Bundle.app",
                     to: .rootContainer,
                     file: source,
+                    snapshot: nil,
                     progress: Progress()
                 )
             }
@@ -2920,6 +3040,7 @@ struct SessionTests {
                     "Bundle.app",
                     to: .rootContainer,
                     file: source,
+                    snapshot: nil,
                     progress: progress
                 )
             }
@@ -2953,6 +3074,7 @@ struct SessionTests {
                 "Doc.rtfd",
                 to: .rootContainer,
                 file: source,
+                snapshot: nil,
                 progress: progress
             )
 
@@ -3291,6 +3413,7 @@ struct SessionTests {
                 "edited.dat",
                 to: .rootContainer,
                 file: uploadUrl,
+                snapshot: nil,
                 progress: Progress()
             )
             #expect(item.id == itemId)
@@ -3393,7 +3516,11 @@ struct SessionTests {
                 await Task.yield()
             }
 
-            _ = try await session.createDirectory("newdir", in: .rootContainer)
+            _ = try await session.createDirectory(
+                "newdir",
+                in: .rootContainer,
+                snapshot: nil
+            )
 
             // The poll finishes and emits its changes.
             try await poll.value
@@ -3412,7 +3539,11 @@ struct SessionTests {
 
             // The operation stays outstanding until the latch opens.
             let operation = Task {
-                try await session.setAttributes(for: itemId, flags: .rw)
+                try await session.setAttributes(
+                    for: itemId,
+                    flags: .rw,
+                    snapshot: nil
+                )
             }
             try await waitUntilOutstanding(session)
 
@@ -3444,7 +3575,11 @@ struct SessionTests {
             #expect(await session.outstanding == 0)
 
             let operation = Task {
-                try await session.setAttributes(for: itemId, flags: .rw)
+                try await session.setAttributes(
+                    for: itemId,
+                    flags: .rw,
+                    snapshot: nil
+                )
             }
             try await waitUntilOutstanding(session)
             #expect(await session.outstanding == 1)
@@ -3490,7 +3625,11 @@ struct SessionTests {
             await ssh.close()
 
             let operation = Task {
-                try await session.setAttributes(for: itemId, flags: .rw)
+                try await session.setAttributes(
+                    for: itemId,
+                    flags: .rw,
+                    snapshot: nil
+                )
             }
             try await waitUntilOutstanding(session)
 

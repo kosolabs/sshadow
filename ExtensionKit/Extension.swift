@@ -225,14 +225,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             }
         }
 
-        if try await isExcluded(
-            filename,
-            in: parentId,
-            isDirectory: type.conforms(to: .directory)
-        ) {
-            throw CoreError.excludedFromSync
-        }
-
+        let snapshot = try await ignoreSnapshot(in: parentId)
         var remaining = fields.subtracting(.nameFields)
         let steps = progress.steps()
 
@@ -246,7 +239,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 let item = try await self.client.createSymlink(
                     parentId: parentId,
                     name: filename,
-                    target: target
+                    target: target,
+                    snapshot: snapshot
                 )
                 itemId = item.id
             }
@@ -266,6 +260,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     parentId: parentId,
                     name: filename,
                     file: url,
+                    snapshot: snapshot,
                     progress: subprogress
                 )
                 itemId = item.id
@@ -280,7 +275,8 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 let item = try await self.client.createDirectory(
                     parentId: parentId,
                     name: filename,
-                    flags: .init(from: fileSystemFlags)
+                    flags: .init(from: fileSystemFlags),
+                    snapshot: snapshot
                 )
                 itemId = item.id
             }
@@ -353,20 +349,24 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 + "options: \(options), " + "request: \(request)"
         )
 
-        let excluded =
-            item.parentItemIdentifier == .trashContainer
-            ? try await isExcluded(client.item(for: item.itemIdentifier))
-            : try await isExcluded(
-                item.filename,
-                in: item.parentItemIdentifier,
-                isDirectory: item.contentType?.conforms(to: .directory) ?? false
-            )
-        if excluded {
-            throw CoreError.excludedFromSync
-        }
-
         var remaining = changedFields
         let steps = progress.steps()
+
+        if remaining.intersects(with: .nameFields) {
+            remaining.subtract(.nameFields)
+            steps.add {
+                let checkedParent =
+                    item.parentId == .trashContainer
+                    ? try await self.client.parent(of: item.itemIdentifier)
+                    : item.parentId
+                _ = try await self.client.move(
+                    item.itemIdentifier,
+                    toParent: item.parentId,
+                    name: item.filename,
+                    snapshot: self.ignoreSnapshot(in: checkedParent)
+                )
+            }
+        }
 
         if remaining.intersects(with: .writeFields) {
             guard let newContents = newContents else {
@@ -383,28 +383,12 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             remaining.subtract(.contents)
 
             steps.add(weight: max(1, fileTransferUnits)) { subprogress in
-                let currentParent = try await self.client.parent(
-                    of: item.itemIdentifier
-                )
-                let currentName = try await self.client.name(
-                    of: item.itemIdentifier
-                )
                 _ = try await self.client.upload(
-                    parentId: currentParent,
-                    name: currentName,
+                    parentId: item.parentId,
+                    name: item.filename,
                     file: newContents,
+                    snapshot: self.ignoreSnapshot(in: item.parentId),
                     progress: subprogress
-                )
-            }
-        }
-
-        if remaining.intersects(with: .nameFields) {
-            remaining.subtract(.nameFields)
-            steps.add {
-                _ = try await self.client.move(
-                    item.itemIdentifier,
-                    toParent: item.parentId,
-                    name: item.filename
                 )
             }
         }
@@ -473,12 +457,14 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 logger.info("Already deleted: \(identifier)")
                 return
             }
-            if try await isExcluded(item) {
-                try await client.forget(identifier)
-            } else if item.kind.isDirectory {
-                try await client.removeDirectory(for: identifier)
+            let snapshot = try await ignoreSnapshot(in: item.parentId)
+            if item.kind.isDirectory {
+                try await client.removeDirectory(
+                    for: identifier,
+                    snapshot: snapshot
+                )
             } else {
-                try await client.removeFile(for: identifier)
+                try await client.removeFile(for: identifier, snapshot: snapshot)
             }
         }
     }
@@ -503,35 +489,10 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         try await FPItem(item: client.item(for: identifier))
     }
 
-    private func isExcluded(
-        _ name: String,
-        in parentId: NSFileProviderItemIdentifier,
-        isDirectory: Bool
-    ) async throws(CoreError) -> Bool {
-        guard let snapshot = try await ignoreSnapshot(in: parentId) else {
-            return false
-        }
-        return try await client.isExcluded(
-            name,
-            in: parentId,
-            isDirectory: isDirectory,
-            snapshot: snapshot
-        )
-    }
-
-    private func isExcluded(_ item: Item) async throws(CoreError) -> Bool {
-        guard let parentId = item.parentId else { return false }
-        return try await isExcluded(
-            item.name,
-            in: parentId,
-            isDirectory: item.kind.isDirectory
-        )
-    }
-
     private func ignoreSnapshot(
-        in parentId: NSFileProviderItemIdentifier
+        in parentId: NSFileProviderItemIdentifier?
     ) async throws(CoreError) -> IgnoreSnapshot? {
-        guard parentId != .trashContainer else { return nil }
+        guard let parentId, parentId != .trashContainer else { return nil }
 
         let filenames = try await client.ignoreFilenames()
         guard !filenames.isEmpty else { return nil }
@@ -586,6 +547,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 ? item.lastUsedDate ?? nil : nil,
             modifyTime: fields.contains(.contentModificationDate)
                 ? item.contentModificationDate ?? nil : nil,
+            snapshot: ignoreSnapshot(in: item.parentId)
         )
     }
 

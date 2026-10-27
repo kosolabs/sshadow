@@ -17,7 +17,7 @@ public actor DomainRegistry {
             await config.domain.signalChanges()
         },
         retryExcluded: { config in
-            await config.domain.retryExcluded()
+            await config.domain.retryIgnored()
         },
         pollInterval: .seconds(300),
         connections: Connections.shared,
@@ -85,7 +85,7 @@ public actor DomainRegistry {
                     domainDb: domainDb,
                     groupUrl: groupUrl,
                     signalChanges: signalChanges,
-                    retryExcluded: retryExcluded,
+                    retryIgnored: retryExcluded,
                     transfers: transfers,
                     events: events
                 ),

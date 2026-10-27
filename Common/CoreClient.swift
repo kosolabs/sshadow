@@ -210,14 +210,16 @@ extension CoreClient {
         for itemId: NSFileProviderItemIdentifier,
         flags: Item.Flags? = nil,
         accessTime: Date? = nil,
-        modifyTime: Date? = nil
+        modifyTime: Date? = nil,
+        snapshot: IgnoreSnapshot?
     ) async throws(CoreError) -> Item {
         let response = try await perform(
             SetAttributesRequest(
                 itemId: itemId.rawValue,
                 flags: flags,
                 accessTime: accessTime,
-                modifyTime: modifyTime
+                modifyTime: modifyTime,
+                snapshot: snapshot
             )
         )
         return response.item
@@ -226,13 +228,15 @@ extension CoreClient {
     public func createSymlink(
         parentId: NSFileProviderItemIdentifier,
         name: String,
-        target: String
+        target: String,
+        snapshot: IgnoreSnapshot?
     ) async throws(CoreError) -> Item {
         let response = try await perform(
             CreateSymlinkRequest(
                 parentId: parentId.rawValue,
                 name: name,
-                target: target
+                target: target,
+                snapshot: snapshot
             )
         )
         return response.item
@@ -242,14 +246,16 @@ extension CoreClient {
         parentId: NSFileProviderItemIdentifier,
         name: String,
         flags: Item.Flags,
-        ifExists: OnExists = .fail
+        ifExists: OnExists = .fail,
+        snapshot: IgnoreSnapshot?
     ) async throws(CoreError) -> Item {
         let response = try await perform(
             CreateDirectoryRequest(
                 parentId: parentId.rawValue,
                 name: name,
                 flags: flags,
-                ifExists: ifExists
+                ifExists: ifExists,
+                snapshot: snapshot
             )
         )
         return response.item
@@ -259,51 +265,36 @@ extension CoreClient {
     public func move(
         _ itemId: NSFileProviderItemIdentifier,
         toParent newParentId: NSFileProviderItemIdentifier,
-        name newName: String
+        name newName: String,
+        snapshot: IgnoreSnapshot?
     ) async throws(CoreError) -> Item {
         let response = try await perform(
             MoveRequest(
                 itemId: itemId.rawValue,
                 newParentId: newParentId.rawValue,
-                newName: newName
+                newName: newName,
+                snapshot: snapshot
             )
         )
         return response.item
     }
 
     public func removeFile(
-        for itemId: NSFileProviderItemIdentifier
+        for itemId: NSFileProviderItemIdentifier,
+        snapshot: IgnoreSnapshot?
     ) async throws(CoreError) {
-        _ = try await perform(RemoveFileRequest(itemId: itemId.rawValue))
+        _ = try await perform(
+            RemoveFileRequest(itemId: itemId.rawValue, snapshot: snapshot)
+        )
     }
 
     public func removeDirectory(
-        for itemId: NSFileProviderItemIdentifier
+        for itemId: NSFileProviderItemIdentifier,
+        snapshot: IgnoreSnapshot?
     ) async throws(CoreError) {
-        _ = try await perform(RemoveDirectoryRequest(itemId: itemId.rawValue))
-    }
-
-    public func forget(
-        _ itemId: NSFileProviderItemIdentifier
-    ) async throws(CoreError) {
-        _ = try await perform(ForgetRequest(itemId: itemId.rawValue))
-    }
-
-    public func isExcluded(
-        _ name: String,
-        in parentId: NSFileProviderItemIdentifier,
-        isDirectory: Bool,
-        snapshot: IgnoreSnapshot
-    ) async throws(CoreError) -> Bool {
-        let response = try await perform(
-            IsExcludedRequest(
-                parentId: parentId.rawValue,
-                name: name,
-                isDirectory: isDirectory,
-                snapshot: snapshot
-            )
+        _ = try await perform(
+            RemoveDirectoryRequest(itemId: itemId.rawValue, snapshot: snapshot)
         )
-        return response.excluded
     }
 
     public func upload(
@@ -311,6 +302,7 @@ extension CoreClient {
         name: String,
         file: URL,
         chunkSize: UInt64 = Limits.defaultBufferSize,
+        snapshot: IgnoreSnapshot?,
         progress: Progress
     ) async throws(CoreError) -> Item {
         let stagedUrl = groupUrl.appending(path: UUID().uuidString)
@@ -330,7 +322,8 @@ extension CoreClient {
                 parentId: parentId.rawValue,
                 name: name,
                 file: stagedUrl,
-                chunkSize: chunkSize
+                chunkSize: chunkSize,
+                snapshot: snapshot
             ),
             progressEndpoint: sync.endpoint
         )
