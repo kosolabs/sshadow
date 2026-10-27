@@ -149,7 +149,7 @@ package class TestSandbox {
             ),
             groupUrl: group,
             signalChanges: { _ in },
-            retryExcluded: { _ in },
+            retryIgnored: { _ in },
             transfers: Transfers(),
             events: Events()
         )

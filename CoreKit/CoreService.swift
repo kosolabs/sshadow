@@ -129,14 +129,6 @@ extension CoreService {
             try await respond { session in
                 try await self.removeDirectory(session, request)
             }
-        case .forget(let request):
-            try await respond { session in
-                try await self.forget(session, request)
-            }
-        case .isExcluded(let request):
-            try await respond { session in
-                try await self.isExcluded(session, request)
-            }
         }
     }
 
@@ -250,7 +242,8 @@ extension CoreService {
             for: NSFileProviderItemIdentifier(request.itemId),
             flags: request.flags,
             accessTime: request.accessTime,
-            modifyTime: request.modifyTime
+            modifyTime: request.modifyTime,
+            snapshot: request.snapshot
         )
         return SetAttributesResponse(item: item)
     }
@@ -262,7 +255,8 @@ extension CoreService {
         let item = try await session.createSymlink(
             request.name,
             in: NSFileProviderItemIdentifier(request.parentId),
-            target: request.target
+            target: request.target,
+            snapshot: request.snapshot
         )
         return CreateSymlinkResponse(item: item)
     }
@@ -275,7 +269,8 @@ extension CoreService {
             request.name,
             in: NSFileProviderItemIdentifier(request.parentId),
             flags: request.flags,
-            ifExists: request.ifExists
+            ifExists: request.ifExists,
+            snapshot: request.snapshot
         )
         return CreateDirectoryResponse(item: item)
     }
@@ -287,7 +282,8 @@ extension CoreService {
         let item = try await session.move(
             NSFileProviderItemIdentifier(request.itemId),
             to: NSFileProviderItemIdentifier(request.newParentId),
-            name: request.newName
+            name: request.newName,
+            snapshot: request.snapshot
         )
         return MoveResponse(item: item)
     }
@@ -297,7 +293,8 @@ extension CoreService {
         _ request: RemoveFileRequest
     ) async throws -> RemoveFileResponse {
         try await session.removeFile(
-            for: NSFileProviderItemIdentifier(request.itemId)
+            for: NSFileProviderItemIdentifier(request.itemId),
+            snapshot: request.snapshot
         )
         return RemoveFileResponse()
     }
@@ -307,30 +304,10 @@ extension CoreService {
         _ request: RemoveDirectoryRequest
     ) async throws -> RemoveDirectoryResponse {
         try await session.removeDirectory(
-            for: NSFileProviderItemIdentifier(request.itemId)
-        )
-        return RemoveDirectoryResponse()
-    }
-
-    private func forget(
-        _ session: Session,
-        _ request: ForgetRequest
-    ) async throws -> ForgetResponse {
-        try await session.forget(NSFileProviderItemIdentifier(request.itemId))
-        return ForgetResponse()
-    }
-
-    private func isExcluded(
-        _ session: Session,
-        _ request: IsExcludedRequest
-    ) async throws -> IsExcludedResponse {
-        let excluded = try await session.isExcluded(
-            request.name,
-            in: NSFileProviderItemIdentifier(request.parentId),
-            isDirectory: request.isDirectory,
+            for: NSFileProviderItemIdentifier(request.itemId),
             snapshot: request.snapshot
         )
-        return IsExcludedResponse(excluded: excluded)
+        return RemoveDirectoryResponse()
     }
 }
 
@@ -394,6 +371,7 @@ extension CoreService {
             request.name,
             to: NSFileProviderItemIdentifier(request.parentId),
             file: request.file,
+            snapshot: request.snapshot,
             progress: sync.progress
         )
         await sync.confirmDelivery()

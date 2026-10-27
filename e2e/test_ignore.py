@@ -46,7 +46,7 @@ SYNCED: Tree = {
 
 
 def excluded(path: str) -> Matcher:
-    return msg(rf"^Excluded from sync: {re.escape(path)} ")
+    return msg(rf'^Skip .*\bpath: "{re.escape(path)}"[,)]')
 
 
 def wait_for_entries(

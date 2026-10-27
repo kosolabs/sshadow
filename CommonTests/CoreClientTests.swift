@@ -91,7 +91,7 @@ struct CoreClientTests {
         try sandbox.createFile(at: "set-attrs.txt")
         let client = try await sandbox.client
         let itemId = try await client.child(name: "set-attrs.txt")
-        try await client.setAttributes(for: itemId, flags: .rw)
+        try await client.setAttributes(for: itemId, flags: .rw, snapshot: nil)
         let item = try await client.item(for: itemId)
 
         #expect(item.flags == .rw)
@@ -104,7 +104,8 @@ struct CoreClientTests {
         let item = try await client.createSymlink(
             parentId: .rootContainer,
             name: "symlink.txt",
-            target: "target.txt"
+            target: "target.txt",
+            snapshot: nil
         )
 
         #expect(item.name == "symlink.txt")
@@ -117,7 +118,8 @@ struct CoreClientTests {
         let item = try await client.createDirectory(
             parentId: .rootContainer,
             name: "new-dir",
-            flags: .all
+            flags: .all,
+            snapshot: nil
         )
 
         #expect(item.name == "new-dir")
@@ -133,7 +135,12 @@ struct CoreClientTests {
         let itemId = try await client.child(of: srcId, name: "old.txt")
         let destId = try await client.child(name: "dest")
 
-        try await client.move(itemId, toParent: destId, name: "new.txt")
+        try await client.move(
+            itemId,
+            toParent: destId,
+            name: "new.txt",
+            snapshot: nil
+        )
 
         let name = try await client.name(of: itemId)
         #expect(name == "new.txt")
@@ -146,7 +153,7 @@ struct CoreClientTests {
         try sandbox.createFile(at: "file.txt")
         let client = try await sandbox.client
         let itemId = try await client.child(name: "file.txt")
-        try await client.removeFile(for: itemId)
+        try await client.removeFile(for: itemId, snapshot: nil)
 
         #expect(!sandbox.exists(at: "file.txt"))
     }
@@ -156,7 +163,7 @@ struct CoreClientTests {
         try sandbox.createFolder(at: "folder")
         let client = try await sandbox.client
         let itemId = try await client.child(name: "folder")
-        try await client.removeDirectory(for: itemId)
+        try await client.removeDirectory(for: itemId, snapshot: nil)
 
         #expect(!sandbox.exists(at: "folder"))
     }
@@ -181,6 +188,7 @@ struct CoreClientTests {
             parentId: .rootContainer,
             name: "upload.txt",
             file: localFile,
+            snapshot: nil,
             progress: Progress()
         )
 
