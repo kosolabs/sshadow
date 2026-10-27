@@ -661,12 +661,13 @@ struct SessionTests {
             #expect(Set(src.map(\.name)) == [".sshadowignore"])
         }
 
-        @Test func newlyIgnoredItemsStayOnReconcile() async throws {
+        @Test func newlyIgnoredMaterializedItemsStayOnReconcile() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
             try sandbox.createFile(at: "a.txt")
             let session = try await sandbox.getSession()
             let aId = try await session.child(name: "a.txt")
+            sandbox.materializedItems.materialize(aId)
 
             try sandbox.createFile(at: ".sshadowignore", contents: "*.txt\n")
             try sandbox.createFile(at: "b.log")
@@ -684,6 +685,7 @@ struct SessionTests {
             try sandbox.createFile(at: "b.txt", contents: "b")
             let session = try await sandbox.getSession()
             let bId = try await session.child(name: "b.txt")
+            sandbox.materializedItems.materialize(bId)
             await session.watch(itemId: bId)
 
             try sandbox.createFile(at: ".sshadowignore", contents: "b.txt\n")
@@ -797,6 +799,169 @@ struct SessionTests {
             }
 
             #expect(!sandbox.exists(at: "build"))
+        }
+    }
+
+    struct HideDatalessTests {
+        @Test func newlyIgnoredDatalessFileIsHiddenOnReconcile() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "a.txt")
+            let session = try await sandbox.getSession()
+            let aId = try await session.child(name: "a.txt")
+
+            try sandbox.createFile(at: ".sshadowignore", contents: "a.txt\n")
+            let changes = try await session.reconcileAll()
+            let items = try await session.list(for: .rootContainer)
+
+            #expect(changes.contains(.delete(itemId: aId.rawValue)))
+            #expect(Set(items.map(\.name)) == [".sshadowignore"])
+            #expect(sandbox.exists(at: "a.txt"))
+        }
+
+        @Test func ignoredItemsStayWhenMaterializedSetIsUnavailable()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "a.txt")
+            let session = try await sandbox.getSession()
+            let aId = try await session.child(name: "a.txt")
+
+            try sandbox.createFile(at: ".sshadowignore", contents: "a.txt\n")
+            sandbox.materializedItems.failNext(1)
+            let changes = try await session.reconcileAll()
+
+            #expect(!changes.contains(.delete(itemId: aId.rawValue)))
+            #expect(try await session.child(name: "a.txt") == aId)
+        }
+
+        @Test func newlyIgnoredDatalessWatchedFileIsHidden() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "a.txt")
+            try sandbox.createFile(at: "other.txt")
+            let session = try await sandbox.getSession()
+            let aId = try await session.child(name: "a.txt")
+            let otherId = try await session.child(name: "other.txt")
+            await session.watch(itemId: aId)
+
+            try await session.removeFile(
+                for: otherId,
+                snapshot: [folder("", text("a.txt\n"))]
+            )
+            let changes = try await session.reconcileWatched()
+
+            #expect(changes == [.delete(itemId: aId.rawValue)])
+        }
+
+        @Test func newlyIgnoredDatalessFolderIsHidden() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "data/a.txt")
+            let session = try await sandbox.getSession()
+            let dataId = try await session.child(name: "data")
+
+            try sandbox.createFile(at: ".sshadowignore", contents: "data/\n")
+            let changes = try await session.reconcileAll()
+
+            #expect(changes.contains(.delete(itemId: dataId.rawValue)))
+            #expect(sandbox.exists(at: "data/a.txt"))
+        }
+
+        @Test func newlyIgnoredMaterializedFolderHidesOnlyDatalessChildren()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "data/read.txt")
+            try sandbox.createFile(at: "data/unread.txt")
+            let session = try await sandbox.getSession()
+            let dataId = try await session.child(name: "data")
+            _ = try await session.list(for: dataId)
+            let readId = try await session.child(of: dataId, name: "read.txt")
+            let unreadId = try await session.child(
+                of: dataId,
+                name: "unread.txt"
+            )
+            sandbox.materializedItems.materialize(dataId, readId)
+
+            try sandbox.createFile(at: ".sshadowignore", contents: "data/\n")
+            let changes = try await session.reconcileAll()
+            let children = try await session.list(for: dataId)
+
+            #expect(changes.contains(.delete(itemId: unreadId.rawValue)))
+            #expect(!changes.contains(.delete(itemId: dataId.rawValue)))
+            #expect(!changes.contains(.delete(itemId: readId.rawValue)))
+            #expect(children.map(\.name) == ["read.txt"])
+        }
+
+        @Test func evictingIgnoredFileHidesIt() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "a.txt")
+            let session = try await sandbox.getSession()
+            let aId = try await session.child(name: "a.txt")
+            sandbox.materializedItems.materialize(aId)
+            try sandbox.createFile(at: ".sshadowignore", contents: "a.txt\n")
+            _ = try await session.reconcileAll()
+            let (anchor, _) = await session.changes(since: 0)
+
+            sandbox.materializedItems.dematerialize(aId)
+            await session.refreshMaterialized().value
+            let (_, changes) = await session.changes(since: anchor)
+
+            #expect(changes == [.delete(itemId: aId.rawValue)])
+            await #expect(throws: CoreError.itemNotFound) {
+                try await session.child(name: "a.txt")
+            }
+        }
+
+        @Test func evictingFileInsideIgnoredFolderHidesIt() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "data/a.txt")
+            let session = try await sandbox.getSession()
+            let dataId = try await session.child(name: "data")
+            _ = try await session.list(for: dataId)
+            let aId = try await session.child(of: dataId, name: "a.txt")
+            sandbox.materializedItems.materialize(dataId, aId)
+            try sandbox.createFile(at: ".sshadowignore", contents: "data/\n")
+            _ = try await session.reconcileAll()
+            let (anchor, _) = await session.changes(since: 0)
+
+            sandbox.materializedItems.dematerialize(aId)
+            await session.refreshMaterialized().value
+            let (_, changes) = await session.changes(since: anchor)
+
+            #expect(changes == [.delete(itemId: aId.rawValue)])
+        }
+
+        @Test func evictingSyncedFileKeepsIt() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "a.txt")
+            let session = try await sandbox.getSession()
+            let aId = try await session.child(name: "a.txt")
+            sandbox.materializedItems.materialize(aId)
+            await session.refreshMaterialized().value
+            let (anchor, _) = await session.changes(since: 0)
+
+            sandbox.materializedItems.dematerialize(aId)
+            await session.refreshMaterialized().value
+            let (_, changes) = await session.changes(since: anchor)
+
+            #expect(changes.isEmpty)
+            #expect(try await session.child(name: "a.txt") == aId)
+        }
+
+        @Test func downloadRefusesIgnoredItem() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "a.txt")
+            let session = try await sandbox.getSession()
+            let aId = try await session.child(name: "a.txt")
+            sandbox.materializedItems.materialize(aId)
+            try sandbox.createFile(at: ".sshadowignore", contents: "a.txt\n")
+            _ = try await session.reconcileAll()
+
+            await #expect(throws: CoreError.itemNotFound) {
+                _ = try await session.download(
+                    itemId: aId,
+                    progress: Progress()
+                )
+            }
         }
     }
 

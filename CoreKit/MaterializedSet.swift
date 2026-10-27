@@ -17,6 +17,7 @@ actor MaterializedSet {
     private let changed: ChangeHandler
 
     private(set) var ids: Set<NSFileProviderItemIdentifier> = []
+    private(set) var isCurrent = false
     private var anchor: NSFileProviderSyncAnchor?
     private var refreshTask: Task<Void, Never>?
     private var stale = false
@@ -43,7 +44,9 @@ actor MaterializedSet {
             stale = false
             do {
                 try await update()
+                isCurrent = true
             } catch {
+                isCurrent = false
                 logger.error("Failed to refresh materialized set: \(error)")
             }
         }

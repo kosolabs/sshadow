@@ -151,9 +151,11 @@ struct MaterializedSetTests {
 
         await set.refresh().value
         #expect(await set.ids == [])
+        #expect(await !set.isCurrent)
 
         await set.refresh().value
         #expect(await set.ids == [a])
+        #expect(await set.isCurrent)
     }
 
     @Test func refreshInvalidatesEachEnumerator() async throws {
