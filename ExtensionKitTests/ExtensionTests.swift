@@ -1659,6 +1659,19 @@ struct ExtensionTests {
 
         #expect(!sandbox.exists(at: "file.txt"))
     }
+
+    @Test func materializedItemsChangeRefreshesCore() async throws {
+        let sandbox = TestSandbox()
+        let (ext, _) = try await sandbox.getExtensionAndClient()
+
+        await ext.materializedItemsDidChange()
+
+        let deadline = ContinuousClock.now + .seconds(10)
+        while sandbox.materializedItems.changeEnumerations == 0 {
+            try #require(ContinuousClock.now < deadline)
+            try await Task.sleep(for: .milliseconds(1))
+        }
+    }
 }
 
 final class ItemTemplate: NSObject, NSFileProviderItem {

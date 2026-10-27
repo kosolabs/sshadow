@@ -105,6 +105,10 @@ extension CoreService {
             try await respond { session in
                 try await self.changes(session, request)
             }
+        case .materializedItemsChanged(let request):
+            try await respond { session in
+                try await self.materializedItemsChanged(session, request)
+            }
         case .setAttributes(let request):
             try await respond { session in
                 try await self.setAttributes(session, request)
@@ -232,6 +236,14 @@ extension CoreService {
             since: request.anchor
         )
         return ChangesResponse(anchor: anchor, changes: changes)
+    }
+
+    private func materializedItemsChanged(
+        _ session: Session,
+        _ request: MaterializedItemsChangedRequest
+    ) async throws -> MaterializedItemsChangedResponse {
+        await session.refreshMaterialized()
+        return MaterializedItemsChangedResponse()
     }
 
     private func setAttributes(

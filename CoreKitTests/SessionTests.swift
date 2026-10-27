@@ -74,6 +74,9 @@ extension TestSandbox {
             ignoreRulesChangedHandler: ignoreRulesChangedHandler,
             connectionLostHandler: connectionLostHandler,
             idleTimeProvider: idleTimeProvider,
+            materializedItems: { [materializedItems] in
+                try materializedItems.enumerator()
+            },
             transfers: Transfers(),
             events: Events()
         )
@@ -810,6 +813,9 @@ struct SessionTests {
                     groupUrl: sandbox.url(in: .group),
                     signalChanges: { _ in },
                     retryIgnored: { if $0.id == config.id { called() } },
+                    materializedItems: { _ in
+                        try sandbox.materializedItems.enumerator()
+                    },
                     transfers: Transfers(),
                     events: Events()
                 )
@@ -819,6 +825,40 @@ struct SessionTests {
                 }
                 await session.close()
             }
+        }
+
+        @Test func startedSessionLoadsMaterializedItems() async throws {
+            let sandbox = TestSandbox()
+            let config = try sandbox.config
+            let store = sandbox.materializedItems
+            let provider = try await Session.provider(
+                domainDb: DomainDB.open(
+                    config: ModelConfiguration(isStoredInMemoryOnly: true)
+                ),
+                groupUrl: sandbox.url(in: .group),
+                signalChanges: { _ in },
+                retryIgnored: { _ in },
+                materializedItems: { materializedConfig in
+                    #expect(materializedConfig.id == config.id)
+                    return try store.enumerator()
+                },
+                transfers: Transfers(),
+                events: Events()
+            )
+            let session = try await withConnectRetries {
+                () async throws(ConnectionError) -> Session in
+                try await provider(config) { _ in }
+            }
+
+            #expect(store.created == 0)
+
+            await session.start(pollInterval: nil)
+            let deadline = ContinuousClock.now + .seconds(10)
+            while store.reloads == 0 {
+                try #require(ContinuousClock.now < deadline)
+                try await Task.sleep(for: .milliseconds(1))
+            }
+            await session.close()
         }
     }
 

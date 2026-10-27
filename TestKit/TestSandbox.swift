@@ -75,6 +75,7 @@ package class TestSandbox {
     package let port: UInt16
     package let user: String
     package let domain: NSFileProviderDomain
+    package let materializedItems = FakeMaterializedItems()
 
     private let root: URL
     private let local: URL
@@ -150,6 +151,9 @@ package class TestSandbox {
             groupUrl: group,
             signalChanges: { _ in },
             retryIgnored: { _ in },
+            materializedItems: { [materializedItems] _ in
+                try materializedItems.enumerator()
+            },
             transfers: Transfers(),
             events: Events()
         )

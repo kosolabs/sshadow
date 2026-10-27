@@ -1,6 +1,7 @@
 import Common
 import FileProvider
 import Foundation
+import TestKit
 import Testing
 
 @testable import CoreKit
@@ -43,6 +44,9 @@ struct DomainRegistryTests {
             groupUrl: FileManager.default.temporaryDirectory,
             signalChanges: { _ in },
             retryExcluded: { _ in },
+            materializedItems: { _ in
+                try FakeMaterializedItems().enumerator()
+            },
             connections: Connections(),
             transfers: Transfers(),
             events: Events(),
