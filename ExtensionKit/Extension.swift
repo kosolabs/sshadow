@@ -469,6 +469,15 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         }
     }
 
+    public func materializedItemsDidChange() async {
+        logger.info("Materialized items changed")
+        do {
+            try await client.materializedItemsChanged()
+        } catch {
+            logger.error("Failed to report materialized items: \(error)")
+        }
+    }
+
     public func enumerator(
         for containerItemIdentifier: NSFileProviderItemIdentifier,
         request: NSFileProviderRequest

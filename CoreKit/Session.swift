@@ -25,6 +25,7 @@ package actor Session {
     private let ignoreRulesChangedHandler: Signal
     private let connectionLostHandler: ConnectionLostHandler
     private let idleTimeProvider: IdleTimeProvider
+    private let materializedItems: MaterializedSet.EnumeratorProvider
     private let transfers: Transfers<ContinuousClock>
     private let events: Events<ContinuousClock>
 
@@ -33,6 +34,12 @@ package actor Session {
 
     private lazy var cache = FileCache(read: read)
     private lazy var ignores = Ignores(filenames: config.ignoreFilenames)
+    private lazy var materialized = MaterializedSet(
+        enumerator: materializedItems,
+        changed: { [weak self] added, removed in
+            await self?.materializedChanged(added: added, removed: removed)
+        }
+    )
 
     private var watched: [NSFileProviderItemIdentifier: Int] = [:]
     private var schedule: PollSchedule?
@@ -60,6 +67,7 @@ package actor Session {
         groupUrl: URL,
         signalChanges: @escaping DomainRegistry.DomainSignal,
         retryIgnored: @escaping DomainRegistry.DomainSignal,
+        materializedItems: @escaping DomainRegistry.MaterializedEnumerator,
         transfers: Transfers<ContinuousClock>,
         events: Events<ContinuousClock>
     ) -> Provider {
@@ -75,6 +83,7 @@ package actor Session {
                 ignoreRulesChangedHandler: { await retryIgnored(config) },
                 connectionLostHandler: handler,
                 idleTimeProvider: SystemIdle.duration,
+                materializedItems: { try materializedItems(config) },
                 transfers: transfers,
                 events: events
             )
@@ -94,6 +103,7 @@ package actor Session {
         ignoreRulesChangedHandler: @escaping Signal,
         connectionLostHandler: @escaping ConnectionLostHandler,
         idleTimeProvider: @escaping IdleTimeProvider,
+        materializedItems: @escaping MaterializedSet.EnumeratorProvider,
         transfers: Transfers<ContinuousClock>,
         events: Events<ContinuousClock>
     ) {
@@ -106,6 +116,7 @@ package actor Session {
         self.ignoreRulesChangedHandler = ignoreRulesChangedHandler
         self.connectionLostHandler = connectionLostHandler
         self.idleTimeProvider = idleTimeProvider
+        self.materializedItems = materializedItems
         self.transfers = transfers
         self.events = events
 
@@ -128,7 +139,8 @@ extension Session {
         logger.notice("SSH disconnected: \(config)")
     }
 
-    func start(pollInterval: Duration?) {
+    func start(pollInterval: Duration?) async {
+        await refreshMaterialized()
         guard pollTask == nil, let pollInterval else { return }
         schedule = PollSchedule(
             begin: ContinuousClock.now,
@@ -510,6 +522,27 @@ extension Session {
         let now = UInt64(Date().timeIntervalSince1970 * 1_000_000_000)
         anchor = max(now, anchor + 1)
         changes.append((anchor, newChanges))
+    }
+}
+
+// MARK: - Materialized Items
+
+extension Session {
+    @discardableResult
+    func refreshMaterialized() async -> Task<Void, Never> {
+        await materialized.refresh()
+    }
+
+    private func materializedChanged(
+        added: Set<NSFileProviderItemIdentifier>,
+        removed: Set<NSFileProviderItemIdentifier>
+    ) async {
+        for itemId in added {
+            await logger.info("Materialized: \(ref(for: itemId))")
+        }
+        for itemId in removed {
+            await logger.info("Dematerialized: \(ref(for: itemId))")
+        }
     }
 }
 

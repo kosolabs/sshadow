@@ -12,6 +12,7 @@ public enum CoreRequest: Message, PrettyDescribable {
     case watch(WatchRequest)
     case unwatch(UnwatchRequest)
     case changes(ChangesRequest)
+    case materializedItemsChanged(MaterializedItemsChangedRequest)
     case setAttributes(SetAttributesRequest)
     case createSymlink(CreateSymlinkRequest)
     case createDirectory(CreateDirectoryRequest)

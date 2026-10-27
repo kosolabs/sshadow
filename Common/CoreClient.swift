@@ -205,6 +205,10 @@ extension CoreClient {
         return (response.anchor, response.changes)
     }
 
+    public func materializedItemsChanged() async throws(CoreError) {
+        _ = try await perform(MaterializedItemsChangedRequest())
+    }
+
     @discardableResult
     public func setAttributes(
         for itemId: NSFileProviderItemIdentifier,

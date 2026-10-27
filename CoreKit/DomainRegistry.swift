@@ -8,6 +8,8 @@ private let logger = Logger(category: "DomainRegistry")
 
 public actor DomainRegistry {
     typealias DomainSignal = @Sendable (ConnectionConfig) async -> Void
+    typealias MaterializedEnumerator =
+        @Sendable (ConnectionConfig) throws -> any NSFileProviderEnumerator
     typealias DomainLister = @Sendable () async -> [NSFileProviderDomain]
     typealias DomainRemover = @Sendable (NSFileProviderDomain) async -> Void
     typealias DomainDeleter = @Sendable (UUID) -> Void
@@ -19,6 +21,9 @@ public actor DomainRegistry {
         retryExcluded: { config in
             await config.domain.retryIgnored()
         },
+        materializedItems: { config in
+            try config.domain.manager.enumeratorForMaterializedItems()
+        },
         pollInterval: .seconds(300),
         connections: Connections.shared,
         transfers: Transfers.shared,
@@ -28,6 +33,7 @@ public actor DomainRegistry {
     private let groupUrl: URL
     private let signalChanges: DomainSignal
     private let retryExcluded: DomainSignal
+    private let materializedItems: MaterializedEnumerator
     private let pollInterval: Duration?
     private let connections: Connections
     private let transfers: Transfers<ContinuousClock>
@@ -43,6 +49,7 @@ public actor DomainRegistry {
         groupUrl: URL = SSHadow.groupUrl,
         signalChanges: @escaping DomainSignal,
         retryExcluded: @escaping DomainSignal,
+        materializedItems: @escaping MaterializedEnumerator,
         pollInterval: Duration? = nil,
         connections: Connections,
         transfers: Transfers<ContinuousClock>,
@@ -60,6 +67,7 @@ public actor DomainRegistry {
         self.groupUrl = groupUrl
         self.signalChanges = signalChanges
         self.retryExcluded = retryExcluded
+        self.materializedItems = materializedItems
         self.pollInterval = pollInterval
         self.connections = connections
         self.transfers = transfers
@@ -86,6 +94,7 @@ public actor DomainRegistry {
                     groupUrl: groupUrl,
                     signalChanges: signalChanges,
                     retryIgnored: retryExcluded,
+                    materializedItems: materializedItems,
                     transfers: transfers,
                     events: events
                 ),

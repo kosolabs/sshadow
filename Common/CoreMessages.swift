@@ -198,6 +198,19 @@ public struct ChangesResponse: Message, PrettyDescribable {
     }
 }
 
+public struct MaterializedItemsChangedRequest: CoreRequestType,
+    PrettyDescribable
+{
+    public typealias Response = MaterializedItemsChangedResponse
+    public var wrapped: CoreRequest { .materializedItemsChanged(self) }
+
+    public init() {}
+}
+
+public struct MaterializedItemsChangedResponse: Message, PrettyDescribable {
+    public init() {}
+}
+
 public enum Change: Message, PrettyDescribable {
     case delete(itemId: String)
     case update(item: Item)
