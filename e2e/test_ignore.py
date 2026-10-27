@@ -49,6 +49,26 @@ def excluded(path: str) -> Matcher:
     return msg(rf'^Skip .*\bpath: "{re.escape(path)}"[,)]')
 
 
+def hidden(path: str) -> Matcher:
+    return msg(rf'^Hide .*\bpath: "{re.escape(path)}"[,)]')
+
+
+def make_dataless(path: Path, logs: LogWatcher) -> None:
+    wait_for(lambda: "" if path.exists() else "missing", on_poll=logs.check)
+    # Eviction fails while File Provider is still syncing the item.
+    wait_for(
+        lambda: "" if dataless(path) else (evict(path) or "downloaded"),
+        on_poll=logs.check,
+    )
+
+
+def wait_until_gone(path: Path, logs: LogWatcher) -> None:
+    wait_for(
+        lambda: f"{path.name} still listed" if path.exists() else "",
+        on_poll=logs.check,
+    )
+
+
 def wait_for_entries(
     root: Path,
     expected: Tree,
@@ -610,6 +630,96 @@ def test_remote_delete_of_detached_item_keeps_local_copy(
     poll_until(app, logs, profile, remote, local, "marker-2.md")
 
     assert (local / "data/a.txt").read_bytes() == b"a\n"
+
+
+def test_remote_rule_hides_dataless_file(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    make_tree(remote, {"a.txt": File(b"a\n"), "b.txt": File(b"b\n")})
+    local = enable(app, logs, profile)
+    make_dataless(local / "a.txt", logs)
+    assert (local / "b.txt").read_bytes() == b"b\n"
+
+    make_tree(remote, {".sshadowignore": File(b"*.txt\n")})
+    app.send("poll", name=profile)
+    logs.expect(hidden("a.txt"), timeout=30)
+    wait_until_gone(local / "a.txt", logs)
+
+    assert (local / "b.txt").read_bytes() == b"b\n"
+    assert (remote / "a.txt").read_bytes() == b"a\n"
+
+
+def test_remote_rule_hides_unlisted_folder(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    make_tree(remote, {"data": Dir(), "data/a.txt": File(b"a\n")})
+    local = enable(app, logs, profile)
+    wait_for(lambda: "" if (local / "data").exists() else "missing")
+
+    make_tree(remote, {".sshadowignore": File(b"data/\n")})
+    app.send("poll", name=profile)
+    logs.expect(hidden("data"), timeout=30)
+    wait_until_gone(local / "data", logs)
+
+    assert (remote / "data/a.txt").read_bytes() == b"a\n"
+
+
+def test_remote_rule_keeps_listed_folder_and_hides_its_dataless_files(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    make_tree(
+        remote,
+        {
+            "data": Dir(),
+            "data/read.txt": File(b"read\n"),
+            "data/unread.txt": File(b"unread\n"),
+        },
+    )
+    local = enable(app, logs, profile)
+    wait_for(lambda: "" if (local / "data").exists() else "missing")
+    assert (local / "data/read.txt").read_bytes() == b"read\n"
+    make_dataless(local / "data/unread.txt", logs)
+
+    make_tree(remote, {".sshadowignore": File(b"data/\n")})
+    app.send("poll", name=profile)
+    logs.expect(hidden("data/unread.txt"), timeout=30)
+    wait_until_gone(local / "data/unread.txt", logs)
+
+    assert [p.name for p in (local / "data").iterdir()] == ["read.txt"]
+    assert (local / "data/read.txt").read_bytes() == b"read\n"
+
+
+def test_evicting_ignored_file_hides_it(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    make_tree(remote, {"a.txt": File(b"a\n")})
+    local = enable(app, logs, profile)
+    wait_for(lambda: "" if (local / "a.txt").exists() else "missing")
+    assert (local / "a.txt").read_bytes() == b"a\n"
+    make_tree(remote, {".sshadowignore": File(b"a.txt\n")})
+    poll_until(app, logs, profile, remote, local, "marker.md")
+    assert (local / "a.txt").read_bytes() == b"a\n"
+
+    wait_for(lambda: evict(local / "a.txt") or "", on_poll=logs.check)
+    logs.expect(hidden("a.txt"), timeout=30)
+    wait_until_gone(local / "a.txt", logs)
+
+    assert (remote / "a.txt").read_bytes() == b"a\n"
+
+
+def test_local_rule_hides_dataless_file(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    make_tree(remote, {"a.txt": File(b"a\n")})
+    local = enable(app, logs, profile)
+    make_dataless(local / "a.txt", logs)
+
+    make_tree(local, {".sshadowignore": File(b"a.txt\n")})
+    logs.expect(hidden("a.txt"), timeout=30)
+    wait_until_gone(local / "a.txt", logs)
+
+    wait_for(lambda: "" if (remote / ".sshadowignore").exists() else "missing")
+    assert (remote / "a.txt").read_bytes() == b"a\n"
 
 
 def test_symlinks_at_ignored_paths_stay_on_their_side(

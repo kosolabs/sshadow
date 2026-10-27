@@ -310,6 +310,7 @@ extension Session {
     }
 
     func reconcileAll() async throws -> [Change] {
+        await materialized.refresh().value
         var allChanges: [Change] = []
         var folders: [Item] = try await [
             db.item(for: .rootContainer),
@@ -358,6 +359,7 @@ extension Session {
     }
 
     func reconcileWatched() async throws -> [Change] {
+        await materialized.refresh().value
         var allChanges: [Change] = []
 
         for itemId in Array(watched.keys) {
@@ -387,13 +389,13 @@ extension Session {
 
     private func reconcile(file dbItem: Item) async throws -> [Change] {
         if let parentId = dbItem.parentId,
-            try await ignores.rule(
+            let rule = try await ignores.rule(
                 ignoring: dbItem.name,
                 in: db.path(for: parentId),
                 isDirectory: dbItem.kind.isDirectory
-            ) != nil
+            )
         {
-            return []
+            return try await hideDataless(dbItem, by: rule)
         }
 
         let attrs: SFTPAttributes
@@ -452,13 +454,16 @@ extension Session {
 
         let dir = try await db.path(for: folder.id)
         for (name, dbItem) in dbItems where sshItems[name] == nil {
-            guard
-                ignores.rule(
-                    ignoring: dbItem.name,
-                    in: dir,
-                    isDirectory: dbItem.kind.isDirectory
-                ) == nil
-            else { continue }
+            if let rule = ignores.rule(
+                ignoring: dbItem.name,
+                in: dir,
+                isDirectory: dbItem.kind.isDirectory
+            ) {
+                changes.append(
+                    contentsOf: try await hideDataless(dbItem, by: rule)
+                )
+                continue
+            }
             logger.info("Reconcile deleted: \(dbItem)")
             try await db.remove(dbItem.id)
             await cache.invalidate(dbItem.id)
@@ -540,9 +545,27 @@ extension Session {
         for itemId in added {
             await logger.info("Materialized: \(ref(for: itemId))")
         }
+        var changes: [Change] = []
         for itemId in removed {
             await logger.info("Dematerialized: \(ref(for: itemId))")
+            do {
+                changes.append(contentsOf: try await hideIfIgnored(itemId))
+            } catch {
+                logger.error("Failed to hide \(itemId): \(error)")
+            }
         }
+        guard !changes.isEmpty else { return }
+        record(changes)
+        await changesDetectedHandler()
+    }
+
+    private func hideIfIgnored(
+        _ itemId: NSFileProviderItemIdentifier
+    ) async throws -> [Change] {
+        guard let item = try? await db.item(for: itemId),
+            let rule = try await coveringRule(for: item)
+        else { return [] }
+        return try await hideDataless(item, by: rule)
     }
 }
 
@@ -802,6 +825,41 @@ extension Session {
             in: try await db.path(for: parentId),
             isDirectory: isDirectory
         )
+    }
+
+    private func coveringRule(for item: Item) async throws -> Rule? {
+        var item = item
+        while let parentId = item.parentId {
+            if let rule = ignores.rule(
+                ignoring: item.name,
+                in: try await db.path(for: parentId),
+                isDirectory: item.kind.isDirectory
+            ) {
+                return rule
+            }
+            item = try await db.item(for: parentId)
+        }
+        return nil
+    }
+
+    private func hideDataless(
+        _ item: Item,
+        by rule: Rule
+    ) async throws -> [Change] {
+        guard await materialized.isCurrent else { return [] }
+        guard await materialized.ids.contains(item.id) else {
+            await skip("Hide \(ref(for: item.id))", by: rule)
+            try await db.remove(item.id)
+            await cache.invalidate(item.id)
+            watched.removeValue(forKey: item.id)
+            return [.delete(itemId: item.rawId)]
+        }
+        guard item.kind == .folder else { return [] }
+        var changes: [Change] = []
+        for child in try await db.children(of: item.id) {
+            changes.append(contentsOf: try await hideDataless(child, by: rule))
+        }
+        return changes
     }
 
     private func skip(_ message: LogMessage, by rule: Rule) {
@@ -1091,6 +1149,10 @@ extension Session {
         defer { gate.leave() }
 
         let item = try await item(for: itemId)
+        if let rule = try await coveringRule(for: item) {
+            await skip("Skip download of \(ref(for: itemId))", by: rule)
+            throw CoreError.itemNotFound
+        }
         let url = groupUrl.appending(path: itemId.rawValue)
         let manifest = try await manifest(for: item)
 
