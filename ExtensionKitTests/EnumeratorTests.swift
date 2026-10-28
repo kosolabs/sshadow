@@ -38,6 +38,17 @@ extension Enumerator {
         return (items.withLock { items in items }, next)
     }
 
+    fileprivate func enumerateChanges(
+        from anchor: NSFileProviderSyncAnchor
+    ) async -> Result<[String], any Error> {
+        await withCheckedContinuation { continuation in
+            enumerateChanges(
+                for: ChangeObserver { continuation.resume(returning: $0) },
+                from: anchor
+            )
+        }
+    }
+
     fileprivate func currentSyncAnchor() async -> NSFileProviderSyncAnchor? {
         await withCheckedContinuation { continuation in
             currentSyncAnchor { anchor in
@@ -144,5 +155,50 @@ struct EnumeratorTests {
 
         let advanced = try #require(await enumerator.currentSyncAnchor())
         #expect(advanced.value > initial.value)
+    }
+
+    @Test func emptyAnchorEnumeratesChangesFromStart() async throws {
+        let sandbox = TestSandbox()
+        let enumerator = try await sandbox.getEnumerator(for: .workingSet)
+        try sandbox.createFolder(at: "new")
+        try await sandbox.pollAll()
+
+        let updated = try await enumerator.enumerateChanges(
+            from: NSFileProviderSyncAnchor(rawValue: Data())
+        ).get()
+
+        #expect(updated == ["new"])
+    }
+}
+
+private final class ChangeObserver: NSObject, NSFileProviderChangeObserver,
+    Sendable
+{
+    private let updated = Mutex<[String]>([])
+    private let finished: @Sendable (Result<[String], any Error>) -> Void
+
+    init(
+        finished: @escaping @Sendable (Result<[String], any Error>) -> Void
+    ) {
+        self.finished = finished
+    }
+
+    func didUpdate(_ updatedItems: [any NSFileProviderItemProtocol]) {
+        updated.withLock { $0.append(contentsOf: updatedItems.map(\.filename)) }
+    }
+
+    func didDeleteItems(
+        withIdentifiers deletedItemIdentifiers: [NSFileProviderItemIdentifier]
+    ) {}
+
+    func finishEnumeratingChanges(
+        upTo anchor: NSFileProviderSyncAnchor,
+        moreComing: Bool
+    ) {
+        finished(.success(updated.withLock { $0 }))
+    }
+
+    func finishEnumeratingWithError(_ error: any Error) {
+        finished(.failure(error))
     }
 }

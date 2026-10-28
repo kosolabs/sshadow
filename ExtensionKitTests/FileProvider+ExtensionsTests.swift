@@ -1,4 +1,5 @@
 import FileProvider
+import Foundation
 import Testing
 
 @testable import ExtensionKit
@@ -35,5 +36,16 @@ struct SyncAnchorExtensionTests {
     @Test func largeIntegerSucceeds() {
         let anchor = NSFileProviderSyncAnchor(UInt64.max)
         #expect(anchor.value == UInt64.max)
+    }
+
+    @Test func emptyIsZero() {
+        let anchor = NSFileProviderSyncAnchor(rawValue: Data())
+        #expect(anchor.value == 0)
+    }
+
+    @Test func unalignedBytesSucceed() {
+        let bytes = Data([0] + withUnsafeBytes(of: UInt64(1024)) { Array($0) })
+        let anchor = NSFileProviderSyncAnchor(rawValue: bytes.dropFirst())
+        #expect(anchor.value == 1024)
     }
 }
