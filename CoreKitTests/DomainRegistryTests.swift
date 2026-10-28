@@ -47,6 +47,7 @@ struct DomainRegistryTests {
             materializedItems: { _ in
                 try FakeMaterializedItems().enumerator()
             },
+            evictItem: { _, _ in },
             connections: Connections(),
             transfers: Transfers(),
             events: Events(),

@@ -77,6 +77,9 @@ extension TestSandbox {
             materializedItems: { [materializedItems] in
                 try materializedItems.enumerator()
             },
+            evictItem: { [materializedItems] in
+                try materializedItems.evict($0)
+            },
             transfers: Transfers(),
             events: Events()
         )
@@ -889,6 +892,51 @@ struct SessionTests {
             #expect(!changes.contains(.delete(itemId: dataId.rawValue)))
             #expect(!changes.contains(.delete(itemId: readId.rawValue)))
             #expect(children.map(\.name) == ["read.txt"])
+            #expect(sandbox.materializedItems.evicted.isEmpty)
+        }
+
+        @Test func newlyIgnoredFolderWithNothingDownloadedIsHidden()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "data/a.txt")
+            let session = try await sandbox.getSession()
+            let dataId = try await session.child(name: "data")
+            _ = try await session.list(for: dataId)
+            let aId = try await session.child(of: dataId, name: "a.txt")
+            sandbox.materializedItems.materialize(dataId)
+
+            try sandbox.createFile(at: ".sshadowignore", contents: "data/\n")
+            let changes = try await session.reconcileAll()
+            let (anchor, _) = await session.changes(since: 0)
+            await session.refreshMaterialized().value
+            let (_, evictionChanges) = await session.changes(since: anchor)
+
+            #expect(changes.contains(.delete(itemId: aId.rawValue)))
+            #expect(sandbox.materializedItems.evicted == [dataId])
+            #expect(evictionChanges == [.delete(itemId: dataId.rawValue)])
+            await #expect(throws: CoreError.itemNotFound) {
+                try await session.child(name: "data")
+            }
+        }
+
+        @Test func ignoredFolderStaysWhenEvictionIsRefused() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "data/a.txt")
+            let session = try await sandbox.getSession()
+            let dataId = try await session.child(name: "data")
+            _ = try await session.list(for: dataId)
+            sandbox.materializedItems.materialize(dataId)
+            sandbox.materializedItems.refuseEviction()
+
+            try sandbox.createFile(at: ".sshadowignore", contents: "data/\n")
+            _ = try await session.reconcileAll()
+            let (anchor, _) = await session.changes(since: 0)
+            await session.refreshMaterialized().value
+            let (_, changes) = await session.changes(since: anchor)
+
+            #expect(changes.isEmpty)
+            #expect(try await session.child(name: "data") == dataId)
         }
 
         @Test func evictingIgnoredFileHidesIt() async throws {
@@ -906,12 +954,15 @@ struct SessionTests {
             let (_, changes) = await session.changes(since: anchor)
 
             #expect(changes == [.delete(itemId: aId.rawValue)])
+            #expect(sandbox.materializedItems.evicted.isEmpty)
             await #expect(throws: CoreError.itemNotFound) {
                 try await session.child(name: "a.txt")
             }
         }
 
-        @Test func evictingFileInsideIgnoredFolderHidesIt() async throws {
+        @Test func evictingLastFileInsideIgnoredFolderHidesBoth()
+            async throws
+        {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "data/a.txt")
             let session = try await sandbox.getSession()
@@ -925,9 +976,13 @@ struct SessionTests {
 
             sandbox.materializedItems.dematerialize(aId)
             await session.refreshMaterialized().value
-            let (_, changes) = await session.changes(since: anchor)
+            let (fileAnchor, fileChanges) = await session.changes(since: anchor)
+            await session.refreshMaterialized().value
+            let (_, folderChanges) = await session.changes(since: fileAnchor)
 
-            #expect(changes == [.delete(itemId: aId.rawValue)])
+            #expect(fileChanges == [.delete(itemId: aId.rawValue)])
+            #expect(sandbox.materializedItems.evicted == [dataId])
+            #expect(folderChanges == [.delete(itemId: dataId.rawValue)])
         }
 
         @Test func evictingSyncedFileKeepsIt() async throws {
@@ -981,6 +1036,9 @@ struct SessionTests {
                     materializedItems: { _ in
                         try sandbox.materializedItems.enumerator()
                     },
+                    evictItem: { _, itemId in
+                        try sandbox.materializedItems.evict(itemId)
+                    },
                     transfers: Transfers(),
                     events: Events()
                 )
@@ -1008,6 +1066,7 @@ struct SessionTests {
                     #expect(materializedConfig.id == config.id)
                     return try store.enumerator()
                 },
+                evictItem: { _, itemId in try store.evict(itemId) },
                 transfers: Transfers(),
                 events: Events()
             )

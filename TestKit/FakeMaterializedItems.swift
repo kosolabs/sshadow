@@ -16,6 +16,8 @@ package final class FakeMaterializedItems: Sendable {
         var created = 0
         var invalidated = 0
         var failures = 0
+        var evicted: [NSFileProviderItemIdentifier] = []
+        var refusesEviction = false
     }
 
     private let state = Mutex(State())
@@ -29,6 +31,9 @@ package final class FakeMaterializedItems: Sendable {
     package var created: Int { state.withLock { $0.created } }
     package var invalidated: Int { state.withLock { $0.invalidated } }
     package var parkedCount: Int { state.withLock { $0.parked.count } }
+    package var evicted: [NSFileProviderItemIdentifier] {
+        state.withLock { $0.evicted }
+    }
 
     package func materialize(_ ids: NSFileProviderItemIdentifier...) {
         state.withLock { state in
@@ -46,6 +51,22 @@ package final class FakeMaterializedItems: Sendable {
                 state.log.append((id, false))
             }
         }
+    }
+
+    /// Evicts like File Provider, which dematerializes the item.
+    package func evict(_ id: NSFileProviderItemIdentifier) throws {
+        try state.withLock { state in
+            if state.refusesEviction {
+                throw NSFileProviderError(.nonEvictableChildren)
+            }
+            state.evicted.append(id)
+            state.ids.remove(id)
+            state.log.append((id, false))
+        }
+    }
+
+    package func refuseEviction() {
+        state.withLock { $0.refusesEviction = true }
     }
 
     package func expireAnchors() {

@@ -154,6 +154,9 @@ package class TestSandbox {
             materializedItems: { [materializedItems] _ in
                 try materializedItems.enumerator()
             },
+            evictItem: { [materializedItems] _, itemId in
+                try materializedItems.evict(itemId)
+            },
             transfers: Transfers(),
             events: Events()
         )

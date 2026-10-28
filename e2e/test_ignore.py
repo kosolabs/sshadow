@@ -664,7 +664,30 @@ def test_remote_rule_hides_unlisted_folder(
     assert (remote / "data/a.txt").read_bytes() == b"a\n"
 
 
-def test_remote_rule_keeps_listed_folder_and_hides_its_dataless_files(
+def test_remote_rule_hides_listed_folder_with_nothing_downloaded(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    make_tree(remote, {"data": Dir(), "data/a.txt": File(b"a\n")})
+    local = enable(app, logs, profile)
+    wait_for(lambda: "" if (local / "data").exists() else "missing")
+    make_dataless(local / "data/a.txt", logs)
+
+    make_tree(remote, {".sshadowignore": File(b"data/\n")})
+    app.send("poll", name=profile)
+    logs.expect(hidden("data/a.txt"), timeout=30)
+    logs.expect(hidden("data"), timeout=30)
+    wait_until_gone(local / "data", logs)
+    assert (remote / "data/a.txt").read_bytes() == b"a\n"
+
+    make_tree(local, {"data": Dir(), "data/new.txt": File(b"new\n")})
+    logs.expect(excluded("data"), timeout=30)
+    poll_until(app, logs, profile, remote, local, "marker.md")
+
+    assert (local / "data/new.txt").read_bytes() == b"new\n"
+    assert [p.name for p in (remote / "data").iterdir()] == ["a.txt"]
+
+
+def test_remote_rule_keeps_listed_folder_until_its_files_are_evicted(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
     make_tree(
@@ -684,9 +707,14 @@ def test_remote_rule_keeps_listed_folder_and_hides_its_dataless_files(
     app.send("poll", name=profile)
     logs.expect(hidden("data/unread.txt"), timeout=30)
     wait_until_gone(local / "data/unread.txt", logs)
-
     assert [p.name for p in (local / "data").iterdir()] == ["read.txt"]
-    assert (local / "data/read.txt").read_bytes() == b"read\n"
+
+    wait_for(lambda: evict(local / "data/read.txt") or "", on_poll=logs.check)
+    logs.expect(hidden("data/read.txt"), timeout=30)
+    logs.expect(hidden("data"), timeout=30)
+    wait_until_gone(local / "data", logs)
+
+    assert (remote / "data/read.txt").read_bytes() == b"read\n"
 
 
 def test_evicting_ignored_file_hides_it(
