@@ -1,6 +1,8 @@
 import Common
 import FileProvider
 
+private let logger = Logger(category: "FileProvider")
+
 extension NSFileProviderItem {
     public var desc: String {
         var components: [String] = []
@@ -286,6 +288,15 @@ extension NSFileProviderSyncAnchor:
     }
 
     public var value: UInt64 {
-        rawValue.withUnsafeBytes { $0.load(as: UInt64.self) }
+        switch rawValue.count {
+        case 0:
+            return 0
+        case MemoryLayout<UInt64>.size:
+            return rawValue.withUnsafeBytes {
+                $0.loadUnaligned(as: UInt64.self)
+            }
+        default:
+            logger.fatal("Unexpected sync anchor: \(rawValue as NSData)")
+        }
     }
 }
