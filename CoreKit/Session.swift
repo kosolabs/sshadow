@@ -15,6 +15,8 @@ package actor Session {
     package typealias ConnectionLostHandler =
         @Sendable (ConnectionError) async -> Void
     package typealias IdleTimeProvider = @Sendable () -> Duration
+    package typealias Evictor =
+        @Sendable (NSFileProviderItemIdentifier) async throws -> Void
 
     private let config: ConnectionConfig
     private let ssh: SSHClient
@@ -26,6 +28,7 @@ package actor Session {
     private let connectionLostHandler: ConnectionLostHandler
     private let idleTimeProvider: IdleTimeProvider
     private let materializedItems: MaterializedSet.EnumeratorProvider
+    private let evictItem: Evictor
     private let transfers: Transfers<ContinuousClock>
     private let events: Events<ContinuousClock>
 
@@ -68,6 +71,7 @@ package actor Session {
         signalChanges: @escaping DomainRegistry.DomainSignal,
         retryIgnored: @escaping DomainRegistry.DomainSignal,
         materializedItems: @escaping DomainRegistry.MaterializedEnumerator,
+        evictItem: @escaping DomainRegistry.ItemEvictor,
         transfers: Transfers<ContinuousClock>,
         events: Events<ContinuousClock>
     ) -> Provider {
@@ -84,6 +88,7 @@ package actor Session {
                 connectionLostHandler: handler,
                 idleTimeProvider: SystemIdle.duration,
                 materializedItems: { try materializedItems(config) },
+                evictItem: { try await evictItem(config, $0) },
                 transfers: transfers,
                 events: events
             )
@@ -103,6 +108,7 @@ package actor Session {
         connectionLostHandler: @escaping ConnectionLostHandler,
         idleTimeProvider: @escaping IdleTimeProvider,
         materializedItems: @escaping MaterializedSet.EnumeratorProvider,
+        evictItem: @escaping Evictor,
         transfers: Transfers<ContinuousClock>,
         events: Events<ContinuousClock>
     ) {
@@ -116,6 +122,7 @@ package actor Session {
         self.connectionLostHandler = connectionLostHandler
         self.idleTimeProvider = idleTimeProvider
         self.materializedItems = materializedItems
+        self.evictItem = evictItem
         self.transfers = transfers
         self.events = events
 
@@ -846,6 +853,17 @@ extension Session {
         _ item: Item,
         by rule: Rule
     ) async throws -> [Change] {
+        let changes = try await hide(item, by: rule)
+        if !changes.isEmpty, let parentId = item.parentId {
+            let parent = try await db.item(for: parentId)
+            if try await coveringRule(for: parent) != nil {
+                try await evictIfEmpty(parent)
+            }
+        }
+        return changes
+    }
+
+    private func hide(_ item: Item, by rule: Rule) async throws -> [Change] {
         guard await materialized.isCurrent else { return [] }
         guard await materialized.ids.contains(item.id) else {
             await skip("Hide \(ref(for: item.id))", by: rule)
@@ -857,9 +875,21 @@ extension Session {
         guard item.kind == .folder else { return [] }
         var changes: [Change] = []
         for child in try await db.children(of: item.id) {
-            changes.append(contentsOf: try await hideDataless(child, by: rule))
+            changes.append(contentsOf: try await hide(child, by: rule))
         }
+        try await evictIfEmpty(item)
         return changes
+    }
+
+    private func evictIfEmpty(_ folder: Item) async throws {
+        guard try await db.children(of: folder.id).isEmpty else { return }
+        let ref = await ref(for: folder.id)
+        do {
+            try await evictItem(folder.id)
+            logger.info("Evicted ignored folder: \(ref)")
+        } catch {
+            logger.notice("Kept ignored folder \(ref): \(error)")
+        }
     }
 
     private func skip(_ message: LogMessage, by rule: Rule) {

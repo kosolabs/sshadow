@@ -10,6 +10,9 @@ public actor DomainRegistry {
     typealias DomainSignal = @Sendable (ConnectionConfig) async -> Void
     typealias MaterializedEnumerator =
         @Sendable (ConnectionConfig) throws -> any NSFileProviderEnumerator
+    typealias ItemEvictor =
+        @Sendable (ConnectionConfig, NSFileProviderItemIdentifier) async throws
+        -> Void
     typealias DomainLister = @Sendable () async -> [NSFileProviderDomain]
     typealias DomainRemover = @Sendable (NSFileProviderDomain) async -> Void
     typealias DomainDeleter = @Sendable (UUID) -> Void
@@ -24,6 +27,9 @@ public actor DomainRegistry {
         materializedItems: { config in
             try config.domain.manager.enumeratorForMaterializedItems()
         },
+        evictItem: { config, itemId in
+            try await config.domain.manager.evictItem(identifier: itemId)
+        },
         pollInterval: .seconds(300),
         connections: Connections.shared,
         transfers: Transfers.shared,
@@ -34,6 +40,7 @@ public actor DomainRegistry {
     private let signalChanges: DomainSignal
     private let retryExcluded: DomainSignal
     private let materializedItems: MaterializedEnumerator
+    private let evictItem: ItemEvictor
     private let pollInterval: Duration?
     private let connections: Connections
     private let transfers: Transfers<ContinuousClock>
@@ -50,6 +57,7 @@ public actor DomainRegistry {
         signalChanges: @escaping DomainSignal,
         retryExcluded: @escaping DomainSignal,
         materializedItems: @escaping MaterializedEnumerator,
+        evictItem: @escaping ItemEvictor,
         pollInterval: Duration? = nil,
         connections: Connections,
         transfers: Transfers<ContinuousClock>,
@@ -68,6 +76,7 @@ public actor DomainRegistry {
         self.signalChanges = signalChanges
         self.retryExcluded = retryExcluded
         self.materializedItems = materializedItems
+        self.evictItem = evictItem
         self.pollInterval = pollInterval
         self.connections = connections
         self.transfers = transfers
@@ -95,6 +104,7 @@ public actor DomainRegistry {
                     signalChanges: signalChanges,
                     retryIgnored: retryExcluded,
                     materializedItems: materializedItems,
+                    evictItem: evictItem,
                     transfers: transfers,
                     events: events
                 ),
