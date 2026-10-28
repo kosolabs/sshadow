@@ -554,11 +554,18 @@ extension Session {
         }
         var changes: [Change] = []
         for itemId in removed {
-            await logger.info("Dematerialized: \(ref(for: itemId))")
+            let ref = await ref(for: itemId)
+            guard let item = try? await db.item(for: itemId) else {
+                logger.info("Dematerialized: \(ref)")
+                continue
+            }
+            let message: LogMessage = "Evicted \(ref)"
+            logger.info("\(message.debug)")
+            fileLog.info(message.display)
             do {
-                changes.append(contentsOf: try await hideIfIgnored(itemId))
+                changes.append(contentsOf: try await hideIfIgnored(item))
             } catch {
-                logger.error("Failed to hide \(itemId): \(error)")
+                logger.error("Failed to hide ignored \(ref): \(error)")
             }
         }
         guard !changes.isEmpty else { return }
@@ -566,12 +573,8 @@ extension Session {
         await changesDetectedHandler()
     }
 
-    private func hideIfIgnored(
-        _ itemId: NSFileProviderItemIdentifier
-    ) async throws -> [Change] {
-        guard let item = try? await db.item(for: itemId),
-            let rule = try await coveringRule(for: item)
-        else { return [] }
+    private func hideIfIgnored(_ item: Item) async throws -> [Change] {
+        guard let rule = try await coveringRule(for: item) else { return [] }
         return try await hideDataless(item, by: rule)
     }
 }
@@ -592,8 +595,8 @@ extension Session {
 
         let ref = await ref(for: itemId)
         if let rule = try await rule(for: itemId, snapshot: snapshot) {
-            skip("Skip set attributes of \(ref)", by: rule)
-            throw CoreError.excludedFromSync
+            logIgnored("Ignore set attributes of \(ref)", by: rule)
+            throw CoreError.ignored
         }
 
         let changes = {
@@ -641,8 +644,8 @@ extension Session {
             isDirectory: false,
             snapshot: snapshot
         ) {
-            skip("Skip create symlink at \(ref)", by: rule)
-            throw CoreError.excludedFromSync
+            logIgnored("Ignore create symlink at \(ref)", by: rule)
+            throw CoreError.ignored
         }
 
         try await perform(
@@ -678,13 +681,13 @@ extension Session {
             isDirectory: true,
             snapshot: snapshot
         ) {
-            skip("Skip create directory at \(ref)", by: rule)
-            throw CoreError.excludedFromSync
+            logIgnored("Ignore create directory \(ref)", by: rule)
+            throw CoreError.ignored
         }
 
         try await perform(
             with: parentId,
-            recording: "Create directory at \(ref)"
+            recording: "Create directory \(ref)"
         ) {
             try await sftp.makeDirectory(
                 at: path(for: name, in: parentId),
@@ -723,8 +726,8 @@ extension Session {
                 snapshot: snapshot
             )
         if let rule {
-            skip("Skip move of \(from) to \(to)", by: rule)
-            throw CoreError.excludedFromSync
+            logIgnored("Ignore move of \(from) to \(to)", by: rule)
+            throw CoreError.ignored
         }
 
         let oldPath = try await path(for: itemId)
@@ -794,7 +797,7 @@ extension Session {
     ) async throws -> Bool {
         guard let rule = try await rule(for: itemId, snapshot: snapshot)
         else { return false }
-        await skip("Skip remove of \(ref(for: itemId))", by: rule)
+        await logIgnored("Ignore remove of \(ref(for: itemId))", by: rule)
         try await db.remove(itemId)
         await cache.invalidate(itemId)
         return true
@@ -866,7 +869,7 @@ extension Session {
     private func hide(_ item: Item, by rule: Rule) async throws -> [Change] {
         guard await materialized.isCurrent else { return [] }
         guard await materialized.ids.contains(item.id) else {
-            await skip("Hide \(ref(for: item.id))", by: rule)
+            await logIgnored("Hide ignored \(ref(for: item.id))", by: rule)
             try await db.remove(item.id)
             await cache.invalidate(item.id)
             watched.removeValue(forKey: item.id)
@@ -888,11 +891,11 @@ extension Session {
             try await evictItem(folder.id)
             logger.info("Evicted ignored folder: \(ref)")
         } catch {
-            logger.notice("Kept ignored folder \(ref): \(error)")
+            logger.notice("Failed to evict ignored folder \(ref): \(error)")
         }
     }
 
-    private func skip(_ message: LogMessage, by rule: Rule) {
+    private func logIgnored(_ message: LogMessage, by rule: Rule) {
         logger.info("\(message.debug): \(rule.source)")
         fileLog.info(message.display, detail: rule.source)
     }
@@ -973,7 +976,10 @@ extension Session {
     private func ignoresChanged(_ dirs: [String], poll: Bool) async {
         guard !dirs.isEmpty else { return }
         for dir in dirs {
-            logger.info("Ignore rules changed in \(dir.isEmpty ? "/" : dir)")
+            let name = dir.isEmpty ? "Root" : "\"\(dir)\""
+            let message = "Ignore rules changed in \(name)"
+            logger.info(message)
+            fileLog.info(message)
         }
         if poll { schedule?.requestPollAll() }
         await ignoreRulesChangedHandler()
@@ -1030,8 +1036,8 @@ extension Session {
             isDirectory: manifest.root.kind == .folder,
             snapshot: snapshot
         ) {
-            skip("Skip upload of \(ref)", by: rule)
-            throw CoreError.excludedFromSync
+            logIgnored("Ignore upload of \(ref)", by: rule)
+            throw CoreError.ignored
         }
 
         progress.kind = .file
@@ -1180,7 +1186,7 @@ extension Session {
 
         let item = try await item(for: itemId)
         if let rule = try await coveringRule(for: item) {
-            await skip("Skip download of \(ref(for: itemId))", by: rule)
+            await logIgnored("Ignore download of \(ref(for: itemId))", by: rule)
             throw CoreError.itemNotFound
         }
         let url = groupUrl.appending(path: itemId.rawValue)

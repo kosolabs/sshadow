@@ -24,7 +24,7 @@ extension CoreError {
             NSFileProviderError(.filenameCollision)
         case .featureUnsupported:
             CocoaError(.featureUnsupported)
-        case .excludedFromSync:
+        case .ignored:
             NSFileProviderError(.excludedFromSync)
         case .cannotSynchronize:
             NSFileProviderError(.cannotSynchronize)

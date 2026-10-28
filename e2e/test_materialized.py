@@ -17,11 +17,11 @@ def materialized(path: str) -> Matcher:
     return msg(rf'^Materialized: .*\bpath: "{re.escape(path)}"[,)]')
 
 
-def dematerialized(path: str) -> Matcher:
-    return msg(rf'^Dematerialized: .*\bpath: "{re.escape(path)}"[,)]')
+def evicted(path: str) -> Matcher:
+    return msg(rf'^Evicted Ref\(path: "{re.escape(path)}"[,)]')
 
 
-def evicted(path: Path) -> Callable[[], str]:
+def evict_when_synced(path: Path) -> Callable[[], str]:
     # Eviction fails while File Provider is still syncing the item.
     return lambda: evict(path) or ""
 
@@ -29,8 +29,8 @@ def evicted(path: Path) -> Callable[[], str]:
 def make_dataless(path: Path, logs: LogWatcher) -> None:
     wait_for(lambda: "" if path.exists() else "missing", on_poll=logs.check)
     if not dataless(path):
-        wait_for(evicted(path), on_poll=logs.check)
-        logs.expect(dematerialized(path.name), timeout=30)
+        wait_for(evict_when_synced(path), on_poll=logs.check)
+        logs.expect(evicted(path.name), timeout=30)
 
 
 def test_reading_and_evicting_file_updates_materialized_set(
@@ -44,8 +44,8 @@ def test_reading_and_evicting_file_updates_materialized_set(
     assert path.read_bytes() == b"a\n"
     logs.expect(materialized("a.txt"), timeout=30)
 
-    wait_for(evicted(path), on_poll=logs.check)
-    logs.expect(dematerialized("a.txt"), timeout=30)
+    wait_for(evict_when_synced(path), on_poll=logs.check)
+    logs.expect(evicted("a.txt"), timeout=30)
 
 
 def test_listing_folder_materializes_it(
@@ -90,5 +90,5 @@ def test_relaunch_reloads_materialized_set(
         [brokered(profile), connected(profile), materialized("a.txt")], timeout=60
     )
 
-    wait_for(evicted(path), on_poll=logs.check)
-    logs.expect(dematerialized("a.txt"), timeout=30)
+    wait_for(evict_when_synced(path), on_poll=logs.check)
+    logs.expect(evicted("a.txt"), timeout=30)
