@@ -12,7 +12,7 @@ public enum OfflineReason: Equatable, Sendable {
         case .disabled:
             "The connection is disconnecting."
         case .paused:
-            "The connection is paused. Reconnect it in Settings."
+            "The connection is paused. Resume it from the SSHadow menu."
         case .failed:
             "The server is unreachable. Check your network connection."
         }

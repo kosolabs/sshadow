@@ -24,8 +24,10 @@ struct EventLogView: View {
                     }
                 }
                 .contextMenu(forSelectionType: Event.ID.self) { ids in
-                    Button("Copy") { copy(logLines(for: ids)) }
-                        .disabled(ids.isEmpty)
+                    Button("Copy") {
+                        NSPasteboard.general.copy(logLines(for: ids))
+                    }
+                    .disabled(ids.isEmpty)
                 }
                 .onCopyCommand {
                     guard !selection.isEmpty else { return [] }
@@ -50,7 +52,7 @@ struct EventLogView: View {
             .disabled(events.value.isEmpty)
 
             Button {
-                copy(logLines(for: selection))
+                NSPasteboard.general.copy(logLines(for: selection))
             } label: {
                 Label("Copy", systemImage: "doc.on.doc")
             }
@@ -75,10 +77,4 @@ struct EventLogView: View {
             .filter { ids.contains($0.id) }
             .map(\.logLine)
             .joined(separator: "\n")
-    }
-
-    private func copy(_ string: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(string, forType: .string)
-    }
-}
+    }}

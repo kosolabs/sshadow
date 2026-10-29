@@ -74,6 +74,14 @@ public class ConnectionConfigModel: CustomStringConvertible {
         return result
     }
 
+    public var sshCommand: String {
+        var result = "ssh"
+        if effectivePort != 22 {
+            result += " -p \(effectivePort)"
+        }
+        return result + " \(effectiveUser)@\(host)"
+    }
+
     public var displayName: String {
         host.isEmpty ? "New Connection" : name ?? url
     }

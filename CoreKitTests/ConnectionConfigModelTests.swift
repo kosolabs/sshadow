@@ -1,9 +1,38 @@
 import Common
+import Foundation
 import Testing
 
 @testable import CoreKit
 
 struct ConnectionConfigModelTests {
+    @Test func sshCommandUsesUserAndHost() {
+        let model = ConnectionConfigModel(host: "example.com", user: "shad")
+        #expect(model.sshCommand == "ssh shad@example.com")
+    }
+
+    @Test func sshCommandIncludesNonDefaultPort() {
+        let model = ConnectionConfigModel(
+            host: "example.com",
+            port: 2222,
+            user: "shad"
+        )
+        #expect(model.sshCommand == "ssh -p 2222 shad@example.com")
+    }
+
+    @Test func sshCommandOmitsDefaultPort() {
+        let model = ConnectionConfigModel(
+            host: "example.com",
+            port: 22,
+            user: "shad"
+        )
+        #expect(model.sshCommand == "ssh shad@example.com")
+    }
+
+    @Test func sshCommandFallsBackToLocalUser() {
+        let model = ConnectionConfigModel(host: "example.com")
+        #expect(model.sshCommand == "ssh \(NSUserName())@example.com")
+    }
+
     @Test func unsetIgnoreFilenamesUseTheDefault() throws {
         let model = ConnectionConfigModel(host: "example.com")
         let config = try ConnectionConfig(from: model, authMethod: .password("secret"))

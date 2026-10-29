@@ -5,7 +5,6 @@ import SwiftData
 import SwiftUI
 
 struct RichMenuMainView: View {
-    @Environment(Connections.self) private var connections
     @Environment(Transfers<ContinuousClock>.self) private var transfers
     @Environment(SettingsNavigation.self) private var settingsNavigation
     @Environment(\.modelContext) private var modelContext
@@ -13,10 +12,6 @@ struct RichMenuMainView: View {
 
     @Query(sort: \ConnectionConfigModel.host) private var configs:
         [ConnectionConfigModel]
-
-    @State private var isPolling = false
-    @State private var isDebug = false
-    @State private var isSettingsHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -70,29 +65,6 @@ struct RichMenuMainView: View {
                 )
             }
 
-            if isDebug {
-                RichMenuButton {
-                    Task {
-                        isPolling = true
-                        defer { isPolling = false }
-                        for config in configs {
-                            if config.isEnabled() {
-                                await config.poll()
-                            }
-                        }
-                    }
-                } label: {
-                    RichMenuLabel(title: "Poll for Remote Changes") {
-                        if isPolling {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                        }
-                    }
-                }
-                .disabled(configs.filter({ c in c.enabled }).isEmpty)
-            }
-
             RichMenuButton {
                 openWindow.inFront(id: "about")
             } label: {
@@ -114,7 +86,5 @@ struct RichMenuMainView: View {
         .padding(.vertical, 8)
         .padding(.horizontal, 8)
         .frame(width: 400)
-        .onAppear {
-            isDebug = NSEvent.modifierFlags.contains(.option)
-        }
-    }}
+    }
+}

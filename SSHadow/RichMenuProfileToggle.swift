@@ -26,6 +26,10 @@ struct RichMenuProfileToggle: View {
         connections.status(for: config.id)
     }
 
+    private var isFailed: Bool {
+        if case .offline(.failed) = status { true } else { false }
+    }
+
     var body: some View {
         VStack(alignment: .leading) {
             HStack(spacing: 8) {
@@ -76,12 +80,43 @@ struct RichMenuProfileToggle: View {
         )
         .onHover { isHovered = $0 }
         .contextMenu {
+            Button("Show in Finder", action: openInFinder)
+                .disabled(folderUrl == nil)
             Button("Edit Connection…", action: editInSettings)
-            if case .offline(.failed) = status {
-                Button("Clear Status") {
-                    Task { await config.clearFailure() }
+
+            Divider()
+
+            if let action = ConnectionStatusAction(
+                config: config,
+                status: status
+            ) {
+                Button(action.title) {
+                    Task { await action.perform() }
                 }
             }
+            Button("Clear Status") {
+                Task { await config.clearFailure() }
+            }
+            .disabled(!isFailed)
+            Button("Check for Remote Changes") {
+                Task { await config.poll() }
+            }
+            .disabled(status != .online)
+
+            Divider()
+
+            Button("Copy SSH Command") {
+                NSPasteboard.general.copy(config.sshCommand)
+            }
+            .disabled(config.host.isEmpty)
+            Button("Copy Path") {
+                if let folderUrl {
+                    NSPasteboard.general.copy(
+                        folderUrl.path(percentEncoded: false)
+                    )
+                }
+            }
+            .disabled(folderUrl == nil)
         }
         .task(id: config.isEnabled()) { folderUrl = await resolveFolderUrl() }
     }
