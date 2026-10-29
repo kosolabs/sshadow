@@ -1,13 +1,18 @@
 import CoreKit
+import SwiftData
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(SettingsNavigation.self) private var navigation
     @Environment(WindowActivationTracker.self) private var activation
+    @Query private var configs: [ConnectionConfigModel]
 
     @State private var section: SidebarSection? = .connections
-    @State private var selectedConfig: ConnectionConfigModel?
 
     var body: some View {
+        @Bindable var navigation = navigation
+
         NavigationSplitView {
             List(selection: $section) {
                 ForEach(SidebarSection.allCases) { section in
@@ -20,7 +25,7 @@ struct SettingsView: View {
         } content: {
             switch section {
             case .connections:
-                ConnectionConfigListView(selection: $selectedConfig)
+                ConnectionConfigListView(selection: $navigation.selectedConfig)
                     .navigationSplitViewColumnWidth(min: 250, ideal: 300)
             case nil:
                 ContentUnavailableView(
@@ -29,8 +34,23 @@ struct SettingsView: View {
                 )
             }
         } detail: {
-            if let selectedConfig {
+            if let selectedConfig = navigation.selectedConfig {
                 ConnectionConfigEditView(config: selectedConfig)
+            } else if configs.isEmpty {
+                ContentUnavailableView {
+                    Label(
+                        "No Connections",
+                        systemImage: SidebarSection.connections.systemImage
+                    )
+                } description: {
+                    Text("Mount a remote directory over SSH in Finder.")
+                } actions: {
+                    Button("Add Connection") {
+                        navigation.addConnection(to: modelContext)
+                    }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                }
             } else {
                 ContentUnavailableView(
                     "Select a Connection",
@@ -41,8 +61,7 @@ struct SettingsView: View {
         .frame(minWidth: 720, minHeight: 600)
         .onAppear { activation.retain() }
         .onDisappear { activation.release() }
-    }
-}
+    }}
 
 enum SidebarSection: String, CaseIterable, Identifiable {
     case connections

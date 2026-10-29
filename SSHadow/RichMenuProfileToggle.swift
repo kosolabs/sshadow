@@ -7,6 +7,8 @@ private let logger = Logger(category: "RichMenuProfileToggle")
 
 struct RichMenuProfileToggle: View {
     @Environment(Connections.self) private var connections
+    @Environment(SettingsNavigation.self) private var settingsNavigation
+    @Environment(\.openWindow) private var openWindow
 
     let config: ConnectionConfigModel
 
@@ -42,7 +44,12 @@ struct RichMenuProfileToggle: View {
                     Spacer()
                 }
                 .contentShape(Rectangle())
-                .onTapGesture { openInFinder() }
+                .onTapGesture {
+                    config.isEnabled() ? openInFinder() : editInSettings()
+                }
+                .help(
+                    config.isEnabled() ? "Show in Finder" : "Edit in Settings"
+                )
                 .draggable(ifAvailable: folderUrl.map(\.shellEscapedPath))
 
                 Toggle(isOn: enabled) {}
@@ -64,11 +71,13 @@ struct RichMenuProfileToggle: View {
         .contentShape(Rectangle())
         .background(
             RoundedRectangle(cornerRadius: 8).fill(
-                isHovered && config.isEnabled()
-                    ? Color.primary : Color.clear
+                isHovered ? Color.primary : Color.clear
             )
         )
         .onHover { isHovered = $0 }
+        .contextMenu {
+            Button("Edit Connection…", action: editInSettings)
+        }
         .task(id: config.isEnabled()) { folderUrl = await resolveFolderUrl() }
     }
 
@@ -89,5 +98,11 @@ struct RichMenuProfileToggle: View {
         guard let folderUrl else { return }
         NSApp.dismissMenuBarExtra()
         NSWorkspace.shared.activateFileViewerSelecting([folderUrl])
+    }
+
+    private func editInSettings() {
+        NSApp.dismissMenuBarExtra()
+        settingsNavigation.selectedConfig = config
+        openWindow.inFront(id: "settings")
     }
 }

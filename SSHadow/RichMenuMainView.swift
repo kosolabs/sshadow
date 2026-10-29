@@ -7,6 +7,8 @@ import SwiftUI
 struct RichMenuMainView: View {
     @Environment(Connections.self) private var connections
     @Environment(Transfers<ContinuousClock>.self) private var transfers
+    @Environment(SettingsNavigation.self) private var settingsNavigation
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
 
     @Query(sort: \ConnectionConfigModel.host) private var configs:
@@ -18,15 +20,32 @@ struct RichMenuMainView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            if !configs.isEmpty {
-                RichMenuHeading(title: "Connections")
+            RichMenuHeading(title: "Connections")
 
+            if configs.isEmpty {
+                VStack(spacing: 8) {
+                    Text("Mount a remote directory over SSH in Finder.")
+                        .foregroundStyle(.secondary)
+
+                    Button {
+                        NSApp.dismissMenuBarExtra()
+                        settingsNavigation.addConnection(to: modelContext)
+                        openWindow.inFront(id: "settings")
+                    } label: {
+                        Label("Add Your First Connection", systemImage: "plus")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                }
+                .padding(8)
+            } else {
                 ForEach(configs) { config in
                     RichMenuProfileToggle(config: config)
                 }
-
-                Divider().padding(.vertical, 4)
             }
+
+            Divider().padding(.vertical, 4)
 
             if !transfers.value.isEmpty {
                 RichMenuHeading(title: "Transfers")
@@ -37,13 +56,13 @@ struct RichMenuMainView: View {
             }
 
             RichMenuButton {
-                openWindowInFront(id: "settings")
+                openWindow.inFront(id: "settings")
             } label: {
-                RichMenuLabel("Settings…", systemImage: "gear")
+                RichMenuLabel("Connections & Settings…", systemImage: "gear")
             }
 
             RichMenuButton {
-                openWindowInFront(id: "events")
+                openWindow.inFront(id: "events")
             } label: {
                 RichMenuLabel(
                     "Event Log",
@@ -75,7 +94,7 @@ struct RichMenuMainView: View {
             }
 
             RichMenuButton {
-                openWindowInFront(id: "about")
+                openWindow.inFront(id: "about")
             } label: {
                 RichMenuLabel("About SSHadow", systemImage: "info.circle")
             }
@@ -98,13 +117,4 @@ struct RichMenuMainView: View {
         .onAppear {
             isDebug = NSEvent.modifierFlags.contains(.option)
         }
-    }
-
-    private func openWindowInFront(id: String) {
-        openWindow(id: id)
-        NSApp.activate()
-        NSApp.windows
-            .first { $0.identifier?.rawValue.contains(id) == true }?
-            .makeKeyAndOrderFront(nil)
-    }
-}
+    }}
