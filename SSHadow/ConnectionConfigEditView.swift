@@ -89,6 +89,35 @@ struct ConnectionConfigEditView: View {
         )
     }
 
+    private var customizesIgnoreFiles: Binding<Bool> {
+        Binding<Bool>(
+            get: { config.customizesIgnoreFiles },
+            set: { config.customizesIgnoreFiles = $0 }
+        )
+    }
+
+    private var ignoreFilenames: Binding<[String]> {
+        Binding<[String]>(
+            get: { config.effectiveIgnoreFilenames },
+            set: { config.ignoreFilenames = $0 }
+        )
+    }
+
+    private var ignoreFilesSummary: Text {
+        switch ignoreFilenames.wrappedValue.count {
+        case 0:
+            Text("Nothing will be ignored.")
+        case 1:
+            Text(
+                "SSHadow will look for this file in every folder and ignore items matching its patterns. Ignore files use [gitignore syntax](https://git-scm.com/docs/gitignore#_pattern_format)."
+            )
+        default:
+            Text(
+                "SSHadow will look for these files in every folder and ignore items matching their patterns. When files disagree, the one lower in the list wins. Ignore files use [gitignore syntax](https://git-scm.com/docs/gitignore#_pattern_format)."
+            )
+        }
+    }
+
     private var status: ConnectionStatus {
         connections.status(for: config.id)
     }
@@ -118,6 +147,8 @@ struct ConnectionConfigEditView: View {
             "This private key requires a passphrase."
         case .privateKeyInvalid:
             "Private key is invalid or the passphrase is incorrect."
+        case .ignoreFilenameInvalid:
+            "Ignore file names can't be empty or contain slashes."
         }
     }
 
@@ -277,6 +308,21 @@ struct ConnectionConfigEditView: View {
                         }
                     }
                 }
+                Section {
+                    Toggle(
+                        "Customize Ignore Files",
+                        isOn: customizesIgnoreFiles
+                    )
+                    .disabled(locked)
+                    .accessibilityIdentifier("customizesIgnoreFilesToggle")
+                    IgnoreFilenamesList(filenames: ignoreFilenames)
+                        .disabled(locked || !customizesIgnoreFiles.wrappedValue)
+                } header: {
+                    Text("Ignore Files")
+                } footer: {
+                    ignoreFilesSummary
+                        .foregroundStyle(.secondary)
+                }
             }
             .formStyle(.grouped)
             .onAppear {
@@ -285,6 +331,7 @@ struct ConnectionConfigEditView: View {
             }
             .onChange(of: config.authMethod) { validate() }
             .onChange(of: config.bookmark) { validate() }
+            .onChange(of: config.ignoreFilenames) { validate() }
             .fileImporter(
                 isPresented: $isImportingKey,
                 allowedContentTypes: [.item],

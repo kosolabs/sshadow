@@ -10,6 +10,7 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
         case privateKeyUnreadable
         case passphraseRequired
         case privateKeyInvalid
+        case ignoreFilenameInvalid
     }
 
     public enum AuthMethod: Message, CustomStringConvertible {
