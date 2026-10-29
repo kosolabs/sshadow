@@ -2133,6 +2133,27 @@ struct SessionTests {
             #expect(changes == [])
         }
 
+        @Test func createDirectoryInMissingTrashCreatesTrashFolder()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+            #expect(!sandbox.exists(at: ".sshadow/trash"))
+
+            let item = try await session.createDirectory(
+                "build",
+                in: .trashContainer,
+                snapshot: nil
+            )
+
+            #expect(sandbox.exists(at: ".sshadow/trash/build"))
+            let trashed = try await session.child(
+                of: .trashContainer,
+                name: "build"
+            )
+            #expect(trashed == item.id)
+        }
+
         @Test func createDirectoryWithIfExistsSucceedSucceeds() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFolder(at: "existing-dir")
@@ -2295,6 +2316,30 @@ struct SessionTests {
             #expect(item.kind == .symlink(target: "/etc/hosts"))
             let changes = try await session.reconcileAll()
             #expect(changes == [])
+        }
+
+        @Test func createSymlinkInMissingTrashCreatesTrashFolder()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+            #expect(!sandbox.exists(at: ".sshadow/trash"))
+
+            let item = try await session.createSymlink(
+                "link",
+                in: .trashContainer,
+                target: "/etc/hosts",
+                snapshot: nil
+            )
+
+            #expect(
+                try sandbox.target(of: ".sshadow/trash/link") == "/etc/hosts"
+            )
+            let trashed = try await session.child(
+                of: .trashContainer,
+                name: "link"
+            )
+            #expect(trashed == item.id)
         }
 
         @Test func createSymlinkInsertsRowMatchingItemId() async throws {
@@ -2759,6 +2804,29 @@ struct SessionTests {
             #expect(item.kind == .package)
             let changes = try await session.reconcileAll()
             #expect(changes == [])
+        }
+
+        @Test func uploadToMissingTrashCreatesTrashFolder() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "a.txt", in: .group, contents: "a")
+            let source = sandbox.url(for: "a.txt", in: .group)
+            let session = try await sandbox.getSession()
+            #expect(!sandbox.exists(at: ".sshadow/trash"))
+
+            let item = try await session.upload(
+                "a.txt",
+                to: .trashContainer,
+                file: source,
+                snapshot: nil,
+                progress: Progress()
+            )
+
+            #expect(try sandbox.contents(of: ".sshadow/trash/a.txt") == "a")
+            let trashed = try await session.child(
+                of: .trashContainer,
+                name: "a.txt"
+            )
+            #expect(trashed == item.id)
         }
 
         @Test func uploadSmallFileSucceeds() async throws {

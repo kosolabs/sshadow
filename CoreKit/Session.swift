@@ -652,10 +652,12 @@ extension Session {
             with: parentId,
             recording: "Create symlink from \(ref) to \(target)"
         ) {
-            try await sftp.makeSymlink(
-                to: target,
-                at: path(for: name, in: parentId)
-            )
+            try await creatingTrash(in: parentId) {
+                try await sftp.makeSymlink(
+                    to: target,
+                    at: path(for: name, in: parentId)
+                )
+            }
         }
         return try await record(
             name,
@@ -689,11 +691,13 @@ extension Session {
             with: parentId,
             recording: "Create directory \(ref)"
         ) {
-            try await sftp.makeDirectory(
-                at: path(for: name, in: parentId),
-                mode: flags.mode,
-                ifExists: ifExists
-            )
+            try await creatingTrash(in: parentId) {
+                try await sftp.makeDirectory(
+                    at: path(for: name, in: parentId),
+                    mode: flags.mode,
+                    ifExists: ifExists
+                )
+            }
         }
         let item = try await record(
             name,
@@ -734,15 +738,7 @@ extension Session {
         let newPath = try await path(for: newName, in: newParentId)
 
         try await perform(with: itemId, recording: "Move \(from) to \(to)") {
-            do {
-                try await sftp.move(from: oldPath, to: newPath)
-            } catch SSHError.sftpError(.noSuchFile, _)
-                where newParentId == .trashContainer
-            {
-                logger.info("Trash doesn't exist, creating")
-                try await sftp.createDirectoryRecursively(
-                    at: path(for: newParentId)
-                )
+            try await creatingTrash(in: newParentId) {
                 try await sftp.move(from: oldPath, to: newPath)
             }
         }
@@ -1091,7 +1087,9 @@ extension Session {
                     try await sftp.createDirectoryRecursively(at: stagingPath)
                     try await writeStaged()
                 }
-                try await install(staged, at: target, kind: kind)
+                try await creatingTrash(in: parentId) {
+                    try await install(staged, at: target, kind: kind)
+                }
             } catch {
                 await removeStaged(staged, kind: kind)
                 switch coreError(from: error, itemId: parentId) {
@@ -1674,6 +1672,23 @@ extension Session {
                 await connectionLostHandler(ConnectionError(from: error))
             }
             throw mapped
+        }
+    }
+
+    private func creatingTrash<T>(
+        in parentId: NSFileProviderItemIdentifier,
+        _ work: () async throws -> T
+    ) async throws -> T {
+        do {
+            return try await work()
+        } catch SSHError.sftpError(.noSuchFile, _)
+            where parentId == .trashContainer
+        {
+            logger.info("Trash doesn't exist, creating")
+            try await sftp.createDirectoryRecursively(
+                at: path(for: .trashContainer)
+            )
+            return try await work()
         }
     }
 
