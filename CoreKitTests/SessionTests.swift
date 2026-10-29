@@ -46,6 +46,15 @@ extension TestSandbox {
     }
 
     @MainActor
+    fileprivate func syncEvents(count: Int) async -> [Event] {
+        let syncEvents = { [events] in
+            events.value.filter { $0.category == .sync }
+        }
+        await expect(eventually: { syncEvents().count >= count })
+        return syncEvents()
+    }
+
+    @MainActor
     fileprivate func fileEvents(count: Int) async -> [String] {
         let messages = { [events] in
             events.value.filter { $0.category == .file }.map(\.message)
@@ -1419,6 +1428,40 @@ struct SessionTests {
             #expect(changes == [])
         }
 
+        @Test func pollLogsEachChange() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            try sandbox.createFile(at: "old.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try sandbox.removeItem(at: "old.txt")
+            try sandbox.createFile(at: "dir/new.txt", modifyDate: end)
+            try sandbox.touch("dir", modifyDate: start)
+            try await session.pollAll()
+
+            let events = await sandbox.syncEvents(count: 3)
+            #expect(
+                events.map(\.message) == [
+                    "Removed \"old.txt\"",
+                    "Added \"dir/new.txt\"",
+                    "Detected 2 change(s) on server",
+                ]
+            )
+            #expect(events.map(\.level) == [.info, .info, .notice])
+        }
+
+        @Test func pollLogsWhenNothingChanged() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "file.txt", modifyDate: start)
+            let session = try await sandbox.getSession()
+
+            try await session.pollAll()
+
+            let event = try #require(await sandbox.syncEvents(count: 1).last)
+            #expect(event.level == .info)
+            #expect(event.message == "No changes on server")
+        }
+
         @Test func pollSurfacesCreatedFile() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFolder(at: "dir", modifyDate: start)
@@ -1927,6 +1970,20 @@ struct SessionTests {
     struct PollWatchedChangesTests {
         let start: Date = Date(timeIntervalSince1970: 1_750_000_000)
         let end: Date = Date(timeIntervalSince1970: 1_760_000_000)
+
+        @Test func pollWatchedLogsNothingWhenNothingChanged() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "dir", modifyDate: start)
+            let session = try await sandbox.getSession()
+            let dirId = try await session.child(name: "dir")
+            await session.watch(itemId: dirId)
+
+            try await session.pollWatched()
+            try await session.pollAll()
+
+            let events = await sandbox.syncEvents(count: 1)
+            #expect(events.map(\.message) == ["No changes on server"])
+        }
 
         @Test func pollWatchedWithNoChangesAccumulatesEmpty() async throws {
             let sandbox = TestSandbox()

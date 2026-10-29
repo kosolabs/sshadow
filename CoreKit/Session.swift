@@ -304,6 +304,7 @@ extension Session {
 
         schedule?.recordPollAll(at: ContinuousClock.now)
         guard !newChanges.isEmpty else {
+            log.info("No changes on server")
             return
         }
 
@@ -410,6 +411,7 @@ extension Session {
             attrs = try await attributes(for: dbItem.id)
         } catch CoreError.itemNotFound {
             logger.info("Reconcile deleted: \(dbItem)")
+            await log.info("Removed \(ref(for: dbItem.id).display)")
             try await db.remove(dbItem.id)
             await cache.invalidate(dbItem.id)
             watched.removeValue(forKey: dbItem.id)
@@ -472,6 +474,7 @@ extension Session {
                 continue
             }
             logger.info("Reconcile deleted: \(dbItem)")
+            await log.info("Removed \(ref(for: dbItem.id).display)")
             try await db.remove(dbItem.id)
             await cache.invalidate(dbItem.id)
             changes.append(.delete(itemId: dbItem.rawId))
@@ -489,6 +492,7 @@ extension Session {
 
         if let dbItem, dbItem.kind != sshItem.kind {
             logger.info("Reconcile replaced: \(dbItem) -> \(sshItem)")
+            await log.info("Removed \(ref(for: dbItem.id).display)")
             try await db.remove(dbItem.id)
             await cache.invalidate(dbItem.id)
             changes.append(.delete(itemId: dbItem.rawId))
@@ -498,12 +502,14 @@ extension Session {
 
         guard let dbItem, dbItem.kind == sshItem.kind else {
             logger.info("Reconcile new: \(sshItem)")
+            await log.info("Added \(ref(for: newItem.id).display)")
             changes.append(.update(item: newItem))
             return changes
         }
 
         if changed(dbItem, versus: sshItem) {
             logger.info("Reconcile changed: \(dbItem) -> \(sshItem)")
+            await log.info("Changed \(ref(for: newItem.id).display)")
             if dbItem.kind == .file {
                 await cache.invalidate(dbItem.id)
             }
