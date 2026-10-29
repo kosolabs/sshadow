@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.17.0](https://github.com/kosolabs/sshadow/compare/v0.16.5...v0.17.0) (2026-10-29)
+
+
+### Features
+
+* add ignore file names to connection settings ([#414](https://github.com/kosolabs/sshadow/issues/414)) ([7388d31](https://github.com/kosolabs/sshadow/commit/7388d31dc85420c0a638283d6792f06f4587957e))
+* add support for tracking materialized items in the app ([#435](https://github.com/kosolabs/sshadow/issues/435)) ([9803ab6](https://github.com/kosolabs/sshadow/commit/9803ab60c8d9f6d1fdf141bf0c6805bb5f8d10c7))
+* do not download ignored items ([#420](https://github.com/kosolabs/sshadow/issues/420)) ([13f35ca](https://github.com/kosolabs/sshadow/commit/13f35ca95575fa151ea692237f9a1d48f24cbf85))
+* do not upload ignored items ([#416](https://github.com/kosolabs/sshadow/issues/416)) ([bacce29](https://github.com/kosolabs/sshadow/commit/bacce29a700aa73433b402932de82bd7e4dff604))
+* hide ignored folders once nothing in them is downloaded ([#439](https://github.com/kosolabs/sshadow/issues/439)) ([acea8d0](https://github.com/kosolabs/sshadow/commit/acea8d07ad2c017ce4ed60ed19d0c501147d2c9e))
+* let each connection customize its ignore files ([#442](https://github.com/kosolabs/sshadow/issues/442)) ([0e9c281](https://github.com/kosolabs/sshadow/commit/0e9c28150ccbc4621d7b93391e1e7df40bd2c4b1))
+* log evictions and say "ignore" instead of "skip" and "excluded" ([#440](https://github.com/kosolabs/sshadow/issues/440)) ([f26c731](https://github.com/kosolabs/sshadow/commit/f26c73143deb7ce7c0ab78d67ed0696cb5d069b0))
+* log skipped ignored items to the event log ([#434](https://github.com/kosolabs/sshadow/issues/434)) ([0a212e0](https://github.com/kosolabs/sshadow/commit/0a212e00b1a2735472fa7437a177b3207cac4a37))
+* only read remote ignore files when they change ([#429](https://github.com/kosolabs/sshadow/issues/429)) ([5193183](https://github.com/kosolabs/sshadow/commit/519318333a693b0f61f0871383301c8d329fee88))
+* read ignore files that haven't been downloaded from the server ([#419](https://github.com/kosolabs/sshadow/issues/419)) ([96370b3](https://github.com/kosolabs/sshadow/commit/96370b3a6ea1f2a9d3fed00fc59f6cacc9c24c81))
+* retry excluded items when ignore rules change ([#423](https://github.com/kosolabs/sshadow/issues/423)) ([72e51c9](https://github.com/kosolabs/sshadow/commit/72e51c97eb9ffbd989099a27b718560d04f02fd7))
+* stop syncing items that become ignored ([#425](https://github.com/kosolabs/sshadow/issues/425)) ([de3fb1f](https://github.com/kosolabs/sshadow/commit/de3fb1f10050655ca3a3f5f3e086ff2e1123217f))
+* stop syncing remote changes to items that become ignored ([#424](https://github.com/kosolabs/sshadow/issues/424)) ([05fc66f](https://github.com/kosolabs/sshadow/commit/05fc66f9205fcade53c88b4395dd14eabd09f90a))
+
+
+### Bug Fixes
+
+* bundle ignore file version from local as well ([#430](https://github.com/kosolabs/sshadow/issues/430)) ([bf5b5e4](https://github.com/kosolabs/sshadow/commit/bf5b5e43f973ebd0ec7eac9f674ebf9072b1e12a))
+* create the trash folder when trashing an item that was never uploaded ([#441](https://github.com/kosolabs/sshadow/issues/441)) ([7659974](https://github.com/kosolabs/sshadow/commit/7659974aa1833a78c7fe1425d963e609004c0dea))
+* hide ignored items that aren't downloaded on the Mac ([#437](https://github.com/kosolabs/sshadow/issues/437)) ([2f6cf93](https://github.com/kosolabs/sshadow/commit/2f6cf93a867198c04089aefe1ae1f2134f16f905))
+* order retryIgnored correct to remove erroneous error ([#436](https://github.com/kosolabs/sshadow/issues/436)) ([078523e](https://github.com/kosolabs/sshadow/commit/078523ee2b837df6642f1a95cf7c08729be57208))
+* reconcile remote changes inside folders created locally ([#422](https://github.com/kosolabs/sshadow/issues/422)) ([ca2ef33](https://github.com/kosolabs/sshadow/commit/ca2ef33eb8ed83b8ad0a76482177d8316f02cea8))
+* treat an empty sync anchor as 0 instead of crashing ([#438](https://github.com/kosolabs/sshadow/issues/438)) ([982935e](https://github.com/kosolabs/sshadow/commit/982935ea2045de817663c56c08cd9ec8f3c629bd))
+
 ## [0.16.5](https://github.com/kosolabs/sshadow/compare/v0.16.4...v0.16.5) (2026-10-17)
 
 
