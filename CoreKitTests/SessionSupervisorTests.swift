@@ -1121,4 +1121,44 @@ struct SessionSupervisorTests {
         #expect(await ext.calls == [.resume, .suspend, .remove])
         #expect(spy.statuses.last == .offline(.disabled))
     }
+
+    @Test func pauseFromFailedSuspendsAsPaused() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            initialBackoff: .milliseconds(1),
+            maxBackoff: .milliseconds(5),
+            openSession: provider.provider(),
+            xpc: xpc,
+            ext: ext,
+            onStatusChange: spy.handler()
+        )
+
+        try await supervisor.connect(config: try sandbox.config)
+        await provider.failNextConnects(1, with: .authenticationFailed)
+        let handler = try #require(await provider.capturedHandler)
+        await handler(ConnectionError.connectionRefused)
+
+        let deadline = ContinuousClock.now + .seconds(5)
+        while ContinuousClock.now < deadline {
+            if spy.statuses.last == .offline(.failed(.authenticationFailed)) {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(spy.statuses.last == .offline(.failed(.authenticationFailed)))
+
+        await supervisor.pause()
+
+        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await ext.calls == [.resume, .suspend, .suspend])
+        #expect(spy.statuses.last == .offline(.paused))
+    }
 }

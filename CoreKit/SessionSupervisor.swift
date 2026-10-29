@@ -189,6 +189,12 @@ package actor SessionSupervisor {
             await cancel(task, reason: .paused)
         case .online(let session):
             await disconnect(session, reason: .paused)
+        case .offline(.failed):
+            state = .offline(.paused)
+            await ext.suspend(
+                reason: OfflineReason.paused.text,
+                options: .temporary
+            )
         case .offline, .disconnecting:
             logger.info("Ignored pause while in \(state)")
             return
