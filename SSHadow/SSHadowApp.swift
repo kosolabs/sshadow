@@ -37,6 +37,7 @@ struct SSHadowApp: App {
 
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var activation = WindowActivationTracker()
+    @State private var settingsNavigation = SettingsNavigation()
 
     init() {
         startup()
@@ -46,6 +47,7 @@ struct SSHadowApp: App {
         MenuBarExtra {
             RichMenuMainView()
                 .modelContainer(Self.modelContainer)
+                .environment(settingsNavigation)
                 .environment(Connections.shared)
                 .environment(Transfers.shared)
                 .environment(Events.shared)
@@ -59,6 +61,7 @@ struct SSHadowApp: App {
         Window("Settings", id: "settings") {
             SettingsView()
                 .modelContainer(Self.modelContainer)
+                .environment(settingsNavigation)
                 .environment(activation)
                 .environment(Connections.shared)
                 .environment(Transfers.shared)
