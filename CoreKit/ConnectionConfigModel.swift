@@ -224,6 +224,24 @@ public class ConnectionConfigModel: CustomStringConvertible {
         return url
     }
 
+    // MARK: - Ignore Files
+
+    public var customizesIgnoreFiles: Bool {
+        get { ignoreFilenames != nil }
+        set { ignoreFilenames = newValue ? effectiveIgnoreFilenames : nil }
+    }
+
+    fileprivate func validateIgnoreFilenames()
+        throws(ConnectionConfig.ValidationError)
+    {
+        let invalid = effectiveIgnoreFilenames.contains {
+            $0.isEmpty || $0 == "." || $0 == ".." || $0.contains("/")
+        }
+        if invalid {
+            throw .ignoreFilenameInvalid
+        }
+    }
+
     // MARK: - Private Key Passphrase Management
 
     private var privateKeyPassphraseKey: String {
@@ -303,7 +321,11 @@ extension ConnectionConfig {
         try self.init(from: profile, authMethod: profile.resolveConfigAuthMethod())
     }
 
-    init(from profile: ConnectionConfigModel, authMethod: AuthMethod) {
+    init(
+        from profile: ConnectionConfigModel,
+        authMethod: AuthMethod
+    ) throws(ValidationError) {
+        try profile.validateIgnoreFilenames()
         self.init(
             id: profile.id,
             name: profile.displayName,
