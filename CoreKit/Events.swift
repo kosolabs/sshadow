@@ -1,7 +1,7 @@
 import Common
 import Foundation
 
-private let maxEvents: Int = 1000
+private let maxEvents: Int = 10_000
 
 extension Events where C == ContinuousClock {
     nonisolated public static let shared = Events()
