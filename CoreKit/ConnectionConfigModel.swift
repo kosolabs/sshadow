@@ -148,6 +148,14 @@ public class ConnectionConfigModel: CustomStringConvertible {
         await DomainRegistry.shared.pause(domain: domain)
     }
 
+    public func clearFailure() async {
+        if enabled {
+            await pause()
+        } else {
+            await DomainRegistry.shared.disable(domain: domain)
+        }
+    }
+
     public func poll() async {
         do {
             try await DomainRegistry.shared.poll(domain: domain)

@@ -77,6 +77,11 @@ struct RichMenuProfileToggle: View {
         .onHover { isHovered = $0 }
         .contextMenu {
             Button("Edit Connection…", action: editInSettings)
+            if case .offline(.failed) = status {
+                Button("Clear Status") {
+                    Task { await config.clearFailure() }
+                }
+            }
         }
         .task(id: config.isEnabled()) { folderUrl = await resolveFolderUrl() }
     }

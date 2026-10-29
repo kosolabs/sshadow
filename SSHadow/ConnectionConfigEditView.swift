@@ -190,7 +190,12 @@ struct ConnectionConfigEditView: View {
                             }
                         }
                         switch status {
-                        case .offline:
+                        case .offline(let reason):
+                            if case .failed = reason {
+                                Button("Clear") {
+                                    Task { await config.clearFailure() }
+                                }
+                            }
                             if config.enabled {
                                 Button("Reconnect") {
                                     Task { await config.enable() }
