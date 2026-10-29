@@ -76,6 +76,7 @@ package class TestSandbox {
     package let user: String
     package let domain: NSFileProviderDomain
     package let materializedItems = FakeMaterializedItems()
+    package let events = Events<ContinuousClock>()
 
     private let root: URL
     private let local: URL
@@ -158,7 +159,7 @@ package class TestSandbox {
                 try materializedItems.evict(itemId)
             },
             transfers: Transfers(),
-            events: Events()
+            events: events
         )
         return { config, handler in
             try await withConnectRetries {

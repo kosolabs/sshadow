@@ -45,6 +45,15 @@ extension TestSandbox {
         ).session
     }
 
+    @MainActor
+    fileprivate func fileEvents(count: Int) async -> [String] {
+        let messages = { [events] in
+            events.value.filter { $0.category == .file }.map(\.message)
+        }
+        await expect(eventually: { messages().count >= count })
+        return messages()
+    }
+
     // Like `getSession`, but also hands back the underlying `SSHClient` so a
     // test can drop the transport out from under the session.
     fileprivate func makeSession(
@@ -81,7 +90,7 @@ extension TestSandbox {
                 try materializedItems.evict($0)
             },
             transfers: Transfers(),
-            events: Events()
+            events: events
         )
 
         var folders: [NSFileProviderItemIdentifier] = [
@@ -633,7 +642,7 @@ struct SessionTests {
     }
 
     struct ListIgnoreTests {
-        @Test func listExcludesIgnoredEntries() async throws {
+        @Test func listOmitsIgnoredEntries() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(
                 at: ".sshadowignore",
@@ -752,7 +761,7 @@ struct SessionTests {
                 target: "/dev/null",
                 snapshot: files
             )
-            await #expect(throws: CoreError.excludedFromSync) {
+            await #expect(throws: CoreError.ignored) {
                 try await session.createSymlink(
                     "a.tmp",
                     in: .rootContainer,
@@ -793,7 +802,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
             try sandbox.removeItem(at: ".sshadowignore")
 
-            await #expect(throws: CoreError.excludedFromSync) {
+            await #expect(throws: CoreError.ignored) {
                 try await session.createDirectory(
                     "build",
                     in: .rootContainer,
@@ -983,6 +992,15 @@ struct SessionTests {
             #expect(fileChanges == [.delete(itemId: aId.rawValue)])
             #expect(sandbox.materializedItems.evicted == [dataId])
             #expect(folderChanges == [.delete(itemId: dataId.rawValue)])
+            #expect(
+                await sandbox.fileEvents(count: 5) == [
+                    "Ignore rules changed in Root",
+                    #"Evicted "data/a.txt""#,
+                    #"Hide ignored "data/a.txt""#,
+                    #"Evicted "data""#,
+                    #"Hide ignored "data""#,
+                ]
+            )
         }
 
         @Test func evictingSyncedFileKeepsIt() async throws {
@@ -1000,6 +1018,9 @@ struct SessionTests {
 
             #expect(changes.isEmpty)
             #expect(try await session.child(name: "a.txt") == aId)
+            #expect(
+                await sandbox.fileEvents(count: 1) == [#"Evicted "a.txt""#]
+            )
         }
 
         @Test func downloadRefusesIgnoredItem() async throws {
@@ -2523,8 +2544,8 @@ struct SessionTests {
         }
     }
 
-    struct ExclusionTests {
-        @Test func removingExcludedFileKeepsRemoteCopy() async throws {
+    struct IgnoredItemTests {
+        @Test func removingIgnoredFileKeepsRemoteCopy() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "b.txt", contents: "b")
             let session = try await sandbox.getSession()
@@ -2541,12 +2562,12 @@ struct SessionTests {
             }
         }
 
-        @Test func uploadToExcludedNameIsSkipped() async throws {
+        @Test func uploadToIgnoredNameIsSkipped() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "a.log", in: .group, contents: "a")
             let session = try await sandbox.getSession()
 
-            await #expect(throws: CoreError.excludedFromSync) {
+            await #expect(throws: CoreError.ignored) {
                 try await session.upload(
                     "a.log",
                     to: .rootContainer,
@@ -2559,13 +2580,13 @@ struct SessionTests {
             #expect(!sandbox.exists(at: "a.log"))
         }
 
-        @Test func trashingExcludedItemIsSkipped() async throws {
+        @Test func trashingIgnoredItemIsSkipped() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "b.txt", contents: "b")
             let session = try await sandbox.getSession()
             let bId = try await session.child(name: "b.txt")
 
-            await #expect(throws: CoreError.excludedFromSync) {
+            await #expect(throws: CoreError.ignored) {
                 try await session.move(
                     bId,
                     to: .trashContainer,
@@ -2586,7 +2607,7 @@ struct SessionTests {
                     ignoreRulesChangedHandler: { called() }
                 )
                 for _ in 0..<2 {
-                    await #expect(throws: CoreError.excludedFromSync) {
+                    await #expect(throws: CoreError.ignored) {
                         try await session.createDirectory(
                             "build",
                             in: .rootContainer,
@@ -2597,11 +2618,11 @@ struct SessionTests {
             }
         }
 
-        @Test func matchingNameIsExcluded() async throws {
+        @Test func matchingNameIsIgnored() async throws {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
 
-            await #expect(throws: CoreError.excludedFromSync) {
+            await #expect(throws: CoreError.ignored) {
                 try await session.createDirectory(
                     "build",
                     in: .rootContainer,
@@ -2612,7 +2633,7 @@ struct SessionTests {
             #expect(!sandbox.exists(at: "build"))
         }
 
-        @Test func otherNameIsNotExcluded() async throws {
+        @Test func otherNameIsNotIgnored() async throws {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
 
@@ -2642,7 +2663,7 @@ struct SessionTests {
                 target: "/dev/null",
                 snapshot: files
             )
-            await #expect(throws: CoreError.excludedFromSync) {
+            await #expect(throws: CoreError.ignored) {
                 try await session.createSymlink(
                     "other.log",
                     in: srcId,
@@ -2661,7 +2682,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
             let srcId = try await session.child(name: "src")
 
-            await #expect(throws: CoreError.excludedFromSync) {
+            await #expect(throws: CoreError.ignored) {
                 try await session.createSymlink(
                     "out.o",
                     in: srcId,
@@ -2700,7 +2721,7 @@ struct SessionTests {
             #expect(sandbox.exists(at: "build"))
         }
 
-        @Test func mismatchedDirectoriesAreNotExcluded() async throws {
+        @Test func mismatchedDirectoriesAreNotIgnored() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFolder(at: "src")
             let session = try await sandbox.getSession()

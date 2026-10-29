@@ -43,7 +43,7 @@ struct DomainRegistryTests {
         let registry = DomainRegistry(
             groupUrl: FileManager.default.temporaryDirectory,
             signalChanges: { _ in },
-            retryExcluded: { _ in },
+            retryIgnored: { _ in },
             materializedItems: { _ in
                 try FakeMaterializedItems().enumerator()
             },

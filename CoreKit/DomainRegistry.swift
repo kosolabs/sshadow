@@ -21,7 +21,7 @@ public actor DomainRegistry {
         signalChanges: { config in
             await config.domain.signalChanges()
         },
-        retryExcluded: { config in
+        retryIgnored: { config in
             await config.domain.retryIgnored()
         },
         materializedItems: { config in
@@ -38,7 +38,7 @@ public actor DomainRegistry {
 
     private let groupUrl: URL
     private let signalChanges: DomainSignal
-    private let retryExcluded: DomainSignal
+    private let retryIgnored: DomainSignal
     private let materializedItems: MaterializedEnumerator
     private let evictItem: ItemEvictor
     private let pollInterval: Duration?
@@ -55,7 +55,7 @@ public actor DomainRegistry {
     init(
         groupUrl: URL = SSHadow.groupUrl,
         signalChanges: @escaping DomainSignal,
-        retryExcluded: @escaping DomainSignal,
+        retryIgnored: @escaping DomainSignal,
         materializedItems: @escaping MaterializedEnumerator,
         evictItem: @escaping ItemEvictor,
         pollInterval: Duration? = nil,
@@ -74,7 +74,7 @@ public actor DomainRegistry {
     ) {
         self.groupUrl = groupUrl
         self.signalChanges = signalChanges
-        self.retryExcluded = retryExcluded
+        self.retryIgnored = retryIgnored
         self.materializedItems = materializedItems
         self.evictItem = evictItem
         self.pollInterval = pollInterval
@@ -102,7 +102,7 @@ public actor DomainRegistry {
                     domainDb: domainDb,
                     groupUrl: groupUrl,
                     signalChanges: signalChanges,
-                    retryIgnored: retryExcluded,
+                    retryIgnored: retryIgnored,
                     materializedItems: materializedItems,
                     evictItem: evictItem,
                     transfers: transfers,

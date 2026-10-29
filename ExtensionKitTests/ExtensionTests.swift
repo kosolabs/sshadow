@@ -652,7 +652,7 @@ struct ExtensionTests {
         #expect(!sandbox.exists(at: "Document"))
     }
 
-    @Test func createItemMatchingLocalRuleIsExcluded() async throws {
+    @Test func createItemMatchingLocalRuleIsIgnored() async throws {
         let sandbox = TestSandbox()
         try sandbox.createFile(
             at: ".sshadowignore",
@@ -661,7 +661,7 @@ struct ExtensionTests {
         )
         let (ext, _) = try await sandbox.getExtensionAndClient()
 
-        await #expect(throws: CoreError.excludedFromSync) {
+        await #expect(throws: CoreError.ignored) {
             try await sandbox.create(
                 file: "a.log",
                 in: .rootContainer,
@@ -691,7 +691,7 @@ struct ExtensionTests {
         let parentId = try await client.child(name: "parent")
 
         try await sandbox.create(file: "keep.log", in: parentId, with: ext)
-        await #expect(throws: CoreError.excludedFromSync) {
+        await #expect(throws: CoreError.ignored) {
             try await sandbox.create(file: "a.log", in: parentId, with: ext)
         }
 
@@ -705,7 +705,7 @@ struct ExtensionTests {
         try sandbox.createFolder(at: ".sshadowignore", in: .local)
         let (ext, _) = try await sandbox.getExtensionAndClient()
 
-        await #expect(throws: CoreError.excludedFromSync) {
+        await #expect(throws: CoreError.ignored) {
             try await sandbox.create(file: "a.log", in: .rootContainer, with: ext)
         }
 
@@ -723,7 +723,7 @@ struct ExtensionTests {
         let (ext, client) = try await sandbox.getExtensionAndClient()
         let aId = try await client.child(name: "a.txt")
 
-        await #expect(throws: CoreError.excludedFromSync) {
+        await #expect(throws: CoreError.ignored) {
             try await sandbox.move(aId, to: .rootContainer, name: "a.log", with: ext)
         }
         try await sandbox.delete(aId, with: ext)
@@ -744,7 +744,7 @@ struct ExtensionTests {
         let dataId = try await client.child(name: "data")
         let aId = try await client.child(of: dataId, name: "a.txt")
 
-        await #expect(throws: CoreError.excludedFromSync) {
+        await #expect(throws: CoreError.ignored) {
             try await sandbox.move(aId, to: dataId, name: "b.txt", with: ext)
         }
         try await sandbox.delete(aId, with: ext)
@@ -764,7 +764,7 @@ struct ExtensionTests {
         let (ext, client) = try await sandbox.getExtensionAndClient()
         let bId = try await client.child(name: "b.txt")
 
-        await #expect(throws: CoreError.excludedFromSync) {
+        await #expect(throws: CoreError.ignored) {
             try await sandbox.move(bId, to: .trashContainer, name: "b.txt", with: ext)
         }
         try await sandbox.delete(bId, with: ext)
