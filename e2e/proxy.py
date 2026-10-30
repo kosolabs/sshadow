@@ -8,7 +8,9 @@ import time
 class Proxy:
     """A TCP proxy in front of the test server, for simulating network failures."""
 
-    def __init__(self, upstream: tuple[str, int], host: str = "127.0.0.1"):
+    def __init__(
+        self, upstream: tuple[str, int], host: str = "127.0.0.1", port: int = 0
+    ):
         self.host = host
         self.upstream = upstream
         # Bytes per second in each direction, or None for unlimited.
@@ -16,12 +18,17 @@ class Proxy:
         self._lock = threading.Lock()
         self._conns: set[socket.socket] = set()
         self._closed = False
-        self._listener = self._listen(0)
+        self._listener = self._listen(port)
         self.port: int = self._listener.getsockname()[1]
         threading.Thread(target=self._accept_loop, daemon=True).start()
 
     def _listen(self, port: int) -> socket.socket:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if ":" in self.host:
+            s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            # Accept IPv4 too, for hosts like localhost that resolve to both.
+            s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        else:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((self.host, port))
         s.listen(64)
