@@ -222,10 +222,12 @@ package actor SessionSupervisor {
 
     private func disconnect(_ session: Session, reason: OfflineReason) async {
         state = .disconnecting(reason)
-        await session.stop()
-        await xpc.teardown()
-        await ext.suspend(reason: reason.text, options: .temporary)
-        await session.close()
+        await Task {
+            await session.stop()
+            await xpc.teardown()
+            await ext.suspend(reason: reason.text, options: .temporary)
+            await session.close()
+        }.value
         state = .offline(reason)
     }
 

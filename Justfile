@@ -16,6 +16,10 @@ build:
 e2e *ARGS: build start-test-server
     uv run --directory e2e pytest -v "$@"
 
+# Walk through a manual test of the whole app.
+manual: build start-test-server
+    uv run --directory e2e python manual.py
+
 log: (_log-stream 'subsystem beginswith "com.kosolabs.SSHadow"')
 
 full-log: (_log-stream 'subsystem == "com.apple.FileProvider" OR subsystem beginswith "com.kosolabs.SSHadow"')
