@@ -16,7 +16,7 @@ private actor SpyXPCBroker: XPCBroker {
     private(set) var calls: [Call] = []
     private(set) var cancelledTeardowns = 0
 
-    func broker(exporting service: CoreService) async {
+    func broker(exporting service: CoreService, log: EventLogger) async {
         calls.append(.broker)
     }
 

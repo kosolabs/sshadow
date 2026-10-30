@@ -4,13 +4,16 @@ import Foundation
 
 private let logger = Logger(category: "XPCBroker")
 
+typealias EventLogger = Events<ContinuousClock>.Logger
+
 protocol XPCBroker {
-    func broker(exporting service: CoreService) async
+    func broker(exporting service: CoreService, log: EventLogger) async
     func teardown() async
 }
 
 actor DomainXPCBroker: XPCBroker {
     private let domain: NSFileProviderDomain
+    private let extensionUrl: URL
 
     private enum State {
         case disconnected
@@ -19,13 +22,14 @@ actor DomainXPCBroker: XPCBroker {
     }
     private var state: State = .disconnected
 
-    init(domain: NSFileProviderDomain) {
+    init(domain: NSFileProviderDomain, extensionUrl: URL) {
         self.domain = domain
+        self.extensionUrl = extensionUrl
     }
 
-    func broker(exporting service: CoreService) async {
+    func broker(exporting service: CoreService, log: EventLogger) async {
         if case .connected = state { return }
-        let task = start(service: service)
+        let task = start(service: service, log: log)
         await withTaskCancellationHandler {
             await task.value
         } onCancel: {
@@ -37,20 +41,32 @@ actor DomainXPCBroker: XPCBroker {
     }
 
     @discardableResult
-    private func start(service: CoreService) -> Task<Void, Never> {
+    private func start(
+        service: CoreService,
+        log: EventLogger
+    ) -> Task<Void, Never> {
         if case .brokering(let task) = state { task.cancel() }
-        let task = Task { await connect(service: service) }
+        let task = Task { await connect(service: service, log: log) }
         state = .brokering(task)
         return task
     }
 
-    private func connect(service: CoreService) async {
+    private func connect(service: CoreService, log: EventLogger) async {
         while !Task.isCancelled {
             do {
                 let connection = try await domain.service.fileProviderConnection()
-                try await attach(connection, service: service)
+                try await attach(connection, service: service, log: log)
                 state = .connected(connection)
                 logger.notice("XPC brokered: \(domain)")
+                if let mismatch = extensionMismatch(
+                    connected: connection.peerBundleUrl,
+                    expected: extensionUrl
+                ) {
+                    logger.error(
+                        "Wrong extension connected for \(domain): \(mismatch)"
+                    )
+                    log.warning("Wrong extension connected", detail: mismatch)
+                }
                 return
             } catch where Task.isCancelled {
                 return
@@ -68,7 +84,8 @@ actor DomainXPCBroker: XPCBroker {
 
     private func attach(
         _ connection: NSXPCConnection,
-        service: CoreService
+        service: CoreService,
+        log: EventLogger
     ) async throws {
         connection.exportedInterface = NSXPCInterface(with: CoreXPC.self)
         connection.exportedObject = service
@@ -76,7 +93,7 @@ actor DomainXPCBroker: XPCBroker {
         connection.invalidationHandler = { [weak self] in
             Task {
                 guard let self else { return }
-                await self.invalidated(connection, service: service)
+                await self.invalidated(connection, service: service, log: log)
             }
         }
         connection.interruptionHandler = { connection.invalidate() }
@@ -92,7 +109,8 @@ actor DomainXPCBroker: XPCBroker {
 
     private func invalidated(
         _ connection: NSXPCConnection,
-        service: CoreService
+        service: CoreService,
+        log: EventLogger
     ) {
         switch state {
         case .connected(let current) where current === connection: break
@@ -100,7 +118,7 @@ actor DomainXPCBroker: XPCBroker {
         case .connected, .disconnected: return
         }
         logger.notice("XPC invalidated: \(domain)")
-        start(service: service)
+        start(service: service, log: log)
     }
 
     func teardown() async {
@@ -129,6 +147,39 @@ actor DomainXPCBroker: XPCBroker {
         connection.interruptionHandler = nil
         connection.invalidate()
     }
+}
+
+func extensionMismatch(connected url: URL?, expected: URL) -> String? {
+    guard let url,
+        url.resolvingSymlinksInPath().pathComponents
+            != expected.resolvingSymlinksInPath().pathComponents
+    else {
+        return nil
+    }
+    return "connected \(url.path(percentEncoded: false)), "
+        + "expected \(expected.path(percentEncoded: false))"
+}
+
+extension NSXPCConnection {
+    fileprivate var peerBundleUrl: URL? {
+        var path = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        guard proc_pidpath(processIdentifier, &path, UInt32(path.count)) > 0 else {
+            logger.error(
+                "Failed to find the path of pid \(processIdentifier): errno \(errno)"
+            )
+            return nil
+        }
+        // .../Extension.appex/Contents/MacOS/Extension
+        return URL(filePath: String(cString: path))
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+}
+
+extension URL {
+    static let builtInExtension = Bundle.main.builtInPlugInsURL!
+        .appending(path: "Extension.appex")
 }
 
 extension NSError {

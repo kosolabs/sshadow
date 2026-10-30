@@ -91,7 +91,8 @@ package actor SessionSupervisor {
         self.maxBackoff = maxBackoff
 
         self.openSession = openSession
-        self.xpc = xpc ?? DomainXPCBroker(domain: domain)
+        self.xpc =
+            xpc ?? DomainXPCBroker(domain: domain, extensionUrl: .builtInExtension)
         self.ext = ext ?? domain
         self.events = events
         self.onStatusChange = onStatusChange
@@ -134,7 +135,7 @@ package actor SessionSupervisor {
             await self.fail(config: config, error: error)
         }
         await ext.resume()
-        await xpc.broker(exporting: service)
+        await xpc.broker(exporting: service, log: log)
         await session.start(pollInterval: pollInterval)
 
         if case .disconnecting(let reason) = state {
