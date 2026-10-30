@@ -129,6 +129,7 @@ def key(tmp_path_factory: pytest.TempPathFactory) -> Path:
 @pytest.fixture(scope="session")
 def app(key: Path) -> Generator[App]:
     app = App(find_app())
+    app.make_only_copy()
     watcher = LogWatcher(PREDICATE)
     try:
         launch(app, watcher, key)
@@ -143,7 +144,12 @@ def app(key: Path) -> Generator[App]:
 
 def launch(app: App, logs: LogWatcher, key: Path) -> None:
     app.launch(files=[key])
-    logs.expect(msg("^Test commands enabled$"))
+    logs.expect_all(
+        [
+            msg("^Test commands enabled$"),
+            msg(rf"^Started from {re.escape(str(app.path))}/? "),
+        ]
+    )
     logs.expect(msg(rf"^Opened file: {re.escape(str(key))}$"))
 
 

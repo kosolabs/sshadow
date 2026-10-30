@@ -30,6 +30,12 @@ COMMAND_NOTIFICATION = "com.kosolabs.SSHadow.command"
 PROFILE_NAME = "Test-E2E"
 REMOTE_ROOT = Path("/tmp/sshadow")
 SERVER_PORT = 2248
+LSREGISTER = (
+    "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/"
+    "LaunchServices.framework/Support/lsregister"
+)
+APP_EXECUTABLE = "Contents/MacOS/SSHadow"
+EXTENSION_BUNDLE = "Contents/PlugIns/Extension.appex"
 
 
 def post_distributed_notification(name: str, obj: str) -> None:
@@ -101,19 +107,68 @@ def kill(executable: Path, timeout: float) -> None:
         time.sleep(0.1)
 
 
+def registered_apps() -> set[Path]:
+    """Every copy of SSHadow LaunchServices knows about, including deleted ones."""
+    dump = subprocess.run(
+        [LSREGISTER, "-dump"], capture_output=True, text=True, check=True
+    ).stdout
+    return {
+        Path(path)
+        for path in re.findall(
+            r"^\s*path:\s*(.*/SSHadow\.app)(?: \(0x[0-9a-f]+\))?$", dump, re.M
+        )
+    }
+
+
+def restart_fileproviderd(timeout: float = 10) -> None:
+    """Restart fileproviderd, which launchd starts again on demand."""
+
+    def pids() -> set[str]:
+        return set(
+            subprocess.run(
+                ["pgrep", "-x", "fileproviderd"], capture_output=True, text=True
+            ).stdout.split()
+        )
+
+    before = pids()
+    subprocess.run(["killall", "fileproviderd"], capture_output=True)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if (after := pids()) and not after & before:
+            return
+        time.sleep(0.5)
+
+
 class App:
     def __init__(self, path: Path):
         if not path.is_dir():
             raise FileNotFoundError(f"SSHadow.app not found at {path}")
         self.path = path.resolve()
-        self.executable = self.path / "Contents" / "MacOS" / "SSHadow"
-        self.extension = (
-            self.path / "Contents/PlugIns/Extension.appex/Contents/MacOS/Extension"
-        )
+        self.executable = self.path / APP_EXECUTABLE
+        self.extension = self.path / EXTENSION_BUNDLE / "Contents/MacOS/Extension"
 
     def started(self) -> datetime | None:
         processes = find_processes(self.executable)
         return processes[0][1] if processes else None
+
+    def make_only_copy(self) -> None:
+        """Make this the only copy of SSHadow whose extension File Provider runs.
+
+        File Provider runs the extension of the newest registered copy, and keeps
+        running the copy it started first until fileproviderd restarts.
+        """
+        for other in registered_apps():
+            if other.resolve() == self.path:
+                continue
+            for pid, _ in find_processes(other / APP_EXECUTABLE):
+                os.kill(pid, signal.SIGKILL)
+            subprocess.run(
+                ["pluginkit", "-r", other / EXTENSION_BUNDLE], capture_output=True
+            )
+            subprocess.run([LSREGISTER, "-u", other], capture_output=True)
+        subprocess.run([LSREGISTER, "-f", self.path], check=True)
+        subprocess.run(["pluginkit", "-a", self.path / EXTENSION_BUNDLE], check=True)
+        restart_fileproviderd()
 
     def launch(self, files: Sequence[Path] = ()) -> None:
         if self.started() is not None:
