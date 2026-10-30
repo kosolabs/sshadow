@@ -120,6 +120,11 @@ def registered_apps() -> set[Path]:
     }
 
 
+def unregister(app: Path) -> None:
+    subprocess.run(["pluginkit", "-r", app / EXTENSION_BUNDLE], capture_output=True)
+    subprocess.run([LSREGISTER, "-u", app], capture_output=True)
+
+
 def restart_fileproviderd(timeout: float = 10) -> None:
     """Restart fileproviderd, which launchd starts again on demand."""
 
@@ -155,19 +160,16 @@ class App:
         """Make this the only copy of SSHadow whose extension File Provider runs.
 
         File Provider runs the extension of the newest registered copy, and keeps
-        running the copy it started first until fileproviderd restarts.
+        running the copy it started first until fileproviderd restarts. Launching
+        registers this copy; registering it here too would register it twice, and
+        File Provider drops the extension when its registration changes.
         """
         for other in registered_apps():
             if other.resolve() == self.path:
                 continue
             for pid, _ in find_processes(other / APP_EXECUTABLE):
                 os.kill(pid, signal.SIGKILL)
-            subprocess.run(
-                ["pluginkit", "-r", other / EXTENSION_BUNDLE], capture_output=True
-            )
-            subprocess.run([LSREGISTER, "-u", other], capture_output=True)
-        subprocess.run([LSREGISTER, "-f", self.path], check=True)
-        subprocess.run(["pluginkit", "-a", self.path / EXTENSION_BUNDLE], check=True)
+            unregister(other)
         restart_fileproviderd()
 
     def launch(self, files: Sequence[Path] = ()) -> None:
