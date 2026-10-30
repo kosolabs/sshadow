@@ -39,6 +39,16 @@ def fault(e: Event) -> bool:
     return e.get("messageType") == "Fault"
 
 
+def wrong_extension(e: Event) -> bool:
+    """Another copy of SSHadow's extension connected, so the tests would run against it."""
+    return e.get("subsystem") == APP and e.get("eventMessage", "").startswith(
+        "Refused extension"
+    )
+
+
+FAILURES: Sequence[Matcher] = (fault, wrong_extension)
+
+
 def format_event(e: Event) -> str:
     subsystem = e.get("subsystem", "").rsplit(".", 1)[-1]
     return (
@@ -91,7 +101,7 @@ class LogWatcher:
         self,
         success: Matcher,
         *,
-        fail: Sequence[Matcher] = (fault,),
+        fail: Sequence[Matcher] = FAILURES,
         timeout: float = 10,
     ) -> Event:
         deadline = time.monotonic() + timeout
@@ -113,7 +123,7 @@ class LogWatcher:
         self,
         matchers: Sequence[Matcher],
         *,
-        fail: Sequence[Matcher] = (fault,),
+        fail: Sequence[Matcher] = FAILURES,
         timeout: float = 10,
     ) -> list[Event]:
         """Wait for an event matching each of `matchers`, in any order."""
@@ -134,7 +144,7 @@ class LogWatcher:
         self,
         matcher: Matcher,
         *,
-        fail: Sequence[Matcher] = (fault,),
+        fail: Sequence[Matcher] = FAILURES,
         timeout: float = 10,
     ) -> None:
         """Fail if an event matching `matcher` arrives within `timeout`."""
@@ -155,7 +165,7 @@ class LogWatcher:
         self.seen.extend(events)
         return events
 
-    def check(self, fail: Sequence[Matcher] = (fault,)) -> None:
+    def check(self, fail: Sequence[Matcher] = FAILURES) -> None:
         """Consume events received so far, raising AssertionError on any `fail`."""
         for e in self.drain():
             if any(f(e) for f in fail):
