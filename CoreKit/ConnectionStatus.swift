@@ -6,6 +6,7 @@ public enum OfflineReason: Equatable, Sendable {
     case disabled
     case paused
     case failed(ConnectionError)
+    case wrongExtension(URL)
     
     public var text: String {
         switch self {
@@ -15,6 +16,9 @@ public enum OfflineReason: Equatable, Sendable {
             "The connection is paused. Resume it from the SSHadow menu."
         case .failed:
             "The server is unreachable. Check your network connection."
+        case .wrongExtension(let url):
+            "File Provider started the extension from another copy of SSHadow at "
+                + "\(url.path(percentEncoded: false))."
         }
     }
 }

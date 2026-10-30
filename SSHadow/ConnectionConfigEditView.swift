@@ -191,10 +191,13 @@ struct ConnectionConfigEditView: View {
                         }
                         switch status {
                         case .offline(let reason):
-                            if case .failed = reason {
+                            switch reason {
+                            case .failed, .wrongExtension:
                                 Button("Clear") {
                                     Task { await config.clearFailure() }
                                 }
+                            case .disabled, .paused:
+                                EmptyView()
                             }
                             if config.enabled {
                                 Button("Reconnect") {

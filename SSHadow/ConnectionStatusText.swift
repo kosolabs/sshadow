@@ -15,6 +15,9 @@ struct ConnectionStatusText: View {
         case .offline(.failed(let error)):
             Text(error.message)
                 .foregroundStyle(.red)
+        case .offline(.wrongExtension):
+            Text("Another copy of SSHadow's extension connected")
+                .foregroundStyle(.red)
         case .disconnecting:
             Text("Disconnecting…")
                 .foregroundStyle(.secondary)

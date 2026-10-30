@@ -8,29 +8,27 @@ private let installed = URL(
 )
 
 struct XPCBrokerTests {
-    @Test func ownExtensionIsNotAMismatch() {
-        #expect(extensionMismatch(connected: installed, expected: installed) == nil)
+    @Test func ownExtensionIsNotWrong() {
+        #expect(wrongExtension(connected: installed, expected: installed) == nil)
     }
 
-    @Test func ownExtensionAsDirectoryIsNotAMismatch() {
+    @Test func ownExtensionAsDirectoryIsNotWrong() {
         let connected = URL(filePath: installed.path(), directoryHint: .isDirectory)
 
-        #expect(extensionMismatch(connected: connected, expected: installed) == nil)
+        #expect(wrongExtension(connected: connected, expected: installed) == nil)
     }
 
-    @Test func unknownExtensionIsNotAMismatch() {
-        #expect(extensionMismatch(connected: nil, expected: installed) == nil)
+    @Test func unknownExtensionIsNotWrong() {
+        #expect(wrongExtension(connected: nil, expected: installed) == nil)
     }
 
-    @Test func extensionFromAnotherCopyIsAMismatch() {
+    @Test func extensionFromAnotherCopyIsWrong() {
         let connected = URL(
             filePath: "/Volumes/SSHadow/SSHadow.app/Contents/PlugIns/Extension.appex"
         )
 
         #expect(
-            extensionMismatch(connected: connected, expected: installed)
-                == "connected /Volumes/SSHadow/SSHadow.app/Contents/PlugIns/Extension.appex, "
-                + "expected /Applications/SSHadow.app/Contents/PlugIns/Extension.appex"
+            wrongExtension(connected: connected, expected: installed) == connected
         )
     }
 }
