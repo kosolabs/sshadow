@@ -55,6 +55,7 @@ struct SSHadowApp: App {
             MenuBarIcon(
                 isLoading: Events.shared.isActive || Transfers.shared.isActive
             )
+            .modifier(OpensRequestedWindows())
         }
         .menuBarExtraStyle(.window)
 

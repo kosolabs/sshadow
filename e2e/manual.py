@@ -1,21 +1,35 @@
 """A guided manual test of the whole app. Run it with `just manual`.
 
-Each step says what it does and what to look for, then either the script does
-it or you do. Either way, the script checks files and console logs afterwards,
-and you judge Finder, the menu, Settings and the Event Log.
+Each section can be walked through or run automatically. When walking through,
+each step says what it does and what to look for. Press Enter and the script
+does it, or do it yourself and the script notices. Either way, the script
+checks files and console logs afterwards, and you judge Finder, the menu,
+Settings and the Event Log.
 """
 
 import getpass
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import termios
-import textwrap
+import threading
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+
+import questionary
+from prompt_toolkit.filters import IsDone
+from prompt_toolkit.formatted_text import StyleAndTextTuples
+from prompt_toolkit.layout import ConditionalContainer, HSplit, Window
+from prompt_toolkit.layout.controls import FormattedTextControl
+from rich.console import Console
+from rich.markup import escape
+from rich.padding import Padding
+from rich.table import Table
 
 from logwatch import LogWatcher, Matcher, msg
 from proxy import Proxy
@@ -48,12 +62,10 @@ BY_HAND = 600
 L = cloud_storage(NAME)
 R = REMOTE_ROOT
 
-BOLD = "\033[1m"
-DIM = "\033[2m"
-GREEN = "\033[32m"
-RED = "\033[31m"
-RESET = "\033[0m"
-CLEAR_LINE = "\033[K"
+console = Console(highlight=False)
+# Rich's default spinner, so waiting looks the same in menus as elsewhere.
+SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+SPINNER_INTERVAL = 0.08
 
 
 @dataclass(frozen=True)
@@ -70,10 +82,18 @@ class Guide:
         self.proxy = proxy
         self.key = key
         self.failures: list[str] = []
+        self.auto = False
+        self.sections = 0
+        self.steps = 0
 
     def section(self, title: str, about: str) -> None:
-        print(f"\n\n{BOLD}━━ {title} {'━' * (60 - len(title))}{RESET}")
-        print(wrap(about, 0))
+        self.sections += 1
+        self.steps = 0
+        console.print()
+        console.rule(f"[bold]{self.sections}. {escape(title)}", align="left")
+        console.print(escape(about))
+        automatically = "Run it automatically"
+        self.auto = menu([automatically, "Walk me through it"]) == automatically
 
     def act(
         self,
@@ -88,72 +108,230 @@ class Guide:
         confirm: bool = False,
     ) -> bool:
         """Describe a step, have it done, and check it. Return whether you did it."""
-        print(f"\n{BOLD}▸ {title}{RESET}")
+        self.steps += 1
+        heading = f"{self.sections}.{self.steps} {escape(title)}"
+        scripted = bool(run or do)
+        manual = bool(run or by_hand)
+
+        if self.auto:
+            if not scripted:
+                console.print(
+                    f"\n[bold dim]{heading}[/] [dim]skipped, since it needs you"
+                )
+                return False
+            console.print(f"\n[bold]{heading}")
+            self.perform(run, do)
+            for check in checks:
+                self.verify(check, check.timeout)
+            return False
+
+        console.print(f"\n[bold]{heading}")
         if run:
-            print("  The script will run:")
+            several = "\n" in run
+            lead = (
+                f"{by_hand} Or let the script run:"
+                if by_hand
+                else "Run these yourself, or let the script run them:"
+                if several
+                else "Run this yourself, or let the script run it:"
+            )
+            indented(escape(lead))
             for line in run.splitlines():
-                print(f"    {DIM}${RESET} {line}")
+                indented(f"[dim]$[/] {escape(line)}", 4)
+        elif do and by_hand:
+            indented(escape(f"{by_hand} Or let the script {doing}."))
         elif do:
-            print(f"  The script will {doing}.")
-        if by_hand:
-            prefix = "Or do it yourself" if run or do else "Do it yourself"
-            print(f"  {wrap(f'{prefix}: {by_hand}', 2)}")
-        elif run:
-            print("  Or run the commands yourself.")
+            indented(escape(f"The script will {doing}."))
+        elif by_hand:
+            indented(escape(by_hand))
         if expect:
-            print("  Look for:")
+            indented("Look for:")
             for line in expect:
-                print(f"  • {wrap(line, 4)}")
+                bullet(line)
 
-        yourself = self.choose(scripted=bool(run or do), manual=bool(run or by_hand))
+        if not scripted:
+            yourself = True
+            if confirm or not checks:
+                menu(["Done"])
+        else:
+            watch = checks[0] if manual and checks else None
+            yourself = self.go(run, watch, manual=manual)
+            if yourself and watch:
+                checks = checks[1:]
+
         if not yourself:
-            if run:
-                env = os.environ | {"L": str(L), "R": str(R)}
-                subprocess.run(["bash", "-c", run], env=env, check=True)
-            elif do:
-                do()
-        elif confirm or not checks:
-            ask("Press Enter when done")
-
+            self.perform(run, do)
         for check in checks:
             timeout = max(check.timeout, BY_HAND) if yourself else check.timeout
             self.verify(check, timeout)
         return yourself
 
-    def choose(self, *, scripted: bool, manual: bool) -> bool:
-        if not scripted:
-            return True
-        if not manual:
-            ask("Press Enter to go")
-            return False
+    def perform(self, run: str | None, do: Callable[[], object] | None) -> None:
+        if run:
+            env = os.environ | {"L": str(L), "R": str(R)}
+            subprocess.run(["bash", "-c", run], env=env, check=True)
+        elif do:
+            do()
+
+    def go(self, run: str | None, watch: Check | None, *, manual: bool) -> bool:
+        """Ask whether to do a step, watching for you to do it instead.
+
+        Return whether you did it. Without `watch` to tell, you say so.
+        """
+        go, done = "Let the script do it", "I've done it"
+        copy = "Copy the commands" if run and "\n" in run else "Copy the command"
+        choices = [go]
+        if run:
+            choices.append(copy)
+        if manual and watch is None:
+            choices.append(done)
         while True:
-            answer = ask("Press Enter to go, or m to do it yourself")
-            if answer in ("", "m"):
-                return answer == "m"
+            answer = menu(choices, watch=watch)
+            if answer is None and watch:
+                passed(watch.what)
+                return True
+            if answer != copy or run is None:
+                return answer == done
+            commands = run.replace("$L", str(L)).replace("$R", str(R))
+            subprocess.run(["pbcopy"], input=commands, text=True, check=True)
+            indented("[dim]Copied.")
 
     def verify(self, check: Check, timeout: float) -> None:
-        print(f"  {DIM}… {check.what}{RESET}", end="", flush=True)
-        try:
-            check.wait(timeout)
-        except (AssertionError, TimeoutError) as e:
-            print(f"\r  {RED}✗ {check.what}{RESET}{CLEAR_LINE}")
-            details = str(e).split("\n\nrecent events:")[0]
-            print(textwrap.indent(details, "    "))
+        errors: list[Exception] = []
+
+        def attempt() -> None:
+            try:
+                check.wait(timeout)
+            except (AssertionError, TimeoutError, OSError) as e:
+                errors.append(e)
+
+        thread = threading.Thread(target=attempt, daemon=True)
+        started = time.monotonic()
+        with console.status(escape(check.what)) as status:
+            thread.start()
+            while thread.is_alive():
+                elapsed = int(time.monotonic() - started)
+                status.update(f"{escape(check.what)} [dim]{elapsed}s")
+                thread.join(0.2)
+        if errors:
+            console.print(f"  [red]✗ {escape(check.what)}")
+            details = str(errors[0]).split("\n\nrecent events:")[0]
+            indented(f"[dim]{escape(details)}", 4)
             self.failures.append(check.what)
         else:
-            print(f"\r  {GREEN}✓ {check.what}{RESET}{CLEAR_LINE}")
+            passed(check.what)
 
     def logged(self, what: str, matcher: Matcher, timeout: float = 30) -> Check:
         return Check(what, lambda t: self.logs.expect(matcher, timeout=t), timeout)
 
+    def watching(self, what: str, path: str) -> Check:
+        """Wait for a Finder window on `path`, which keeps it watched.
 
-def ask(prompt: str) -> str:
+        File Provider also watches folders briefly when it enumerates them, so
+        the watch has to last a second.
+        """
+        matcher = msg(rf'^(Watch|Unwatch) on Ref\(path: "{re.escape(path)}",')
+        since: float | None = None
+
+        def wait(timeout: float) -> None:
+            nonlocal since
+            deadline = time.monotonic() + timeout
+            while since is None or time.monotonic() - since < 1:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(f"{L / path} isn't open in Finder")
+                try:
+                    event = self.logs.expect(matcher, timeout=min(remaining, 0.25))
+                except TimeoutError:
+                    continue
+                count = int(event["eventMessage"].rsplit(": ", 1)[1])
+                if count == 0:
+                    since = None
+                elif since is None:
+                    since = time.monotonic()
+
+        return Check(what, wait)
+
+
+def menu(
+    choices: list[str], *, question: str = "", watch: Check | None = None
+) -> str | None:
+    """Ask you to pick one of `choices`. Return None if `watch` passes first."""
     termios.tcflush(sys.stdin, termios.TCIFLUSH)
-    return input(f"  {DIM}{prompt}…{RESET} ").strip().lower()
+    prompt = questionary.select(
+        question,
+        choices=choices,
+        qmark=" ",
+        pointer="▸",
+        instruction=" ",
+        refresh_interval=SPINNER_INTERVAL if watch else None,
+    )
+    if watch is None:
+        return prompt.unsafe_ask()
+
+    app = prompt.application
+    started = time.monotonic()
+
+    def status() -> StyleAndTextTuples:
+        elapsed = time.monotonic() - started
+        frame = SPINNER[int(elapsed / SPINNER_INTERVAL) % len(SPINNER)]
+        return [
+            ("fg:ansigreen", f"  {frame} "),
+            ("", f"{watch.what} "),
+            ("fg:ansibrightblack", f"{int(elapsed)}s"),
+        ]
+
+    layout = app.layout.container
+    assert isinstance(layout, HSplit)
+    layout.children.append(
+        ConditionalContainer(
+            Window(FormattedTextControl(status), height=1), filter=~IsDone()
+        )
+    )
+    stop = threading.Event()
+    watched = threading.Event()
+
+    def poll() -> None:
+        while not stop.is_set() and not watched.is_set():
+            try:
+                watch.wait(0.25)
+            except (AssertionError, TimeoutError, OSError):
+                continue
+            watched.set()
+        while not stop.is_set():
+            if app.is_running and (loop := app.loop):
+                loop.call_soon_threadsafe(exit_unanswered)
+                return
+            time.sleep(0.05)
+
+    def exit_unanswered() -> None:
+        if app.future and not app.future.done():
+            app.exit()
+
+    thread = threading.Thread(target=poll, daemon=True)
+    thread.start()
+    try:
+        answer = prompt.unsafe_ask()
+    finally:
+        stop.set()
+        thread.join()
+    return None if watched.is_set() else answer
 
 
-def wrap(text: str, indent: int) -> str:
-    return textwrap.fill(text, 78, subsequent_indent=" " * indent)
+def indented(markup: str, indent: int = 2) -> None:
+    console.print(Padding(markup, (0, 0, 0, indent)))
+
+
+def bullet(text: str) -> None:
+    grid = Table.grid(padding=(0, 1))
+    grid.add_column()
+    grid.add_column()
+    grid.add_row("•", escape(text))
+    console.print(Padding(grid, (0, 0, 0, 2)))
+
+
+def passed(what: str) -> None:
+    console.print(f"  [green]✓ {escape(what)}")
 
 
 def until(what: str, condition: Callable[[], str], timeout: float = 30) -> Check:
@@ -209,9 +387,6 @@ def copied_entries(_: float) -> None:
     lines = pasted().splitlines()
     if len(lines) < 10:
         raise AssertionError(f"clipboard has {len(lines)} line(s)")
-    print(f"\r  {DIM}The clipboard starts:{RESET}{CLEAR_LINE}")
-    for line in lines[:3]:
-        print(f"    {DIM}{line[:74]}{RESET}")
 
 
 def paused(name: str) -> Matcher:
@@ -226,10 +401,10 @@ FULL_POLL = msg(r"^Poll: .*, anchor: \d+$")
 
 
 def setup() -> Guide:
-    print(f"{BOLD}SSHadow manual test{RESET}")
+    console.rule("[bold]SSHadow manual test")
     app = App(find_app())
     while app.started() is not None:
-        ask("SSHadow is running. Quit it, then press Enter")
+        menu(["Done"], question="SSHadow is running. Quit it, then choose Done.")
 
     # The app can only read a key it's asked to open.
     key = Path(tempfile.mkdtemp()) / KEY.name
@@ -240,10 +415,13 @@ def setup() -> Guide:
     app.send("delete", name=NAME)
     try:
         logs.expect(msg(rf"^Profile deleted: .*{named(NAME)}"), timeout=5)
-        print(f"Deleted the {NAME} connection from the last run.")
+        console.print(f"Deleted the {NAME} connection from the last run.")
     except TimeoutError:
         pass
     wait_for_removal(L)
+
+    app.send("open", window="events")
+    logs.expect(msg("^Opened window: events$"))
 
     shutil.rmtree(R, ignore_errors=True)
     R.mkdir()
@@ -260,13 +438,13 @@ def setup() -> Guide:
         capture_output=True,
     )
 
-    print(
-        "\nOpen the Event Log from the SSHadow menu, and arrange it beside the "
-        f"Finder window on {R} and the `just log` window."
+    console.print(
+        "\nArrange the Event Log beside the Finder window on "
+        f"{R} and the `just log` window."
     )
-    print("To run commands yourself, first run this in your terminal:")
-    print(f'  export L="{L}" R="{R}"')
-    ask("Press Enter to start")
+    console.print("To run commands yourself, first run this in your terminal:")
+    indented(f'export L="{L}" R="{R}"')
+    menu(["Start"])
     return Guide(app, logs, proxy, key)
 
 
@@ -275,11 +453,20 @@ def launch(app: App, logs: LogWatcher, key: Path) -> None:
     logs.expect(msg("^Test commands enabled$"))
 
 
+def open_event_log(g: Guide, title: str, expect: Sequence[str]) -> None:
+    g.act(
+        title,
+        do=lambda: g.app.send("open", window="events"),
+        doing="open the Event Log",
+        by_hand="Choose Event Log from the SSHadow menu.",
+        expect=expect,
+    )
+
+
 def create_connection(g: Guide) -> None:
     g.section(
-        "1. Create a connection",
-        "From the menu's onboarding to a working connection, and the menu's "
-        "copy actions.",
+        "Create a connection",
+        "From the menu's onboarding to a working connection.",
     )
 
     def create() -> None:
@@ -322,24 +509,13 @@ def create_connection(g: Guide) -> None:
         run='open "$L"',
         by_hand="Right-click the connection in the menu and choose Show in Finder.",
         expect=["A Finder window on the mounted folder. Keep it open."],
-    )
-    g.act(
-        "Copy the mounted folder's path",
-        by_hand="Right-click the connection and choose Copy Path.",
-        checks=[clipboard(str(L))],
-        confirm=True,
-    )
-    g.act(
-        "Copy the SSH command",
-        by_hand="Right-click the connection and choose Copy SSH Command.",
-        checks=[clipboard(f"ssh -p {PROXY_PORT} {getpass.getuser()}@localhost")],
-        confirm=True,
+        checks=[g.watching("Finder shows the mounted folder", "")],
     )
 
 
 def mac_changes(g: Guide) -> None:
     g.section(
-        "2. Changes on the Mac",
+        "Changes on the Mac",
         "Each change reaches the server, and the Event Log names it in a File entry.",
     )
     g.act(
@@ -385,7 +561,7 @@ def mac_changes(g: Guide) -> None:
 
 def server_changes(g: Guide) -> None:
     g.section(
-        "3. Changes on the server",
+        "Changes on the server",
         "Folders open in Finder are checked every 10 seconds. The Event Log "
         "shows a row for each change, then a summary.",
     )
@@ -394,6 +570,7 @@ def server_changes(g: Guide) -> None:
         run='open "$L/docs"',
         by_hand="Open docs in the mounted Finder window.",
         expect=["A Finder window on docs, showing b.txt. Keep it open."],
+        checks=[g.watching("Finder shows docs", "docs")],
     )
     r = L / "docs/r.txt"
     g.act(
@@ -460,7 +637,7 @@ def server_changes(g: Guide) -> None:
 
 def transfers(g: Guide) -> None:
     g.section(
-        "4. Transfers, pause and resume",
+        "Transfers, pause and resume",
         "Uploads are slowed to 1 MB/s here, so there's time to look at the "
         "menu and pause partway through.",
     )
@@ -513,7 +690,7 @@ def transfers(g: Guide) -> None:
 
 def outage(g: Guide) -> None:
     g.section(
-        "5. Server outage",
+        "Server outage",
         "The proxy between SSHadow and the server drops the connection and "
         "refuses new ones, as if the server went down.",
     )
@@ -538,6 +715,7 @@ def outage(g: Guide) -> None:
         "Write a file while the server is down",
         run='echo offline > "$L/docs/offline.txt"',
         expect=["offline.txt appears in Finder, but doesn't upload yet."],
+        checks=[until("offline.txt is on the Mac", exists(L / "docs/offline.txt"))],
     )
     g.act(
         "Bring the server back",
@@ -562,7 +740,7 @@ def outage(g: Guide) -> None:
 
 def failed_connection(g: Guide) -> None:
     g.section(
-        "6. Failed connection and Clear Status",
+        "Failed connection and Clear Status",
         "A connection that fails to connect shows its error until you clear it.",
     )
     g.act(
@@ -618,8 +796,32 @@ def failed_connection(g: Guide) -> None:
     )
 
 
+def connection_menu(g: Guide) -> None:
+    g.section(
+        "Connection menu",
+        "The connection's right-click menu in the SSHadow menu.",
+    )
+    g.act(
+        "Copy the mounted folder's path",
+        by_hand="Right-click the connection and choose Copy Path.",
+        checks=[clipboard(str(L))],
+        confirm=True,
+    )
+    g.act(
+        "Copy the SSH command",
+        by_hand="Right-click the connection and choose Copy SSH Command.",
+        checks=[clipboard(f"ssh -p {PROXY_PORT} {getpass.getuser()}@localhost")],
+        confirm=True,
+    )
+    g.act(
+        "Edit the connection",
+        by_hand="Right-click the connection and choose Edit Connection… from its menu.",
+        expect=["Settings opens with the connection selected."],
+    )
+
+
 def event_log(g: Guide) -> None:
-    g.section("7. Event Log", "Search, filters, copying and clearing.")
+    g.section("Event Log", "Search, filters, copying and clearing.")
     g.act(
         "Search",
         by_hand="Search for docs/, then for zzz, then clear the search.",
@@ -641,25 +843,27 @@ def event_log(g: Guide) -> None:
             ),
         ],
     )
-    g.act(
+    copied = g.act(
         "Copy every entry",
         by_hand="Click an entry, then press ⌘A and ⌘C.",
         checks=[Check("Copied the entries", copied_entries)],
         confirm=True,
     )
+    if copied:
+        for line in pasted().splitlines()[:3]:
+            indented(f"[dim]{escape(line)}", 4)
+    g.act("Close the Event Log", by_hand="Close the Event Log window.")
+    open_event_log(g, "Reopen the Event Log", ["The filter shows everything again."])
     g.act(
-        "Reopen and clear",
-        by_hand="Close and reopen the Event Log. Then click Clear.",
-        expect=[
-            "After reopening, the filter shows everything again.",
-            "After clearing, the window shows No Events.",
-        ],
+        "Clear the Event Log",
+        by_hand="Click Clear.",
+        expect=["The window shows No Events."],
     )
 
 
 def relaunch(g: Guide) -> None:
     g.section(
-        "8. Quit and relaunch",
+        "Quit and relaunch",
         "A change made on the server while SSHadow is quit shows up after it "
         "relaunches.",
     )
@@ -679,18 +883,21 @@ def relaunch(g: Guide) -> None:
     g.act(
         "Change the server while SSHadow is quit",
         run='echo quit > "$R/docs/while-quit.txt"',
+        checks=[
+            until("while-quit.txt is on the server", exists(R / "docs/while-quit.txt"))
+        ],
     )
     g.act(
         "Relaunch SSHadow",
         do=lambda: launch(g.app, g.logs, g.key),
         doing="launch SSHadow",
-        expect=[
-            (
-                "The menu bar icon comes back. Open the Event Log: Connecting to "
-                f"{NAME}, then Connected to {NAME}."
-            )
-        ],
+        expect=["The menu bar icon comes back."],
         checks=[g.logged("Connected", connected(NAME), timeout=60)],
+    )
+    open_event_log(
+        g,
+        "Open the Event Log",
+        [f"Connecting to {NAME}, then Connected to {NAME}."],
     )
     g.act(
         "Check for remote changes",
@@ -708,7 +915,7 @@ def relaunch(g: Guide) -> None:
 
 
 def disable(g: Guide) -> None:
-    g.section("9. Disable", "Disabling removes the mounted folder, not the files.")
+    g.section("Disable", "Disabling removes the mounted folder, not the files.")
     g.act(
         "Disable the connection",
         do=lambda: g.app.send("disable", name=NAME),
@@ -740,14 +947,16 @@ def disable(g: Guide) -> None:
 
 
 def finish(g: Guide) -> None:
-    g.section("Done", "")
+    console.print()
+    console.rule("[bold]Done", align="left")
     if g.failures:
-        print(f"{RED}{len(g.failures)} check(s) failed:{RESET}")
+        console.print(f"[red]{len(g.failures)} check(s) failed:")
         for failure in g.failures:
-            print(f"  • {failure}")
+            bullet(failure)
     else:
-        print(f"{GREEN}Every check passed.{RESET}")
-    if ask(f"Delete the {NAME} connection? [y/N]") == "y":
+        console.print("[green]Every check passed.")
+    delete = f"Delete {NAME}"
+    if menu([f"Keep {NAME}", delete], question="Keep the connection?") == delete:
         g.app.send("delete", name=NAME)
         g.verify(g.logged("Deleted", msg(rf"^Profile deleted: .*{named(NAME)}")), 30)
 
@@ -762,6 +971,7 @@ def main() -> None:
             transfers,
             outage,
             failed_connection,
+            connection_menu,
             event_log,
             relaunch,
             disable,
@@ -769,7 +979,7 @@ def main() -> None:
             step(g)
         finish(g)
     except KeyboardInterrupt:
-        print(f"\nStopped. Rerun to start over; it deletes {NAME} first.")
+        console.print(f"\nStopped. Rerun to start over; it deletes {NAME} first.")
     finally:
         g.proxy.close()
         g.logs.close()
