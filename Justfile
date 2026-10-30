@@ -34,22 +34,35 @@ _log-stream $PREDICATE:
         | tee "$LOGFILE" \
         | jq -R -r --unbuffered -f logfilter.jq
 
+lsregister := "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Support/lsregister"
+
+# List the copies of SSHadow registered with LaunchServices and PlugInKit.
+registered:
+    #!/bin/bash
+    echo "LaunchServices:"
+    {{just_executable()}} _registered-apps | while IFS= read -r app; do
+        [ -e "$app" ] && echo "  $app" || echo "  $app (missing)"
+    done
+
+    echo "PlugInKit:"
+    pluginkit -mAv -i com.kosolabs.SSHadow.Extension \
+        | awk -F'\t' 'NF >= 4 {print "  " $4 " (" $3 ")"}'
+
 unregister:
     #!/bin/bash
-    BUNDLE=com.kosolabs.SSHadow
-    LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Support/lsregister
-
     pkill -f 'SSHadow.app/Contents/MacOS/SSHadow' || true
     pkill -f 'SSHadow.app/Contents/PlugIns/Extension.appex/Contents/MacOS/Extension' || true
 
-    $LSREGISTER -dump \
-        | awk -F'path: *' '/^[[:space:]]*path:.*SSHadow\.app/{p=$2; sub(/ \([0-9a-fx]+\)$/,"",p); print p}' \
-        | sort -u \
-        | while IFS= read -r app; do
-            [ -n "$app" ] || continue
-            $LSREGISTER -u "$app" 2>/dev/null || true
-            echo "  Unregistered: $app"
-        done
+    {{just_executable()}} _registered-apps | while IFS= read -r app; do
+        pluginkit -r "$app/Contents/PlugIns/Extension.appex" 2>/dev/null || true
+        {{lsregister}} -u "$app" 2>/dev/null || true
+        echo "  Unregistered: $app"
+    done
+
+_registered-apps:
+    @{{lsregister}} -dump \
+        | awk -F'path: *' '/^[[:space:]]*path:/{p=$2; sub(/ \([0-9a-fx]+\)$/,"",p); if (p ~ /\/SSHadow\.app$/) print p}' \
+        | sort -u
 
 dmg:
     ./ci_scripts/dmg.sh
