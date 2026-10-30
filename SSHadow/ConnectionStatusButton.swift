@@ -16,7 +16,7 @@ struct ConnectionStatusAction {
             title = "Pause Connection"
             systemImage = "pause.circle.fill"
             perform = config.pause
-        case .offline(.paused), .offline(.failed):
+        case .offline(.paused), .offline(.failed), .offline(.wrongExtension):
             title = "Resume Connection"
             systemImage = "play.circle.fill"
             perform = config.enable

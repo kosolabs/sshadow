@@ -7,6 +7,11 @@ import SwiftUI
 private let logger = Logger(category: "SSHadowApp")
 
 private func startup() {
+    logger.notice(
+        "Started "
+            + "from \(Bundle.main.bundleURL.path(percentEncoded: false)) "
+            + "(version \(SSHadow.version), build \(SSHadow.build))"
+    )
     Task {
         await reconnectEnabledDomains()
         await removeOrphanedDomains()

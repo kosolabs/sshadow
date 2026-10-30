@@ -27,7 +27,10 @@ struct RichMenuProfileToggle: View {
     }
 
     private var isFailed: Bool {
-        if case .offline(.failed) = status { true } else { false }
+        switch status {
+        case .offline(.failed), .offline(.wrongExtension): true
+        default: false
+        }
     }
 
     var body: some View {
@@ -62,7 +65,7 @@ struct RichMenuProfileToggle: View {
             }
 
             switch status {
-            case .reconnecting, .offline(.failed):
+            case .reconnecting, .offline(.failed), .offline(.wrongExtension):
                 ConnectionStatusText(status: status)
                     .font(.caption)
                     .padding(.leading, 28)

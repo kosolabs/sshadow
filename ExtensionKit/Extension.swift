@@ -19,7 +19,11 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
             client: CoreClient.shared(for: domain),
             localUrl: { try await domain.manager.getUserVisibleURL(for: $0) }
         )
-        logger.debug("Init \(domain)")
+        logger.notice(
+            "Init \(domain) "
+                + "from \(Bundle.main.bundleURL.path(percentEncoded: false)) "
+                + "(version \(SSHadow.version), build \(SSHadow.build))"
+        )
     }
 
     init(client: CoreClient, localUrl: @escaping DomainURLLookup) {

@@ -30,6 +30,9 @@ struct ConnectionStatusIcon: View {
         case .offline(.failed(let error)):
             Image(systemName: error.systemImage)
                 .foregroundStyle(.red)
+        case .offline(.wrongExtension):
+            Image(systemName: "puzzlepiece.extension.fill")
+                .foregroundStyle(.red)
         case .offline(.disabled):
             switch variant {
             case .checkmark:
