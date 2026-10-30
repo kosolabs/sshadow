@@ -16,7 +16,7 @@ struct ConnectionStatusText: View {
             Text(error.message)
                 .foregroundStyle(.red)
         case .offline(.wrongExtension):
-            Text("Another copy of SSHadow's extension connected")
+            Text("Another copy of SSHadow is interfering")
                 .foregroundStyle(.red)
         case .disconnecting:
             Text("Disconnecting…")

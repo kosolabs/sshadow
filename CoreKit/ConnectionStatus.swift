@@ -16,9 +16,8 @@ public enum OfflineReason: Equatable, Sendable {
             "The connection is paused. Resume it from the SSHadow menu."
         case .failed:
             "The server is unreachable. Check your network connection."
-        case .wrongExtension(let url):
-            "File Provider started the extension from another copy of SSHadow at "
-                + "\(url.path(percentEncoded: false))."
+        case .wrongExtension:
+            "Another copy of SSHadow is interfering. Open SSHadow to fix it."
         }
     }
 }

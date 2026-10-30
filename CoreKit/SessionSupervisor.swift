@@ -228,8 +228,12 @@ package actor SessionSupervisor {
             return
         }
         log.error(
-            "Refused the extension from another copy of SSHadow",
-            detail: url.path(percentEncoded: false)
+            "Another copy of SSHadow is interfering",
+            detail: interferenceDetail(
+                other: url.containingApp,
+                own: Bundle.main.bundleURL,
+                home: .userHome
+            )
         )
         logger.notice("Supervisor refused extension: \(domain)")
     }
