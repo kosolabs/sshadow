@@ -264,6 +264,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     parentId: parentId,
                     name: filename,
                     file: url,
+                    ifExists: .fail,
                     snapshot: snapshot,
                     progress: subprogress
                 )
@@ -391,6 +392,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     parentId: item.parentId,
                     name: item.filename,
                     file: newContents,
+                    ifExists: .replace,
                     snapshot: self.ignoreSnapshot(in: item.parentId),
                     progress: subprogress
                 )

@@ -676,7 +676,6 @@ extension Session {
         _ name: String,
         in parentId: NSFileProviderItemIdentifier,
         flags: Item.Flags = .all,
-        ifExists: OnExists = .fail,
         snapshot: IgnoreSnapshot?
     ) async throws -> Item {
         await gate.enter()
@@ -700,8 +699,7 @@ extension Session {
             try await creatingTrash(in: parentId) {
                 try await sftp.makeDirectory(
                     at: path(for: name, in: parentId),
-                    mode: flags.mode,
-                    ifExists: ifExists
+                    mode: flags.mode
                 )
             }
         }
@@ -1023,6 +1021,7 @@ extension Session {
         _ name: String,
         to parentId: NSFileProviderItemIdentifier,
         file url: URL,
+        ifExists: OnExists,
         chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
         snapshot: IgnoreSnapshot?,
         progress: Progress
@@ -1094,12 +1093,18 @@ extension Session {
                     try await writeStaged()
                 }
                 try await creatingTrash(in: parentId) {
-                    try await install(staged, at: target, kind: kind)
+                    try await install(
+                        staged,
+                        at: target,
+                        kind: kind,
+                        ifExists: ifExists
+                    )
                 }
             } catch {
                 await removeStaged(staged, kind: kind)
                 switch coreError(from: error, itemId: parentId) {
-                case CoreError.userCancelled, CoreError.serverUnreachable:
+                case CoreError.userCancelled, CoreError.serverUnreachable,
+                    CoreError.filenameCollision:
                     throw error
                 default:
                     logger.error("Failed to upload \(target): \(error)")
@@ -1118,8 +1123,16 @@ extension Session {
     private func install(
         _ staged: String,
         at target: String,
-        kind: Manifest.Entry.Kind
+        kind: Manifest.Entry.Kind,
+        ifExists: OnExists
     ) async throws {
+        guard ifExists == .replace else {
+            try await sftp.moveWithoutReplacing(
+                from: stagingPath(staged),
+                to: target
+            )
+            return
+        }
         guard kind == .folder, try await sftp.isDirectory(at: target) else {
             try await sftp.move(from: stagingPath(staged), to: target)
             return

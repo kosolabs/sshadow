@@ -188,6 +188,7 @@ struct CoreClientTests {
             parentId: .rootContainer,
             name: "upload.txt",
             file: localFile,
+            ifExists: .fail,
             snapshot: nil,
             progress: Progress()
         )
