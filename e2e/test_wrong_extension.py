@@ -1,6 +1,7 @@
 import re
+import shutil
 import subprocess
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from pathlib import Path
 
 import pytest
@@ -11,19 +12,21 @@ from sshadow import App, disable, enable, unregister
 
 
 @pytest.fixture
-def other_copy(app: App, tmp_path: Path) -> Generator[App]:
-    """A copy of the app under test at another path, removed afterwards."""
+def other_copy(
+    app: App, relaunch_app: Callable[[], None], tmp_path: Path
+) -> Generator[App]:
+    """A copy of the app under test at another path, removed before relaunching."""
     path = tmp_path / "SSHadow.app"
     subprocess.run(["ditto", app.path, path], check=True)
     other = App(path)
     yield other
     if other.started() is not None:
         other.kill()
-    unregister(other.path)
     app.make_only_copy()
+    unregister(path)
+    shutil.rmtree(path)
 
 
-@pytest.mark.usefixtures("relaunch_app")
 def test_refuses_extension_from_another_copy(
     app: App,
     logs: LogWatcher,

@@ -19,8 +19,10 @@ from sshadow import (
     SERVER_PORT,
     App,
     Profiles,
+    cloud_storage,
     create_profile,
     find_app,
+    wait_for_removal,
 )
 
 PREDICATE = 'subsystem BEGINSWITH "com.kosolabs.SSHadow"'
@@ -90,7 +92,10 @@ def pytest_sessionstart(session: pytest.Session) -> None:
 def pytest_sessionfinish(session: pytest.Session) -> None:
     if log_stream is not None:
         log_stream.terminate()
-        log_stream.wait(timeout=5)
+        try:
+            log_stream.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            log_stream.kill()
 
 
 def pytest_runtest_logstart(nodeid: str, location: tuple[str, int | None, str]) -> None:
@@ -129,17 +134,26 @@ def key(tmp_path_factory: pytest.TempPathFactory) -> Path:
 @pytest.fixture(scope="session")
 def app(key: Path) -> Generator[App]:
     app = App(find_app())
+    if app.started() is not None:
+        pytest.fail("SSHadow is already running. Quit it and rerun.", pytrace=False)
     app.make_only_copy()
     watcher = LogWatcher(PREDICATE)
     try:
         launch(app, watcher, key)
+        delete_leftover_profiles(app, watcher)
         approve_file_provider(app, watcher, key)
-    except (RuntimeError, TimeoutError) as e:
-        pytest.fail(str(e), pytrace=False)
+    except BaseException as e:
+        # Teardown doesn't run when setup fails.
+        if app.started() is not None:
+            app.kill()
+        if isinstance(e, (RuntimeError, TimeoutError)):
+            pytest.fail(str(e), pytrace=False)
+        raise
     finally:
         watcher.close()
     yield app
-    app.quit()
+    if app.started() is not None:
+        app.quit()
 
 
 def launch(app: App, logs: LogWatcher, key: Path) -> None:
@@ -151,6 +165,15 @@ def launch(app: App, logs: LogWatcher, key: Path) -> None:
         ]
     )
     logs.expect(msg(rf"^Opened file: {re.escape(str(key))}$"))
+
+
+def delete_leftover_profiles(app: App, logs: LogWatcher) -> None:
+    """Delete the test profiles an interrupted run left behind."""
+    app.send("delete-all", prefix=PROFILE_NAME)
+    logs.expect(msg(r"^Deleted \d+ profiles named "), timeout=60)
+    root = cloud_storage(PROFILE_NAME)
+    for leftover in root.parent.glob(f"{root.name}*"):
+        wait_for_removal(leftover)
 
 
 def read_domains() -> dict[str, Any]:
@@ -217,7 +240,14 @@ def profiles(
 ) -> Generator[Profiles]:
     profiles = Profiles(app, logs, key)
     yield profiles
-    profiles.delete_all()
+    exited = app.started() is None
+    if exited:
+        launch(app, logs, key)
+    try:
+        profiles.delete_all()
+    finally:
+        if exited:
+            pytest.fail("SSHadow exited during the test", pytrace=False)
 
 
 @pytest.fixture
