@@ -250,7 +250,6 @@ extension CoreClient {
         parentId: NSFileProviderItemIdentifier,
         name: String,
         flags: Item.Flags,
-        ifExists: OnExists = .fail,
         snapshot: IgnoreSnapshot?
     ) async throws(CoreError) -> Item {
         let response = try await perform(
@@ -258,7 +257,6 @@ extension CoreClient {
                 parentId: parentId.rawValue,
                 name: name,
                 flags: flags,
-                ifExists: ifExists,
                 snapshot: snapshot
             )
         )
@@ -305,6 +303,7 @@ extension CoreClient {
         parentId: NSFileProviderItemIdentifier,
         name: String,
         file: URL,
+        ifExists: OnExists,
         chunkSize: UInt64 = Limits.defaultBufferSize,
         snapshot: IgnoreSnapshot?,
         progress: Progress
@@ -326,6 +325,7 @@ extension CoreClient {
                 parentId: parentId.rawValue,
                 name: name,
                 file: stagedUrl,
+                ifExists: ifExists,
                 chunkSize: chunkSize,
                 snapshot: snapshot
             ),

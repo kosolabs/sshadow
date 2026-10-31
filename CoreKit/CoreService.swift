@@ -281,7 +281,6 @@ extension CoreService {
             request.name,
             in: NSFileProviderItemIdentifier(request.parentId),
             flags: request.flags,
-            ifExists: request.ifExists,
             snapshot: request.snapshot
         )
         return CreateDirectoryResponse(item: item)
@@ -383,6 +382,7 @@ extension CoreService {
             request.name,
             to: NSFileProviderItemIdentifier(request.parentId),
             file: request.file,
+            ifExists: request.ifExists,
             snapshot: request.snapshot,
             progress: sync.progress
         )

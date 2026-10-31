@@ -441,19 +441,6 @@ FILE: Tree = {"x.log": File(b"x\n")}
 MARKER: Tree = {"marker.md": File(b"marker\n")}
 
 
-def test_removing_rule_locally_pushes_local_file(
-    app: App, logs: LogWatcher, profile: str, remote: Path
-) -> None:
-    local = detach_on_both_sides(
-        app, logs, profile, remote, b"*.log\n", FILE, {}, {}, False
-    )
-
-    (local / ".sshadowignore").write_bytes(b"")
-    expected = {".sshadowignore": File(b"")} | MARKER | side(FILE, b"local ")
-    wait_for_tree(remote, expected, on_poll=logs.check)
-    wait_for_tree(local, expected, on_poll=logs.check)
-
-
 def test_renaming_detached_item_to_synced_name_uploads_it(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
@@ -470,20 +457,6 @@ def test_renaming_detached_item_to_synced_name_uploads_it(
     wait_for_tree(remote, expected, on_poll=logs.check)
 
 
-def test_removing_rule_remotely_pushes_local_file(
-    app: App, logs: LogWatcher, profile: str, remote: Path
-) -> None:
-    local = detach_on_both_sides(
-        app, logs, profile, remote, b"*.log\n", FILE, {}, {}, True
-    )
-
-    (remote / ".sshadowignore").write_bytes(b"")
-    app.send("poll", name=profile)
-    expected = {".sshadowignore": File(b"")} | MARKER | side(FILE, b"local ")
-    wait_for_tree(remote, expected, on_poll=logs.check)
-    wait_for_entries(local, side(FILE, b"local "), on_poll=logs.check)
-
-
 FOLDER: Tree = {"build": Dir(), "build/data.txt": File(b"data\n")}
 LOCAL_ONLY: Tree = {"build/local.txt": File(b"l\n")}
 REMOTE_ONLY: Tree = {"build/remote.txt": File(b"r\n")}
@@ -492,9 +465,51 @@ REMOTE_FOLDER: Tree = side(FOLDER, b"remote ") | REMOTE_ONLY
 
 
 def renamed(tree: Tree, name: str) -> Tree:
-    """`tree` with its top folder renamed, as File Provider does on a collision."""
+    """`tree` with its top item renamed, as File Provider does on a collision."""
     top = min(tree)
     return {name + k.removeprefix(top): v for k, v in tree.items()}
+
+
+LOCAL_FILE: Tree = side(FILE, b"local ")
+REMOTE_FILE: Tree = side(FILE, b"remote ")
+
+
+def test_removing_rule_locally_keeps_both_files_until_one_is_deleted(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = detach_on_both_sides(
+        app, logs, profile, remote, b"*.log\n", FILE, {}, {}, False
+    )
+
+    (local / ".sshadowignore").write_bytes(b"")
+    base = {".sshadowignore": File(b"")} | MARKER
+    expected = REMOTE_FILE | renamed(LOCAL_FILE, "x 2.log")
+    wait_for_entries(local, expected, timeout=60, on_poll=logs.check)
+    wait_for_tree(remote, base | REMOTE_FILE, on_poll=logs.check)
+
+    (local / "x.log").unlink()
+    wait_for_tree(remote, base | LOCAL_FILE, timeout=60, on_poll=logs.check)
+    wait_for_tree(local, base | LOCAL_FILE, on_poll=logs.check)
+
+
+def test_removing_rule_remotely_keeps_both_files_until_one_is_deleted(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    local = detach_on_both_sides(
+        app, logs, profile, remote, b"*.log\n", FILE, {}, {}, True
+    )
+
+    (remote / ".sshadowignore").write_bytes(b"")
+    app.send("poll", name=profile)
+    base = {".sshadowignore": File(b"")} | MARKER
+    expected = REMOTE_FILE | renamed(LOCAL_FILE, "x 2.log")
+    wait_for_entries(local, expected, timeout=60, on_poll=logs.check)
+    wait_for_tree(remote, base | REMOTE_FILE, on_poll=logs.check)
+
+    (local / "x 2.log").unlink()
+    app.send("poll", name=profile)
+    wait_for_tree(local, base | REMOTE_FILE, timeout=60, on_poll=logs.check)
+    wait_for_tree(remote, base | REMOTE_FILE, on_poll=logs.check)
 
 
 def test_removing_rule_locally_keeps_both_folders_until_one_is_deleted(

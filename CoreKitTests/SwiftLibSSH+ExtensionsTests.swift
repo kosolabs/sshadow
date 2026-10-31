@@ -156,37 +156,7 @@ private let unauthorizedKey = """
         } throws: { ($0 as? SSHError)?.sftpError == .fileAlreadyExists }
     }
 
-    @Test func makeDirectoryIfExistsSucceedOverFolderSucceeds() async throws {
-        let sandbox = TestSandbox()
-        _ = try sandbox.createFolder(at: "dir")
-        let (_, sftp) = try await connect(sandbox)
-
-        try await sftp.makeDirectory(
-            at: path("dir", in: sandbox),
-            mode: 0o755,
-            ifExists: .succeed
-        )
-    }
-
-    @Test func makeDirectoryIfExistsSucceedOverFileThrowsAlreadyExists()
-        async throws
-    {
-        let sandbox = TestSandbox()
-        try sandbox.createFile(at: "file")
-        let (_, sftp) = try await connect(sandbox)
-
-        await #expect {
-            try await sftp.makeDirectory(
-                at: path("file", in: sandbox),
-                mode: 0o755,
-                ifExists: .succeed
-            )
-        } throws: { ($0 as? SSHError)?.sftpError == .fileAlreadyExists }
-    }
-
-    @Test func makeDirectoryIfExistsSucceedOverSymlinkThrowsAlreadyExists()
-        async throws
-    {
+    @Test func makeDirectoryOverSymlinkThrowsAlreadyExists() async throws {
         let sandbox = TestSandbox()
         _ = try sandbox.createFolder(at: "target-dir")
         try sandbox.createSymlink(at: "link-dir", target: "target-dir")
@@ -195,8 +165,7 @@ private let unauthorizedKey = """
         await #expect {
             try await sftp.makeDirectory(
                 at: path("link-dir", in: sandbox),
-                mode: 0o755,
-                ifExists: .succeed
+                mode: 0o755
             )
         } throws: { ($0 as? SSHError)?.sftpError == .fileAlreadyExists }
     }

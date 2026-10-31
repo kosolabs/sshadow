@@ -284,7 +284,6 @@ public struct CreateDirectoryRequest: CoreRequestType, PrettyDescribable {
     public let parentId: String
     public let name: String
     public let flags: Item.Flags
-    public let ifExists: OnExists
     public let snapshot: IgnoreSnapshot?
 
     public var wrapped: CoreRequest { .createDirectory(self) }
@@ -293,13 +292,11 @@ public struct CreateDirectoryRequest: CoreRequestType, PrettyDescribable {
         parentId: String,
         name: String,
         flags: Item.Flags,
-        ifExists: OnExists,
         snapshot: IgnoreSnapshot?
     ) {
         self.parentId = parentId
         self.name = name
         self.flags = flags
-        self.ifExists = ifExists
         self.snapshot = snapshot
     }
 }
@@ -310,11 +307,6 @@ public struct CreateDirectoryResponse: Message, PrettyDescribable {
     public init(item: Item) {
         self.item = item
     }
-}
-
-public enum OnExists: Message, PrettyDescribable {
-    case fail
-    case succeed
 }
 
 public struct MoveRequest: CoreRequestType, PrettyDescribable {
@@ -391,6 +383,7 @@ public struct UploadRequest: CoreProgressRequestType, PrettyDescribable {
     public let parentId: String
     public let name: String
     public let file: URL
+    public let ifExists: OnExists
     public let chunkSize: UInt64
     public let snapshot: IgnoreSnapshot?
 
@@ -400,12 +393,14 @@ public struct UploadRequest: CoreProgressRequestType, PrettyDescribable {
         parentId: String,
         name: String,
         file: URL,
+        ifExists: OnExists,
         chunkSize: UInt64,
         snapshot: IgnoreSnapshot?
     ) {
         self.parentId = parentId
         self.name = name
         self.file = file
+        self.ifExists = ifExists
         self.chunkSize = chunkSize
         self.snapshot = snapshot
     }
@@ -417,6 +412,11 @@ public struct UploadResponse: Message, PrettyDescribable {
     public init(item: Item) {
         self.item = item
     }
+}
+
+public enum OnExists: Message, PrettyDescribable {
+    case fail
+    case replace
 }
 
 public struct DownloadRequest: CoreProgressRequestType, PrettyDescribable {

@@ -53,11 +53,7 @@ extension SSHClient {
 }
 
 extension SFTPClient {
-    func makeDirectory(
-        at path: String,
-        mode: mode_t,
-        ifExists: OnExists = .fail
-    ) async throws {
+    func makeDirectory(at path: String, mode: mode_t) async throws {
         do {
             try await createDirectory(at: path, mode: mode)
         } catch let error
@@ -67,7 +63,6 @@ extension SFTPClient {
             guard let existing = try await attributesIfExists(at: path) else {
                 throw error
             }
-            if ifExists == .succeed, existing.type == .directory { return }
             throw collision(with: existing, at: path)
         }
     }
@@ -101,6 +96,16 @@ extension SFTPClient {
             else { throw error }
             throw collision(with: existing, at: path)
         }
+    }
+
+    func moveWithoutReplacing(
+        from source: String,
+        to path: String
+    ) async throws {
+        if let existing = try await attributesIfExists(at: path) {
+            throw collision(with: existing, at: path)
+        }
+        try await move(from: source, to: path)
     }
 
     func attributesIfExists(at path: String) async throws -> SFTPAttributes? {

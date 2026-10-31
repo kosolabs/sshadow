@@ -652,6 +652,23 @@ struct ExtensionTests {
         #expect(!sandbox.exists(at: "Document"))
     }
 
+    @Test func createFileOverRemoteFileThrowsFilenameCollision()
+        async throws
+    {
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "notes.txt", contents: "remote")
+        let (ext, _) = try await sandbox.getExtensionAndClient()
+
+        await #expect(throws: CoreError.filenameCollision) {
+            try await sandbox.create(
+                file: "notes.txt",
+                in: .rootContainer,
+                with: ext
+            )
+        }
+        #expect(try sandbox.contents(of: "notes.txt") == "remote")
+    }
+
     @Test func createItemMatchingLocalRuleIsIgnored() async throws {
         let sandbox = TestSandbox()
         try sandbox.createFile(

@@ -2211,24 +2211,6 @@ struct SessionTests {
             #expect(trashed == item.id)
         }
 
-        @Test func createDirectoryWithIfExistsSucceedSucceeds() async throws {
-            let sandbox = TestSandbox()
-            try sandbox.createFolder(at: "existing-dir")
-            let session = try await sandbox.getSession()
-
-            let item = try await session.createDirectory(
-                "existing-dir",
-                in: .rootContainer,
-                ifExists: .succeed,
-                snapshot: nil
-            )
-
-            #expect(item.name == "existing-dir")
-            #expect(item.kind == .folder)
-            let changes = try await session.reconcileAll()
-            #expect(changes == [])
-        }
-
         @Test func reconcileFindsRemoteAdditionsInCreatedDirectory()
             async throws
         {
@@ -2246,27 +2228,7 @@ struct SessionTests {
             #expect(updates.map(\.name) == ["child.txt"])
         }
 
-        @Test func createDirectoryOverExistingDirectoryFindsItsChildren()
-            async throws
-        {
-            let sandbox = TestSandbox()
-            let session = try await sandbox.getSession()
-            try sandbox.createFile(at: "x/child.txt", contents: "c")
-
-            _ = try await session.createDirectory(
-                "x",
-                in: .rootContainer,
-                ifExists: .succeed,
-                snapshot: nil
-            )
-            let (updates, _) = try await session.reconcileAll().split()
-
-            #expect(updates.map(\.name) == ["child.txt"])
-        }
-
-        @Test func createDirectoryWithIfExistsSucceedOverFileThrows()
-            async throws
-        {
+        @Test func createDirectoryOverFileThrows() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "existing-file")
             let session = try await sandbox.getSession()
@@ -2275,7 +2237,6 @@ struct SessionTests {
                 _ = try await session.createDirectory(
                     "existing-file",
                     in: .rootContainer,
-                    ifExists: .succeed,
                     snapshot: nil
                 )
             }
@@ -2283,9 +2244,7 @@ struct SessionTests {
             #expect(changes == [])
         }
 
-        @Test func createDirectoryWithIfExistsSucceedOverSymlinkThrows()
-            async throws
-        {
+        @Test func createDirectoryOverSymlinkThrows() async throws {
             let sandbox = TestSandbox()
             _ = try sandbox.createFolder(at: "target-dir")
             try sandbox.createSymlink(at: "link-dir", target: "target-dir")
@@ -2295,7 +2254,6 @@ struct SessionTests {
                 _ = try await session.createDirectory(
                     "link-dir",
                     in: .rootContainer,
-                    ifExists: .succeed,
                     snapshot: nil
                 )
             }
@@ -2674,6 +2632,7 @@ struct SessionTests {
                     "a.log",
                     to: .rootContainer,
                     file: sandbox.url(for: "a.log", in: .group),
+                    ifExists: .fail,
                     snapshot: [folder("", text("*.log\n"))],
                     progress: Progress()
                 )
@@ -2854,6 +2813,7 @@ struct SessionTests {
                 "Doc.rtfd",
                 to: .rootContainer,
                 file: source,
+                ifExists: .fail,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -2874,6 +2834,7 @@ struct SessionTests {
                 "a.txt",
                 to: .trashContainer,
                 file: source,
+                ifExists: .fail,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -2901,6 +2862,7 @@ struct SessionTests {
                 filename,
                 to: .rootContainer,
                 file: uploadUrl,
+                ifExists: .fail,
                 snapshot: nil,
                 progress: progress
             )
@@ -2932,6 +2894,7 @@ struct SessionTests {
                 filename,
                 to: .rootContainer,
                 file: uploadUrl,
+                ifExists: .fail,
                 snapshot: nil,
                 progress: progress
             )
@@ -2961,6 +2924,7 @@ struct SessionTests {
                     "collide-upload",
                     to: .rootContainer,
                     file: uploadUrl,
+                    ifExists: .replace,
                     snapshot: nil,
                     progress: Progress()
                 )
@@ -2985,6 +2949,7 @@ struct SessionTests {
                     "cancelled.dat",
                     to: .rootContainer,
                     file: uploadUrl,
+                    ifExists: .fail,
                     snapshot: nil,
                     progress: progress
                 )
@@ -3006,6 +2971,7 @@ struct SessionTests {
                     "partial.dat",
                     to: .rootContainer,
                     file: uploadUrl,
+                    ifExists: .fail,
                     snapshot: nil,
                     progress: progress
                 )
@@ -3030,6 +2996,7 @@ struct SessionTests {
                     "partial.dat",
                     to: .rootContainer,
                     file: uploadUrl,
+                    ifExists: .fail,
                     chunkSize: Self.slowChunkSize,
                     snapshot: nil,
                     progress: progress
@@ -3065,6 +3032,7 @@ struct SessionTests {
                     "existing.txt",
                     to: .rootContainer,
                     file: uploadUrl,
+                    ifExists: .replace,
                     snapshot: nil,
                     progress: progress
                 )
@@ -3089,6 +3057,7 @@ struct SessionTests {
                     "existing.dat",
                     to: .rootContainer,
                     file: uploadUrl,
+                    ifExists: .replace,
                     snapshot: nil,
                     progress: progress
                 )
@@ -3110,6 +3079,7 @@ struct SessionTests {
                     "existing.dat",
                     to: .rootContainer,
                     file: uploadUrl,
+                    ifExists: .replace,
                     chunkSize: Self.slowChunkSize,
                     snapshot: nil,
                     progress: progress
@@ -3151,6 +3121,7 @@ struct SessionTests {
                     "Doc.rtfd",
                     to: .rootContainer,
                     file: source,
+                    ifExists: .replace,
                     snapshot: nil,
                     progress: progress
                 )
@@ -3174,12 +3145,69 @@ struct SessionTests {
                 "existing.txt",
                 to: .rootContainer,
                 file: uploadUrl,
+                ifExists: .replace,
                 snapshot: nil,
                 progress: Progress()
             )
 
             #expect(item.id == itemId)
             #expect(try sandbox.contents(of: "existing.txt") == "replacement")
+            #expect(try sandbox.stagedUploads() == [])
+            let changes = try await session.reconcileAll()
+            #expect(changes == [])
+        }
+
+        @Test func uploadFailingIfExistsOverExistingFileThrowsCollision()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "existing.txt", contents: "original")
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
+            try Data("replacement".utf8).write(to: uploadUrl)
+            let session = try await sandbox.getSession()
+
+            await #expect(throws: CoreError.filenameCollision) {
+                _ = try await session.upload(
+                    "existing.txt",
+                    to: .rootContainer,
+                    file: uploadUrl,
+                    ifExists: .fail,
+                    snapshot: nil,
+                    progress: Progress()
+                )
+            }
+            #expect(try sandbox.contents(of: "existing.txt") == "original")
+            #expect(try sandbox.stagedUploads() == [])
+            let changes = try await session.reconcileAll()
+            #expect(changes == [])
+        }
+
+        @Test func uploadPackageFailingIfExistsOverExistingThrowsCollision()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createPackage(
+                at: "Doc.rtfd",
+                files: [.file(path: "text.rtf", contents: "old")]
+            )
+            let source = try sandbox.createPackage(
+                at: "src.rtfd",
+                in: .group,
+                files: [.file(path: "text.rtf", contents: "new")]
+            )
+            let session = try await sandbox.getSession()
+
+            await #expect(throws: CoreError.filenameCollision) {
+                _ = try await session.upload(
+                    "Doc.rtfd",
+                    to: .rootContainer,
+                    file: source,
+                    ifExists: .fail,
+                    snapshot: nil,
+                    progress: Progress()
+                )
+            }
+            #expect(try sandbox.contents(of: "Doc.rtfd/text.rtf") == "old")
             #expect(try sandbox.stagedUploads() == [])
             let changes = try await session.reconcileAll()
             #expect(changes == [])
@@ -3206,6 +3234,7 @@ struct SessionTests {
                     "existing.txt",
                     to: lockedId,
                     file: uploadUrl,
+                    ifExists: .replace,
                     snapshot: nil,
                     progress: Progress()
                 )
@@ -3226,6 +3255,7 @@ struct SessionTests {
                 "first.txt",
                 to: .rootContainer,
                 file: uploadUrl,
+                ifExists: .fail,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -3234,6 +3264,7 @@ struct SessionTests {
                 "second.txt",
                 to: .rootContainer,
                 file: uploadUrl,
+                ifExists: .fail,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -3257,6 +3288,7 @@ struct SessionTests {
                     "existing.txt",
                     to: .rootContainer,
                     file: uploadUrl,
+                    ifExists: .replace,
                     snapshot: nil,
                     progress: Progress()
                 )
@@ -3326,6 +3358,7 @@ struct SessionTests {
                 "file.txt",
                 to: folderId,
                 file: uploadUrl,
+                ifExists: .fail,
                 snapshot: nil,
                 progress: progress
             )
@@ -3362,6 +3395,7 @@ struct SessionTests {
                 "Doc.rtfd",
                 to: .rootContainer,
                 file: source,
+                ifExists: .fail,
                 snapshot: nil,
                 progress: progress
             )
@@ -3393,6 +3427,7 @@ struct SessionTests {
                 "Empty.rtfd",
                 to: .rootContainer,
                 file: source,
+                ifExists: .fail,
                 snapshot: nil,
                 progress: progress
             )
@@ -3431,6 +3466,7 @@ struct SessionTests {
                     "Bundle.app",
                     to: .rootContainer,
                     file: source,
+                    ifExists: .fail,
                     snapshot: nil,
                     progress: Progress()
                 )
@@ -3451,6 +3487,7 @@ struct SessionTests {
                     "Bundle.app",
                     to: .rootContainer,
                     file: source,
+                    ifExists: .fail,
                     snapshot: nil,
                     progress: progress
                 )
@@ -3485,6 +3522,7 @@ struct SessionTests {
                 "Doc.rtfd",
                 to: .rootContainer,
                 file: source,
+                ifExists: .replace,
                 snapshot: nil,
                 progress: progress
             )
@@ -3824,6 +3862,7 @@ struct SessionTests {
                 "edited.dat",
                 to: .rootContainer,
                 file: uploadUrl,
+                ifExists: .replace,
                 snapshot: nil,
                 progress: Progress()
             )
