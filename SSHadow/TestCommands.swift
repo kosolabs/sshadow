@@ -78,6 +78,8 @@ final class TestCommands {
             )
         case "delete":
             try await delete(name: params.required("name"))
+        case "delete-all":
+            try await deleteAll(prefix: params.required("prefix"))
         case "open":
             NotificationCenter.default.post(
                 name: .openWindowRequested,
@@ -139,6 +141,17 @@ final class TestCommands {
         let context = SSHadowApp.modelContainer.mainContext
         await context.delete(connectionConfig: try config(for: name))
         try context.save()
+    }
+
+    private func deleteAll(prefix: String) async throws {
+        let context = SSHadowApp.modelContainer.mainContext
+        let configs = try context.fetch(FetchDescriptor<ConnectionConfigModel>())
+            .filter { $0.name?.hasPrefix(prefix) == true }
+        for config in configs {
+            await context.delete(connectionConfig: config)
+        }
+        try context.save()
+        logger.notice("Deleted \(configs.count) profiles named \(prefix)*")
     }
 
     private func bookmark(forPrivateKeyAt path: String) throws -> Data {

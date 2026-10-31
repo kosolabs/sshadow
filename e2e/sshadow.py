@@ -36,6 +36,7 @@ LSREGISTER = (
 )
 APP_EXECUTABLE = "Contents/MacOS/SSHadow"
 EXTENSION_BUNDLE = "Contents/PlugIns/Extension.appex"
+EXTENSION_EXECUTABLE = f"{EXTENSION_BUNDLE}/Contents/MacOS/Extension"
 
 
 def post_distributed_notification(name: str, obj: str) -> None:
@@ -115,14 +116,16 @@ def registered_apps() -> set[Path]:
     return {
         Path(path)
         for path in re.findall(
-            r"^\s*path:\s*(.*/SSHadow\.app)(?: \(0x[0-9a-f]+\))?$", dump, re.M
+            r"^\s*path:\s*(.*/SSHadow\.app)(?: \(0x[0-9a-f]+\))?$", dump, re.MULTILINE
         )
     }
 
 
 def unregister(app: Path) -> None:
-    subprocess.run(["pluginkit", "-r", app / EXTENSION_BUNDLE], capture_output=True)
-    subprocess.run([LSREGISTER, "-u", app], capture_output=True)
+    subprocess.run(
+        ["pluginkit", "-r", app / EXTENSION_BUNDLE], capture_output=True, check=False
+    )
+    subprocess.run([LSREGISTER, "-u", app], capture_output=True, check=False)
 
 
 def restart_fileproviderd(timeout: float = 10) -> None:
@@ -131,12 +134,15 @@ def restart_fileproviderd(timeout: float = 10) -> None:
     def pids() -> set[str]:
         return set(
             subprocess.run(
-                ["pgrep", "-x", "fileproviderd"], capture_output=True, text=True
+                ["pgrep", "-x", "fileproviderd"],
+                capture_output=True,
+                text=True,
+                check=False,
             ).stdout.split()
         )
 
     before = pids()
-    subprocess.run(["killall", "fileproviderd"], capture_output=True)
+    subprocess.run(["killall", "fileproviderd"], capture_output=True, check=False)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if (after := pids()) and not after & before:
@@ -150,7 +156,7 @@ class App:
             raise FileNotFoundError(f"SSHadow.app not found at {path}")
         self.path = path.resolve()
         self.executable = self.path / APP_EXECUTABLE
-        self.extension = self.path / EXTENSION_BUNDLE / "Contents/MacOS/Extension"
+        self.extension = self.path / EXTENSION_EXECUTABLE
 
     def started(self) -> datetime | None:
         processes = find_processes(self.executable)
@@ -167,8 +173,9 @@ class App:
         for other in registered_apps():
             if other.resolve() == self.path:
                 continue
-            for pid, _ in find_processes(other / APP_EXECUTABLE):
-                os.kill(pid, signal.SIGKILL)
+            for executable in (APP_EXECUTABLE, EXTENSION_EXECUTABLE):
+                for pid, _ in find_processes(other / executable):
+                    os.kill(pid, signal.SIGKILL)
             unregister(other)
         restart_fileproviderd()
 
@@ -311,15 +318,25 @@ class Profiles:
             self.names.append(name)
         return name
 
-    def delete(self, name: str, timeout: float = 30) -> None:
-        self.app.send("delete", name=name)
-        self.logs.expect(msg(rf"Profile deleted: .*{named(name)}"), timeout=timeout)
-        self.names.remove(name)
-        wait_for_removal(cloud_storage(name))
+    def delete_all(self, timeout: float = 30) -> None:
+        """Delete every profile, even if deleting an earlier one fails.
 
-    def delete_all(self) -> None:
-        for name in list(self.names):
-            self.delete(name)
+        Ignores faults, which fail the test that caused them, so a fault queued
+        behind the test's failure can't leave the remaining profiles enabled.
+        """
+        names, self.names = self.names, []
+        errors: list[Exception] = []
+        for name in names:
+            try:
+                self.app.send("delete", name=name)
+                self.logs.expect(
+                    msg(rf"Profile deleted: .*{named(name)}"), fail=(), timeout=timeout
+                )
+                wait_for_removal(cloud_storage(name))
+            except (RuntimeError, TimeoutError) as e:
+                errors.append(e)
+        if errors:
+            raise ExceptionGroup("can't delete every profile", errors)
 
 
 def enable(app: App, logs: LogWatcher, profile: str) -> Path:
