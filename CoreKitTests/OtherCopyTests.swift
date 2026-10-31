@@ -70,4 +70,50 @@ struct OtherCopyTests {
                 + "instead of this one at /Applications/SSHadow.app."
         )
     }
+
+    @Test func fixDescribesTheOtherCopyAndHowToUnregisterIt() {
+        let appex = URL(
+            filePath: "/Users/me/Downloads/SSHadow.app/Contents/PlugIns/Extension.appex/",
+            directoryHint: .isDirectory
+        )
+
+        let fix = InterferenceFix(otherExtension: appex, home: home)
+
+        #expect(fix.otherCopy == "The copy at ~/Downloads/SSHadow.app")
+        #expect(fix.otherApp == URL(filePath: "/Users/me/Downloads/SSHadow.app"))
+        #expect(
+            fix.command
+                == "pluginkit -r /Users/me/Downloads/SSHadow.app/Contents/PlugIns/Extension.appex\n"
+                + "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/"
+                + "LaunchServices.framework/Support/lsregister -u /Users/me/Downloads/SSHadow.app\n"
+                + "killall fileproviderd"
+        )
+    }
+
+    @Test func fixForTranslocatedCopyHidesItsLocation() {
+        let fix = InterferenceFix(
+            otherExtension: translocated.appending(path: "Contents/PlugIns/Extension.appex"),
+            home: home
+        )
+
+        #expect(fix.otherCopy == "A copy opened from Downloads or a disk image")
+        #expect(fix.otherApp == nil)
+        #expect(fix.command.contains("-u \(translocated.path(percentEncoded: false))"))
+    }
+
+    @Test func fixEscapesPathsInTheCommand() {
+        let fix = InterferenceFix(
+            otherExtension: URL(
+                filePath: "/Volumes/SSHadow Beta/SSHadow.app/Contents/PlugIns/Extension.appex"
+            ),
+            home: home
+        )
+
+        #expect(
+            fix.command.hasPrefix(
+                "pluginkit -r /Volumes/SSHadow\\ Beta/SSHadow.app/Contents/PlugIns/Extension.appex\n"
+            )
+        )
+        #expect(fix.command.contains(" -u /Volumes/SSHadow\\ Beta/SSHadow.app\n"))
+    }
 }
