@@ -5,12 +5,20 @@ private let lsregister =
     "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/"
     + "LaunchServices.framework/Support/lsregister"
 
-public struct InterferenceFix: Equatable, Sendable {
-    public let otherCopy: String
+private let restartSyncCommand = "killall fileproviderd"
+
+public struct UnreachableFix: Codable, Hashable, Sendable {
+    public let otherCopy: String?
     public let otherApp: URL?
     public let command: String
 
-    public init(otherExtension: URL, home: URL) {
+    public init(otherExtension: URL?, home: URL) {
+        guard let otherExtension else {
+            self.otherCopy = nil
+            self.otherApp = nil
+            self.command = restartSyncCommand
+            return
+        }
         let app = URL(filePath: displayPath(otherExtension.containingApp))
         let appex = URL(filePath: displayPath(otherExtension))
         self.otherCopy = description(of: app, home: home)
@@ -18,14 +26,16 @@ public struct InterferenceFix: Equatable, Sendable {
         self.command = """
             pluginkit -r \(appex.shellEscapedPath)
             \(lsregister) -u \(app.shellEscapedPath)
-            killall fileproviderd
+            \(restartSyncCommand)
             """
     }
 }
 
 func interferenceDetail(other: URL, own: URL, home: URL) -> String {
-    let ownCopy = location(of: own, home: home).map { "this one at \($0)" } ?? "this one"
-    return "\(description(of: other, home: home)) is syncing this folder instead of \(ownCopy)."
+    let ownCopy =
+        location(of: own, home: home).map { "this one at \($0)" } ?? "this one"
+    return
+        "\(description(of: other, home: home)) is syncing this folder instead of \(ownCopy)."
 }
 
 extension URL {
@@ -57,5 +67,6 @@ private func location(of app: URL, home: URL) -> String? {
 
 private func displayPath(_ url: URL) -> String {
     let path = url.standardizedFileURL.path(percentEncoded: false)
-    return path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
+    return path.count > 1 && path.hasSuffix("/")
+        ? String(path.dropLast()) : path
 }

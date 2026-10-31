@@ -15,22 +15,22 @@ private actor SpyXPCBroker: XPCBroker {
 
     private(set) var calls: [Call] = []
     private(set) var cancelledTeardowns = 0
-    private(set) var onWrongExtension: WrongExtensionHandler?
-    private var refusal: URL?
+    private(set) var onUnreachable: UnreachableHandler?
+    private var unreachable: URL??
 
-    func refuseNextBroker(as url: URL) {
-        refusal = url
+    func failNextBroker(otherExtension: URL?) {
+        unreachable = otherExtension
     }
 
     func broker(
         exporting service: CoreService,
-        onWrongExtension: @escaping WrongExtensionHandler
+        onUnreachable: @escaping UnreachableHandler
     ) async {
         calls.append(.broker)
-        self.onWrongExtension = onWrongExtension
-        if let refusal {
-            self.refusal = nil
-            onWrongExtension(refusal)
+        self.onUnreachable = onUnreachable
+        if let unreachable {
+            self.unreachable = nil
+            onUnreachable(unreachable)
         }
     }
 
@@ -443,7 +443,7 @@ struct SessionSupervisorTests {
 
         await supervisor.disable()
     }
-    
+
     @Test func disableWhileConnectingCancelsAndRemoves() async throws {
         let sandbox = TestSandbox()
         let spy = StatusSpy()
@@ -1260,17 +1260,21 @@ struct SessionSupervisorTests {
             ext: ext,
             onStatusChange: { _ in }
         )
-        await xpc.refuseNextBroker(as: otherExtension)
+        await xpc.failNextBroker(otherExtension: otherExtension)
 
         _ = try? await supervisor.connect(config: try sandbox.config)
 
-        try await waitUntil(supervisor, is: .offline(.wrongExtension(otherExtension)))
+        try await waitUntil(
+            supervisor,
+            is: .offline(.xpcUnreachable(otherExtension: otherExtension))
+        )
         #expect(await xpc.calls == [.broker, .teardown])
         #expect(await ext.calls == [.resume, .suspend])
         #expect(await provider.callCount == 1)
     }
 
-    @Test func refusedExtensionWhileOnlineSuspendsAndGoesOffline() async throws {
+    @Test func refusedExtensionWhileOnlineSuspendsAndGoesOffline() async throws
+    {
         let sandbox = TestSandbox()
         let xpc = SpyXPCBroker()
         let ext = SpyExtensionController()
@@ -1287,10 +1291,13 @@ struct SessionSupervisorTests {
         )
         try await supervisor.connect(config: try sandbox.config)
 
-        let onWrongExtension = try #require(await xpc.onWrongExtension)
-        onWrongExtension(otherExtension)
+        let onUnreachable = try #require(await xpc.onUnreachable)
+        onUnreachable(otherExtension)
 
-        try await waitUntil(supervisor, is: .offline(.wrongExtension(otherExtension)))
+        try await waitUntil(
+            supervisor,
+            is: .offline(.xpcUnreachable(otherExtension: otherExtension))
+        )
         #expect(await xpc.calls == [.broker, .teardown])
         #expect(await ext.calls == [.resume, .suspend])
         #expect(await provider.callCount == 1)
@@ -1308,13 +1315,46 @@ struct SessionSupervisorTests {
             ext: ext,
             onStatusChange: { _ in }
         )
-        await xpc.refuseNextBroker(as: otherExtension)
+        await xpc.failNextBroker(otherExtension: otherExtension)
         _ = try? await supervisor.connect(config: try sandbox.config)
-        try await waitUntil(supervisor, is: .offline(.wrongExtension(otherExtension)))
+        try await waitUntil(
+            supervisor,
+            is: .offline(.xpcUnreachable(otherExtension: otherExtension))
+        )
 
         await supervisor.pause()
 
         #expect(await ext.calls == [.resume, .suspend, .suspend])
         #expect(await supervisor.status == .offline(.paused))
+    }
+
+    @Test func unreachableExtensionWhileConnectingSuspendsAndGoesOffline()
+        async throws
+    {
+        let sandbox = TestSandbox()
+        let xpc = SpyXPCBroker()
+        let ext = SpyExtensionController()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            openSession: provider.provider(),
+            xpc: xpc,
+            ext: ext,
+            onStatusChange: { _ in }
+        )
+        await xpc.failNextBroker(otherExtension: nil)
+
+        _ = try? await supervisor.connect(config: try sandbox.config)
+
+        try await waitUntil(
+            supervisor,
+            is: .offline(.xpcUnreachable(otherExtension: nil))
+        )
+        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await ext.calls == [.resume, .suspend])
+        #expect(await provider.callCount == 1)
     }
 }

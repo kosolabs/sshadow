@@ -197,9 +197,15 @@ struct ConnectionConfigEditView: View {
                                 Button("Clear") {
                                     Task { await config.clearFailure() }
                                 }
-                            case .wrongExtension(let url):
+                            case .xpcUnreachable(let otherExtension):
                                 Button("How to Fix…") {
-                                    openWindow.inFront(id: "interference", value: url)
+                                    openWindow.inFront(
+                                        id: "unreachable",
+                                        value: UnreachableFix(
+                                            otherExtension: otherExtension,
+                                            home: .userHome
+                                        )
+                                    )
                                 }
                                 Button("Clear") {
                                     Task { await config.clearFailure() }

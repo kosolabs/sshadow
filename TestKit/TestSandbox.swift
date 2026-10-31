@@ -18,7 +18,7 @@ enum TestSandboxError: Error {
 struct NoopXPCBroker: XPCBroker {
     func broker(
         exporting service: CoreService,
-        onWrongExtension: @escaping WrongExtensionHandler
+        onUnreachable: @escaping UnreachableHandler
     ) async {}
     func teardown() async {}
 }

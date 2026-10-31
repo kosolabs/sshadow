@@ -6,7 +6,8 @@ import Testing
 private let home = URL(filePath: "/Users/me", directoryHint: .isDirectory)
 private let installed = URL(filePath: "/Applications/SSHadow.app")
 private let translocated = URL(
-    filePath: "/private/var/folders/x_/abc/T/AppTranslocation/1234/d/SSHadow.app"
+    filePath:
+        "/private/var/folders/x_/abc/T/AppTranslocation/1234/d/SSHadow.app"
 )
 
 struct OtherCopyTests {
@@ -60,12 +61,17 @@ struct OtherCopyTests {
 
     @Test func findsTheAppContainingAnExtension() {
         let appex = URL(
-            filePath: "/Users/me/Downloads/SSHadow.app/Contents/PlugIns/Extension.appex/",
+            filePath:
+                "/Users/me/Downloads/SSHadow.app/Contents/PlugIns/Extension.appex/",
             directoryHint: .isDirectory
         )
 
         #expect(
-            interferenceDetail(other: appex.containingApp, own: installed, home: home)
+            interferenceDetail(
+                other: appex.containingApp,
+                own: installed,
+                home: home
+            )
                 == "The copy at ~/Downloads/SSHadow.app is syncing this folder "
                 + "instead of this one at /Applications/SSHadow.app."
         )
@@ -73,14 +79,17 @@ struct OtherCopyTests {
 
     @Test func fixDescribesTheOtherCopyAndHowToUnregisterIt() {
         let appex = URL(
-            filePath: "/Users/me/Downloads/SSHadow.app/Contents/PlugIns/Extension.appex/",
+            filePath:
+                "/Users/me/Downloads/SSHadow.app/Contents/PlugIns/Extension.appex/",
             directoryHint: .isDirectory
         )
 
-        let fix = InterferenceFix(otherExtension: appex, home: home)
+        let fix = UnreachableFix(otherExtension: appex, home: home)
 
         #expect(fix.otherCopy == "The copy at ~/Downloads/SSHadow.app")
-        #expect(fix.otherApp == URL(filePath: "/Users/me/Downloads/SSHadow.app"))
+        #expect(
+            fix.otherApp == URL(filePath: "/Users/me/Downloads/SSHadow.app")
+        )
         #expect(
             fix.command
                 == "pluginkit -r /Users/me/Downloads/SSHadow.app/Contents/PlugIns/Extension.appex\n"
@@ -91,20 +100,27 @@ struct OtherCopyTests {
     }
 
     @Test func fixForTranslocatedCopyHidesItsLocation() {
-        let fix = InterferenceFix(
-            otherExtension: translocated.appending(path: "Contents/PlugIns/Extension.appex"),
+        let fix = UnreachableFix(
+            otherExtension: translocated.appending(
+                path: "Contents/PlugIns/Extension.appex"
+            ),
             home: home
         )
 
         #expect(fix.otherCopy == "A copy opened from Downloads or a disk image")
         #expect(fix.otherApp == nil)
-        #expect(fix.command.contains("-u \(translocated.path(percentEncoded: false))"))
+        #expect(
+            fix.command.contains(
+                "-u \(translocated.path(percentEncoded: false))"
+            )
+        )
     }
 
     @Test func fixEscapesPathsInTheCommand() {
-        let fix = InterferenceFix(
+        let fix = UnreachableFix(
             otherExtension: URL(
-                filePath: "/Volumes/SSHadow Beta/SSHadow.app/Contents/PlugIns/Extension.appex"
+                filePath:
+                    "/Volumes/SSHadow Beta/SSHadow.app/Contents/PlugIns/Extension.appex"
             ),
             home: home
         )
@@ -114,6 +130,16 @@ struct OtherCopyTests {
                 "pluginkit -r /Volumes/SSHadow\\ Beta/SSHadow.app/Contents/PlugIns/Extension.appex\n"
             )
         )
-        #expect(fix.command.contains(" -u /Volumes/SSHadow\\ Beta/SSHadow.app\n"))
+        #expect(
+            fix.command.contains(" -u /Volumes/SSHadow\\ Beta/SSHadow.app\n")
+        )
+    }
+
+    @Test func fixWithoutAnotherCopyOnlyRestartsSync() {
+        let fix = UnreachableFix(otherExtension: nil, home: home)
+
+        #expect(fix.otherCopy == nil)
+        #expect(fix.otherApp == nil)
+        #expect(fix.command == "killall fileproviderd")
     }
 }
