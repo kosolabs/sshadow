@@ -26,13 +26,10 @@ struct RichMenuProfileToggle: View {
         connections.status(for: config.id)
     }
 
-    private var otherExtension: URL? {
-        if case .offline(.wrongExtension(let url)) = status { url } else { nil }
-    }
-
     private var isFailed: Bool {
         switch status {
-        case .offline(.failed), .offline(.wrongExtension): true
+        case .offline(.failed), .offline(.xpcUnreachable):
+            true
         default: false
         }
     }
@@ -73,11 +70,13 @@ struct RichMenuProfileToggle: View {
                 ConnectionStatusText(status: status)
                     .font(.caption)
                     .padding(.leading, 28)
-            case .offline(.wrongExtension(let url)):
+            case .offline(.xpcUnreachable(let otherExtension)):
                 HStack(spacing: 4) {
                     ConnectionStatusText(status: status)
-                    Button("How to Fix…") { showFix(for: url) }
-                        .buttonStyle(.link)
+                    Button("How to Fix…") {
+                        showFix(otherExtension: otherExtension)
+                    }
+                    .buttonStyle(.link)
                 }
                 .font(.caption)
                 .padding(.leading, 28)
@@ -109,8 +108,10 @@ struct RichMenuProfileToggle: View {
                     Task { await action.perform() }
                 }
             }
-            if let otherExtension {
-                Button("How to Fix…") { showFix(for: otherExtension) }
+            if case .offline(.xpcUnreachable(let otherExtension)) = status {
+                Button("How to Fix…") {
+                    showFix(otherExtension: otherExtension)
+                }
             }
             Button("Clear Status") {
                 Task { await config.clearFailure() }
@@ -164,8 +165,14 @@ struct RichMenuProfileToggle: View {
         openWindow.inFront(id: "settings")
     }
 
-    private func showFix(for otherExtension: URL) {
+    private func showFix(otherExtension: URL?) {
         NSApp.dismissMenuBarExtra()
-        openWindow.inFront(id: "interference", value: otherExtension)
+        openWindow.inFront(
+            id: "unreachable",
+            value: UnreachableFix(
+                otherExtension: otherExtension,
+                home: .userHome
+            )
+        )
     }
 }

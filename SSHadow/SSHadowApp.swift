@@ -83,13 +83,15 @@ struct SSHadowApp: App {
         }
         .handlesExternalEvents(matching: [])
 
-        WindowGroup("Another Copy of SSHadow", id: "interference", for: URL.self) {
-            $otherExtension in
-            if let otherExtension {
-                InterferenceView(
-                    fix: InterferenceFix(otherExtension: otherExtension, home: .userHome)
-                )
-                .environment(activation)
+        WindowGroup(
+            "Can't Connect",
+            id: "unreachable",
+            for: UnreachableFix.self
+        ) {
+            $fix in
+            if let fix {
+                UnreachableView(fix: fix)
+                    .environment(activation)
             }
         }
         .windowResizability(.contentSize)

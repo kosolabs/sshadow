@@ -30,7 +30,7 @@ struct ConnectionStatusIcon: View {
         case .offline(.failed(let error)):
             Image(systemName: error.systemImage)
                 .foregroundStyle(.red)
-        case .offline(.wrongExtension):
+        case .offline(.xpcUnreachable):
             Image(systemName: "puzzlepiece.extension.fill")
                 .foregroundStyle(.red)
         case .offline(.disabled):

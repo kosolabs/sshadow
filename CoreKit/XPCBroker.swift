@@ -4,12 +4,12 @@ import Foundation
 
 private let logger = Logger(category: "XPCBroker")
 
-typealias WrongExtensionHandler = @Sendable (URL) -> Void
+typealias UnreachableHandler = @Sendable (_ otherExtension: URL?) -> Void
 
 protocol XPCBroker {
     func broker(
         exporting service: CoreService,
-        onWrongExtension: @escaping WrongExtensionHandler
+        onUnreachable: @escaping UnreachableHandler
     ) async
     func teardown() async
 }
@@ -32,10 +32,10 @@ actor DomainXPCBroker: XPCBroker {
 
     func broker(
         exporting service: CoreService,
-        onWrongExtension: @escaping WrongExtensionHandler
+        onUnreachable: @escaping UnreachableHandler
     ) async {
         if case .connected = state { return }
-        let task = start(service: service, onWrongExtension: onWrongExtension)
+        let task = start(service: service, onUnreachable: onUnreachable)
         await withTaskCancellationHandler {
             await task.value
         } onCancel: {
@@ -49,11 +49,11 @@ actor DomainXPCBroker: XPCBroker {
     @discardableResult
     private func start(
         service: CoreService,
-        onWrongExtension: @escaping WrongExtensionHandler
+        onUnreachable: @escaping UnreachableHandler
     ) -> Task<Void, Never> {
         if case .brokering(let task) = state { task.cancel() }
         let task = Task {
-            await connect(service: service, onWrongExtension: onWrongExtension)
+            await connect(service: service, onUnreachable: onUnreachable)
         }
         state = .brokering(task)
         return task
@@ -61,15 +61,16 @@ actor DomainXPCBroker: XPCBroker {
 
     private func connect(
         service: CoreService,
-        onWrongExtension: @escaping WrongExtensionHandler
+        onUnreachable: @escaping UnreachableHandler
     ) async {
         while !Task.isCancelled {
             do {
-                let connection = try await domain.service.fileProviderConnection()
+                let connection = try await domain.service
+                    .fileProviderConnection()
                 try await attach(
                     connection,
                     service: service,
-                    onWrongExtension: onWrongExtension
+                    onUnreachable: onUnreachable
                 )
                 if let other = wrongExtension(
                     connected: connection.peerBundleUrl,
@@ -81,21 +82,27 @@ actor DomainXPCBroker: XPCBroker {
                             + "\(other.path(percentEncoded: false)), expected "
                             + "\(extensionUrl.path(percentEncoded: false))"
                     )
-                    onWrongExtension(other)
+                    onUnreachable(other)
                     return
                 }
                 state = .connected(connection)
                 logger.notice("XPC brokered: \(domain)")
                 return
-            } catch where Task.isCancelled {
+            } catch  where Task.isCancelled {
                 return
             } catch let error as NSError where error.isDisconnectedDomain {
                 logger.error(
                     "Failed to broker XPC for \(domain), reconnecting: \(error)"
                 )
                 await domain.resume()
+            } catch let error as NSError where error.isFileProviderRestart {
+                logger.error(
+                    "Failed to broker XPC for \(domain), retrying: \(error)"
+                )
             } catch {
                 logger.error("Failed to broker XPC for \(domain): \(error)")
+                onUnreachable(nil)
+                return
             }
             try? await Task.sleep(for: .seconds(1))
         }
@@ -104,7 +111,7 @@ actor DomainXPCBroker: XPCBroker {
     private func attach(
         _ connection: NSXPCConnection,
         service: CoreService,
-        onWrongExtension: @escaping WrongExtensionHandler
+        onUnreachable: @escaping UnreachableHandler
     ) async throws {
         connection.exportedInterface = NSXPCInterface(with: CoreXPC.self)
         connection.exportedObject = service
@@ -115,7 +122,7 @@ actor DomainXPCBroker: XPCBroker {
                 await self.invalidated(
                     connection,
                     service: service,
-                    onWrongExtension: onWrongExtension
+                    onUnreachable: onUnreachable
                 )
             }
         }
@@ -133,7 +140,7 @@ actor DomainXPCBroker: XPCBroker {
     private func invalidated(
         _ connection: NSXPCConnection,
         service: CoreService,
-        onWrongExtension: @escaping WrongExtensionHandler
+        onUnreachable: @escaping UnreachableHandler
     ) {
         switch state {
         case .connected(let current) where current === connection: break
@@ -141,7 +148,7 @@ actor DomainXPCBroker: XPCBroker {
         case .connected, .disconnected: return
         }
         logger.notice("XPC invalidated: \(domain)")
-        start(service: service, onWrongExtension: onWrongExtension)
+        start(service: service, onUnreachable: onUnreachable)
     }
 
     func teardown() async {
@@ -185,7 +192,8 @@ func wrongExtension(connected url: URL?, expected: URL) -> URL? {
 extension NSXPCConnection {
     fileprivate var peerBundleUrl: URL? {
         var path = [CChar](repeating: 0, count: Int(MAXPATHLEN))
-        guard proc_pidpath(processIdentifier, &path, UInt32(path.count)) > 0 else {
+        guard proc_pidpath(processIdentifier, &path, UInt32(path.count)) > 0
+        else {
             logger.error(
                 "Failed to find the path of pid \(processIdentifier): errno \(errno)"
             )
@@ -215,5 +223,10 @@ extension NSError {
         }
         return underlying.domain == "NSFileProviderInternalErrorDomain"
             && underlying.code == 12
+    }
+
+    // Seen when fileproviderd exits while brokering.
+    fileprivate var isFileProviderRestart: Bool {
+        domain == NSCocoaErrorDomain && code == NSXPCConnectionInvalid
     }
 }

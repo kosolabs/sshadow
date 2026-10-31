@@ -9,13 +9,20 @@ private let installed = URL(
 
 struct XPCBrokerTests {
     @Test func ownExtensionIsNotWrong() {
-        #expect(wrongExtension(connected: installed, expected: installed) == nil)
+        #expect(
+            wrongExtension(connected: installed, expected: installed) == nil
+        )
     }
 
     @Test func ownExtensionAsDirectoryIsNotWrong() {
-        let connected = URL(filePath: installed.path(), directoryHint: .isDirectory)
+        let connected = URL(
+            filePath: installed.path(),
+            directoryHint: .isDirectory
+        )
 
-        #expect(wrongExtension(connected: connected, expected: installed) == nil)
+        #expect(
+            wrongExtension(connected: connected, expected: installed) == nil
+        )
     }
 
     @Test func unknownExtensionIsNotWrong() {
@@ -24,11 +31,13 @@ struct XPCBrokerTests {
 
     @Test func extensionFromAnotherCopyIsWrong() {
         let connected = URL(
-            filePath: "/Volumes/SSHadow/SSHadow.app/Contents/PlugIns/Extension.appex"
+            filePath:
+                "/Volumes/SSHadow/SSHadow.app/Contents/PlugIns/Extension.appex"
         )
 
         #expect(
-            wrongExtension(connected: connected, expected: installed) == connected
+            wrongExtension(connected: connected, expected: installed)
+                == connected
         )
     }
 }

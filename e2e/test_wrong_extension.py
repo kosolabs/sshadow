@@ -50,6 +50,9 @@ def test_refuses_extension_from_another_copy(
         "reproduce another copy's extension connecting."
     )
     logs.expect(
-        msg(r"^Sync suspended: .*Another copy of SSHadow is interfering", subsystem=APP),
+        msg(
+            r"^Sync suspended: .*SSHadow can't connect to its extension",
+            subsystem=APP,
+        ),
         fail=(fault,),
     )

@@ -92,7 +92,8 @@ package actor SessionSupervisor {
 
         self.openSession = openSession
         self.xpc =
-            xpc ?? DomainXPCBroker(domain: domain, extensionUrl: .builtInExtension)
+            xpc
+            ?? DomainXPCBroker(domain: domain, extensionUrl: .builtInExtension)
         self.ext = ext ?? domain
         self.events = events
         self.onStatusChange = onStatusChange
@@ -135,10 +136,10 @@ package actor SessionSupervisor {
             await self.fail(config: config, error: error)
         }
         await ext.resume()
-        await xpc.broker(exporting: service) { [weak self] url in
+        await xpc.broker(exporting: service) { [weak self] otherExtension in
             // Not awaited: the first brokering runs inside the task that
-            // refusing the extension cancels.
-            Task { await self?.refuse(extensionAt: url) }
+            // going offline cancels.
+            Task { await self?.unreachable(otherExtension: otherExtension) }
         }
         await session.start(pollInterval: pollInterval)
 
@@ -194,7 +195,7 @@ package actor SessionSupervisor {
             await cancel(task, reason: .paused)
         case .online(let session):
             await disconnect(session, reason: .paused)
-        case .offline(.failed), .offline(.wrongExtension):
+        case .offline(.failed), .offline(.xpcUnreachable):
             state = .offline(.paused)
             await ext.suspend(
                 reason: OfflineReason.paused.text,
@@ -215,8 +216,10 @@ package actor SessionSupervisor {
         reconnect(config: config)
     }
 
-    private func refuse(extensionAt url: URL) async {
-        let reason = OfflineReason.wrongExtension(url)
+    private func unreachable(otherExtension: URL?) async {
+        let reason = OfflineReason.xpcUnreachable(
+            otherExtension: otherExtension
+        )
         switch state {
         case .connecting(let task):
             await cancel(task, reason: reason)
@@ -228,14 +231,16 @@ package actor SessionSupervisor {
             return
         }
         log.error(
-            "Another copy of SSHadow is interfering",
-            detail: interferenceDetail(
-                other: url.containingApp,
-                own: Bundle.main.bundleURL,
-                home: .userHome
-            )
+            "SSHadow can't connect to its extension",
+            detail: otherExtension.map {
+                interferenceDetail(
+                    other: $0.containingApp,
+                    own: Bundle.main.bundleURL,
+                    home: .userHome
+                )
+            } ?? "Choose How to Fix… from the SSHadow menu."
         )
-        logger.notice("Supervisor refused extension: \(domain)")
+        logger.notice("Supervisor went offline: \(domain): \(reason)")
     }
 
     private func cancel<T>(
