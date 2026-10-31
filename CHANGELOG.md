@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.18.0](https://github.com/kosolabs/sshadow/compare/v0.17.0...v0.18.0) (2026-10-31)
+
+
+### Features
+
+* add button to clear status on connection failure ([#445](https://github.com/kosolabs/sshadow/issues/445)) ([f1c0538](https://github.com/kosolabs/sshadow/commit/f1c053802962d22b9695c5ebbccd68eebda78a0e))
+* add Finder, pause/resume, check and copy actions to profile context menu ([#447](https://github.com/kosolabs/sshadow/issues/447)) ([674bd1b](https://github.com/kosolabs/sshadow/commit/674bd1be95c5eb0b6e7be5f21f379da56b4236ce))
+* add search and filters to the event log and log each remote change ([#448](https://github.com/kosolabs/sshadow/issues/448)) ([989fcdd](https://github.com/kosolabs/sshadow/commit/989fcdd63b224fa139c3e111298d0bb13b017438))
+* explain how to fix another copy of SSHadow interfering ([#454](https://github.com/kosolabs/sshadow/issues/454)) ([f8c4c51](https://github.com/kosolabs/sshadow/commit/f8c4c5121f4a9cc6ff37b38c3c9053075c323611))
+* go offline when another copy of SSHadow's extension connects ([#451](https://github.com/kosolabs/sshadow/issues/451)) ([365ef83](https://github.com/kosolabs/sshadow/commit/365ef83cd4442a88753249b35169ed38308ce361))
+* go offline with a fix when SSHadow can't connect to its extension ([#455](https://github.com/kosolabs/sshadow/issues/455)) ([ee47f50](https://github.com/kosolabs/sshadow/commit/ee47f505e70330cb28dbf430555468f411edf397))
+* improve onboarding with prompts for the first connection ([#443](https://github.com/kosolabs/sshadow/issues/443)) ([7149437](https://github.com/kosolabs/sshadow/commit/71494376d03f59fb94d7acffc2f3723cce4e223b))
+
+
+### Bug Fixes
+
+* finish tearing down a lost connection even when its task is cancelled ([#449](https://github.com/kosolabs/sshadow/issues/449)) ([847e094](https://github.com/kosolabs/sshadow/commit/847e094ddf9d981aafc0d078b16d0e57c4b51e96))
+* keep both copies when a new file's name is already taken on the server ([#456](https://github.com/kosolabs/sshadow/issues/456)) ([3895b40](https://github.com/kosolabs/sshadow/commit/3895b405a14f6912eb7dc3187ae933fc4451e02f))
+
 ## [0.17.0](https://github.com/kosolabs/sshadow/compare/v0.16.5...v0.17.0) (2026-10-29)
 
 
