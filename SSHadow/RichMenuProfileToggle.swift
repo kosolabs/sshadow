@@ -26,6 +26,10 @@ struct RichMenuProfileToggle: View {
         connections.status(for: config.id)
     }
 
+    private var otherExtension: URL? {
+        if case .offline(.wrongExtension(let url)) = status { url } else { nil }
+    }
+
     private var isFailed: Bool {
         switch status {
         case .offline(.failed), .offline(.wrongExtension): true
@@ -65,10 +69,18 @@ struct RichMenuProfileToggle: View {
             }
 
             switch status {
-            case .reconnecting, .offline(.failed), .offline(.wrongExtension):
+            case .reconnecting, .offline(.failed):
                 ConnectionStatusText(status: status)
                     .font(.caption)
                     .padding(.leading, 28)
+            case .offline(.wrongExtension(let url)):
+                HStack(spacing: 4) {
+                    ConnectionStatusText(status: status)
+                    Button("How to Fix…") { showFix(for: url) }
+                        .buttonStyle(.link)
+                }
+                .font(.caption)
+                .padding(.leading, 28)
             default:
                 EmptyView()
             }
@@ -96,6 +108,9 @@ struct RichMenuProfileToggle: View {
                 Button(action.title) {
                     Task { await action.perform() }
                 }
+            }
+            if let otherExtension {
+                Button("How to Fix…") { showFix(for: otherExtension) }
             }
             Button("Clear Status") {
                 Task { await config.clearFailure() }
@@ -147,5 +162,10 @@ struct RichMenuProfileToggle: View {
         NSApp.dismissMenuBarExtra()
         settingsNavigation.selectedConfig = config
         openWindow.inFront(id: "settings")
+    }
+
+    private func showFix(for otherExtension: URL) {
+        NSApp.dismissMenuBarExtra()
+        openWindow.inFront(id: "interference", value: otherExtension)
     }
 }

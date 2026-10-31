@@ -83,6 +83,18 @@ struct SSHadowApp: App {
         }
         .handlesExternalEvents(matching: [])
 
+        WindowGroup("Another Copy of SSHadow", id: "interference", for: URL.self) {
+            $otherExtension in
+            if let otherExtension {
+                InterferenceView(
+                    fix: InterferenceFix(otherExtension: otherExtension, home: .userHome)
+                )
+                .environment(activation)
+            }
+        }
+        .windowResizability(.contentSize)
+        .handlesExternalEvents(matching: [])
+
         Window("About SSHadow", id: "about") {
             AboutView()
                 .environment(activation)

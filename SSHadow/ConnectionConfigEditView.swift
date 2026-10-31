@@ -9,6 +9,7 @@ private let logger = Logger(category: "ConnectionConfigEditView")
 struct ConnectionConfigEditView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Connections.self) private var connections
+    @Environment(\.openWindow) private var openWindow
 
     var config = ConnectionConfigModel()
     @State private var isImportingKey: Bool = false
@@ -192,7 +193,14 @@ struct ConnectionConfigEditView: View {
                         switch status {
                         case .offline(let reason):
                             switch reason {
-                            case .failed, .wrongExtension:
+                            case .failed:
+                                Button("Clear") {
+                                    Task { await config.clearFailure() }
+                                }
+                            case .wrongExtension(let url):
+                                Button("How to Fix…") {
+                                    openWindow.inFront(id: "interference", value: url)
+                                }
                                 Button("Clear") {
                                     Task { await config.clearFailure() }
                                 }
