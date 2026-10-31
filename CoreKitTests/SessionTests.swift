@@ -3923,8 +3923,13 @@ struct SessionTests {
             try sandbox.createFile(at: "dir/file.txt")
             let session = try await sandbox.getSession()
 
-            let task = Task { try await session.reconcileAll() }
+            let latch = Latch()
+            let task = Task {
+                await latch.wait()
+                return try await session.reconcileAll()
+            }
             task.cancel()
+            await latch.open()
 
             await #expect(throws: CancellationError.self) {
                 _ = try await task.value
@@ -3941,8 +3946,13 @@ struct SessionTests {
             let dirId = try await session.child(name: "dir")
             await session.watch(itemId: dirId)
 
-            let task = Task { try await session.reconcileWatched() }
+            let latch = Latch()
+            let task = Task {
+                await latch.wait()
+                return try await session.reconcileWatched()
+            }
             task.cancel()
+            await latch.open()
 
             await #expect(throws: CancellationError.self) {
                 _ = try await task.value
