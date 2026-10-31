@@ -87,11 +87,7 @@ struct RichMenuProfileToggle: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .contentShape(Rectangle())
-        .background(
-            RoundedRectangle(cornerRadius: 8).fill(
-                isHovered ? Color.primary : Color.clear
-            )
-        )
+        .menuHighlight(isHovered)
         .onHover { isHovered = $0 }
         .contextMenu {
             Button("Show in Finder", action: openInFinder)
