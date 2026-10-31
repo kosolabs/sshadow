@@ -83,6 +83,8 @@ private struct FixCommand: View {
     let command: String
     let note: String
 
+    @State private var isCopied = false
+
     var body: some View {
         Text(command)
             .font(.system(.callout, design: .monospaced))
@@ -93,8 +95,23 @@ private struct FixCommand: View {
         Text(note)
             .font(.caption)
             .foregroundStyle(.secondary)
-        Button("Copy Command") {
+        Button {
             NSPasteboard.general.copy(command)
+            isCopied = true
+        } label: {
+            Label {
+                Text("Copy Command")
+            } icon: {
+                ZStack {
+                    Image(systemName: "doc.on.doc").opacity(isCopied ? 0 : 1)
+                    Image(systemName: "checkmark").opacity(isCopied ? 1 : 0)
+                }
+            }
+        }
+        .task(id: isCopied) {
+            guard isCopied else { return }
+            try? await Task.sleep(for: .seconds(2))
+            isCopied = false
         }
     }
 }

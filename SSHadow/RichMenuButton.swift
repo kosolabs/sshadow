@@ -22,11 +22,7 @@ struct RichMenuButton<Content: View>: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .contentShape(Rectangle())
-            .background(
-                RoundedRectangle(cornerRadius: 8).fill(
-                    isHovered && isEnabled ? Color.primary : Color.clear
-                )
-            )
+            .menuHighlight(isHovered && isEnabled)
             .opacity(isEnabled ? 1.0 : 0.4)
         }
         .buttonStyle(.plain)

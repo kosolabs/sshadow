@@ -21,4 +21,12 @@ extension View {
             self
         }
     }
+
+    func menuHighlight(_ isHighlighted: Bool) -> some View {
+        background(
+            isHighlighted
+                ? AnyShapeStyle(.fill.secondary) : AnyShapeStyle(.clear),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+    }
 }
