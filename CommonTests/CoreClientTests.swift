@@ -213,6 +213,29 @@ struct CoreClientTests {
         #expect(item.name == "download.txt")
         #expect(item.size == UInt64(contents.utf8.count))
     }
+
+    @Test func requestsFailUntilCoreIsReady() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "file.txt")
+        let (client, connection) = try await sandbox.attachClient()
+
+        await #expect(throws: CoreError.serviceUnreachable) {
+            try await client.list(for: .rootContainer)
+        }
+        try await connection.detach()
+    }
+
+    @Test func requestsWaitingForCoreSucceedOnceReady() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "file.txt")
+        let (client, connection) = try await sandbox.attachClient()
+
+        async let entries = client.list(for: .rootContainer)
+        try await connection.ready()
+
+        #expect(try await entries.map(\.name) == ["file.txt"])
+        try await connection.detach()
+    }
 }
 
 func isNoSuchItemError(_ error: any Error) -> Bool {
