@@ -8,6 +8,7 @@ public final class CoreClient: NSObject {
     private enum State {
         case idle
         case waiting
+        case attached(NSXPCConnection)
         case connected(NSXPCConnection)
         case detaching(NSXPCConnection)
         case detached
@@ -29,7 +30,7 @@ public final class CoreClient: NSObject {
             switch $0 {
             case .connected(let connection), .detaching(let connection):
                 connection
-            case .idle, .waiting, .detached, .suspended:
+            case .idle, .waiting, .attached, .detached, .suspended:
                 nil
             }
         }
@@ -102,17 +103,18 @@ extension CoreClient: NSXPCListenerDelegate {
             self.disconnected(connection)
         }
         connection.interruptionHandler = { connection.invalidate() }
-        state.withLock { $0 = .connected(connection) }
+        state.withLock { $0 = .attached(connection) }
         connection.resume()
 
-        logger.info("Core XPC connected")
+        logger.info("Core XPC attached")
         return true
     }
 
     private func disconnected(_ connection: NSXPCConnection) {
         let current = state.withLock {
             switch $0 {
-            case .connected(let current) where current === connection:
+            case .attached(let current) where current === connection,
+                .connected(let current) where current === connection:
                 $0 = .waiting
             case .detaching(let current) where current === connection:
                 $0 = .detached
@@ -129,14 +131,35 @@ extension CoreClient: NSXPCListenerDelegate {
         logger.info("Core XPC disconnected")
     }
 
-    fileprivate func ready() {
+    fileprivate func ready(_ connection: NSXPCConnection) {
+        let current = state.withLock {
+            switch $0 {
+            case .attached(let current) where current === connection:
+                $0 = .connected(current)
+            case .connected(let current) where current === connection,
+                .detaching(let current) where current === connection:
+                break
+            default:
+                return false
+            }
+            return true
+        }
+        guard current else {
+            logger.info("Ignored stale Core ready")
+            return
+        }
+        logger.info("Core ready")
         watches.withLock { publishWatched($0) }
     }
 
     fileprivate func detach(_ connection: NSXPCConnection) {
         state.withLock {
-            if case .connected(let current) = $0, current === connection {
+            switch $0 {
+            case .attached(let current) where current === connection,
+                .connected(let current) where current === connection:
                 $0 = .detaching(current)
+            default:
+                break
             }
         }
     }
@@ -426,7 +449,7 @@ extension CoreClient {
     private func requireConnection() async throws(CoreError) -> NSXPCConnection
     {
         if connection == nil {
-            logger.info("Waiting for Core XPC to connect")
+            logger.info("Waiting for Core to be ready")
             let deadline = ContinuousClock.now + .seconds(1)
             while connection == nil, ContinuousClock.now < deadline {
                 try? await Task.sleep(for: .milliseconds(50))
@@ -434,7 +457,7 @@ extension CoreClient {
         }
         guard let connection else {
             await suspend()
-            logger.error("Core XPC never connected")
+            logger.error("Core never became ready")
             throw CoreError.serviceUnreachable
         }
         return connection
@@ -489,7 +512,9 @@ private final class ExtHandler: NSObject, ExtXPC {
     }
 
     func ready(reply: @escaping @Sendable () -> Void) {
-        client?.ready()
+        if let client, let connection {
+            client.ready(connection)
+        }
         reply()
     }
 

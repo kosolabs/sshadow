@@ -211,19 +211,9 @@ package class TestSandbox {
                 return _client
             }
 
-            let service = CoreService(supervisor: try await supervisor)
-            let client = CoreClient(domain: domain, groupUrl: group)
-
-            let connection = NSXPCConnection(
-                listenerEndpoint: try client.makeListenerEndpoint()
-            )
-            connection.exportedInterface = NSXPCInterface(with: CoreXPC.self)
-            connection.exportedObject = service
-            connection.remoteObjectInterface = NSXPCInterface(with: ExtXPC.self)
-            connection.resume()
+            let (client, connection) = try await attachClient()
             self.connection = connection
-
-            try await connection.attach()
+            try await connection.ready()
 
             var folders: [NSFileProviderItemIdentifier] = [.rootContainer]
             while !folders.isEmpty {
@@ -244,6 +234,22 @@ package class TestSandbox {
             self._client = client
             return client
         }
+    }
+
+    package func attachClient() async throws -> (CoreClient, NSXPCConnection) {
+        let service = CoreService(supervisor: try await supervisor)
+        let client = CoreClient(domain: domain, groupUrl: group)
+
+        let connection = NSXPCConnection(
+            listenerEndpoint: try client.makeListenerEndpoint()
+        )
+        connection.exportedInterface = NSXPCInterface(with: CoreXPC.self)
+        connection.exportedObject = service
+        connection.remoteObjectInterface = NSXPCInterface(with: ExtXPC.self)
+        connection.resume()
+
+        try await connection.attach()
+        return (client, connection)
     }
 
     package func path(
