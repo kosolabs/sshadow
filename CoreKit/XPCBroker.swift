@@ -149,7 +149,11 @@ actor DomainXPCBroker: XPCBroker {
         case .connected, .disconnected: return
         }
         logger.notice("XPC invalidated: \(domain)")
-        start(service: service, onUnreachable: onUnreachable)
+        let task = start(service: service, onUnreachable: onUnreachable)
+        Task {
+            await task.value
+            await ready()
+        }
     }
 
     func ready() async {
