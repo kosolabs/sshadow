@@ -32,6 +32,12 @@ def invalidated(profile: str) -> Matcher:
     return msg(rf"^XPC invalidated: .*{named(profile, 'displayName')}", subsystem=APP)
 
 
+def suspended_by_extension(profile: str) -> Matcher:
+    return msg(
+        rf"^Sync suspended: .*{named(profile, 'displayName')}", subsystem=EXTENSION
+    )
+
+
 RETRYING = msg(r"^Connect failed; retrying in ")
 
 
@@ -66,7 +72,10 @@ def test_rebroker_domains(
     for _ in range(2):
         if kill == "app":
             app.kill()
-            logs.expect(msg(r"^Core XPC disconnected$", subsystem=EXTENSION))
+            logs.expect_all([suspended_by_extension(name) for name in remotes])
+            # File Provider restarts each domain after its extension suspends
+            # it, and can lose a reconnect that arrives mid-restart.
+            time.sleep(2)
             relaunch_app()
         else:
             app.kill_extension()
