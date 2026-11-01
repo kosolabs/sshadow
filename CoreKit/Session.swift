@@ -44,7 +44,7 @@ package actor Session {
         }
     )
 
-    private var watched: [NSFileProviderItemIdentifier: Int] = [:]
+    private var watched: Set<NSFileProviderItemIdentifier> = []
     private var schedule: PollSchedule?
     private var pollTask: Task<Void, Never>?
     private(set) var reconcileTask: Task<[Change], any Error>?
@@ -248,37 +248,19 @@ extension Session {
 // MARK: - Change Tracking
 
 extension Session {
-    func watch(itemId: NSFileProviderItemIdentifier) async {
-        guard itemId != .workingSet, itemId != .trashContainer else { return }
-        let ref = await ref(for: itemId)
-
-        watched[itemId, default: 0] += 1
-        schedule?.recordWatchStarted()
-
-        let newCount = watched[itemId, default: 0]
-        logger.info("Watch on \(ref): \(newCount)")
-        if newCount == 1 {
-            logger.notice("Started watching: \(ref)")
+    func setWatched(_ itemIds: Set<NSFileProviderItemIdentifier>) async {
+        let itemIds = itemIds.subtracting([.workingSet, .trashContainer])
+        guard itemIds != watched else { return }
+        if !itemIds.isSubset(of: watched) {
+            schedule?.recordWatchStarted()
         }
-    }
+        watched = itemIds
 
-    func unwatch(itemId: NSFileProviderItemIdentifier) async {
-        guard itemId != .workingSet, itemId != .trashContainer else { return }
-        guard watched[itemId] != nil else { return }
-        let ref = await ref(for: itemId)
-
-        guard let count = watched[itemId] else { return }
-        if count <= 1 {
-            watched.removeValue(forKey: itemId)
-        } else {
-            watched[itemId] = count - 1
+        var refs: [Ref] = []
+        for itemId in watched {
+            refs.append(await ref(for: itemId))
         }
-
-        let newCount = watched[itemId, default: 0]
-        logger.info("Unwatch on \(ref): \(newCount)")
-        if newCount == 0 {
-            logger.notice("Stopped watching: \(ref)")
-        }
+        logger.notice("Watching: \(refs)")
     }
 
     func changes(since prevAnchor: UInt64) -> (UInt64, [Change]) {
@@ -343,7 +325,7 @@ extension Session {
             guard !watched.isEmpty else { return [] }
 
             logger.info(
-                "Poll: \(config.url), anchor: \(anchor), items: \(watched.keys)"
+                "Poll: \(config.url), anchor: \(anchor), items: \(watched)"
             )
 
             let reconcileTask = Task { try await reconcileWatched() }
@@ -360,7 +342,7 @@ extension Session {
         record(newChanges)
 
         logger.notice(
-            "Polled: \(newChanges.count) change(s), anchor: \(anchor), items: \(watched.keys)"
+            "Polled: \(newChanges.count) change(s), anchor: \(anchor), items: \(watched)"
         )
         log.notice("Detected \(newChanges.count) change(s) on server")
         await changesDetectedHandler()
@@ -370,7 +352,7 @@ extension Session {
         await materialized.refresh().value
         var allChanges: [Change] = []
 
-        for itemId in Array(watched.keys) {
+        for itemId in Array(watched) {
             try Task.checkCancellation()
             do {
                 let item = try await db.item(for: itemId)
@@ -384,7 +366,7 @@ extension Session {
             } catch CoreError.serverUnreachable {
                 throw CoreError.serverUnreachable
             } catch CoreError.itemNotFound {
-                watched.removeValue(forKey: itemId)
+                watched.remove(itemId)
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
@@ -414,7 +396,7 @@ extension Session {
             await log.info("Removed \(ref(for: dbItem.id).display)")
             try await db.remove(dbItem.id)
             await cache.invalidate(dbItem.id)
-            watched.removeValue(forKey: dbItem.id)
+            watched.remove(dbItem.id)
             return [.delete(itemId: dbItem.rawId)]
         }
 
@@ -872,7 +854,7 @@ extension Session {
             await logIgnored("Hide ignored \(ref(for: item.id))", by: rule)
             try await db.remove(item.id)
             await cache.invalidate(item.id)
-            watched.removeValue(forKey: item.id)
+            watched.remove(item.id)
             return [.delete(itemId: item.rawId)]
         }
         guard item.kind == .folder else { return [] }

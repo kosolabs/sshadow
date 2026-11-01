@@ -10,6 +10,7 @@ import Testing
 private actor SpyXPCBroker: XPCBroker {
     enum Call: Equatable {
         case broker
+        case ready
         case teardown
     }
 
@@ -17,6 +18,7 @@ private actor SpyXPCBroker: XPCBroker {
     private(set) var cancelledTeardowns = 0
     private(set) var onUnreachable: UnreachableHandler?
     private var unreachable: URL??
+    private var isConnected = false
 
     func failNextBroker(otherExtension: URL?) {
         unreachable = otherExtension
@@ -31,10 +33,18 @@ private actor SpyXPCBroker: XPCBroker {
         if let unreachable {
             self.unreachable = nil
             onUnreachable(unreachable)
+        } else {
+            isConnected = true
         }
     }
 
+    func ready() async {
+        guard isConnected else { return }
+        calls.append(.ready)
+    }
+
     func teardown() async {
+        isConnected = false
         calls.append(.teardown)
         if Task.isCancelled { cancelledTeardowns += 1 }
     }
@@ -231,7 +241,7 @@ struct SessionSupervisorTests {
 
         #expect(await provider.callCount == 1)
         #expect(await ext.calls == [.resume])
-        #expect(await xpc.calls == [.broker])
+        #expect(await xpc.calls == [.broker, .ready])
         #expect(await supervisor.status == .online)
 
         await supervisor.disable()
@@ -624,7 +634,7 @@ struct SessionSupervisorTests {
         // pause() suspends the domain (preserving the cache); it must not
         // remove it the way disable() does.
         #expect(await ext.calls == [.resume, .suspend])
-        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await xpc.calls == [.broker, .ready, .teardown])
         #expect(await xpc.cancelledTeardowns == 0)
         #expect(await supervisor.status == .offline(.paused))
     }
@@ -674,7 +684,9 @@ struct SessionSupervisorTests {
         // left online: broker/teardown and resume/suspend stay balanced, so the
         // domain is suspended exactly once per teardown (no leak, no double
         // suspend), and we never came online on the reconnect.
-        #expect(await xpc.calls == [.broker, .teardown, .broker, .teardown])
+        #expect(
+            await xpc.calls == [.broker, .ready, .teardown, .broker, .teardown]
+        )
         #expect(await ext.calls == [.resume, .suspend, .resume, .suspend])
         #expect(await provider.callCount == 2)
         #expect(spy.statuses.last == .offline(.paused))
@@ -722,7 +734,7 @@ struct SessionSupervisorTests {
         await supervisor.pause()
 
         #expect(await provider.callCount == 2)
-        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await xpc.calls == [.broker, .ready, .teardown])
         #expect(await xpc.cancelledTeardowns == 0)
         #expect(await ext.calls == [.resume, .suspend])
         #expect(spy.statuses.last == .offline(.paused))
@@ -1062,7 +1074,7 @@ struct SessionSupervisorTests {
         await supervisor.disable()
 
         #expect(await provider.callCount == 2)
-        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await xpc.calls == [.broker, .ready, .teardown])
         #expect(await xpc.cancelledTeardowns == 0)
         #expect(await ext.calls == [.resume, .suspend, .remove])
         #expect(spy.statuses.last == .offline(.disabled))
@@ -1149,7 +1161,7 @@ struct SessionSupervisorTests {
         // so no second teardown/suspend fires.
         await supervisor.disable()
 
-        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await xpc.calls == [.broker, .ready, .teardown])
         #expect(await xpc.cancelledTeardowns == 0)
         #expect(await ext.calls == [.resume, .suspend, .remove])
         #expect(spy.statuses.last == .offline(.disabled))
@@ -1196,7 +1208,7 @@ struct SessionSupervisorTests {
         // second teardown/suspend.
         await supervisor.disable()
 
-        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await xpc.calls == [.broker, .ready, .teardown])
         #expect(await xpc.cancelledTeardowns == 0)
         #expect(await ext.calls == [.resume, .suspend, .remove])
         #expect(spy.statuses.last == .offline(.disabled))
@@ -1237,7 +1249,7 @@ struct SessionSupervisorTests {
 
         await supervisor.pause()
 
-        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await xpc.calls == [.broker, .ready, .teardown])
         #expect(await xpc.cancelledTeardowns == 0)
         #expect(await ext.calls == [.resume, .suspend, .suspend])
         #expect(spy.statuses.last == .offline(.paused))
@@ -1298,7 +1310,7 @@ struct SessionSupervisorTests {
             supervisor,
             is: .offline(.xpcUnreachable(otherExtension: otherExtension))
         )
-        #expect(await xpc.calls == [.broker, .teardown])
+        #expect(await xpc.calls == [.broker, .ready, .teardown])
         #expect(await ext.calls == [.resume, .suspend])
         #expect(await provider.callCount == 1)
     }

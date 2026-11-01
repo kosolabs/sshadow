@@ -21,6 +21,8 @@ public final class CoreClient: NSObject {
     private let listener = NSXPCListener.anonymous()
     private let groupUrl: URL
     private let state = Mutex(State.idle)
+    private let watches = Mutex<[UUID: NSFileProviderItemIdentifier]>([:])
+    private let watchedSets: AsyncStream<[String]>.Continuation
 
     private var connection: NSXPCConnection? {
         state.withLock {
@@ -51,13 +53,25 @@ public final class CoreClient: NSObject {
     ) {
         self.domain = domain
         self.groupUrl = groupUrl
+        let (sets, watchedSets) = AsyncStream.makeStream(
+            of: [String].self,
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        self.watchedSets = watchedSets
 
         super.init()
         listener.delegate = self
         listener.resume()
+
+        Task { [weak self] in
+            for await itemIds in sets {
+                await self?.sendWatched(itemIds)
+            }
+        }
     }
 
     deinit {
+        watchedSets.finish()
         connection?.invalidate()
     }
 }
@@ -113,6 +127,10 @@ extension CoreClient: NSXPCListenerDelegate {
         }
         Task { await suspend() }
         logger.info("Core XPC disconnected")
+    }
+
+    fileprivate func ready() {
+        watches.withLock { publishWatched($0) }
     }
 
     fileprivate func detach(_ connection: NSXPCConnection) {
@@ -186,16 +204,21 @@ extension CoreClient {
         return response.fileInfos
     }
 
-    public func watch(
-        itemId: NSFileProviderItemIdentifier
-    ) async throws(CoreError) {
-        _ = try await perform(WatchRequest(itemId: itemId.rawValue))
+    public func watch(itemId: NSFileProviderItemIdentifier) -> UUID {
+        let watch = UUID()
+        watches.withLock {
+            $0[watch] = itemId
+            publishWatched($0)
+        }
+        return watch
     }
 
-    public func unwatch(
-        itemId: NSFileProviderItemIdentifier
-    ) async throws(CoreError) {
-        _ = try await perform(UnwatchRequest(itemId: itemId.rawValue))
+    public func unwatch(_ watch: UUID) {
+        watches.withLock {
+            if $0.removeValue(forKey: watch) != nil {
+                publishWatched($0)
+            }
+        }
     }
 
     public func changes(
@@ -433,6 +456,24 @@ extension CoreClient {
     }
 }
 
+// MARK: - Watching
+
+extension CoreClient {
+    private func publishWatched(
+        _ watches: [UUID: NSFileProviderItemIdentifier]
+    ) {
+        watchedSets.yield(Set(watches.values).map(\.rawValue))
+    }
+
+    private func sendWatched(_ itemIds: [String]) async {
+        do {
+            _ = try await perform(SetWatchedRequest(itemIds: itemIds))
+        } catch {
+            logger.error("Failed to sync watched items: \(error)")
+        }
+    }
+}
+
 private final class ExtHandler: NSObject, ExtXPC {
     private weak var client: CoreClient?
     private weak var connection: NSXPCConnection?
@@ -443,6 +484,11 @@ private final class ExtHandler: NSObject, ExtXPC {
     }
 
     func attach(reply: @escaping @Sendable () -> Void) {
+        reply()
+    }
+
+    func ready(reply: @escaping @Sendable () -> Void) {
+        client?.ready()
         reply()
     }
 

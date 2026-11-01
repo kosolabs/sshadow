@@ -707,7 +707,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
             let bId = try await session.child(name: "b.txt")
             sandbox.materializedItems.materialize(bId)
-            await session.watch(itemId: bId)
+            await session.setWatched([bId])
 
             try sandbox.createFile(at: ".sshadowignore", contents: "b.txt\n")
             _ = try await session.reconcileAll()
@@ -862,7 +862,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
             let aId = try await session.child(name: "a.txt")
             let otherId = try await session.child(name: "other.txt")
-            await session.watch(itemId: aId)
+            await session.setWatched([aId])
 
             try await session.removeFile(
                 for: otherId,
@@ -1629,7 +1629,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let dirId = try await session.child(name: "dir")
-            await session.watch(itemId: dirId)
+            await session.setWatched([dirId])
 
             try sandbox.createFile(at: "dir/new.txt", modifyDate: end)
             let changes = try await session.reconcileWatched()
@@ -1648,7 +1648,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let dirId = try await session.child(name: "dir")
-            await session.watch(itemId: dirId)
+            await session.setWatched([dirId])
 
             let fileId = try await session.id(of: "dir/item.txt")
             try sandbox.removeItem(at: "dir/item.txt")
@@ -1668,7 +1668,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let watchedId = try await session.child(name: "watched")
-            await session.watch(itemId: watchedId)
+            await session.setWatched([watchedId])
 
             try sandbox.createFile(at: "other/new.txt", modifyDate: end)
             try sandbox.touch("other", modifyDate: start)
@@ -1685,7 +1685,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let dirId = try await session.child(name: "dir")
-            await session.watch(itemId: dirId)
+            await session.setWatched([dirId])
 
             try sandbox.createFile(at: "dir/subdir/deep.txt", modifyDate: end)
             // Reset the subfolder's mtime so the only detectable change lives
@@ -1702,8 +1702,8 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let dirId = try await session.child(name: "dir")
-            await session.watch(itemId: dirId)
-            await session.unwatch(itemId: dirId)
+            await session.setWatched([dirId])
+            await session.setWatched([])
 
             try sandbox.createFile(at: "dir/new.txt", modifyDate: end)
             let changes = try await session.reconcileWatched()
@@ -1711,22 +1711,25 @@ struct SessionTests {
             #expect(changes == [])
         }
 
-        @Test func reconcileWatchedRespectsWatchRefCount() async throws {
+        @Test func reconcileWatchedFollowsLatestWatchedSet() async throws {
             let sandbox = TestSandbox()
+            try sandbox.createFolder(at: "old", modifyDate: start)
             try sandbox.createFolder(at: "dir", modifyDate: start)
             let session = try await sandbox.getSession()
 
+            let oldId = try await session.child(name: "old")
             let dirId = try await session.child(name: "dir")
-            await session.watch(itemId: dirId)
-            await session.watch(itemId: dirId)
-            await session.unwatch(itemId: dirId)
+            await session.setWatched([oldId])
+            await session.setWatched([dirId])
 
+            try sandbox.createFile(at: "old/new.txt", modifyDate: end)
             try sandbox.createFile(at: "dir/new.txt", modifyDate: end)
             let changes = try await session.reconcileWatched()
 
             let (updates, _) = changes.split()
             let item = try #require(updates.only)
             #expect(item.name == "new.txt")
+            #expect(item.parentId == dirId)
         }
 
         @Test func reconcileWatchedIgnoresTrashContainer() async throws {
@@ -1737,7 +1740,7 @@ struct SessionTests {
             )
             let session = try await sandbox.getSession()
 
-            await session.watch(itemId: .trashContainer)
+            await session.setWatched([.trashContainer])
 
             try sandbox.createFile(
                 at: ".sshadow/trash/new.txt",
@@ -1758,8 +1761,7 @@ struct SessionTests {
 
             let goneId = try await session.child(name: "gone")
             let liveId = try await session.child(name: "live")
-            await session.watch(itemId: goneId)
-            await session.watch(itemId: liveId)
+            await session.setWatched([goneId, liveId])
 
             // "gone" disappears remotely while still watched, and a change
             // lands in "live". One dead watched folder must not starve the
@@ -1788,7 +1790,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let fileId = try await session.child(name: "file.txt")
-            await session.watch(itemId: fileId)
+            await session.setWatched([fileId])
 
             let changes = try await session.reconcileWatched()
 
@@ -1805,7 +1807,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let fileId = try await session.child(name: "file.txt")
-            await session.watch(itemId: fileId)
+            await session.setWatched([fileId])
 
             let updated = "updated"
             try sandbox.createFile(
@@ -1830,7 +1832,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let packageId = try await session.child(name: "Doc.rtfd")
-            await session.watch(itemId: packageId)
+            await session.setWatched([packageId])
 
             try sandbox.createFile(at: "Doc.rtfd/new.rtf", modifyDate: end)
             try sandbox.touch("Doc.rtfd", modifyDate: start)
@@ -1845,7 +1847,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let packageId = try await session.child(name: "Doc.rtfd")
-            await session.watch(itemId: packageId)
+            await session.setWatched([packageId])
 
             try sandbox.touch("Doc.rtfd", modifyDate: end)
             let changes = try await session.reconcileWatched()
@@ -1865,7 +1867,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let fileId = try await session.child(name: "file.txt")
-            await session.watch(itemId: fileId)
+            await session.setWatched([fileId])
 
             try sandbox.touch("file.txt", permissions: 0o444)
             let changes = try await session.reconcileWatched()
@@ -1883,7 +1885,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let fileId = try await session.child(name: "file.txt")
-            await session.watch(itemId: fileId)
+            await session.setWatched([fileId])
 
             try sandbox.removeItem(at: "file.txt")
             let changes = try await session.reconcileWatched()
@@ -1901,7 +1903,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let fileId = try await session.child(name: "file.txt")
-            await session.watch(itemId: fileId)
+            await session.setWatched([fileId])
 
             try sandbox.removeItem(at: "file.txt")
             _ = try await session.reconcileWatched()
@@ -1920,7 +1922,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let linkId = try await session.id(of: "link.txt")
-            await session.watch(itemId: linkId)
+            await session.setWatched([linkId])
 
             try sandbox.createSymlink(at: "link.txt", target: "new.txt")
             let changes = try await session.reconcileWatched()
@@ -1942,7 +1944,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let fileId = try await session.child(name: "file.txt")
-            await session.watch(itemId: fileId)
+            await session.setWatched([fileId])
 
             let (warmUrl, _) = try await session.stream(
                 itemId: fileId,
@@ -1976,7 +1978,7 @@ struct SessionTests {
             try sandbox.createFolder(at: "dir", modifyDate: start)
             let session = try await sandbox.getSession()
             let dirId = try await session.child(name: "dir")
-            await session.watch(itemId: dirId)
+            await session.setWatched([dirId])
 
             try await session.pollWatched()
             try await session.pollAll()
@@ -1991,7 +1993,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let dirId = try await session.child(name: "dir")
-            await session.watch(itemId: dirId)
+            await session.setWatched([dirId])
 
             try await session.pollWatched()
 
@@ -2006,7 +2008,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let dirId = try await session.child(name: "dir")
-            await session.watch(itemId: dirId)
+            await session.setWatched([dirId])
 
             try sandbox.createFile(at: "dir/new.txt", modifyDate: end)
             try await session.pollWatched()
@@ -2027,7 +2029,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let watchedId = try await session.child(name: "watched")
-            await session.watch(itemId: watchedId)
+            await session.setWatched([watchedId])
 
             try sandbox.createFile(at: "other/new.txt", modifyDate: end)
             try sandbox.touch("other", modifyDate: start)
@@ -3944,7 +3946,7 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let dirId = try await session.child(name: "dir")
-            await session.watch(itemId: dirId)
+            await session.setWatched([dirId])
 
             let latch = Latch()
             let task = Task {

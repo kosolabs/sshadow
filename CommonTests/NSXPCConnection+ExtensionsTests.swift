@@ -17,6 +17,10 @@ private final class StubExt: NSObject, ExtXPC {
         if replies { reply() }
     }
 
+    func ready(reply: @escaping @Sendable () -> Void) {
+        reply()
+    }
+
     func detach(reply: @escaping @Sendable () -> Void) {
         reply()
     }

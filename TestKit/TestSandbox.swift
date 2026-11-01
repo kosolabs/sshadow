@@ -20,6 +20,7 @@ struct NoopXPCBroker: XPCBroker {
         exporting service: CoreService,
         onUnreachable: @escaping UnreachableHandler
     ) async {}
+    func ready() async {}
     func teardown() async {}
 }
 
@@ -194,6 +195,10 @@ package class TestSandbox {
             self._supervisor = supervisor
             return supervisor
         }
+    }
+
+    package func ready() async throws {
+        try await connection?.ready()
     }
 
     package func pollAll() async throws {

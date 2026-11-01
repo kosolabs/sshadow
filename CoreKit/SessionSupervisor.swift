@@ -149,6 +149,7 @@ package actor SessionSupervisor {
         }
 
         state = .online(session)
+        await xpc.ready()
         log.notice("Connected to \(config.name)")
         logger.notice("Supervisor connected: \(config)")
     }
