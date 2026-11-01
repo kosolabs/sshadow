@@ -466,6 +466,7 @@ extension CoreClient {
     }
 
     private func sendWatched(_ itemIds: [String]) async {
+        guard connection != nil else { return }
         do {
             _ = try await perform(SetWatchedRequest(itemIds: itemIds))
         } catch {

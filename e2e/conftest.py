@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import time
 from collections.abc import Callable, Generator
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -61,15 +62,19 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
+log_path = LOG_DIR / f"e2e-{datetime.now():%Y%m%d-%H%M%S}.log"
 log_stream: subprocess.Popen[bytes] | None = None
 
 
+def pytest_report_header(config: pytest.Config) -> str:
+    return f"log: {log_path}"
+
+
 def pytest_sessionstart(session: pytest.Session) -> None:
-    """Record the session's log events to logs/e2e.log."""
+    """Record the session's log events to a log named for when it started."""
     global log_stream
     LOG_DIR.mkdir(exist_ok=True)
-    path = LOG_DIR / "e2e.log"
-    with path.open("wb") as f:
+    with log_path.open("xb") as f:
         log_stream = subprocess.Popen(
             [
                 "log",
@@ -85,7 +90,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
             stderr=subprocess.STDOUT,
         )
     deadline = time.monotonic() + 10
-    while path.stat().st_size == 0 and time.monotonic() < deadline:
+    while log_path.stat().st_size == 0 and time.monotonic() < deadline:
         time.sleep(0.1)
 
 
