@@ -6,6 +6,7 @@ private let logger = Logger(category: "Enumerator")
 public class Enumerator: NSObject, NSFileProviderEnumerator {
     private let client: CoreClient
     private let itemIdentifier: NSFileProviderItemIdentifier
+    private let watch: UUID
 
     init(
         client: CoreClient,
@@ -13,34 +14,13 @@ public class Enumerator: NSObject, NSFileProviderEnumerator {
     ) {
         self.client = client
         self.itemIdentifier = itemIdentifier
+        self.watch = client.watch(itemId: itemIdentifier)
 
         super.init()
-
-        observe()
     }
 
     public func invalidate() {
-        unobserve()
-    }
-
-    private func observe() {
-        Task {
-            do {
-                try await client.watch(itemId: itemIdentifier)
-            } catch {
-                logger.error("Failed to watch \(itemIdentifier): \(error)")
-            }
-        }
-    }
-
-    private func unobserve() {
-        Task {
-            do {
-                try await client.unwatch(itemId: itemIdentifier)
-            } catch {
-                logger.error("Failed to unwatch \(itemIdentifier): \(error)")
-            }
-        }
+        client.unwatch(watch)
     }
 
     public func enumerateItems(

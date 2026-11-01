@@ -9,7 +9,6 @@ Settings and the Event Log.
 
 import getpass
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -230,7 +229,8 @@ class Guide:
         File Provider also watches folders briefly when it enumerates them, so
         the watch has to last a second.
         """
-        matcher = msg(rf'^(Watch|Unwatch) on Ref\(path: "{re.escape(path)}",')
+        matcher = msg(r"^Watching: ")
+        ref = f'Ref(path: "{path}",'
         since: float | None = None
 
         def wait(timeout: float) -> None:
@@ -244,8 +244,7 @@ class Guide:
                     event = self.logs.expect(matcher, timeout=min(remaining, 0.25))
                 except TimeoutError:
                     continue
-                count = int(event["eventMessage"].rsplit(": ", 1)[1])
-                if count == 0:
+                if ref not in event["eventMessage"]:
                     since = None
                 elif since is None:
                     since = time.monotonic()

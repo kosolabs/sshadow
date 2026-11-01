@@ -2,6 +2,7 @@ import Foundation
 
 @objc public protocol ExtXPC {
     func attach(reply: @escaping @Sendable () -> Void)
+    func ready(reply: @escaping @Sendable () -> Void)
     func detach(reply: @escaping @Sendable () -> Void)
 }
 
@@ -21,6 +22,12 @@ extension NSXPCConnection {
     public func attach() async throws {
         try await call { (ext: ExtXPC, reply) in
             ext.attach { reply(.success(())) }
+        }
+    }
+
+    public func ready() async throws {
+        try await call { (ext: ExtXPC, reply) in
+            ext.ready { reply(.success(())) }
         }
     }
 

@@ -93,13 +93,9 @@ extension CoreService {
             try await respond { session in
                 try await self.list(session, request)
             }
-        case .watch(let request):
+        case .setWatched(let request):
             try await respond { session in
-                try await self.watch(session, request)
-            }
-        case .unwatch(let request):
-            try await respond { session in
-                try await self.unwatch(session, request)
+                try await self.setWatched(session, request)
             }
         case .changes(let request):
             try await respond { session in
@@ -208,24 +204,14 @@ extension CoreService {
         return ListResponse(fileInfos: entries)
     }
 
-    private func watch(
+    private func setWatched(
         _ session: Session,
-        _ request: WatchRequest
-    ) async throws -> WatchResponse {
-        await session.watch(
-            itemId: NSFileProviderItemIdentifier(request.itemId)
+        _ request: SetWatchedRequest
+    ) async throws -> SetWatchedResponse {
+        await session.setWatched(
+            Set(request.itemIds.map { NSFileProviderItemIdentifier($0) })
         )
-        return WatchResponse()
-    }
-
-    private func unwatch(
-        _ session: Session,
-        _ request: UnwatchRequest
-    ) async throws -> UnwatchResponse {
-        await session.unwatch(
-            itemId: NSFileProviderItemIdentifier(request.itemId)
-        )
-        return UnwatchResponse()
+        return SetWatchedResponse()
     }
 
     private func changes(

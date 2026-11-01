@@ -6,16 +6,21 @@ import re
 import signal
 import subprocess
 import time
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
+import objc
 from Foundation import (
     NSURL,
     NSData,
     NSDistributedNotificationCenter,
+    NSFileCoordinator,
     NSFileManager,
     NSItemReplacementDirectory,
+    NSObject,
+    NSOperationQueue,
     NSUserDomainMask,
 )
 
@@ -363,6 +368,51 @@ def evict(path: Path) -> None:
 def dataless(path: Path) -> bool:
     """Whether a File Provider item's contents haven't been downloaded."""
     return bool(os.lstat(path).st_flags & SF_DATALESS)
+
+
+class FilePresenter(NSObject, protocols=[objc.protocolNamed("NSFilePresenter")]):
+    url: NSURL
+    queue: NSOperationQueue
+
+    def presentedItemURL(self) -> NSURL:
+        return self.url
+
+    def presentedItemOperationQueue(self) -> NSOperationQueue:
+        return self.queue
+
+
+@contextmanager
+def presenting(path: Path) -> Generator[None]:
+    """Present `path`, which has File Provider watch it, as a Finder window does."""
+    presenter = FilePresenter.new()
+    presenter.url = NSURL.fileURLWithPath_(str(path))
+    presenter.queue = NSOperationQueue.new()
+    NSFileCoordinator.addFilePresenter_(presenter)
+    try:
+        yield
+    finally:
+        NSFileCoordinator.removeFilePresenter_(presenter)
+
+
+def wait_for_watching(
+    logs: LogWatcher, pattern: str, *, timeout: float = 10, settle: float = 0.5
+) -> None:
+    """Wait for the watched set to match `pattern` and stay that way for `settle`.
+
+    File Provider briefly watches folders it downloads, so a matching set can
+    be followed by another before it settles.
+    """
+    deadline = time.monotonic() + timeout
+    latest = None
+    while time.monotonic() < deadline:
+        try:
+            latest = logs.expect(msg(r"^Watching: "), timeout=settle)["eventMessage"]
+        except TimeoutError:
+            if latest is not None and re.search(pattern, latest):
+                return
+    raise AssertionError(
+        f"latest watched set: {latest}, expected {pattern}\n\n{logs.tail()}"
+    )
 
 
 def trash(path: Path) -> Path:

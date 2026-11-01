@@ -22,6 +22,22 @@ extension TestSandbox {
         let client = try await client
         return Enumerator(client: client, itemIdentifier: itemId)
     }
+
+    fileprivate func reconcileWatchedUntilUpdated() async throws -> [String] {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while ContinuousClock.now < deadline {
+            let changes = try await supervisor.withSession {
+                try await $0.reconcileWatched()
+            }
+            let names = changes.compactMap { change -> String? in
+                guard case .update(let item) = change else { return nil }
+                return item.name
+            }
+            if !names.isEmpty { return names }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        return []
+    }
 }
 
 extension Enumerator {
@@ -168,6 +184,38 @@ struct EnumeratorTests {
         ).get()
 
         #expect(updated == ["new"])
+    }
+
+    @Test func folderStaysWatchedUntilLastEnumeratorInvalidates()
+        async throws
+    {
+        let sandbox = TestSandbox()
+        try sandbox.createFolder(at: "watched")
+        let first = try await sandbox.getEnumerator(for: "watched")
+        let second = try await sandbox.getEnumerator(for: "watched")
+        first.invalidate()
+
+        try sandbox.createFile(at: "watched/new.txt")
+        let updated = try await sandbox.reconcileWatchedUntilUpdated()
+
+        #expect(updated == ["new.txt"])
+        second.invalidate()
+    }
+
+    @Test func readyResendsWatchedFolders() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFolder(at: "watched")
+        let enumerator = try await sandbox.getEnumerator(for: "watched")
+        try sandbox.createFile(at: "watched/first.txt")
+        _ = try await sandbox.reconcileWatchedUntilUpdated()
+        try await sandbox.supervisor.withSession { await $0.setWatched([]) }
+
+        try await sandbox.ready()
+        try sandbox.createFile(at: "watched/second.txt")
+        let updated = try await sandbox.reconcileWatchedUntilUpdated()
+
+        #expect(updated == ["second.txt"])
+        enumerator.invalidate()
     }
 }
 

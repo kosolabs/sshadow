@@ -147,33 +147,18 @@ public struct ListResponse: Message, PrettyDescribable {
     }
 }
 
-public struct WatchRequest: CoreRequestType, PrettyDescribable {
-    public typealias Response = WatchResponse
-    public let itemId: String
+public struct SetWatchedRequest: CoreRequestType, PrettyDescribable {
+    public typealias Response = SetWatchedResponse
+    public let itemIds: [String]
 
-    public var wrapped: CoreRequest { .watch(self) }
+    public var wrapped: CoreRequest { .setWatched(self) }
 
-    public init(itemId: String) {
-        self.itemId = itemId
+    public init(itemIds: [String]) {
+        self.itemIds = itemIds
     }
 }
 
-public struct WatchResponse: Message, PrettyDescribable {
-    public init() {}
-}
-
-public struct UnwatchRequest: CoreRequestType, PrettyDescribable {
-    public typealias Response = UnwatchResponse
-    public let itemId: String
-
-    public var wrapped: CoreRequest { .unwatch(self) }
-
-    public init(itemId: String) {
-        self.itemId = itemId
-    }
-}
-
-public struct UnwatchResponse: Message, PrettyDescribable {
+public struct SetWatchedResponse: Message, PrettyDescribable {
     public init() {}
 }
 

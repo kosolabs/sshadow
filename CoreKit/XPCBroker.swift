@@ -11,6 +11,7 @@ protocol XPCBroker {
         exporting service: CoreService,
         onUnreachable: @escaping UnreachableHandler
     ) async
+    func ready() async
     func teardown() async
 }
 
@@ -149,6 +150,15 @@ actor DomainXPCBroker: XPCBroker {
         }
         logger.notice("XPC invalidated: \(domain)")
         start(service: service, onUnreachable: onUnreachable)
+    }
+
+    func ready() async {
+        guard case .connected(let connection) = state else { return }
+        do {
+            try await connection.ready()
+        } catch {
+            logger.error("Failed to signal ready to \(domain): \(error)")
+        }
     }
 
     func teardown() async {
