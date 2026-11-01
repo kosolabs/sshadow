@@ -1,8 +1,11 @@
 import select
 import socket
 import struct
+import subprocess
 import threading
 import time
+
+RESET_TIMEOUT = 5
 
 
 class Proxy:
@@ -16,7 +19,8 @@ class Proxy:
         # Bytes per second in each direction, or None for unlimited.
         self.rate: float | None = None
         self._lock = threading.Lock()
-        self._conns: set[socket.socket] = set()
+        # Each connection's pump thread, and the event that tells it to reset.
+        self._relays: dict[threading.Thread, threading.Event] = {}
         self._closed = False
         self._listener = self._listen(port)
         self.port: int = self._listener.getsockname()[1]
@@ -53,53 +57,75 @@ class Proxy:
             except OSError:
                 client.close()
                 continue
-            server.settimeout(None)
+            client.setblocking(False)
+            server.setblocking(False)
+            reset = threading.Event()
+            pump = threading.Thread(
+                target=self._pump, args=(client, server, reset), daemon=True
+            )
             with self._lock:
-                self._conns |= {client, server}
-            threading.Thread(
-                target=self._pump, args=(client, server), daemon=True
-            ).start()
+                self._relays[pump] = reset
+            pump.start()
 
-    def _pump(self, a: socket.socket, b: socket.socket) -> None:
+    def _pump(self, a: socket.socket, b: socket.socket, reset: threading.Event) -> None:
+        """Relay between `a` and `b` until either closes or `reset` is set.
+
+        Only this thread closes `a` and `b`, so neither is closed while in use.
+        """
         peers = {a: b, b: a}
         try:
-            while not self._closed:
+            while not self._closed and not reset.is_set():
                 readable, _, _ = select.select([a, b], [], [], 0.05)
                 for src in readable:
                     rate = self.rate
                     data = src.recv(65536 if rate is None else max(1, int(rate / 20)))
-                    if not data:
+                    if not data or not self._send(peers[src], data, reset):
                         return
-                    peers[src].sendall(data)
                     if rate is not None:
                         time.sleep(len(data) / rate)
         except (OSError, ValueError):
             pass
         finally:
-            self._close(a)
-            self._close(b)
+            if reset.is_set():
+                _reset(a)
+                _reset(b)
+            else:
+                a.close()
+                b.close()
+            with self._lock:
+                self._relays.pop(threading.current_thread(), None)
 
-    def _close(self, s: socket.socket) -> None:
-        with self._lock:
-            self._conns.discard(s)
-        try:
-            s.close()
-        except OSError:
-            pass
+    def _send(self, dst: socket.socket, data: bytes, reset: threading.Event) -> bool:
+        """Send all of `data`, unless `reset` is set first while waiting to send."""
+        view = memoryview(data)
+        while view:
+            if self._closed or reset.is_set():
+                return False
+            _, writable, _ = select.select([], [dst], [], 0.05)
+            if writable:
+                view = view[dst.send(view) :]
+        return True
 
     def drop(self) -> None:
-        """Reset every open connection, as if the network dropped."""
+        """Reset every open connection, as if the network dropped.
+
+        Returns once every reset has been sent.
+        """
         with self._lock:
-            conns = list(self._conns)
-        for s in conns:
-            try:
-                # Close with a reset instead of a FIN.
-                s.setsockopt(
-                    socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0)
-                )
-            except OSError:
-                pass
-            self._close(s)
+            relays = dict(self._relays)
+        for reset in relays.values():
+            reset.set()
+        deadline = time.monotonic() + RESET_TIMEOUT
+        stuck = []
+        for pump in relays:
+            pump.join(timeout=max(0, deadline - time.monotonic()))
+            if pump.is_alive():
+                stuck.append(pump)
+        _log(f"Proxy reset {len(relays) - len(stuck)} connection(s)")
+        if stuck:
+            _log(
+                f"Proxy couldn't reset {len(stuck)} connection(s) within {RESET_TIMEOUT}s"
+            )
 
     def refuse(self) -> None:
         """Drop every connection and refuse new ones."""
@@ -117,3 +143,16 @@ class Proxy:
     def close(self) -> None:
         self._closed = True
         self.refuse()
+
+
+def _reset(s: socket.socket) -> None:
+    """Close `s` with a reset instead of a FIN."""
+    try:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+    except OSError as e:
+        _log(f"Proxy couldn't set SO_LINGER, closing with a FIN: {e}")
+    s.close()
+
+
+def _log(message: str) -> None:
+    subprocess.run(["logger", message], check=True)
