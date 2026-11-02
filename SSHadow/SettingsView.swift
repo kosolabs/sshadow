@@ -36,6 +36,7 @@ struct SettingsView: View {
         } detail: {
             if let selectedConfig = navigation.selectedConfig {
                 ConnectionConfigEditView(config: selectedConfig)
+                    .id(selectedConfig.id)
             } else if configs.isEmpty {
                 ContentUnavailableView {
                     Label(
