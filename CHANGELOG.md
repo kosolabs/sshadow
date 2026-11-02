@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0](https://github.com/kosolabs/sshadow/compare/v0.18.1...v1.0.0) (2026-11-02)
+
+
+### Miscellaneous Chores
+
+* release 1.0.0 ([#470](https://github.com/kosolabs/sshadow/issues/470)) ([f049e3d](https://github.com/kosolabs/sshadow/commit/f049e3d4776fbfa0b945adaf7241f3f4917bffc2))
+
 ## [0.18.1](https://github.com/kosolabs/sshadow/compare/v0.18.0...v0.18.1) (2026-11-02)
 
 
