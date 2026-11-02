@@ -14,7 +14,8 @@ private func makeItem(
     flags: Item.Flags? = .rw,
     accessTime: Date? = Date(timeIntervalSince1970: 100),
     modifyTime: Date? = Date(timeIntervalSince1970: 200),
-    createTime: Date? = Date(timeIntervalSince1970: 300)
+    createTime: Date? = Date(timeIntervalSince1970: 300),
+    revision: Int = 0
 ) -> FPItem {
     FPItem(
         item: Item(
@@ -27,6 +28,7 @@ private func makeItem(
             accessTime: accessTime,
             modifyTime: modifyTime,
             createTime: createTime,
+            revision: revision,
             enumeratedAt: nil
         )
     )
@@ -99,8 +101,8 @@ struct FPItemVersionTests {
     }
 
     @Test func contentChangeOnlyChangesContentVersion() {
-        let a = makeItem(size: 1024).itemVersion
-        let b = makeItem(size: 2048).itemVersion
+        let a = makeItem(revision: 1).itemVersion
+        let b = makeItem(revision: 2).itemVersion
         #expect(a.contentVersion != b.contentVersion)
         #expect(a.metadataVersion == b.metadataVersion)
     }

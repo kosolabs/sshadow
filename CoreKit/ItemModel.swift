@@ -15,6 +15,7 @@ extension Item {
             accessTime: item.accessTime,
             modifyTime: item.modifyTime,
             createTime: item.createTime,
+            revision: item.revision,
             enumeratedAt: item.enumeratedAt
         )
     }
@@ -30,6 +31,7 @@ class ItemModel {
     var accessTime: Date?
     var modifyTime: Date?
     var createTime: Date?
+    var revision = 0
     var enumeratedAt: Date?
     
     @Relationship(deleteRule: .cascade, inverse: \ItemModel.parent)
