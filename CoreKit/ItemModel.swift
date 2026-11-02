@@ -33,10 +33,10 @@ class ItemModel {
     var createTime: Date?
     var revision = 0
     var enumeratedAt: Date?
-    
+
     @Relationship(deleteRule: .cascade, inverse: \ItemModel.parent)
     var children: [ItemModel] = []
-    
+
     @Relationship
     var parent: ItemModel?
 
@@ -68,7 +68,7 @@ class ItemModel {
     var id: NSFileProviderItemIdentifier {
         NSFileProviderItemIdentifier(rawId)
     }
-    
+
     func child(named: String) -> ItemModel? {
         children.first(where: { $0.name == named })
     }

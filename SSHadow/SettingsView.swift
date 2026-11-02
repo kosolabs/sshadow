@@ -48,8 +48,8 @@ struct SettingsView: View {
                     Button("Add Connection") {
                         navigation.addConnection(to: modelContext)
                     }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
                 }
             } else {
                 ContentUnavailableView(
@@ -61,7 +61,8 @@ struct SettingsView: View {
         .frame(minWidth: 720, minHeight: 600)
         .onAppear { activation.retain() }
         .onDisappear { activation.release() }
-    }}
+    }
+}
 
 enum SidebarSection: String, CaseIterable, Identifiable {
     case connections

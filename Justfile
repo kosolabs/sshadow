@@ -12,6 +12,12 @@ test: start-test-server
 build:
     xcodebuild build -scheme SSHadow -configuration Debug -destination 'platform=macOS' -quiet
 
+format:
+    git ls-files -z '*.swift' | xargs -0 xcrun swift-format format -i --parallel
+
+lint:
+    git ls-files -z '*.swift' | xargs -0 xcrun swift-format lint --strict --parallel
+
 [positional-arguments]
 e2e *ARGS: build start-test-server
     uv run --directory e2e pytest -v "$@"

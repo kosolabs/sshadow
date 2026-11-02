@@ -5,6 +5,17 @@ on:
     branches: [ main ]
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: xcode-27
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Check Swift formatting
+      run: git ls-files -z '*.swift' | xargs -0 xcrun swift-format lint --strict --parallel
+
   tests:
     name: Tests
     runs-on: xcode-27

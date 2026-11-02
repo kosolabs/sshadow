@@ -21,15 +21,15 @@ struct MenuBarIcon: View {
                         .rotationEffect(.degrees(Double(angle)))
                 }
             }
-        .frame(width: 18, height: 18)
-        .rasterized(scale: displayScale, isTemplate: true)
-        .task(id: isLoading) {
-            guard isLoading else { return }
-            let step = Int(360 / fps)
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1 / fps))
-                angle = (angle + step) % 360
+            .frame(width: 18, height: 18)
+            .rasterized(scale: displayScale, isTemplate: true)
+            .task(id: isLoading) {
+                guard isLoading else { return }
+                let step = Int(360 / fps)
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(1 / fps))
+                    angle = (angle + step) % 360
+                }
             }
-        }
     }
 }

@@ -49,27 +49,27 @@ struct ShellEscapedPathTests {
                 == "\(parent)/SSHadow-user@host.com:2222:mnt:sshadow"
         )
     }
-    
+
     @Test func ampersandIsEscaped() {
         let url = cloudStorageUrl("Dev&Test")
         #expect(url.shellEscapedPath == "\(parent)/Dev\\&Test")
     }
-    
+
     @Test func dollarSignIsEscaped() {
         let url = cloudStorageUrl("Dev$Test")
         #expect(url.shellEscapedPath == "\(parent)/Dev\\$Test")
     }
-    
+
     @Test func spaceIsEscaped() {
         let url = cloudStorageUrl("Dev Test")
         #expect(url.shellEscapedPath == "\(parent)/Dev\\ Test")
     }
-    
+
     @Test func singleQuoteIsEscaped() {
         let url = cloudStorageUrl("Dev'Test")
         #expect(url.shellEscapedPath == "\(parent)/Dev\\'Test")
     }
-    
+
     @Test func backslashIsEscaped() {
         let url = cloudStorageUrl("Dev\\Test")
         #expect(url.shellEscapedPath == "\(parent)/Dev\\\\Test")

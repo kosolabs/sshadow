@@ -10,8 +10,7 @@ struct RichMenuMainView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
 
-    @Query(sort: \ConnectionConfigModel.host) private var configs:
-        [ConnectionConfigModel]
+    @Query(sort: \ConnectionConfigModel.host) private var configs: [ConnectionConfigModel]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {

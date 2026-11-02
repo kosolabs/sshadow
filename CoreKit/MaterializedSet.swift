@@ -194,8 +194,7 @@ private final class ChangesObserver: NSObject, NSFileProviderChangeObserver,
             deleted: Set<NSFileProviderItemIdentifier>()
         )
     )
-    var continuation:
-        CheckedContinuation<(NSFileProviderSyncAnchor, Bool), any Error>?
+    var continuation: CheckedContinuation<(NSFileProviderSyncAnchor, Bool), any Error>?
 
     func didUpdate(_ updatedItems: [any NSFileProviderItemProtocol]) {
         batch.withLock { batch in
