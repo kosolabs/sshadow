@@ -143,6 +143,17 @@ struct IgnoreCacheTests {
         )
     }
 
+    @Test func laterFilenamesOverrideEarlierOnes() {
+        var ignores = Ignores(filenames: [".gitignore", ignore])
+        ignores.update([
+            folder("", text("!keep.log\n"), text("*.log\n", named: ".gitignore"))
+        ])
+
+        #expect(ignores.ignore("a.log"))
+        #expect(!ignores.ignore("keep.log"))
+        #expect(!ignores.ignore("b.txt"))
+    }
+
     @Test func unresolvedFileInUnknownFolderHasNoRules() {
         var ignores = Ignores(filenames: [ignore])
         ignores.update([folder("", unresolved())])

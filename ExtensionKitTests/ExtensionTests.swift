@@ -806,6 +806,64 @@ struct ExtensionTests {
         #expect(sandbox.exists(at: "b.txt"))
     }
 
+    @Test func editingNewlyIgnoredItemKeepsRemoteCopy() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "b.txt", contents: "b")
+        try sandbox.createFile(
+            at: ".sshadowignore",
+            in: .local,
+            contents: "b.txt\n"
+        )
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+        let bId = try await client.child(name: "b.txt")
+        let edited = try sandbox.createFile(
+            at: UUID().uuidString,
+            in: .group,
+            contents: "local b"
+        )
+
+        await #expect(throws: CoreError.ignored) {
+            _ = try await ext.modifyItem(
+                ItemTemplate(
+                    itemIdentifier: bId,
+                    filename: "b.txt",
+                    contentType: .text,
+                    fileSystemFlags: [.rw, .pathExtensionHidden],
+                    documentSize: 7,
+                    contentModificationDate: .now
+                ),
+                baseVersion: NSFileProviderItemVersion(),
+                changedFields: [.contents, .contentModificationDate],
+                contents: edited,
+                options: [],
+                request: NSFileProviderRequest(),
+                progress: Progress()
+            )
+        }
+        try await sandbox.delete(bId, with: ext)
+
+        #expect(try sandbox.contents(of: "b.txt") == "b")
+    }
+
+    @Test func movingOutOfIgnoredFolderMovesRemoteCopy() async throws {
+        let sandbox = TestSandbox()
+        try sandbox.createFile(at: "data/a.txt", contents: "a")
+        try sandbox.createFile(
+            at: ".sshadowignore",
+            in: .local,
+            contents: "data/\n"
+        )
+        let (ext, client) = try await sandbox.getExtensionAndClient()
+        let dataId = try await client.child(name: "data")
+        let aId = try await client.child(of: dataId, name: "a.txt")
+
+        try await sandbox.move(aId, to: .rootContainer, name: "a.txt", with: ext)
+
+        #expect(try sandbox.contents(of: "a.txt") == "a")
+        #expect(!sandbox.exists(at: "data/a.txt"))
+        #expect(sandbox.exists(at: "data"))
+    }
+
     @Test func deleteChildOfDeletedFolderSucceeds() async throws {
         // rm -r folder, then the system deletes folder/file.txt too
         let sandbox = TestSandbox()

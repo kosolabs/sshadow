@@ -1,5 +1,6 @@
 import random
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -158,9 +159,12 @@ def exists(path: Path) -> Callable[[], str]:
     return lambda: "" if path.exists() else f"{path} doesn't exist"
 
 
-def evicted(path: Path) -> Callable[[], str]:
-    # Eviction fails while File Provider is still syncing the item.
-    return lambda: evict(path) or ""
+def evict_error(path: Path) -> str:
+    try:
+        evict(path)
+    except OSError as e:
+        return str(e)
+    return ""
 
 
 # Offsets in a chunk the first read fetches, and in one it prefetches.
@@ -187,13 +191,25 @@ def test_remote_edit_after_read(
 
 
 def evict_files(root: Path, tree: Tree, logs: LogWatcher) -> None:
+    """Evict every file in `tree`, in parallel as File Provider can."""
+    pending: list[Path] = []
     for rel, e in tree.items():
         # A package is one item, evicted as a whole.
         parents = Path(rel).parts[:-1]
         if any(Path(p).suffix == ".rtfd" for p in parents):
             continue
         if isinstance(e, File) or Path(rel).suffix == ".rtfd":
-            wait_for(evicted(root / rel), on_poll=logs.check)
+            pending.append(root / rel)
+
+    def evict_pending() -> str:
+        # Eviction fails while File Provider is still syncing the item.
+        with ThreadPoolExecutor(max_workers=16) as pool:
+            errors = list(pool.map(evict_error, pending))
+        failed = [(path, error) for path, error in zip(pending, errors) if error]
+        pending[:] = [path for path, _ in failed]
+        return "\n".join(f"{path}: {error}" for path, error in failed)
+
+    wait_for(evict_pending, on_poll=logs.check)
 
 
 def test_evict(app: App, logs: LogWatcher, profile: str, remote: Path) -> None:
