@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.18.1](https://github.com/kosolabs/sshadow/compare/v0.18.0...v0.18.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* hold the extension's requests until Core says it's ready, so they don't arrive before the session is online ([#465](https://github.com/kosolabs/sshadow/issues/465)) ([46b210f](https://github.com/kosolabs/sshadow/commit/46b210f76b713785bc2071b9d8499ff47c73ed2c))
+* make hovered menu items readable on macOS 15 ([#457](https://github.com/kosolabs/sshadow/issues/457)) ([2ced3d3](https://github.com/kosolabs/sshadow/commit/2ced3d34bd24d548b7e88c9849c6c22cc614bf11))
+* run moves one at a time so a move can't use a path an earlier move just changed, and refresh the folder an item moves out of ([#467](https://github.com/kosolabs/sshadow/issues/467)) ([360a6aa](https://github.com/kosolabs/sshadow/commit/360a6aab4cbe8185cab4ae8ef71b65b3aca7f294))
+* send the whole watched set on every change, and again when Core comes online ([#462](https://github.com/kosolabs/sshadow/issues/462)) ([c19f755](https://github.com/kosolabs/sshadow/commit/c19f755c209ddb06369dbde23c7e235f7f4b36d8))
+* skip sending the watched set while Core is disconnected, and ask for it again after every reconnect ([#464](https://github.com/kosolabs/sshadow/issues/464)) ([cd84a5d](https://github.com/kosolabs/sshadow/commit/cd84a5d60462b98a027bfdfd40489333196609e4))
+* version files by a revision that only changes with their contents ([#468](https://github.com/kosolabs/sshadow/issues/468)) ([07b7928](https://github.com/kosolabs/sshadow/commit/07b7928f0c5e390c8a5ad6b933213cea78f96f55))
+
 ## [0.18.0](https://github.com/kosolabs/sshadow/compare/v0.17.0...v0.18.0) (2026-10-31)
 
 
