@@ -690,7 +690,11 @@ struct SessionTests {
             let aId = try await session.child(name: "a.txt")
             sandbox.materializedItems.materialize(aId)
 
-            try sandbox.createFile(at: ".sshadowignore", contents: "*.txt\n")
+            try sandbox.createFile(
+                at: ".sshadowignore",
+                contents: "*.txt\n",
+                modifyDate: .now + 60
+            )
             try sandbox.createFile(at: "b.log")
             let changes = try await session.reconcileAll()
             let items = try await session.list(for: .rootContainer)
@@ -727,7 +731,8 @@ struct SessionTests {
                 )
                 try sandbox.createFile(
                     at: ".sshadowignore",
-                    contents: "*.tmp\n"
+                    contents: "*.tmp\n",
+                    modifyDate: .now + 60
                 )
                 _ = try await session.reconcileAll()
             }
@@ -761,7 +766,11 @@ struct SessionTests {
             try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
             let session = try await sandbox.getSession()
 
-            try sandbox.createFile(at: ".sshadowignore", contents: "*.tmp\n")
+            try sandbox.createFile(
+                at: ".sshadowignore",
+                contents: "*.tmp\n",
+                modifyDate: .now + 60
+            )
             _ = try await session.reconcileAll()
             let files = [folder("", unresolved())]
             _ = try await session.createSymlink(
@@ -792,6 +801,146 @@ struct SessionTests {
             let changes = try await session.reconcileAll()
 
             #expect(changes == [])
+        }
+
+        @Test func ignoredRemoteSymlinkIsNoChange() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
+            try sandbox.createFile(at: "a.txt")
+            let session = try await sandbox.getSession()
+
+            try sandbox.createSymlink(at: "remote.log", target: "a.txt")
+            let changes = try await session.reconcileAll()
+
+            #expect(changes == [])
+        }
+
+        @Test func remoteRenameToIgnoredNameIsDeletion() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
+            try sandbox.createFile(at: "a.txt")
+            let session = try await sandbox.getSession()
+            let aId = try await session.child(name: "a.txt")
+            sandbox.materializedItems.materialize(aId)
+
+            try sandbox.move(from: "a.txt", to: "a.log")
+            let changes = try await session.reconcileAll()
+
+            #expect(changes == [.delete(itemId: aId.rawValue)])
+        }
+
+        @Test func remoteRenameFromIgnoredNameIsAddition() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
+            try sandbox.createFile(at: "a.log", contents: "a")
+            let session = try await sandbox.getSession()
+
+            try sandbox.move(from: "a.log", to: "a.txt")
+            let (updates, deletedIds) = try await session.reconcileAll().split()
+
+            #expect(updates.map(\.name) == ["a.txt"])
+            #expect(deletedIds.isEmpty)
+        }
+
+        @Test func emptyingRemoteIgnoreFileAddsIgnoredItems() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: ".sshadowignore",
+                contents: "build/\n*.log\n"
+            )
+            try sandbox.createFile(at: "build/out.o")
+            try sandbox.createFile(at: "debug.log")
+            let session = try await sandbox.getSession()
+
+            try sandbox.createFile(at: ".sshadowignore", contents: "")
+            let (updates, deletedIds) = try await session.reconcileAll().split()
+
+            #expect(
+                Set(updates.map(\.name)) == [".sshadowignore", "build", "debug.log"]
+            )
+            #expect(deletedIds.isEmpty)
+        }
+
+        @Test func deletingRemoteIgnoreFileAddsIgnoredItems() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: ".sshadowignore",
+                contents: "build/\n*.log\n"
+            )
+            try sandbox.createFile(at: "build/out.o")
+            try sandbox.createFile(at: "debug.log")
+            let session = try await sandbox.getSession()
+            let ignoreId = try await session.child(name: ".sshadowignore")
+
+            try sandbox.removeItem(at: ".sshadowignore")
+            let (updates, deletedIds) = try await session.reconcileAll().split()
+
+            #expect(Set(updates.map(\.name)) == ["build", "debug.log"])
+            #expect(deletedIds == [ignoreId])
+        }
+
+        @Test func remoteEditWhileIgnoredArrivesOnceRuleIsRemoved()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "data/a.txt", contents: "a")
+            let session = try await sandbox.getSession()
+            let dataId = try await session.child(name: "data")
+            _ = try await session.list(for: dataId)
+            let aId = try await session.child(of: dataId, name: "a.txt")
+            sandbox.materializedItems.materialize(dataId, aId)
+            try sandbox.createFile(at: ".sshadowignore", contents: "data/\n")
+            _ = try await session.reconcileAll()
+
+            try sandbox.createFile(at: "data/a.txt", contents: "remote edit")
+            let ignoredChanges = try await session.reconcileAll()
+            try sandbox.createFile(at: ".sshadowignore", contents: "")
+            let (updates, _) = try await session.reconcileAll().split()
+
+            #expect(ignoredChanges == [])
+            #expect(updates.first { $0.id == aId }?.size == 11)
+        }
+
+        @Test func remoteDeleteOfIgnoredItemIsNoChange() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "data/a.txt", contents: "a")
+            let session = try await sandbox.getSession()
+            let dataId = try await session.child(name: "data")
+            _ = try await session.list(for: dataId)
+            let aId = try await session.child(of: dataId, name: "a.txt")
+            sandbox.materializedItems.materialize(dataId, aId)
+            try sandbox.createFile(at: ".sshadowignore", contents: "data/\n")
+            _ = try await session.reconcileAll()
+
+            try sandbox.removeItem(at: "data/a.txt")
+            let changes = try await session.reconcileAll()
+
+            #expect(changes == [])
+        }
+
+        @Test func movingIgnoreFileAddsItemsItIgnored() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "src/.sshadowignore", contents: "*.log\n")
+            try sandbox.createFile(at: "src/y.log")
+            try sandbox.createFolder(at: "docs")
+            let session = try await sandbox.getSession()
+            let srcId = try await session.child(name: "src")
+            let docsId = try await session.child(name: "docs")
+            let ignoreId = try await session.child(
+                of: srcId,
+                name: ".sshadowignore"
+            )
+
+            _ = try await session.move(
+                ignoreId,
+                to: docsId,
+                name: ".sshadowignore",
+                snapshot: [folder(""), folder("docs", text("*.log\n"))]
+            )
+            let (updates, deletedIds) = try await session.reconcileAll().split()
+
+            #expect(updates.contains { $0.name == "y.log" })
+            #expect(deletedIds.isEmpty)
         }
 
         @Test func trashIsNotFiltered() async throws {
@@ -2679,6 +2828,38 @@ struct SessionTests {
                     }
                 }
             }
+        }
+
+        @Test func removingIgnoreFileUnignoresItsItems() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadowignore", contents: "build/\n")
+
+            try await confirmation { called in
+                let session = try await sandbox.getSession(
+                    ignoreRulesChangedHandler: { called() }
+                )
+                let ignoreId = try await session.child(name: ".sshadowignore")
+                await #expect(throws: CoreError.ignored) {
+                    try await session.createDirectory(
+                        "build",
+                        in: .rootContainer,
+                        snapshot: [folder("", text("build/\n"))]
+                    )
+                }
+
+                try await session.removeFile(
+                    for: ignoreId,
+                    snapshot: [folder("")]
+                )
+                _ = try await session.createDirectory(
+                    "build",
+                    in: .rootContainer,
+                    snapshot: [folder("")]
+                )
+            }
+
+            #expect(sandbox.exists(at: "build"))
+            #expect(!sandbox.exists(at: ".sshadowignore"))
         }
 
         @Test func matchingNameIsIgnored() async throws {

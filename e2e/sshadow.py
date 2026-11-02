@@ -146,13 +146,15 @@ def restart_fileproviderd(timeout: float = 10) -> None:
             ).stdout.split()
         )
 
+    # Only wait for these to exit: launchd doesn't start fileproviderd again
+    # until something uses it.
     before = pids()
     subprocess.run(["killall", "fileproviderd"], capture_output=True, check=False)
     deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if (after := pids()) and not after & before:
-            return
-        time.sleep(0.5)
+    while pids() & before:
+        if time.monotonic() >= deadline:
+            raise TimeoutError(f"fileproviderd didn't exit within {timeout}s")
+        time.sleep(0.1)
 
 
 class App:
@@ -237,7 +239,7 @@ def wait_for_removal(path: Path, timeout: float = 30) -> None:
     while path.exists():
         if time.monotonic() >= deadline:
             raise TimeoutError(f"{path} still exists {timeout}s after deletion")
-        time.sleep(0.5)
+        time.sleep(0.1)
 
 
 def round_trip(

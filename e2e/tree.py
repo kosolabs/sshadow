@@ -4,6 +4,7 @@ import shutil
 import stat
 import time
 from collections.abc import Callable, Sequence
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -131,25 +132,33 @@ def subtree(tree: Tree, path: str) -> list[str]:
 
 
 def read_tree(root: Path) -> Tree:
-    """Read every file under `root`, which downloads File Provider items."""
-    tree: Tree = {}
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in IGNORED]
-        base = Path(dirpath).relative_to(root)
-        for name in dirnames + filenames:
-            if name in IGNORED:
-                continue
-            path = Path(dirpath) / name
-            st = path.lstat()
-            mode, mtime = stat.S_IMODE(st.st_mode), int(st.st_mtime)
-            if stat.S_ISLNK(st.st_mode):
-                e = Link(os.readlink(path), mtime)
-            elif stat.S_ISDIR(st.st_mode):
-                e = Dir(mode, mtime)
-            else:
-                e = File(path.read_bytes(), mode, mtime)
-            tree[str(base / name)] = e
-    return tree
+    """Read every file under `root`, which downloads File Provider items.
+
+    Reads files in parallel, since File Provider takes over half a second to
+    download each one but downloads several at once.
+    """
+    entries: dict[str, Entry | tuple[Future[bytes], int, int]] = {}
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if d not in IGNORED]
+            base = Path(dirpath).relative_to(root)
+            for name in dirnames + filenames:
+                if name in IGNORED:
+                    continue
+                path = Path(dirpath) / name
+                st = path.lstat()
+                mode, mtime = stat.S_IMODE(st.st_mode), int(st.st_mtime)
+                if stat.S_ISLNK(st.st_mode):
+                    e = Link(os.readlink(path), mtime)
+                elif stat.S_ISDIR(st.st_mode):
+                    e = Dir(mode, mtime)
+                else:
+                    e = (pool.submit(path.read_bytes), mode, mtime)
+                entries[str(base / name)] = e
+        return {
+            rel: File(e[0].result(), e[1], e[2]) if isinstance(e, tuple) else e
+            for rel, e in entries.items()
+        }
 
 
 def same_mode(actual: int | None, expected: int | None) -> bool:
@@ -206,7 +215,7 @@ def wait_for_tree(
     expected: Tree,
     *,
     timeout: float = 30,
-    interval: float = 0.5,
+    interval: float = 0.1,
     on_poll: Callable[[], None] = lambda: None,
 ) -> None:
     deadline = time.monotonic() + timeout
@@ -230,7 +239,7 @@ def wait_for(
     check: Callable[[], str],
     *,
     timeout: float = 30,
-    interval: float = 0.5,
+    interval: float = 0.1,
     on_poll: Callable[[], None] = lambda: None,
 ) -> None:
     """Wait for `check` to return an empty string, or fail with what it last returned."""
