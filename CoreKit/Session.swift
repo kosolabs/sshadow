@@ -49,6 +49,9 @@ package actor Session {
     private var pollTask: Task<Void, Never>?
     private(set) var reconcileTask: Task<[Change], any Error>?
     private let gate = ReconcileGate()
+    // Each move looks up its paths after earlier moves have finished, so it
+    // can't use a path an earlier move just changed.
+    private let moves = AsyncLock()
     private var changes: [(UInt64, [Change])] = []
     private(set) var anchor: UInt64 = 0
 
@@ -704,33 +707,42 @@ extension Session {
         await gate.enter()
         defer { gate.leave() }
 
-        let from = await ref(for: itemId)
-        let to = await ref(for: newName, in: newParentId)
-        let rule =
-            newParentId == .trashContainer
-            ? try await rule(for: itemId, snapshot: snapshot)
-            : try await rule(
-                for: newName,
-                in: newParentId,
-                isDirectory: db.item(for: itemId).kind.isDirectory,
-                snapshot: snapshot
-            )
-        if let rule {
-            logIgnored("Ignore move of \(from) to \(to)", by: rule)
-            throw CoreError.ignored
-        }
-
-        let oldPath = try await path(for: itemId)
-        let newPath = try await path(for: newName, in: newParentId)
-
-        try await perform(with: itemId, recording: "Move \(from) to \(to)") {
-            try await creatingTrash(in: newParentId) {
-                try await sftp.move(from: oldPath, to: newPath)
+        return try await moves.withLock {
+            let from = await ref(for: itemId)
+            let to = await ref(for: newName, in: newParentId)
+            let rule =
+                newParentId == .trashContainer
+                ? try await rule(for: itemId, snapshot: snapshot)
+                : try await rule(
+                    for: newName,
+                    in: newParentId,
+                    isDirectory: db.item(for: itemId).kind.isDirectory,
+                    snapshot: snapshot
+                )
+            if let rule {
+                logIgnored("Ignore move of \(from) to \(to)", by: rule)
+                throw CoreError.ignored
             }
+
+            let oldParentId = try await db.parent(of: itemId).id
+            let oldPath = try await path(for: itemId)
+            let newPath = try await path(for: newName, in: newParentId)
+
+            try await perform(
+                with: itemId,
+                recording: "Move \(from) to \(to)"
+            ) {
+                try await creatingTrash(in: newParentId) {
+                    try await sftp.move(from: oldPath, to: newPath)
+                }
+            }
+            try await refresh(newParentId)
+            if oldParentId != newParentId {
+                try await refresh(oldParentId)
+            }
+            try await db.move(itemId, toParent: newParentId, name: newName)
+            return try await item(for: itemId)
         }
-        try await refresh(newParentId)
-        try await db.move(itemId, toParent: newParentId, name: newName)
-        return try await item(for: itemId)
     }
 
     func removeFile(
@@ -1052,7 +1064,6 @@ extension Session {
             estimator: estimator,
             progress: progress
         ) {
-            let target = try await path(for: name, in: parentId)
             let kind = manifest.root.kind
             let staged = stagingName()
             let writeStaged = {
@@ -1074,6 +1085,7 @@ extension Session {
                     try await sftp.createDirectoryRecursively(at: stagingPath)
                     try await writeStaged()
                 }
+                let target = try await path(for: name, in: parentId)
                 try await creatingTrash(in: parentId) {
                     try await install(
                         staged,
@@ -1089,7 +1101,7 @@ extension Session {
                     CoreError.filenameCollision:
                     throw error
                 default:
-                    logger.error("Failed to upload \(target): \(error)")
+                    logger.error("Failed to upload \(ref): \(error)")
                     throw CoreError.cannotSynchronize
                 }
             }

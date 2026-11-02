@@ -2608,6 +2608,65 @@ struct SessionTests {
             #expect(changes == [])
         }
 
+        @Test func moveRefreshesOldParent() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "src/a.txt")
+            try sandbox.touch(
+                "src",
+                modifyDate: Date(timeIntervalSince1970: 1_000_000)
+            )
+            let session = try await sandbox.getSession()
+            let srcId = try await session.child(name: "src")
+            _ = try await session.list(for: srcId)
+            let aId = try await session.child(of: srcId, name: "a.txt")
+
+            try await session.move(
+                aId,
+                to: .rootContainer,
+                name: "a.txt",
+                snapshot: nil
+            )
+            let changes = try await session.reconcileAll()
+
+            #expect(changes == [])
+        }
+
+        @Test func concurrentMovesOfFolderAndItsContentsSucceed() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "docs/nested/deep.txt", contents: "deep")
+            try sandbox.createFile(at: "broken.txt", contents: "b")
+            let session = try await sandbox.getSession()
+            let docsId = try await session.child(name: "docs")
+            _ = try await session.list(for: docsId)
+            let nestedId = try await session.child(of: docsId, name: "nested")
+            let brokenId = try await session.child(name: "broken.txt")
+
+            async let docs = session.move(
+                docsId,
+                to: .rootContainer,
+                name: "documents",
+                snapshot: nil
+            )
+            async let nested = session.move(
+                nestedId,
+                to: .rootContainer,
+                name: "nested",
+                snapshot: nil
+            )
+            async let broken = session.move(
+                brokenId,
+                to: docsId,
+                name: "broken.txt",
+                snapshot: nil
+            )
+            _ = try await (docs, nested, broken)
+
+            #expect(try sandbox.contents(of: "nested/deep.txt") == "deep")
+            #expect(try sandbox.contents(of: "documents/broken.txt") == "b")
+            #expect(!sandbox.exists(at: "documents/nested"))
+            #expect(try await session.reconcileAll() == [])
+        }
+
         @Test func moveToNewParent() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "file.txt", contents: "hello")
