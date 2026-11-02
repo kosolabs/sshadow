@@ -1267,6 +1267,27 @@ struct SessionTests {
     }
 
     struct ReconcileAllTests {
+        @Test func remoteEditChangesContentVersion() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: "a.txt",
+                contents: "a",
+                modifyDate: Date(timeIntervalSince1970: 1_000_000)
+            )
+            let session = try await sandbox.getSession()
+            let aId = try await session.child(name: "a.txt")
+            let before = try await session.item(for: aId)
+
+            try sandbox.createFile(
+                at: "a.txt",
+                contents: "b",
+                modifyDate: Date(timeIntervalSince1970: 2_000_000)
+            )
+            let (updates, _) = try await session.reconcileAll().split()
+
+            #expect(updates.only?.contentVersion != before.contentVersion)
+        }
+
         let start: Date = Date(timeIntervalSince1970: 1_750_000_000)
         let end: Date = Date(timeIntervalSince1970: 1_760_000_000)
 
@@ -2191,6 +2212,28 @@ struct SessionTests {
     }
 
     struct SetAttributesTests {
+        @Test func settingModifyTimeKeepsContentVersion() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "a.txt", contents: "a")
+            let session = try await sandbox.getSession()
+            let aId = try await session.child(name: "a.txt")
+            let before = try await session.item(for: aId)
+
+            let after = try await session.setAttributes(
+                for: aId,
+                modifyTime: Date(timeIntervalSince1970: 2_000_000),
+                snapshot: nil
+            )
+            let changes = try await session.reconcileAll()
+
+            #expect(after.contentVersion == before.contentVersion)
+            #expect(changes == [])
+            #expect(
+                try await session.item(for: aId).contentVersion
+                    == before.contentVersion
+            )
+        }
+
         @Test func setFlagsSucceeds() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: "perms.txt", permissions: 0o400)
@@ -3041,6 +3084,29 @@ struct SessionTests {
     }
 
     struct UploadTests {
+        @Test func replacingFileWithSameSizeChangesContentVersion()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+            var versions: [Data] = []
+            for contents in ["version 1\n", "version 2\n"] {
+                let url = sandbox.url(for: UUID().uuidString, in: .group)
+                try Data(contents.utf8).write(to: url)
+                let item = try await session.upload(
+                    "doc.txt",
+                    to: .rootContainer,
+                    file: url,
+                    ifExists: .replace,
+                    snapshot: nil,
+                    progress: Progress()
+                )
+                versions.append(item.contentVersion)
+            }
+
+            #expect(versions[0] != versions[1])
+        }
+
         @Test func uploadPackageRecordsPackageKind() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(

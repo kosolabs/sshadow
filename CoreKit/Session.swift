@@ -1109,7 +1109,9 @@ extension Session {
 
         let kind: Item.Kind =
             manifest.root.kind == .folder ? .init(directoryNamed: name) : .file
-        let item = try await record(name, in: parentId, kind: kind)
+        let item = try await db.markContentChanged(
+            record(name, in: parentId, kind: kind).id
+        )
         await cache.invalidate(item.id)
         return item
     }

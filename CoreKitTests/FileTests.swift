@@ -16,6 +16,7 @@ private func item(size: UInt64) -> Item {
         accessTime: nil,
         modifyTime: nil,
         createTime: nil,
+        revision: 0,
         enumeratedAt: nil
     )
 }

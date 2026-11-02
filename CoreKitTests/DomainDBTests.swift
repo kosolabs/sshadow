@@ -278,6 +278,72 @@ struct DomainDBTests {
         #expect(updated.modifyTime == date)
     }
 
+    @Test func setAttributesKeepsContentVersion() async throws {
+        let item = try await db.upsert(
+            name: "file.txt",
+            kind: .file,
+            size: 5,
+            modifyTime: Date(timeIntervalSince1970: 1_000_000)
+        )
+
+        try await db.setAttributes(
+            for: item.id,
+            modifyTime: Date(timeIntervalSince1970: 2_000_000)
+        )
+
+        let updated = try await db.item(for: item.id)
+        #expect(updated.contentVersion == item.contentVersion)
+    }
+
+    @Test func relistingAfterSetAttributesKeepsContentVersion() async throws {
+        let item = try await db.upsert(
+            name: "file.txt",
+            kind: .file,
+            size: 5,
+            modifyTime: Date(timeIntervalSince1970: 1_000_000)
+        )
+        let modified = Date(timeIntervalSince1970: 2_000_000)
+        try await db.setAttributes(for: item.id, modifyTime: modified)
+
+        let relisted = try await db.upsert(
+            name: "file.txt",
+            kind: .file,
+            size: 5,
+            modifyTime: modified
+        )
+
+        #expect(relisted.contentVersion == item.contentVersion)
+    }
+
+    @Test func upsertWithNewModifyTimeBumpsRevision() async throws {
+        let item = try await db.upsert(
+            name: "file.txt",
+            kind: .file,
+            size: 5,
+            modifyTime: Date(timeIntervalSince1970: 1_000_000)
+        )
+
+        let edited = try await db.upsert(
+            name: "file.txt",
+            kind: .file,
+            size: 5,
+            modifyTime: Date(timeIntervalSince1970: 2_000_000)
+        )
+
+        #expect(item.revision == 0)
+        #expect(edited.revision == 1)
+    }
+
+    @Test func markContentChangedBumpsRevision() async throws {
+        let item = try await db.upsert(name: "file.txt", kind: .file)
+
+        let first = try await db.markContentChanged(item.id)
+        let second = try await db.markContentChanged(item.id)
+
+        #expect(first.revision == 1)
+        #expect(second.revision == 2)
+    }
+
     @Test func setAttributesNilLeavesExistingFieldsUntouched() async throws {
         let original = Date(timeIntervalSince1970: 1_000_000)
         let item = try await db.upsert(

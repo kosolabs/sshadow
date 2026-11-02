@@ -13,6 +13,7 @@ private func makeItem(
     accessTime: Date? = Date(timeIntervalSince1970: 100),
     modifyTime: Date? = Date(timeIntervalSince1970: 200),
     createTime: Date? = Date(timeIntervalSince1970: 300),
+    revision: Int = 0,
     enumeratedAt: Date? = nil
 ) -> Item {
     Item(
@@ -25,6 +26,7 @@ private func makeItem(
         accessTime: accessTime,
         modifyTime: modifyTime,
         createTime: createTime,
+        revision: revision,
         enumeratedAt: enumeratedAt
     )
 }
@@ -116,17 +118,25 @@ struct ContentVersionTests {
         #expect(makeItem().contentVersion == makeItem().contentVersion)
     }
 
-    @Test func contentVersionChangesWithSize() {
+    @Test func fileContentVersionChangesWithRevision() {
         #expect(
-            makeItem(size: 1024).contentVersion
-                != makeItem(size: 2048).contentVersion
+            makeItem(revision: 1).contentVersion
+                != makeItem(revision: 2).contentVersion
         )
     }
 
-    @Test func contentVersionChangesWithModifyTime() {
-        let a = makeItem(modifyTime: Date(timeIntervalSince1970: 200))
-        let b = makeItem(modifyTime: Date(timeIntervalSince1970: 201))
-        #expect(a.contentVersion != b.contentVersion)
+    @Test func fileContentVersionIgnoresSizeAndModifyTime() {
+        let a = makeItem(
+            size: 1024,
+            modifyTime: Date(timeIntervalSince1970: 200),
+            revision: 1
+        )
+        let b = makeItem(
+            size: 2048,
+            modifyTime: Date(timeIntervalSince1970: 201),
+            revision: 1
+        )
+        #expect(a.contentVersion == b.contentVersion)
     }
 
     @Test func contentVersionIgnoresMetadataOnlyFields() {
@@ -143,11 +153,19 @@ struct ContentVersionTests {
         #expect(a.contentVersion == b.contentVersion)
     }
 
-    @Test func contentVersionChangesWhenSizeBecomesNil() {
-        #expect(
-            makeItem(size: 1024).contentVersion
-                != makeItem(size: nil).contentVersion
+    @Test(arguments: [Item.Kind.folder, .symlink(target: "target")])
+    func contentVersionOfItemWithoutContentsChangesWithModifyTime(
+        kind: Item.Kind
+    ) {
+        let a = makeItem(
+            kind: kind,
+            modifyTime: Date(timeIntervalSince1970: 200)
         )
+        let b = makeItem(
+            kind: kind,
+            modifyTime: Date(timeIntervalSince1970: 201)
+        )
+        #expect(a.contentVersion != b.contentVersion)
     }
 }
 

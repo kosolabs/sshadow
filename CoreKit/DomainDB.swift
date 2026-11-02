@@ -160,6 +160,13 @@ actor DomainDB {
         try modelContext.save()
     }
 
+    func markContentChanged(_ id: NSFileProviderItemIdentifier) throws -> Item {
+        let item = try model(for: id)
+        item.revision += 1
+        try modelContext.save()
+        return Item(from: item)
+    }
+
     func isEnumerated(_ id: NSFileProviderItemIdentifier) throws -> Bool {
         try model(for: id).enumeratedAt != nil
     }
@@ -244,6 +251,9 @@ actor DomainDB {
         let item: ItemModel
         if let child = parent.child(named: name) {
             item = child
+            if child.size != size || child.modifyTime != modifyTime {
+                item.revision += 1
+            }
         } else {
             item = ItemModel(parent: parent, name: name)
             modelContext.insert(item)

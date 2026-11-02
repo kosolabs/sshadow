@@ -118,6 +118,7 @@ public struct Item: Message, PrettyDescribable {
     public let accessTime: Date?
     public let modifyTime: Date?
     public let createTime: Date?
+    public let revision: Int
     public let enumeratedAt: Date?
 
     public var id: NSFileProviderItemIdentifier {
@@ -136,11 +137,16 @@ public struct Item: Message, PrettyDescribable {
     }
 
     public var contentVersion: Data {
-        let fields = [
-            String(modifyTime?.timeIntervalSince1970 ?? 0),
-            String(size ?? 0),
-        ]
-        return Data(fields.joined(separator: "-").utf8)
+        switch kind {
+        case .file, .package:
+            return Data(String(revision).utf8)
+        case .folder, .symlink:
+            let fields = [
+                String(modifyTime?.timeIntervalSince1970 ?? 0),
+                String(size ?? 0),
+            ]
+            return Data(fields.joined(separator: "-").utf8)
+        }
     }
 
     public var metadataVersion: Data {
@@ -164,6 +170,7 @@ public struct Item: Message, PrettyDescribable {
         accessTime: Date?,
         modifyTime: Date?,
         createTime: Date?,
+        revision: Int,
         enumeratedAt: Date?
     ) {
         self.rawId = id
@@ -175,6 +182,7 @@ public struct Item: Message, PrettyDescribable {
         self.accessTime = accessTime
         self.modifyTime = modifyTime
         self.createTime = createTime
+        self.revision = revision
         self.enumeratedAt = enumeratedAt
     }
 }
