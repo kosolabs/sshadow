@@ -248,7 +248,7 @@ struct DomainDBTests {
             try await db.remove(unknownId)
         }
     }
-    
+
     @Test func setAttributesUpdatesFlags() async throws {
         let item = try await db.upsert(name: "file.txt", kind: .file)
 

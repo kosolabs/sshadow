@@ -48,7 +48,7 @@ struct ConnectionConfigTests {
 
         #expect(config.path(for: "file.txt") == "base/file.txt")
     }
-    
+
     @Test func testPathWithEmptySubpath() {
         let config = ConnectionConfig(
             id: UUID(),

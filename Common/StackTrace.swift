@@ -61,7 +61,7 @@ public struct StackTrace: CustomStringConvertible {
             return symbol
         }
 
-        let result = _stdlib_demangle(mangled, mangled.count, nil, nil, 0)
+        let result = swiftDemangle(mangled, mangled.count, nil, nil, 0)
         if let result = result {
             defer { free(result) }
             let demangledName = String(cString: result)
@@ -72,7 +72,7 @@ public struct StackTrace: CustomStringConvertible {
 }
 
 @_silgen_name("swift_demangle")
-private func _stdlib_demangle(
+private func swiftDemangle(
     _ mangledName: UnsafePointer<Int8>?,
     _ mangledNameLength: Int,
     _ outputBuffer: UnsafeMutablePointer<Int8>?,

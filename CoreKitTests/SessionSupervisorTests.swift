@@ -839,8 +839,7 @@ struct SessionSupervisorTests {
         try await waitUntilOnline(supervisor)
         #expect(spy.statuses.first == .reconnecting(nil, nextAttempt: nil))
         let sawReconnectingWithError = spy.statuses.contains { status in
-            if case .reconnecting(.connectionRefused, let nextAttempt) = status
-            {
+            if case .reconnecting(.connectionRefused, let nextAttempt) = status {
                 return nextAttempt != nil
             }
             return false
@@ -1019,8 +1018,7 @@ struct SessionSupervisorTests {
         try await waitUntilOnline(supervisor)
 
         let sawReconnectingWithError = spy.statuses.contains { status in
-            if case .reconnecting(.connectionRefused, let nextAttempt) = status
-            {
+            if case .reconnecting(.connectionRefused, let nextAttempt) = status {
                 return nextAttempt != nil
             }
             return false
@@ -1285,8 +1283,7 @@ struct SessionSupervisorTests {
         #expect(await provider.callCount == 1)
     }
 
-    @Test func refusedExtensionWhileOnlineSuspendsAndGoesOffline() async throws
-    {
+    @Test func refusedExtensionWhileOnlineSuspendsAndGoesOffline() async throws {
         let sandbox = TestSandbox()
         let xpc = SpyXPCBroker()
         let ext = SpyExtensionController()

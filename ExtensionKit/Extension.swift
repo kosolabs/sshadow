@@ -60,8 +60,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
         logger.info("Item for \(itemIdentifier), request: \(request)")
 
         return try await progress.withChild {
-            if itemIdentifier == .rootContainer || itemIdentifier == .workingSet
-            {
+            if itemIdentifier == .rootContainer || itemIdentifier == .workingSet {
                 return SpecialItem(itemIdentifier: itemIdentifier)
             }
 

@@ -1,7 +1,7 @@
 import Foundation
 
-public extension Progress {
-    var report: String {
+extension Progress {
+    public var report: String {
         self.localizedAdditionalDescription ?? self.description
     }
 }

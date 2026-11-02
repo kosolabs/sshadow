@@ -6,19 +6,21 @@ import Testing
 @testable import CoreKit
 
 private func file(size: UInt64 = 10 * File.defaultChunkSize) -> File {
-    File(item: Item(
-        id: UUID().uuidString,
-        parentId: UUID().uuidString,
-        name: "file",
-        kind: .file,
-        size: size,
-        flags: .rw,
-        accessTime: nil,
-        modifyTime: nil,
-        createTime: nil,
-        revision: 0,
-        enumeratedAt: nil
-    ))
+    File(
+        item: Item(
+            id: UUID().uuidString,
+            parentId: UUID().uuidString,
+            name: "file",
+            kind: .file,
+            size: size,
+            flags: .rw,
+            accessTime: nil,
+            modifyTime: nil,
+            createTime: nil,
+            revision: 0,
+            enumeratedAt: nil
+        )
+    )
 }
 
 private actor CallLog {
@@ -38,10 +40,12 @@ private actor CallLog {
 }
 
 private func makeCache(log: CallLog, capacity: Int) -> FileCache {
-    FileCache(read: { itemId, range in
-        await log.record(itemId, range.lowerBound / File.defaultChunkSize)
-        return Data()
-    }, capacity: capacity)
+    FileCache(
+        read: { itemId, range in
+            await log.record(itemId, range.lowerBound / File.defaultChunkSize)
+            return Data()
+        }, capacity: capacity
+    )
 }
 
 struct FileCacheTests {

@@ -13,7 +13,7 @@ extension BinaryInteger {
 extension Range<UInt64> {
     public var offset: Bound { lowerBound }
     public var length: Bound { upperBound - lowerBound }
-    
+
     public func asNSRange() -> NSRange {
         NSRange(self)
     }

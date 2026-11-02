@@ -9,22 +9,4 @@ struct SSHItem: Message, PrettyDescribable {
     let accessTime: Date?
     let modifyTime: Date?
     let createTime: Date?
-
-    init(
-        name: String,
-        kind: Item.Kind,
-        size: UInt64?,
-        flags: Item.Flags?,
-        accessTime: Date?,
-        modifyTime: Date?,
-        createTime: Date?
-    ) {
-        self.name = name
-        self.kind = kind
-        self.size = size
-        self.flags = flags
-        self.accessTime = accessTime
-        self.modifyTime = modifyTime
-        self.createTime = createTime
-    }
 }

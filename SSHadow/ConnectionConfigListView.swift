@@ -7,8 +7,7 @@ import SwiftUI
 struct ConnectionConfigListView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Connections.self) private var connections
-    @Query(sort: \ConnectionConfigModel.host) private var configs:
-        [ConnectionConfigModel]
+    @Query(sort: \ConnectionConfigModel.host) private var configs: [ConnectionConfigModel]
 
     @Binding var selection: ConnectionConfigModel?
 

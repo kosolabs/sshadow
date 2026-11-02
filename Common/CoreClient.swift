@@ -446,8 +446,7 @@ extension CoreClient {
         return try result.get()
     }
 
-    private func requireConnection() async throws(CoreError) -> NSXPCConnection
-    {
+    private func requireConnection() async throws(CoreError) -> NSXPCConnection {
         if connection == nil {
             logger.info("Waiting for Core to be ready")
             let deadline = ContinuousClock.now + .seconds(1)

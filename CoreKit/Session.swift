@@ -1255,8 +1255,7 @@ extension Session {
                         at: entry.path(under: root),
                         accessType: .readOnly
                     ) { fp in
-                        for try await data in fp.stream(bufferSize: bufferSize)
-                        {
+                        for try await data in fp.stream(bufferSize: bufferSize) {
                             if progress.isCancelled {
                                 throw CoreError.userCancelled
                             }
