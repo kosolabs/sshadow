@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/kosolabs/sshadow/compare/v1.0.0...v1.0.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* reset the connection editor when switching connections ([#472](https://github.com/kosolabs/sshadow/issues/472)) ([c2cae94](https://github.com/kosolabs/sshadow/commit/c2cae941dff02d979b1e861976cf2d255ed13508))
+
 ## [1.0.0](https://github.com/kosolabs/sshadow/compare/v0.18.1...v1.0.0) (2026-11-02)
 
 
