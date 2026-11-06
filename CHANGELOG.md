@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/kosolabs/sshadow/compare/v1.0.1...v1.1.0) (2026-11-06)
+
+
+### Features
+
+* verify server host keys ([#478](https://github.com/kosolabs/sshadow/issues/478)) ([d4a6285](https://github.com/kosolabs/sshadow/commit/d4a6285eba34de24077ce658210a3ce8c5aac10e))
+
 ## [1.0.1](https://github.com/kosolabs/sshadow/compare/v1.0.0...v1.0.1) (2026-11-02)
 
 
