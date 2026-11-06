@@ -1,6 +1,7 @@
 import Common
 import CoreKit
 import SwiftData
+import SwiftLibSSH
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -15,6 +16,7 @@ struct ConnectionConfigEditView: View {
     @State private var isImportingKey: Bool = false
     @State private var passwordText: String = ""
     @State private var validationError: ConnectionConfig.ValidationError?
+    @State private var changedHostKey: SSHHostKey?
 
     private var name: Binding<String> {
         Binding<String>(
@@ -127,7 +129,7 @@ struct ConnectionConfigEditView: View {
 
     private func validate() {
         do {
-            _ = try ConnectionConfig(from: config)
+            try config.validate()
             validationError = nil
         } catch {
             validationError = error
@@ -150,6 +152,8 @@ struct ConnectionConfigEditView: View {
             "Private key is invalid or the passphrase is incorrect."
         case .ignoreFilenameInvalid:
             "Ignore file names can't be empty or contain slashes."
+        case .hostKeyUnknown:
+            "The server's host key hasn't been checked yet."
         }
     }
 
@@ -193,6 +197,13 @@ struct ConnectionConfigEditView: View {
                         switch status {
                         case .offline(let reason):
                             switch reason {
+                            case .failed(.hostKeyChanged(let hostKey)):
+                                Button("Trust New Key…") {
+                                    changedHostKey = hostKey
+                                }
+                                Button("Clear") {
+                                    Task { await config.clearFailure() }
+                                }
                             case .failed:
                                 Button("Clear") {
                                     Task { await config.clearFailure() }
@@ -354,6 +365,24 @@ struct ConnectionConfigEditView: View {
             .onChange(of: config.authMethod) { validate() }
             .onChange(of: config.bookmark) { validate() }
             .onChange(of: config.ignoreFilenames) { validate() }
+            .alert(
+                "Trust the New Host Key?",
+                isPresented: Binding(
+                    get: { changedHostKey != nil },
+                    set: { if !$0 { changedHostKey = nil } }
+                ),
+                presenting: changedHostKey
+            ) { hostKey in
+                Button("Trust and Reconnect", role: .destructive) {
+                    config.trustHostKey(hostKey)
+                    Task { await config.enable() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { hostKey in
+                Text(
+                    "The server at \(config.socket) identified itself with a different key than before. This happens when the server is reinstalled or its keys are regenerated, but it can also mean someone is intercepting the connection. Only trust the new key if you expected this change.\n\nNew key fingerprint:\n\(hostKey.fingerprint)"
+                )
+            }
             .fileImporter(
                 isPresented: $isImportingKey,
                 allowedContentTypes: [.item],

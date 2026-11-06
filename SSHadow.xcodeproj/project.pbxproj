@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		424251C3525FF8E3C9B4C803 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 8106F7FEE4BAD6941D90FB59 /* SwiftLibSSH */; };
 		7309810A2F318825009F7AA2 /* Common.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; };
 		730981142F318825009F7AA2 /* Common.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; };
 		730981152F318825009F7AA2 /* Common.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -430,6 +431,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				424251C3525FF8E3C9B4C803 /* SwiftLibSSH in Frameworks */,
 				73E6CAB3308AADF800472449 /* CoreKit.framework in Frameworks */,
 				73E6CAAF308AADF800472449 /* Common.framework in Frameworks */,
 			);
@@ -750,6 +752,7 @@
 			);
 			name = TestKit;
 			packageProductDependencies = (
+				8106F7FEE4BAD6941D90FB59 /* SwiftLibSSH */,
 			);
 			productName = TestKit;
 			productReference = 73E6CAA0308AAD5700472449 /* TestKit.framework */;
@@ -1886,7 +1889,7 @@
 			repositoryURL = "https://github.com/kosolabs/swift-libssh.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.24.1;
+				minimumVersion = 1.26.1;
 			};
 		};
 		737720C72FBD039600FC5390 /* XCRemoteSwiftPackageReference "swift-collections" */ = {
@@ -1947,6 +1950,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 73E6C8693089644300472449 /* XCRemoteSwiftPackageReference "swift-ignore" */;
 			productName = Ignore;
+		};
+		8106F7FEE4BAD6941D90FB59 /* SwiftLibSSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */;
+			productName = SwiftLibSSH;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -1,5 +1,5 @@
 {
-  "originHash" : "61c624fc7c85dad9479aae7f374f1961a1eb958c47e149b1b7d6dfd104e8dc74",
+  "originHash" : "6ea7657611e2ce0a5e289bee61025c0790efd063618700eb664df6f260fc60d5",
   "pins" : [
     {
       "identity" : "swift-collections",
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/kosolabs/swift-libssh.git",
       "state" : {
-        "revision" : "ffe162aa5ff27d2b26831c259cbf015ea8cfb928",
-        "version" : "1.24.1"
+        "revision" : "d95541d13f814732a9c200d2c88e5a5573fcc3cc",
+        "version" : "1.26.1"
       }
     }
   ],

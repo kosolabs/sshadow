@@ -31,6 +31,7 @@ public class ConnectionConfigModel: CustomStringConvertible {
     public var authMethod: AuthMethod
     public var bookmark: Data?
     public var ignoreFilenames: [String]?
+    public var hostKey: String?
 
     public init(
         id: UUID = UUID(),
@@ -127,8 +128,24 @@ public class ConnectionConfigModel: CustomStringConvertible {
 
     public func enable() async {
         do {
-            let config = try ConnectionConfig(from: self)
-            try await DomainRegistry.shared.connect(config: config)
+            try validate()
+            if effectiveHostKey == nil {
+                await Connections.shared.beginHostKeyCheck(id: id)
+                do {
+                    try await resolveHostKey()
+                } catch {
+                    await Connections.shared.failHostKeyCheck(id: id, error: error)
+                    throw error
+                }
+            }
+            do {
+                let config = try ConnectionConfig(from: self)
+                try await DomainRegistry.shared.connect(config: config)
+            } catch {
+                await Connections.shared.endHostKeyCheck(id: id)
+                throw error
+            }
+            await Connections.shared.endHostKeyCheck(id: id)
             self.enabled = true
             save()
             logger.notice("Profile enabled: \(self)")
@@ -137,7 +154,21 @@ public class ConnectionConfigModel: CustomStringConvertible {
         }
     }
 
+    public func reconnectOnLaunch() async {
+        guard effectiveHostKey != nil else {
+            await enable()
+            return
+        }
+        do {
+            let config = try ConnectionConfig(from: self)
+            try await DomainRegistry.shared.reconnect(config: config)
+        } catch {
+            logger.error("Failed to reconnect \(self): \(error)")
+        }
+    }
+
     public func disable() async {
+        await Connections.shared.endHostKeyCheck(id: id)
         await DomainRegistry.shared.disable(domain: domain)
         self.enabled = false
         save()
@@ -157,6 +188,7 @@ public class ConnectionConfigModel: CustomStringConvertible {
     }
 
     public func clearFailure() async {
+        await Connections.shared.endHostKeyCheck(id: id)
         if enabled {
             await pause()
         } else {
@@ -240,11 +272,69 @@ public class ConnectionConfigModel: CustomStringConvertible {
         return url
     }
 
+    // MARK: - Host Key Management
+
+    var effectiveHostKey: SSHHostKey? {
+        trustedHostKey(for: socket)
+    }
+
+    public func trustHostKey(_ key: SSHHostKey) {
+        trust(key, for: socket)
+    }
+
+    func resolveHostKey() async throws(ConnectionError) {
+        let socket = socket
+        do {
+            let key = try await SSHClient.serverHostKey(
+                host: host,
+                port: effectivePort
+            )
+            trust(key, for: socket)
+        } catch {
+            eventLog.error(
+                "Failed to connect to \(displayName)",
+                detail: error.detail
+            )
+            throw error
+        }
+    }
+
+    private func trust(_ key: SSHHostKey, for socket: String) {
+        let replaced = trustedHostKey(for: socket)
+        hostKey = "\(socket) \(key)"
+        save()
+        logger.notice("Trusted host key for \(socket): \(key.fingerprint)")
+        var detail = "\(key.fingerprint) for \(socket)"
+        if let replaced, replaced != key {
+            detail += ", replacing \(replaced.fingerprint)"
+        }
+        eventLog.notice("Trusted host key for \(displayName)", detail: detail)
+    }
+
+    private func trustedHostKey(for socket: String) -> SSHHostKey? {
+        guard let hostKey else { return nil }
+        let fields = hostKey.split(separator: " ", maxSplits: 1)
+        guard fields.count == 2, fields[0] == socket else { return nil }
+        return SSHHostKey(String(fields[1]))
+    }
+
+    private var eventLog: Events<ContinuousClock>.Logger {
+        Events.shared.logger(
+            for: .connection,
+            source: Event.Source(name: displayName, url: url)
+        )
+    }
+
     // MARK: - Ignore Files
 
     public var customizesIgnoreFiles: Bool {
         get { ignoreFilenames != nil }
         set { ignoreFilenames = newValue ? effectiveIgnoreFilenames : nil }
+    }
+
+    public func validate() throws(ConnectionConfig.ValidationError) {
+        _ = try resolveConfigAuthMethod()
+        try validateIgnoreFilenames()
     }
 
     fileprivate func validateIgnoreFilenames()
@@ -342,6 +432,9 @@ extension ConnectionConfig {
         authMethod: AuthMethod
     ) throws(ValidationError) {
         try profile.validateIgnoreFilenames()
+        guard let hostKey = profile.effectiveHostKey else {
+            throw .hostKeyUnknown
+        }
         self.init(
             id: profile.id,
             name: profile.displayName,
@@ -350,7 +443,8 @@ extension ConnectionConfig {
             user: profile.effectiveUser,
             path: profile.effectivePath,
             authMethod: authMethod,
-            ignoreFilenames: profile.effectiveIgnoreFilenames
+            ignoreFilenames: profile.effectiveIgnoreFilenames,
+            hostKey: hostKey
         )
     }
 }

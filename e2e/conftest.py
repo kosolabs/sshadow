@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from impostor import Impostor
 from logwatch import LogWatcher, msg
 from proxy import Proxy
 from sshadow import (
@@ -35,6 +36,7 @@ DOMAINS_PLIST = (
     / "Library/Application Support/FileProvider/com.kosolabs.SSHadow.Extension/Domains.plist"
 )
 DEFAULT_DOMAIN = "NSFileProviderDomainDefaultIdentifier"
+IMPOSTOR_PORT = 2252
 
 
 # From <sys/resource.h>.
@@ -276,6 +278,14 @@ def proxy() -> Generator[Proxy]:
     proxy = Proxy(("127.0.0.1", SERVER_PORT))
     yield proxy
     proxy.close()
+
+
+@pytest.fixture
+def impostor() -> Generator[Impostor]:
+    """A second SSH server for the same account and files, with its own host key."""
+    impostor = Impostor(IMPOSTOR_PORT)
+    yield impostor
+    impostor.close()
 
 
 @pytest.fixture

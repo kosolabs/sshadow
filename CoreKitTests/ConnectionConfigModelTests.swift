@@ -35,6 +35,7 @@ struct ConnectionConfigModelTests {
 
     @Test func unsetIgnoreFilenamesUseTheDefault() throws {
         let model = ConnectionConfigModel(host: "example.com")
+        model.trustHostKey(unrelatedHostKey)
         let config = try ConnectionConfig(from: model, authMethod: .password("secret"))
         #expect(model.ignoreFilenames == nil)
         #expect(config.ignoreFilenames == [".sshadowignore"])
@@ -45,12 +46,14 @@ struct ConnectionConfigModelTests {
             host: "example.com",
             ignoreFilenames: [".gitignore", ".sshadowignore"]
         )
+        model.trustHostKey(unrelatedHostKey)
         let config = try ConnectionConfig(from: model, authMethod: .password("secret"))
         #expect(config.ignoreFilenames == [".gitignore", ".sshadowignore"])
     }
 
     @Test func emptyIgnoreFilenamesStayEmpty() throws {
         let model = ConnectionConfigModel(host: "example.com", ignoreFilenames: [])
+        model.trustHostKey(unrelatedHostKey)
         let config = try ConnectionConfig(from: model, authMethod: .password("secret"))
         #expect(config.ignoreFilenames == [])
     }
@@ -60,6 +63,7 @@ struct ConnectionConfigModelTests {
             host: "example.com",
             ignoreFilenames: [".gitignore", ".sshadowignore", ".gitignore"]
         )
+        model.trustHostKey(unrelatedHostKey)
         let config = try ConnectionConfig(from: model, authMethod: .password("secret"))
         #expect(config.ignoreFilenames == [".gitignore", ".sshadowignore"])
     }

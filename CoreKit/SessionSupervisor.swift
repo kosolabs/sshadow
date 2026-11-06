@@ -123,7 +123,7 @@ package actor SessionSupervisor {
             guard case .connecting = state else { throw .cancelled }
             log.error(
                 "Failed to connect to \(config.name)",
-                detail: error.message
+                detail: error.detail
             )
             state = .offline(.failed(error))
             throw error
@@ -278,15 +278,10 @@ package actor SessionSupervisor {
             do {
                 try await open(config: config)
                 break
-            } catch let error
-                where error == .invalidPrivateKey
-                || error == .authenticationFailed
-                || error == .remotePathNotFound
-                || error == .remotePathNotDirectory
-            {
+            } catch let error where !error.isRetryable {
                 log.error(
                     "Reconnection to \(config.name) failed",
-                    detail: error.message
+                    detail: error.detail
                 )
                 state = .offline(.failed(error))
                 break

@@ -18,13 +18,17 @@ private func startup() {
     }
 }
 
+@MainActor
 private func reconnectEnabledDomains() async {
-    for config in await AppDB.shared.enabledConfigs() {
-        do {
-            try await DomainRegistry.shared.reconnect(config: config)
-        } catch {
-            logger.error("Failed to enable \(config.domain): \(error)")
+    let descriptor = FetchDescriptor<ConnectionConfigModel>(
+        predicate: #Predicate { $0.enabled }
+    )
+    do {
+        for profile in try SSHadowApp.modelContainer.mainContext.fetch(descriptor) {
+            Task { await profile.reconnectOnLaunch() }
         }
+    } catch {
+        logger.error("Failed to load enabled connections: \(error)")
     }
 }
 

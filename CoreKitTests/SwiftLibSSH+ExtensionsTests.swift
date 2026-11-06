@@ -19,6 +19,7 @@ import XPC
             path: "/home/user",
             authMethod: .none,
             ignoreFilenames: [],
+            hostKey: unrelatedHostKey,
         )
 
         await #expect(throws: ConnectionError.unknownHost) {
@@ -36,6 +37,7 @@ import XPC
             path: "/home/user",
             authMethod: .none,
             ignoreFilenames: [],
+            hostKey: unrelatedHostKey,
         )
 
         await #expect(throws: ConnectionError.connectionRefused) {
@@ -73,6 +75,50 @@ import XPC
         }
     }
 
+    @Test func connectWithServerHostKeySucceeds() async throws {
+        let sandbox = TestSandbox()
+        let config = try sandbox.config
+
+        let (ssh, _) = try await connect(config)
+        let served = try await ssh.hostKey
+        await ssh.close()
+
+        #expect(served == config.hostKey)
+    }
+
+    @Test func connectWithChangedHostKeyThrowsHostKeyChanged() async throws {
+        let sandbox = TestSandbox()
+        let config = try sandbox.config(hostKey: unrelatedHostKey)
+
+        await #expect(throws: ConnectionError.hostKeyChanged(try sandbox.serverHostKey)) {
+            try await connect(config)
+        }
+    }
+
+    @Test func serverHostKeyReturnsTheServersKey() async throws {
+        let sandbox = TestSandbox()
+        let config = try sandbox.config
+
+        let hostKey = try await withConnectRetries {
+            () async throws(ConnectionError) -> SSHHostKey in
+            try await SSHClient.serverHostKey(host: config.host, port: config.port)
+        }
+
+        #expect(hostKey == config.hostKey)
+    }
+
+    @Test func serverHostKeyForUnknownHostThrowsUnknownHost() async throws {
+        await #expect(throws: ConnectionError.unknownHost) {
+            try await SSHClient.serverHostKey(host: "unknown", port: 22)
+        }
+    }
+
+    @Test func serverHostKeyForRefusedPortThrowsConnectionRefused() async throws {
+        await #expect(throws: ConnectionError.connectionRefused) {
+            try await SSHClient.serverHostKey(host: "localhost", port: 2223)
+        }
+    }
+
     private func connect(
         _ config: ConnectionConfig
     ) async throws(ConnectionError) -> (SSHClient, SFTPClient) {
@@ -86,7 +132,8 @@ import XPC
 extension TestSandbox {
     fileprivate func config(
         path: String? = nil,
-        authMethod: ConnectionConfig.AuthMethod? = nil
+        authMethod: ConnectionConfig.AuthMethod? = nil,
+        hostKey: SSHHostKey? = nil
     ) throws -> ConnectionConfig {
         let base = try config
         return ConnectionConfig(
@@ -99,6 +146,7 @@ extension TestSandbox {
                 ?? base.path,
             authMethod: authMethod ?? base.authMethod,
             ignoreFilenames: base.ignoreFilenames,
+            hostKey: hostKey ?? base.hostKey,
         )
     }
 }

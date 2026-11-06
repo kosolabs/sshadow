@@ -2,6 +2,7 @@ import Common
 import FileProvider
 import Foundation
 import SwiftData
+import SwiftLibSSH
 import Testing
 import XPC
 
@@ -10,6 +11,7 @@ import XPC
 private let logger = Logger(category: "TestData")
 
 enum TestSandboxError: Error {
+    case hostKey(String)
     case lchmod
     case lstat
     case utimensat
@@ -39,7 +41,8 @@ extension ConnectionError {
         case .connectionRefused, .connectionTimedOut, .unknown:
             true
         case .unknownHost, .invalidPrivateKey, .authenticationFailed,
-            .remotePathNotFound, .remotePathNotDirectory, .cancelled:
+            .hostKeyChanged, .remotePathNotFound, .remotePathNotDirectory,
+            .cancelled:
             false
         }
     }
@@ -126,7 +129,23 @@ package class TestSandbox {
                     passphrase: nil
                 ),
                 ignoreFilenames: [".sshadowignore"],
+                hostKey: serverHostKey
             )
+        }
+    }
+
+    package var serverHostKey: SSHHostKey {
+        get throws {
+            let path = "/tmp/ssh-test-server-\(user)/host_key_ed25519.pub"
+            let contents = try String(contentsOfFile: path, encoding: .utf8)
+            guard
+                let key = SSHHostKey(
+                    contents.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            else {
+                throw TestSandboxError.hostKey(path)
+            }
+            return key
         }
     }
 

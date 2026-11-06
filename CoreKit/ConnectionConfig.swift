@@ -1,7 +1,6 @@
+import Common
 import FileProvider
-import SwiftData
-
-private let logger = Logger(category: "ConnectionConfig")
+import SwiftLibSSH
 
 public struct ConnectionConfig: Message, CustomStringConvertible {
     public enum ValidationError: Error, Equatable {
@@ -11,6 +10,7 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
         case passphraseRequired
         case privateKeyInvalid
         case ignoreFilenameInvalid
+        case hostKeyUnknown
     }
 
     public enum AuthMethod: Message, CustomStringConvertible {
@@ -38,6 +38,7 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
     public let path: String
     public let authMethod: AuthMethod
     public let ignoreFilenames: [String]
+    public let hostKey: SSHHostKey
 
     public init(
         id: UUID,
@@ -48,6 +49,7 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
         path: String,
         authMethod: AuthMethod,
         ignoreFilenames: [String],
+        hostKey: SSHHostKey,
     ) {
         self.id = id
         self.name = name
@@ -60,6 +62,7 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
         self.ignoreFilenames = ignoreFilenames.filter {
             seen.insert($0).inserted
         }
+        self.hostKey = hostKey
     }
 
     public var socket: String {

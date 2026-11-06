@@ -787,6 +787,84 @@ struct SessionSupervisorTests {
         await supervisor.disable()
     }
 
+    @Test func connectWithChangedHostKeyGoesOffline() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            openSession: try await sandbox.sessionProvider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController(),
+            onStatusChange: spy.handler()
+        )
+        let served = try sandbox.config
+        let changed = ConnectionError.hostKeyChanged(served.hostKey)
+        let stale = ConnectionConfig(
+            id: served.id,
+            name: served.name,
+            host: served.host,
+            port: served.port,
+            user: served.user,
+            path: served.path,
+            authMethod: served.authMethod,
+            ignoreFilenames: served.ignoreFilenames,
+            hostKey: unrelatedHostKey
+        )
+
+        await #expect(throws: changed) {
+            try await supervisor.connect(config: stale)
+        }
+
+        #expect(spy.statuses.last == .offline(.failed(changed)))
+    }
+
+    @Test func reconnectGoesOfflineWhenHostKeyChanges() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let events = Events()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            initialBackoff: .milliseconds(1),
+            maxBackoff: .milliseconds(5),
+            openSession: provider.provider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController(),
+            events: events,
+            onStatusChange: spy.handler()
+        )
+        try await supervisor.connect(config: try sandbox.config)
+
+        let changed = ConnectionError.hostKeyChanged(unrelatedHostKey)
+        await provider.failNextConnects(1, with: changed)
+        let handler = try #require(await provider.capturedHandler)
+        await handler(ConnectionError.connectionRefused)
+
+        let deadline = ContinuousClock.now + .seconds(5)
+        while ContinuousClock.now < deadline {
+            if spy.statuses.last == .offline(.failed(changed)) { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(spy.statuses.last == .offline(.failed(changed)))
+        #expect(await provider.callCount == 2)
+        await expect(eventually: {
+            await MainActor.run {
+                events.value.contains {
+                    $0.level == .error && $0.detail == changed.detail
+                }
+            }
+        })
+
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(await provider.callCount == 2)
+
+        await supervisor.disable()
+    }
+
     @Test func reconnectFromOfflineRetriesUntilConnectSucceeds()
         async throws
     {
@@ -943,7 +1021,8 @@ struct SessionSupervisorTests {
             user: original.user,
             path: original.path,
             authMethod: original.authMethod,
-            ignoreFilenames: original.ignoreFilenames
+            ignoreFilenames: original.ignoreFilenames,
+            hostKey: original.hostKey
         )
         try await supervisor.connect(config: edited)
         try await waitUntilOnline(supervisor)
