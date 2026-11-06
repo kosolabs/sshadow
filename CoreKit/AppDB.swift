@@ -36,16 +36,4 @@ public actor AppDB {
         }
         return Set(profiles.map(\.id))
     }
-
-    public func enabledConfigs() -> [ConnectionConfig] {
-        let descriptor = FetchDescriptor<ConnectionConfigModel>(
-            predicate: #Predicate { profile in
-                profile.enabled
-            }
-        )
-        guard let profiles = try? modelContext.fetch(descriptor) else {
-            return []
-        }
-        return profiles.compactMap { try? ConnectionConfig(from: $0) }
-    }
 }

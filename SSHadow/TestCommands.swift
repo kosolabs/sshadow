@@ -61,6 +61,8 @@ final class TestCommands {
             try await pause(name: params.required("name"))
         case "poll":
             try await poll(name: params.required("name"))
+        case "trust-host-key":
+            try await trustHostKey(name: params.required("name"))
         case "create":
             try await create(
                 name: params.required("name"),
@@ -106,6 +108,18 @@ final class TestCommands {
 
     private func poll(name: String) async throws {
         try await config(for: name).poll()
+    }
+
+    private func trustHostKey(name: String) async throws {
+        let config = try config(for: name)
+        guard
+            case .offline(.failed(.hostKeyChanged(let hostKey))) =
+                Connections.shared.status(for: config.id)
+        else {
+            throw Error(message: "\"\(name)\" has no changed host key")
+        }
+        config.trustHostKey(hostKey)
+        await config.enable()
     }
 
     private func create(

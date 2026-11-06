@@ -52,8 +52,10 @@ class Proxy:
                 client, _ = listener.accept()
             except (OSError, ValueError):
                 continue
+            with self._lock:
+                upstream = self.upstream
             try:
-                server = socket.create_connection(self.upstream, timeout=5)
+                server = socket.create_connection(upstream, timeout=5)
             except OSError:
                 client.close()
                 continue
@@ -126,6 +128,12 @@ class Proxy:
             _log(
                 f"Proxy couldn't reset {len(stuck)} connection(s) within {RESET_TIMEOUT}s"
             )
+
+    def redirect(self, upstream: tuple[str, int]) -> None:
+        """Send new connections to `upstream`, and drop the open ones."""
+        with self._lock:
+            self.upstream = upstream
+        self.drop()
 
     def refuse(self) -> None:
         """Drop every connection and refuse new ones."""

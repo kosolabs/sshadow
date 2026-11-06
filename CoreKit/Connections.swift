@@ -7,11 +7,24 @@ public final class Connections {
     nonisolated public static let shared: Connections = Connections()
 
     private var statuses: [UUID: ConnectionStatus] = [:]
+    private var hostKeyChecks: [UUID: ConnectionStatus] = [:]
 
     nonisolated public init() {}
 
     public func status(for id: UUID) -> ConnectionStatus {
-        self.statuses[id] ?? .offline(.disabled)
+        hostKeyChecks[id] ?? statuses[id] ?? .offline(.disabled)
+    }
+
+    func beginHostKeyCheck(id: UUID) {
+        hostKeyChecks[id] = .connecting
+    }
+
+    func failHostKeyCheck(id: UUID, error: ConnectionError) {
+        hostKeyChecks[id] = .offline(.failed(error))
+    }
+
+    func endHostKeyCheck(id: UUID) {
+        hostKeyChecks[id] = nil
     }
 
     nonisolated func update(_ status: ConnectionStatus, for id: UUID) {

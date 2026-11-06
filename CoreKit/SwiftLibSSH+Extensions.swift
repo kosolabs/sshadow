@@ -5,6 +5,18 @@ import SwiftLibSSH
 private let logger = Logger(category: "SwiftLibSSH")
 
 extension SSHClient {
+    static func serverHostKey(
+        host: String,
+        port: UInt16
+    ) async throws(ConnectionError) -> SSHHostKey {
+        do {
+            return try await SSHClient.hostKey(host: host, port: port)
+        } catch {
+            logger.error("Failed to fetch host key for \(host):\(port): \(error)")
+            throw ConnectionError(from: error)
+        }
+    }
+
     static func connect(
         config: ConnectionConfig
     ) async throws(ConnectionError) -> (SSHClient, SFTPClient) {
@@ -15,14 +27,16 @@ extension SSHClient {
                     try await SSHClient.connect(
                         host: config.host,
                         port: config.port,
-                        user: config.user
+                        user: config.user,
+                        expectedHostKey: config.hostKey
                     )
                 case .password(let password):
                     try await SSHClient.connect(
                         host: config.host,
                         port: config.port,
                         user: config.user,
-                        auth: .password(password)
+                        auth: .password(password),
+                        expectedHostKey: config.hostKey
                     )
                 case .privateKey(let contents, let passphrase):
                     try await SSHClient.connect(
@@ -32,7 +46,8 @@ extension SSHClient {
                         auth: .privateKey(
                             contents: contents,
                             passphrase: passphrase
-                        )
+                        ),
+                        expectedHostKey: config.hostKey
                     )
                 }
             let sftp = try await ssh.sftp()

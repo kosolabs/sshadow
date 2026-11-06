@@ -9,6 +9,7 @@ Settings and the Event Log.
 
 import getpass
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -30,6 +31,7 @@ from rich.markup import escape
 from rich.padding import Padding
 from rich.table import Table
 
+from impostor import Impostor
 from logwatch import LogWatcher, Matcher, msg
 from proxy import Proxy
 from sshadow import (
@@ -52,6 +54,7 @@ from tree import Dir, File, Link, Tree, wait_for, wait_for_tree
 NAME = "ManualTest"
 PROXY_PORT = 2249
 WRONG_PORT = 2250
+IMPOSTOR_PORT = 2251
 KEY = REPO / "TestKit" / "id_ed25519"
 PREDICATE = 'subsystem BEGINSWITH "com.kosolabs.SSHadow"'
 MiB = 1024 * 1024
@@ -75,10 +78,18 @@ class Check:
 
 
 class Guide:
-    def __init__(self, app: App, logs: LogWatcher, proxy: Proxy, key: Path):
+    def __init__(
+        self,
+        app: App,
+        logs: LogWatcher,
+        proxy: Proxy,
+        impostor: Impostor,
+        key: Path,
+    ):
         self.app = app
         self.logs = logs
         self.proxy = proxy
+        self.impostor = impostor
         self.key = key
         self.failures: list[str] = []
         self.auto = False
@@ -396,6 +407,22 @@ def reconnecting(name: str) -> Matcher:
     return msg(rf"^Session reconnecting: .*{named(name)}")
 
 
+def host_key_refused(name: str) -> Matcher:
+    return msg(rf"^Failed to connect SSH config .*{named(name)}.*hostKeyMismatch")
+
+
+def refused_once(impostor: Impostor, before: int) -> None:
+    """Fail if SSHadow signed in to `impostor`, or connected more than once.
+
+    Waits first, to give a retry time to happen.
+    """
+    time.sleep(5)
+    if impostor.authenticated():
+        raise AssertionError("SSHadow signed in to the second server")
+    if (attempts := impostor.connections() - before) != 1:
+        raise AssertionError(f"SSHadow connected {attempts} times, not once")
+
+
 FULL_POLL = msg(r"^Poll: .*, anchor: \d+$")
 
 
@@ -425,6 +452,7 @@ def setup() -> Guide:
     shutil.rmtree(R, ignore_errors=True)
     R.mkdir()
     proxy = Proxy(("127.0.0.1", SERVER_PORT), host="::", port=PROXY_PORT)
+    impostor = Impostor(IMPOSTOR_PORT)
 
     subprocess.run(["open", R], check=True)
     subprocess.run(
@@ -444,7 +472,7 @@ def setup() -> Guide:
     console.print("To run commands yourself, first run this in your terminal:")
     indented(f'export L="{L}" R="{R}"')
     menu(["Start"])
-    return Guide(app, logs, proxy, key)
+    return Guide(app, logs, proxy, impostor, key)
 
 
 def launch(app: App, logs: LogWatcher, key: Path) -> None:
@@ -795,6 +823,95 @@ def failed_connection(g: Guide) -> None:
     )
 
 
+def host_key_change(g: Guide) -> None:
+    g.section(
+        "Host key change",
+        "The proxy switches to a second SSH server with its own host key, as if "
+        "someone were intercepting the connection. SSHadow refuses it before "
+        "signing in, and connects only once you trust the new key.",
+    )
+    fingerprint = g.impostor.fingerprint
+    before = g.impostor.connections()
+
+    def switch() -> None:
+        g.proxy.redirect(("127.0.0.1", IMPOSTOR_PORT))
+        g.app.send("poll", name=NAME)
+
+    g.act(
+        "Switch to a server with a different host key",
+        do=switch,
+        doing=(
+            "send the connection to the second server, then check for remote "
+            "changes so SSHadow notices right away"
+        ),
+        expect=[
+            (
+                f"Event Log: WARNING Lost connection to {NAME}, then ERROR "
+                f"Reconnection to {NAME} failed, with the detail Host key "
+                f"changed; the server now presents {fingerprint}. Nothing after it."
+            ),
+            (
+                "Settings' Status row shows Host key changed in red, with Trust "
+                "New Key… and Clear buttons and no Reconnecting countdown."
+            ),
+            "The menu row shows an error icon.",
+        ],
+        checks=[
+            g.logged("Refused the new host key", host_key_refused(NAME)),
+            Check(
+                "It didn't sign in or retry",
+                lambda _: refused_once(g.impostor, before),
+            ),
+        ],
+    )
+    g.act(
+        "Look at the new key, then cancel",
+        by_hand=(
+            "In Settings, click Trust New Key…. Check that the fingerprint is "
+            f"{fingerprint}, then click Cancel."
+        ),
+        expect=["The Status row still shows Host key changed."],
+    )
+    g.act(
+        "Trust the new key",
+        do=lambda: g.app.send("trust-host-key", name=NAME),
+        doing="trust the new key, as Trust and Reconnect does",
+        by_hand="Click Trust New Key… again, then Trust and Reconnect.",
+        expect=[
+            "Settings' Status row shows Connected.",
+            (
+                f"Event Log: NOTICE Trusted host key for {NAME}, with {fingerprint} "
+                f"for localhost:{PROXY_PORT}, replacing the old key's fingerprint, "
+                f"in the detail. Then Connecting to {NAME} and Connected to {NAME}."
+            ),
+        ],
+        checks=[
+            g.logged(
+                "Trusted the new key",
+                msg(
+                    rf"^Trusted host key for localhost:{PROXY_PORT}: "
+                    rf"{re.escape(fingerprint)}$"
+                ),
+            ),
+            g.logged("Connected", connected(NAME)),
+        ],
+    )
+
+    def reconnect() -> None:
+        g.app.send("pause", name=NAME)
+        g.logs.expect(paused(NAME))
+        g.app.send("enable", name=NAME)
+
+    g.act(
+        "Reconnect with the trusted key",
+        do=reconnect,
+        doing="pause and resume the connection",
+        by_hand="Click Pause in Settings, then Reconnect.",
+        expect=["Connected again, without asking about the host key."],
+        checks=[g.logged("Connected", connected(NAME))],
+    )
+
+
 def connection_menu(g: Guide) -> None:
     g.section(
         "Connection menu",
@@ -970,6 +1087,7 @@ def main() -> None:
             transfers,
             outage,
             failed_connection,
+            host_key_change,
             connection_menu,
             event_log,
             relaunch,
@@ -981,6 +1099,7 @@ def main() -> None:
         console.print(f"\nStopped. Rerun to start over; it deletes {NAME} first.")
     finally:
         g.proxy.close()
+        g.impostor.close()
         g.logs.close()
 
 

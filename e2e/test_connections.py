@@ -1,4 +1,6 @@
+import getpass
 import random
+import re
 import threading
 import time
 from collections.abc import Callable
@@ -6,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from impostor import Impostor, fingerprint
 from logwatch import APP, EXTENSION, LogWatcher, Matcher, msg
 from proxy import Proxy
 from sshadow import (
@@ -39,6 +42,17 @@ def suspended_by_extension(profile: str) -> Matcher:
 
 
 RETRYING = msg(r"^Connect failed; retrying in ")
+SERVER_HOST_KEY = Path(f"/tmp/ssh-test-server-{getpass.getuser()}/host_key_ed25519.pub")
+
+
+def trusted(socket: str, key_fingerprint: str) -> Matcher:
+    return msg(
+        rf"^Trusted host key for {re.escape(socket)}: {re.escape(key_fingerprint)}$"
+    )
+
+
+def host_key_refused(profile: str) -> Matcher:
+    return msg(rf"^Failed to connect SSH config .*{named(profile)}.*hostKeyMismatch")
 
 
 # Multiple domains
@@ -200,4 +214,42 @@ def test_drop_during_download(
     if isinstance(result[0], bytes):
         assert result[0] == data, "read returned corrupt contents"
     wait_for_tree(local, tree, on_poll=logs.check)
+    round_trip(app, logs, name, local, remote, tree)
+
+
+# Host keys
+
+
+def test_changed_host_key_is_refused_until_trusted(
+    app: App,
+    logs: LogWatcher,
+    proxy: Proxy,
+    proxied_profile: str,
+    remote: Path,
+    impostor: Impostor,
+    relaunch_app: Callable[[], None],
+) -> None:
+    name = proxied_profile
+    socket = f"127.0.0.1:{proxy.port}"
+    local = enable(app, logs, name)
+    learned = trusted(socket, fingerprint(SERVER_HOST_KEY))
+    assert any(learned(e) for e in logs.seen), "the first enable didn't trust the key"
+    tree = round_trip(app, logs, name, local, remote, {})
+
+    before = impostor.connections()
+    proxy.redirect(("127.0.0.1", impostor.port))
+    app.send("poll", name=name)
+    logs.expect(host_key_refused(name), timeout=30)
+    time.sleep(3)
+    assert not impostor.authenticated(), "SSHadow signed in to the second server"
+    assert impostor.connections() - before == 1, "SSHadow retried the changed key"
+
+    app.send("trust-host-key", name=name)
+    logs.expect(trusted(socket, impostor.fingerprint))
+    logs.expect(connected(name), timeout=30)
+    tree = round_trip(app, logs, name, local, remote, tree)
+
+    app.quit()
+    relaunch_app()
+    logs.expect(connected(name), timeout=60)
     round_trip(app, logs, name, local, remote, tree)

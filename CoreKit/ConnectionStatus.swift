@@ -14,6 +14,8 @@ public enum OfflineReason: Equatable, Sendable {
             "The connection is disconnecting."
         case .paused:
             "The connection is paused. Resume it from the SSHadow menu."
+        case .failed(.hostKeyChanged):
+            "The server's host key changed. Open SSHadow to review it."
         case .failed:
             "The server is unreachable. Check your network connection."
         case .xpcUnreachable:

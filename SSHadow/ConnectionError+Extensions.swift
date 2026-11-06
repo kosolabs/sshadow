@@ -5,6 +5,8 @@ extension ConnectionError {
         switch self {
         case .invalidPrivateKey, .authenticationFailed:
             "lock.circle"
+        case .hostKeyChanged:
+            "exclamationmark.shield"
         case .unknownHost, .connectionRefused, .connectionTimedOut:
             "network.slash"
         case .remotePathNotFound, .remotePathNotDirectory:

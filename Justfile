@@ -12,6 +12,19 @@ test: start-test-server
 build:
     xcodebuild build -scheme SSHadow -configuration Debug -destination 'platform=macOS' -quiet
 
+debug: build
+    #!/bin/bash
+    set -euo pipefail
+    products=$(xcodebuild -showBuildSettings -scheme SSHadow -configuration Debug 2>/dev/null \
+        | awk -F' = ' '$1 ~ /^ *BUILT_PRODUCTS_DIR$/ {print $2}')
+    app="$products/SSHadow.app"
+    executable="$app/Contents/MacOS/SSHadow"
+    if pkill -f "^$executable"; then
+        while pgrep -f "^$executable" > /dev/null; do sleep 0.1; done
+    fi
+    open "$app"
+    echo "Launched $app"
+
 format:
     git ls-files -z '*.swift' | xargs -0 xcrun swift-format format -i --parallel
 

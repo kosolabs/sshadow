@@ -139,7 +139,7 @@ def restart_fileproviderd(timeout: float = 10) -> None:
     def pids() -> set[str]:
         return set(
             subprocess.run(
-                ["pgrep", "-x", "fileproviderd"],
+                ["pgrep", "-x", "-u", str(os.getuid()), "fileproviderd"],
                 capture_output=True,
                 text=True,
                 check=False,

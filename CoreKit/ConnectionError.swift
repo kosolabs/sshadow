@@ -8,6 +8,7 @@ public enum ConnectionError: Message, Error {
     case connectionTimedOut
     case invalidPrivateKey
     case authenticationFailed
+    case hostKeyChanged(SSHHostKey)
     case remotePathNotFound
     case remotePathNotDirectory
     case cancelled
@@ -41,6 +42,9 @@ public enum ConnectionError: Message, Error {
             case .authenticationFailed:
                 self = .authenticationFailed
                 return
+            case .hostKeyMismatch(_, let actual, _):
+                self = .hostKeyChanged(actual)
+                return
             case .sftpError(.noSuchFile, _):
                 self = .remotePathNotFound
                 return
@@ -56,6 +60,26 @@ public enum ConnectionError: Message, Error {
         )
     }
 
+    public var isRetryable: Bool {
+        switch self {
+        case .unknownHost, .connectionRefused, .connectionTimedOut, .cancelled,
+            .unknown:
+            true
+        case .invalidPrivateKey, .authenticationFailed, .hostKeyChanged,
+            .remotePathNotFound, .remotePathNotDirectory:
+            false
+        }
+    }
+
+    public var detail: String {
+        switch self {
+        case .hostKeyChanged(let hostKey):
+            "Host key changed; the server now presents \(hostKey.fingerprint)"
+        default:
+            message
+        }
+    }
+
     public var message: String {
         switch self {
         case .unknownHost: "Unknown host"
@@ -63,6 +87,7 @@ public enum ConnectionError: Message, Error {
         case .connectionTimedOut: "Connection timed out"
         case .invalidPrivateKey: "Invalid private key"
         case .authenticationFailed: "Authentication failed"
+        case .hostKeyChanged: "Host key changed"
         case .remotePathNotFound: "Remote path does not exist"
         case .remotePathNotDirectory: "Remote path is not a directory"
         case .cancelled: "Cancelled"

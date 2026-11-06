@@ -29,6 +29,29 @@ import Testing
         #expect(error == .connectionRefused)
     }
 
+    @Test func mapsHostKeyMismatchToTheNewKey() {
+        let error = ConnectionError(
+            from: SSHError.hostKeyMismatch(
+                expected: otherHostKey,
+                actual: unrelatedHostKey,
+                message: "mismatch"
+            )
+        )
+        #expect(error == .hostKeyChanged(unrelatedHostKey))
+    }
+
+    @Test func changedHostKeyDetailNamesTheNewFingerprint() {
+        let error = ConnectionError.hostKeyChanged(unrelatedHostKey)
+        #expect(
+            error.detail
+                == "Host key changed; the server now presents \(unrelatedHostKey.fingerprint)"
+        )
+    }
+
+    @Test func otherErrorDetailsAreTheirMessage() {
+        #expect(ConnectionError.connectionRefused.detail == "Connection refused")
+    }
+
     @Test func mapsConnectionTimedOut() {
         let error = ConnectionError(
             from: SSHError.connectionFailed(message: "Timeout connecting")

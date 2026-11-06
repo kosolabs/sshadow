@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import Common
+@testable import CoreKit
 
 struct ConnectionConfigTests {
     @Test func testPathWithEmptyConfigPath() {
@@ -13,7 +13,8 @@ struct ConnectionConfigTests {
             user: "user",
             path: "",
             authMethod: .none,
-            ignoreFilenames: []
+            ignoreFilenames: [],
+            hostKey: unrelatedHostKey
         )
 
         #expect(config.path(for: "file.txt") == "file.txt")
@@ -28,7 +29,8 @@ struct ConnectionConfigTests {
             user: "user",
             path: "",
             authMethod: .none,
-            ignoreFilenames: []
+            ignoreFilenames: [],
+            hostKey: unrelatedHostKey
         )
 
         #expect(config.path(for: "") == ".")
@@ -43,7 +45,8 @@ struct ConnectionConfigTests {
             user: "user",
             path: "base",
             authMethod: .none,
-            ignoreFilenames: []
+            ignoreFilenames: [],
+            hostKey: unrelatedHostKey
         )
 
         #expect(config.path(for: "file.txt") == "base/file.txt")
@@ -58,7 +61,8 @@ struct ConnectionConfigTests {
             user: "user",
             path: "base",
             authMethod: .none,
-            ignoreFilenames: []
+            ignoreFilenames: [],
+            hostKey: unrelatedHostKey
         )
 
         #expect(config.path(for: "") == "base")
@@ -73,7 +77,8 @@ struct ConnectionConfigTests {
             user: "user",
             path: "base/",
             authMethod: .none,
-            ignoreFilenames: []
+            ignoreFilenames: [],
+            hostKey: unrelatedHostKey
         )
 
         #expect(config.path(for: "file.txt") == "base/file.txt")
@@ -88,7 +93,8 @@ struct ConnectionConfigTests {
             user: "user",
             path: "/base",
             authMethod: .none,
-            ignoreFilenames: []
+            ignoreFilenames: [],
+            hostKey: unrelatedHostKey
         )
 
         #expect(config.path(for: "file.txt") == "/base/file.txt")
