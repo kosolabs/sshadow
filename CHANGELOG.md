@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/kosolabs/sshadow/compare/v1.1.0...v1.1.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* let libssh try each resolved address when connecting ([#480](https://github.com/kosolabs/sshadow/issues/480)) ([4ad72ef](https://github.com/kosolabs/sshadow/commit/4ad72ef0feceb1b7aa618db58e81053344881e3e))
+
 ## [1.1.0](https://github.com/kosolabs/sshadow/compare/v1.0.1...v1.1.0) (2026-11-06)
 
 
