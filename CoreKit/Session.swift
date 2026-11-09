@@ -57,8 +57,8 @@ package actor Session {
 
     var limits: Limits {
         Limits(
-            maxReadLength: sftp.limits.maxReadLength,
-            maxWriteLength: sftp.limits.maxWriteLength
+            maxReadLength: UInt64(sftp.limits.maxReadLength),
+            maxWriteLength: UInt64(sftp.limits.maxWriteLength)
         )
     }
 
@@ -1021,7 +1021,7 @@ extension Session {
         to parentId: NSFileProviderItemIdentifier,
         file url: URL,
         ifExists: OnExists,
-        chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
+        chunkSize: Int = SFTPLimits.defaultBufferSize,
         snapshot: IgnoreSnapshot?,
         progress: Progress
     ) async throws -> Item {
@@ -1153,7 +1153,7 @@ extension Session {
         _ manifest: Manifest,
         from url: URL,
         to root: String,
-        chunkSize: UInt64,
+        chunkSize: Int,
         estimator: ThroughputEstimator,
         progress: Progress
     ) async throws {
@@ -1177,9 +1177,7 @@ extension Session {
                     mode: entry.mode
                 ) { file in
                     try await file.withAsyncWriter { writer in
-                        while let data = try fp.read(
-                            upToCount: Int(bufferSize)
-                        ) {
+                        while let data = try fp.read(upToCount: bufferSize) {
                             if progress.isCancelled {
                                 throw CoreError.userCancelled
                             }
@@ -1196,7 +1194,7 @@ extension Session {
 
     func download(
         itemId: NSFileProviderItemIdentifier,
-        chunkSize: UInt64 = SFTPLimits.defaultBufferSize,
+        chunkSize: Int = SFTPLimits.defaultBufferSize,
         progress: Progress
     ) async throws -> (URL, Item) {
         await gate.enter()

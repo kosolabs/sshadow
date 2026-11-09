@@ -28,7 +28,7 @@ extension SSHClient {
                         host: config.host,
                         port: config.port,
                         user: config.user,
-                        expectedHostKey: config.hostKey
+                        hostKey: .expecting(config.hostKey)
                     )
                 case .password(let password):
                     try await SSHClient.connect(
@@ -36,7 +36,7 @@ extension SSHClient {
                         port: config.port,
                         user: config.user,
                         auth: .password(password),
-                        expectedHostKey: config.hostKey
+                        hostKey: .expecting(config.hostKey)
                     )
                 case .privateKey(let contents, let passphrase):
                     try await SSHClient.connect(
@@ -47,7 +47,7 @@ extension SSHClient {
                             contents: contents,
                             passphrase: passphrase
                         ),
-                        expectedHostKey: config.hostKey
+                        hostKey: .expecting(config.hostKey)
                     )
                 }
             let sftp = try await ssh.sftp()
