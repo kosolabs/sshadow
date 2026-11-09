@@ -12,6 +12,7 @@ Matcher = Callable[[Event], bool]
 
 APP = "com.kosolabs.SSHadow"
 EXTENSION = "com.kosolabs.SSHadow.Extension"
+FILE_PROVIDER = "com.apple.FileProvider"
 
 
 def msg(
@@ -36,7 +37,7 @@ def msg(
 
 
 def fault(e: Event) -> bool:
-    return e.get("messageType") == "Fault"
+    return e.get("subsystem", "").startswith(APP) and e.get("messageType") == "Fault"
 
 
 def wrong_extension(e: Event) -> bool:

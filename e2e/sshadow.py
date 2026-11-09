@@ -2,14 +2,17 @@
 import getpass
 import json
 import os
+import plistlib
 import re
 import signal
 import subprocess
 import time
+from collections import Counter
 from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import objc
 from Foundation import (
@@ -24,7 +27,7 @@ from Foundation import (
     NSUserDomainMask,
 )
 
-from logwatch import APP, LogWatcher, Matcher, msg
+from logwatch import APP, EXTENSION, FILE_PROVIDER, Event, LogWatcher, Matcher, msg
 from tree import File, Tree, make_tree, wait_for_tree
 
 SF_DATALESS = 0x40000000
@@ -42,6 +45,11 @@ LSREGISTER = (
 APP_EXECUTABLE = "Contents/MacOS/SSHadow"
 EXTENSION_BUNDLE = "Contents/PlugIns/Extension.appex"
 EXTENSION_EXECUTABLE = f"{EXTENSION_BUNDLE}/Contents/MacOS/Extension"
+DOMAINS_PLIST = (
+    Path.home()
+    / "Library/Application Support/FileProvider/com.kosolabs.SSHadow.Extension/Domains.plist"
+)
+DEFAULT_DOMAIN = "NSFileProviderDomainDefaultIdentifier"
 
 
 def post_distributed_notification(name: str, obj: str) -> None:
@@ -164,6 +172,7 @@ class App:
         self.path = path.resolve()
         self.executable = self.path / APP_EXECUTABLE
         self.extension = self.path / EXTENSION_EXECUTABLE
+        self.domains_connected_at_stop: list[str] = []
 
     def started(self) -> datetime | None:
         processes = find_processes(self.executable)
@@ -195,6 +204,7 @@ class App:
         )
 
     def quit(self, timeout: float = 10) -> None:
+        self.domains_connected_at_stop = connected_domains()
         self.send("quit")
         deadline = time.monotonic() + timeout
         while self.started() is not None:
@@ -203,6 +213,7 @@ class App:
             time.sleep(0.1)
 
     def kill(self, timeout: float = 10) -> None:
+        self.domains_connected_at_stop = connected_domains()
         kill(self.executable, timeout)
 
     def kill_extension(self, timeout: float = 10) -> None:
@@ -215,6 +226,70 @@ class App:
             COMMAND_NOTIFICATION,
             json.dumps({"command": command, **params}, default=str),
         )
+
+
+def read_domains() -> dict[str, Any]:
+    try:
+        with DOMAINS_PLIST.open("rb") as f:
+            return plistlib.load(f)
+    except FileNotFoundError:
+        return {}
+    except PermissionError as e:
+        raise RuntimeError(
+            f"Can't read {DOMAINS_PLIST}. Give the terminal running the tests Full Disk Access."
+        ) from e
+
+
+def connected_domains() -> list[str]:
+    return [
+        identifier
+        for identifier, domain in read_domains().items()
+        if identifier != DEFAULT_DOMAIN and domain.get("Connected")
+    ]
+
+
+def obfuscated(identifier: str) -> str:
+    """An identifier as fileproviderd logs it, e.g. "E{34}C" for a UUID."""
+    return f"{identifier[0]}{{{len(identifier) - 2}}}{identifier[-1]}"
+
+
+def wait_for_restarts(
+    logs: LogWatcher, domains: Sequence[str], timeout: float = 30
+) -> None:
+    """Wait for fileproviderd to restart each domain the extension suspended.
+
+    A few seconds after the extension suspends a domain, File Provider starts
+    the domain again and then tears it down, and a reconnect that arrives in
+    the middle can be lost. The teardown ends by closing the domain's wharf. A
+    wharf closed before the restart began belongs to the suspension, so it
+    doesn't count. Obfuscated identifiers can collide, so restarts are counted
+    per category rather than per domain.
+    """
+    pending = Counter(f"{EXTENSION}/{obfuscated(d)}" for d in domains)
+    started: Counter[str] = Counter()
+
+    def restarted(e: Event) -> bool:
+        category = e.get("category", "")
+        if e.get("subsystem") != FILE_PROVIDER or pending[category] == 0:
+            return False
+        message = e.get("eventMessage", "")
+        if message.endswith("with reason domainStartup"):
+            started[category] += 1
+        elif message == "closing the wharf" and started[category] > 0:
+            started[category] -= 1
+            return True
+        return False
+
+    deadline = time.monotonic() + timeout
+    while +pending:
+        try:
+            e = logs.expect(restarted, timeout=deadline - time.monotonic())
+        except TimeoutError as error:
+            waiting = ", ".join(sorted((+pending).elements()))
+            raise TimeoutError(
+                f"fileproviderd didn't restart {waiting} within {timeout}s"
+            ) from error
+        pending[e["category"]] -= 1
 
 
 def cloud_storage(profile: str) -> Path:
