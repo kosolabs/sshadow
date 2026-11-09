@@ -987,9 +987,9 @@ extension Session {
         return try await perform(with: .rootContainer) {
             do {
                 logger.info("Read \"\(path)\"")
-                return try await sftp.withSftpFile(
+                return try await sftp.withFile(
                     at: config.path(for: path),
-                    accessType: .readOnly
+                    access: .readOnly
                 ) { file in
                     let data = try await file.read()
                     let version = try await file.attributes().ignoreFileVersion
@@ -1178,7 +1178,7 @@ extension Session {
                             if progress.isCancelled {
                                 throw CoreError.userCancelled
                             }
-                            try await writer.write(data: data)
+                            try await writer.write(contentsOf: data)
                             estimator.update(delta: data.count)
                         }
                     }
@@ -1251,9 +1251,9 @@ extension Session {
                 case .file:
                     let handle = try FileHandle(for: localUrl, mode: entry.mode)
                     defer { try? handle.close() }
-                    try await sftp.withSftpFile(
+                    try await sftp.withFile(
                         at: entry.path(under: root),
-                        accessType: .readOnly
+                        access: .readOnly
                     ) { fp in
                         for try await data in fp.stream(bufferSize: bufferSize) {
                             if progress.isCancelled {
@@ -1644,23 +1644,21 @@ extension Session {
     ) async throws -> Data {
         try await withFile(
             for: itemId,
-            accessType: .readOnly
+            access: .readOnly
         ) { file in
-            try await file.read(range: range)
+            try await file.read(range)
         }
     }
 
     private func withFile<T: Sendable>(
         for itemId: NSFileProviderItemIdentifier,
-        accessType: AccessType,
-        mode: mode_t = 0o666,
+        access: SFTPFile.AccessMode,
         _ work: @Sendable (SFTPFile) async throws -> T
     ) async throws -> T {
         try await perform(with: itemId) {
-            try await sftp.withSftpFile(
+            try await sftp.withFile(
                 at: path(for: itemId),
-                accessType: accessType,
-                mode: mode,
+                access: access,
                 perform: work
             )
         }

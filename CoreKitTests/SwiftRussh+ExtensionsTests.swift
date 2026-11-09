@@ -253,7 +253,7 @@ private let unauthorizedKey = """
                 at: path("dir", in: sandbox),
                 mode: 0o644
             ) {
-                try await $0.write(data: Data("data".utf8))
+                try await $0.write(contentsOf: Data("data".utf8), at: 0)
             }
         } throws: { ($0 as? SSHError)?.sftpStatus == .fileAlreadyExists }
     }
@@ -264,7 +264,7 @@ private let unauthorizedKey = """
         let (_, sftp) = try await connect(sandbox)
 
         try await sftp.writeFile(at: path("file", in: sandbox), mode: 0o644) {
-            try await $0.write(data: Data("new".utf8))
+            try await $0.write(contentsOf: Data("new".utf8), at: 0)
         }
 
         #expect(try sandbox.contents(of: "file") == "new")
