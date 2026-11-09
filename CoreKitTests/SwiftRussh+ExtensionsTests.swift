@@ -188,7 +188,7 @@ private let unauthorizedKey = """
                 at: path("dir", in: sandbox),
                 mode: 0o755
             )
-        } throws: { ($0 as? SSHError)?.sftpError == .fileAlreadyExists }
+        } throws: { ($0 as? SSHError)?.sftpStatus == .fileAlreadyExists }
     }
 
     @Test func makeDirectoryOverFileThrowsAlreadyExists() async throws {
@@ -201,7 +201,7 @@ private let unauthorizedKey = """
                 at: path("file", in: sandbox),
                 mode: 0o755
             )
-        } throws: { ($0 as? SSHError)?.sftpError == .fileAlreadyExists }
+        } throws: { ($0 as? SSHError)?.sftpStatus == .fileAlreadyExists }
     }
 
     @Test func makeDirectoryOverSymlinkThrowsAlreadyExists() async throws {
@@ -215,7 +215,7 @@ private let unauthorizedKey = """
                 at: path("link-dir", in: sandbox),
                 mode: 0o755
             )
-        } throws: { ($0 as? SSHError)?.sftpError == .fileAlreadyExists }
+        } throws: { ($0 as? SSHError)?.sftpStatus == .fileAlreadyExists }
     }
 
     @Test func makeDirectoryWithMissingParentIsNotACollision() async throws {
@@ -227,7 +227,7 @@ private let unauthorizedKey = """
                 at: path("missing/dir", in: sandbox),
                 mode: 0o755
             )
-        } throws: { ($0 as? SSHError)?.sftpError != .fileAlreadyExists }
+        } throws: { ($0 as? SSHError)?.sftpStatus != .fileAlreadyExists }
     }
 
     @Test func makeSymlinkOverFileThrowsAlreadyExists() async throws {
@@ -240,7 +240,7 @@ private let unauthorizedKey = """
                 to: "target",
                 at: path("file", in: sandbox)
             )
-        } throws: { ($0 as? SSHError)?.sftpError == .fileAlreadyExists }
+        } throws: { ($0 as? SSHError)?.sftpStatus == .fileAlreadyExists }
     }
 
     @Test func writeFileOverFolderThrowsAlreadyExists() async throws {
@@ -255,7 +255,7 @@ private let unauthorizedKey = """
             ) {
                 try await $0.write(data: Data("data".utf8))
             }
-        } throws: { ($0 as? SSHError)?.sftpError == .fileAlreadyExists }
+        } throws: { ($0 as? SSHError)?.sftpStatus == .fileAlreadyExists }
     }
 
     @Test func writeFileOverFileOverwrites() async throws {

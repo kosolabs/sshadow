@@ -384,10 +384,11 @@ public class ConnectionConfigModel: CustomStringConvertible {
                     passphrase: passphrase
                 )
             } catch {
-                guard case .keyError(let keyError, _) = error else {
+                guard case .privateKey(let failure, _)? = error as? SSHError
+                else {
                     throw .privateKeyInvalid
                 }
-                throw ConnectionConfig.ValidationError(keyError)
+                throw ConnectionConfig.ValidationError(failure)
             }
             return .privateKey(
                 contents: contents,
@@ -398,8 +399,8 @@ public class ConnectionConfigModel: CustomStringConvertible {
 }
 
 extension ConnectionConfig.ValidationError {
-    init(_ keyError: SSHKeyError) {
-        switch keyError {
+    init(_ failure: SSHError.PrivateKeyFailure) {
+        switch failure {
         case .unreadable:
             self = .privateKeyUnreadable
         case .passphraseRequired:

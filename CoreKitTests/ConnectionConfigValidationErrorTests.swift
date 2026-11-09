@@ -7,15 +7,18 @@ import Testing
 @Suite struct ConnectionConfigValidationErrorTests {
     @Test(
         arguments: [
-            (SSHKeyError.unreadable, ConnectionConfig.ValidationError.privateKeyUnreadable),
-            (SSHKeyError.passphraseRequired, .passphraseRequired),
-            (SSHKeyError.invalid, .privateKeyInvalid),
+            (
+                SSHError.PrivateKeyFailure.unreadable,
+                ConnectionConfig.ValidationError.privateKeyUnreadable
+            ),
+            (SSHError.PrivateKeyFailure.passphraseRequired, .passphraseRequired),
+            (SSHError.PrivateKeyFailure.invalid, .privateKeyInvalid),
         ]
     )
-    func mapsKeyError(
-        _ keyError: SSHKeyError,
+    func mapsPrivateKeyFailure(
+        _ failure: SSHError.PrivateKeyFailure,
         _ expected: ConnectionConfig.ValidationError
     ) {
-        #expect(ConnectionConfig.ValidationError(keyError) == expected)
+        #expect(ConnectionConfig.ValidationError(failure) == expected)
     }
 }

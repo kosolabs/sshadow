@@ -71,9 +71,9 @@ extension SFTPClient {
     func makeDirectory(at path: String, mode: mode_t) async throws {
         do {
             try await createDirectory(at: path, mode: mode)
-        } catch let error
-            where error.sftpError == .failure
-            || error.sftpError == .fileAlreadyExists
+        } catch let error as SSHError
+            where error.sftpStatus == .failure
+            || error.sftpStatus == .fileAlreadyExists
         {
             guard let existing = try await attributesIfExists(at: path) else {
                 throw error
@@ -85,7 +85,7 @@ extension SFTPClient {
     func makeSymlink(to target: String, at path: String) async throws {
         do {
             try await createSymlink(to: target, at: path)
-        } catch let error where error.sftpError == .failure {
+        } catch let error as SSHError where error.sftpStatus == .failure {
             guard let existing = try await attributesIfExists(at: path) else {
                 throw error
             }
@@ -105,7 +105,7 @@ extension SFTPClient {
                 mode: mode,
                 perform: perform
             )
-        } catch let error as SSHError where error.sftpError == .failure {
+        } catch let error as SSHError where error.sftpStatus == .failure {
             guard let existing = try await attributesIfExists(at: path),
                 existing.type == .directory
             else { throw error }
@@ -130,7 +130,7 @@ extension SFTPClient {
                 followSymlinks: false
             )
             return attrs
-        } catch SSHError.sftpError(.noSuchFile, _) {
+        } catch SSHError.sftp(.noSuchFile, _) {
             return nil
         }
     }
@@ -143,7 +143,7 @@ extension SFTPClient {
         with existing: SFTPAttributes,
         at path: String
     ) -> SSHError {
-        .sftpError(
+        .sftp(
             .fileAlreadyExists,
             message: "\(existing.type) already exists at \(path)"
         )

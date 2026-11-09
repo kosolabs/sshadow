@@ -1001,7 +1001,7 @@ extension Session {
                         )
                     )
                 }
-            } catch SSHError.sftpError(.noSuchFile, _) {
+            } catch SSHError.sftp(.noSuchFile, _) {
                 return nil
             }
         }
@@ -1079,7 +1079,7 @@ extension Session {
             do {
                 do {
                     try await writeStaged()
-                } catch SSHError.sftpError(.noSuchFile, _) {
+                } catch SSHError.sftp(.noSuchFile, _) {
                     logger.info("Uploads folder doesn't exist, creating")
                     await removeStaged(staged, kind: kind)
                     try await sftp.createDirectoryRecursively(at: stagingPath)
@@ -1356,7 +1356,7 @@ extension Session {
                 }
                 return stale
             }
-        } catch SSHError.sftpError(.noSuchFile, _) {
+        } catch SSHError.sftp(.noSuchFile, _) {
             return
         } catch {
             logger.error("Failed to list \(stagingPath): \(error)")
@@ -1379,7 +1379,7 @@ extension Session {
                 try await sftp.removeFile(at: path)
             }
             logger.notice("Removed staged upload: \(path)")
-        } catch SSHError.sftpError(.noSuchFile, _) {
+        } catch SSHError.sftp(.noSuchFile, _) {
             return
         } catch {
             logger.error("Failed to remove staged upload \(path): \(error)")
@@ -1695,7 +1695,7 @@ extension Session {
     ) async throws -> T {
         do {
             return try await work()
-        } catch SSHError.sftpError(.noSuchFile, _)
+        } catch SSHError.sftp(.noSuchFile, _)
             where parentId == .trashContainer
         {
             logger.info("Trash doesn't exist, creating")
@@ -1712,23 +1712,18 @@ extension Session {
     ) -> any Error {
         guard let error = error as? SSHError else { return error }
 
-        if error.isConnectionFailed
-            || error.isClosed
-            || error.sftpError == .connectionLost
-            || error.sftpError == .noConnection
-        {
+        switch error {
+        case .connectionFailed, .closed, .sftp(.connectionLost, _),
+            .sftp(.noConnection, _):
             logger.error("SSH connection lost: \(error)")
             return CoreError.serverUnreachable
-        }
-
-        switch error {
-        case .sftpError(.noSuchFile, _):
+        case .sftp(.noSuchFile, _):
             return CoreError.itemNotFound(itemId.rawValue)
-        case .sftpError(.permissionDenied, _):
+        case .sftp(.permissionDenied, _):
             return CoreError.permissionDenied
-        case .sftpError(.fileAlreadyExists, _):
+        case .sftp(.fileAlreadyExists, _):
             return CoreError.filenameCollision
-        case .sftpError(.failure, let message):
+        case .sftp(.failure, let message):
             logger.error("SFTP operation failed: \(message)")
             return CoreError.unknown(domain: "SFTP", code: 0, message: message)
         default:
