@@ -22,6 +22,7 @@ class Proxy:
         # Each connection's pump thread, and the event that tells it to reset.
         self._relays: dict[threading.Thread, threading.Event] = {}
         self._closed = False
+        self._blackholed = False
         self._listener = self._listen(port)
         self.port: int = self._listener.getsockname()[1]
         threading.Thread(target=self._accept_loop, daemon=True).start()
@@ -42,7 +43,8 @@ class Proxy:
         while not self._closed:
             with self._lock:
                 listener = self._listener
-            if listener is None:
+                blackholed = self._blackholed
+            if listener is None or blackholed:
                 time.sleep(0.05)
                 continue
             try:
@@ -77,6 +79,9 @@ class Proxy:
         peers = {a: b, b: a}
         try:
             while not self._closed and not reset.is_set():
+                if self._blackholed:
+                    time.sleep(0.05)
+                    continue
                 readable, _, _ = select.select([a, b], [], [], 0.05)
                 for src in readable:
                     rate = self.rate
@@ -143,10 +148,17 @@ class Proxy:
             listener.close()
         self.drop()
 
+    def blackhole(self) -> None:
+        """Stop relaying on open connections and leave new ones unanswered,
+        without closing anything, as if the network silently went away."""
+        with self._lock:
+            self._blackholed = True
+
     def restore(self) -> None:
         with self._lock:
             if self._listener is None:
                 self._listener = self._listen(self.port)
+            self._blackholed = False
 
     def close(self) -> None:
         self._closed = True

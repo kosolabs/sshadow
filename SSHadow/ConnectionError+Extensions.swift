@@ -7,7 +7,8 @@ extension ConnectionError {
             "lock.circle"
         case .hostKeyChanged:
             "exclamationmark.shield"
-        case .unknownHost, .connectionRefused, .connectionTimedOut:
+        case .unknownHost, .connectionRefused, .connectionTimedOut,
+            .connectionLost:
             "network.slash"
         case .remotePathNotFound, .remotePathNotDirectory:
             "questionmark.folder"

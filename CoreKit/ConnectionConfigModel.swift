@@ -1,7 +1,7 @@
 import Common
 import FileProvider
 import SwiftData
-import SwiftLibSSH
+import SwiftRussh
 
 private let logger = Logger(category: "ConnectionConfigModel")
 

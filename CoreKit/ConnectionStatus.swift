@@ -1,6 +1,6 @@
 import Common
 import Foundation
-import SwiftLibSSH
+import SwiftRussh
 
 public enum OfflineReason: Equatable, Sendable {
     case disabled

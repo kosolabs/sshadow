@@ -1,7 +1,7 @@
 import Common
 import FileProvider
 import Foundation
-import SwiftLibSSH
+import SwiftRussh
 
 private let logger = Logger(category: "SessionSupervisor")
 

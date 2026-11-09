@@ -3,7 +3,7 @@ import FileProvider
 import Foundation
 import Ignore
 import SwiftData
-import SwiftLibSSH
+import SwiftRussh
 
 private let logger = Logger(category: "Session")
 

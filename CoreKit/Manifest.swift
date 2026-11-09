@@ -1,6 +1,6 @@
 import Common
 import Foundation
-import SwiftLibSSH
+import SwiftRussh
 
 struct Manifest: Message {
     struct Entry: Message {

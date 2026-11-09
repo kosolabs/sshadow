@@ -7,14 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		424251C3525FF8E3C9B4C803 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 8106F7FEE4BAD6941D90FB59 /* SwiftLibSSH */; };
 		7309810A2F318825009F7AA2 /* Common.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; };
 		730981142F318825009F7AA2 /* Common.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; };
 		730981152F318825009F7AA2 /* Common.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		7309811F2F3188DA009F7AA2 /* Common.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; };
 		730981202F3188DA009F7AA2 /* Common.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		7322A9222F2857C700D8117D /* SSHadow.icon in Resources */ = {isa = PBXBuildFile; fileRef = 7322A9212F2857C700D8117D /* SSHadow.icon */; };
-		7322A9282F294D5400D8117D /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 7322A9272F294D5400D8117D /* SwiftLibSSH */; };
 		7369DF3F2F45513300F709F8 /* UnitTests.xctestplan in Resources */ = {isa = PBXBuildFile; fileRef = 7369DF3E2F45513300F709F8 /* UnitTests.xctestplan */; };
 		737720C92FBD039600FC5390 /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 737720C82FBD039600FC5390 /* OrderedCollections */; };
 		73799A492F9811DD00A15109 /* CoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* CoreKit.framework */; };
@@ -22,17 +20,19 @@
 		73799A542F9811DD00A15109 /* CoreKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 73799A3E2F9811DD00A15109 /* CoreKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		73799A642F98129E00A15109 /* Common.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; };
 		73799A652F98129E00A15109 /* Common.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		73799A6A2F9812A200A15109 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 73799A692F9812A200A15109 /* SwiftLibSSH */; };
-		73799A6C2F9812D100A15109 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 73799A6B2F9812D100A15109 /* SwiftLibSSH */; };
 		7386D8862F3FDB59004DF22F /* ExtensionKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 738D63A22F3FD1F100FED311 /* ExtensionKit.framework */; };
 		7386D8872F3FDB59004DF22F /* ExtensionKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 738D63A22F3FD1F100FED311 /* ExtensionKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		738C97B92FDA03CC007EC380 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 738C97B82FDA03CC007EC380 /* SwiftLibSSH */; };
-		738C97BB2FDA03D2007EC380 /* SwiftLibSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 738C97BA2FDA03D2007EC380 /* SwiftLibSSH */; };
 		738D63AD2F3FD1F100FED311 /* ExtensionKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 738D63A22F3FD1F100FED311 /* ExtensionKit.framework */; };
 		738D63B72F3FD1F100FED311 /* ExtensionKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 738D63A22F3FD1F100FED311 /* ExtensionKit.framework */; };
 		738D63B82F3FD1F100FED311 /* ExtensionKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 738D63A22F3FD1F100FED311 /* ExtensionKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		738D63F12F3FD43300FED311 /* Common.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; };
 		738D63F22F3FD43300FED311 /* Common.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 730980FF2F318825009F7AA2 /* Common.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		7391BAC630A13C1F004ED002 /* SwiftRussh in Frameworks */ = {isa = PBXBuildFile; productRef = 7391BAC530A13C1F004ED002 /* SwiftRussh */; };
+		7391BAC830A13C35004ED002 /* SwiftRussh in Frameworks */ = {isa = PBXBuildFile; productRef = 7391BAC730A13C35004ED002 /* SwiftRussh */; };
+		7391BACA30A13C3F004ED002 /* SwiftRussh in Frameworks */ = {isa = PBXBuildFile; productRef = 7391BAC930A13C3F004ED002 /* SwiftRussh */; };
+		7391BACC30A13C46004ED002 /* SwiftRussh in Frameworks */ = {isa = PBXBuildFile; productRef = 7391BACB30A13C46004ED002 /* SwiftRussh */; };
+		7391BACE30A13C54004ED002 /* SwiftRussh in Frameworks */ = {isa = PBXBuildFile; productRef = 7391BACD30A13C54004ED002 /* SwiftRussh */; };
+		7391BAD030A13C5A004ED002 /* SwiftRussh in Frameworks */ = {isa = PBXBuildFile; productRef = 7391BACF30A13C5A004ED002 /* SwiftRussh */; };
 		7393A9CD2F3134FB00213730 /* Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7393A9C02F3134FB00213730 /* Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		73E6C86B3089644300472449 /* Ignore in Frameworks */ = {isa = PBXBuildFile; productRef = 73E6C86A3089644300472449 /* Ignore */; };
 		73E6C86D3089645700472449 /* Ignore in Frameworks */ = {isa = PBXBuildFile; productRef = 73E6C86C3089645700472449 /* Ignore */; };
@@ -361,9 +361,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7391BAC830A13C35004ED002 /* SwiftRussh in Frameworks */,
 				73E6CAB8308AAE7C00472449 /* TestKit.framework in Frameworks */,
 				7309810A2F318825009F7AA2 /* Common.framework in Frameworks */,
-				738C97B92FDA03CC007EC380 /* SwiftLibSSH in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -373,7 +373,7 @@
 			files = (
 				738D63B72F3FD1F100FED311 /* ExtensionKit.framework in Frameworks */,
 				73799A532F9811DD00A15109 /* CoreKit.framework in Frameworks */,
-				7322A9282F294D5400D8117D /* SwiftLibSSH in Frameworks */,
+				7391BAC630A13C1F004ED002 /* SwiftRussh in Frameworks */,
 				730981142F318825009F7AA2 /* Common.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -383,8 +383,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				73799A642F98129E00A15109 /* Common.framework in Frameworks */,
-				73799A6A2F9812A200A15109 /* SwiftLibSSH in Frameworks */,
 				73E6C86B3089644300472449 /* Ignore in Frameworks */,
+				7391BACA30A13C3F004ED002 /* SwiftRussh in Frameworks */,
 				737720C92FBD039600FC5390 /* OrderedCollections in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -396,7 +396,7 @@
 				73E6C86D3089645700472449 /* Ignore in Frameworks */,
 				73E6CABD308AAE9400472449 /* TestKit.framework in Frameworks */,
 				73799A492F9811DD00A15109 /* CoreKit.framework in Frameworks */,
-				73799A6C2F9812D100A15109 /* SwiftLibSSH in Frameworks */,
+				7391BACC30A13C46004ED002 /* SwiftRussh in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -412,9 +412,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7391BACE30A13C54004ED002 /* SwiftRussh in Frameworks */,
 				73E6CAC2308AAEA800472449 /* TestKit.framework in Frameworks */,
 				738D63AD2F3FD1F100FED311 /* ExtensionKit.framework in Frameworks */,
-				738C97BB2FDA03D2007EC380 /* SwiftLibSSH in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -431,7 +431,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				424251C3525FF8E3C9B4C803 /* SwiftLibSSH in Frameworks */,
+				7391BAD030A13C5A004ED002 /* SwiftRussh in Frameworks */,
 				73E6CAB3308AADF800472449 /* CoreKit.framework in Frameworks */,
 				73E6CAAF308AADF800472449 /* Common.framework in Frameworks */,
 			);
@@ -565,7 +565,7 @@
 			);
 			name = CommonTests;
 			packageProductDependencies = (
-				738C97B82FDA03CC007EC380 /* SwiftLibSSH */,
+				7391BAC730A13C35004ED002 /* SwiftRussh */,
 			);
 			productName = SSHadowSharedTests;
 			productReference = 730981092F318825009F7AA2 /* CommonTests.xctest */;
@@ -595,7 +595,7 @@
 			);
 			name = SSHadow;
 			packageProductDependencies = (
-				7322A9272F294D5400D8117D /* SwiftLibSSH */,
+				7391BAC530A13C1F004ED002 /* SwiftRussh */,
 			);
 			productName = SSHadow;
 			productReference = 733470892F22037100B8181D /* SSHadow.app */;
@@ -621,9 +621,9 @@
 			);
 			name = CoreKit;
 			packageProductDependencies = (
-				73799A692F9812A200A15109 /* SwiftLibSSH */,
 				737720C82FBD039600FC5390 /* OrderedCollections */,
 				73E6C86A3089644300472449 /* Ignore */,
+				7391BAC930A13C3F004ED002 /* SwiftRussh */,
 			);
 			productName = CoreKit;
 			productReference = 73799A3E2F9811DD00A15109 /* CoreKit.framework */;
@@ -649,8 +649,8 @@
 			);
 			name = CoreKitTests;
 			packageProductDependencies = (
-				73799A6B2F9812D100A15109 /* SwiftLibSSH */,
 				73E6C86C3089645700472449 /* Ignore */,
+				7391BACB30A13C46004ED002 /* SwiftRussh */,
 			);
 			productName = CoreKitTests;
 			productReference = 73799A482F9811DD00A15109 /* CoreKitTests.xctest */;
@@ -701,7 +701,7 @@
 			);
 			name = ExtensionKitTests;
 			packageProductDependencies = (
-				738C97BA2FDA03D2007EC380 /* SwiftLibSSH */,
+				7391BACD30A13C54004ED002 /* SwiftRussh */,
 			);
 			productName = SSHadowExtensionTests;
 			productReference = 738D63AC2F3FD1F100FED311 /* ExtensionKitTests.xctest */;
@@ -752,7 +752,7 @@
 			);
 			name = TestKit;
 			packageProductDependencies = (
-				8106F7FEE4BAD6941D90FB59 /* SwiftLibSSH */,
+				7391BACF30A13C5A004ED002 /* SwiftRussh */,
 			);
 			productName = TestKit;
 			productReference = 73E6CAA0308AAD5700472449 /* TestKit.framework */;
@@ -807,9 +807,9 @@
 			mainGroup = 733470802F22037100B8181D;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */,
 				737720C72FBD039600FC5390 /* XCRemoteSwiftPackageReference "swift-collections" */,
 				73E6C8693089644300472449 /* XCRemoteSwiftPackageReference "swift-ignore" */,
+				7391BAC430A13C03004ED002 /* XCRemoteSwiftPackageReference "swift-russh" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7334708A2F22037100B8181D /* Products */;
@@ -1884,20 +1884,20 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/kosolabs/swift-libssh.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.26.2;
-			};
-		};
 		737720C72FBD039600FC5390 /* XCRemoteSwiftPackageReference "swift-collections" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-collections.git";
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 1.6.0;
+			};
+		};
+		7391BAC430A13C03004ED002 /* XCRemoteSwiftPackageReference "swift-russh" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kosolabs/swift-russh.git";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 0.2.1;
 			};
 		};
 		73E6C8693089644300472449 /* XCRemoteSwiftPackageReference "swift-ignore" */ = {
@@ -1911,35 +1911,40 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		7322A9272F294D5400D8117D /* SwiftLibSSH */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */;
-			productName = SwiftLibSSH;
-		};
 		737720C82FBD039600FC5390 /* OrderedCollections */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 737720C72FBD039600FC5390 /* XCRemoteSwiftPackageReference "swift-collections" */;
 			productName = OrderedCollections;
 		};
-		73799A692F9812A200A15109 /* SwiftLibSSH */ = {
+		7391BAC530A13C1F004ED002 /* SwiftRussh */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */;
-			productName = SwiftLibSSH;
+			package = 7391BAC430A13C03004ED002 /* XCRemoteSwiftPackageReference "swift-russh" */;
+			productName = SwiftRussh;
 		};
-		73799A6B2F9812D100A15109 /* SwiftLibSSH */ = {
+		7391BAC730A13C35004ED002 /* SwiftRussh */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */;
-			productName = SwiftLibSSH;
+			package = 7391BAC430A13C03004ED002 /* XCRemoteSwiftPackageReference "swift-russh" */;
+			productName = SwiftRussh;
 		};
-		738C97B82FDA03CC007EC380 /* SwiftLibSSH */ = {
+		7391BAC930A13C3F004ED002 /* SwiftRussh */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */;
-			productName = SwiftLibSSH;
+			package = 7391BAC430A13C03004ED002 /* XCRemoteSwiftPackageReference "swift-russh" */;
+			productName = SwiftRussh;
 		};
-		738C97BA2FDA03D2007EC380 /* SwiftLibSSH */ = {
+		7391BACB30A13C46004ED002 /* SwiftRussh */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */;
-			productName = SwiftLibSSH;
+			package = 7391BAC430A13C03004ED002 /* XCRemoteSwiftPackageReference "swift-russh" */;
+			productName = SwiftRussh;
+		};
+		7391BACD30A13C54004ED002 /* SwiftRussh */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7391BAC430A13C03004ED002 /* XCRemoteSwiftPackageReference "swift-russh" */;
+			productName = SwiftRussh;
+		};
+		7391BACF30A13C5A004ED002 /* SwiftRussh */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7391BAC430A13C03004ED002 /* XCRemoteSwiftPackageReference "swift-russh" */;
+			productName = SwiftRussh;
 		};
 		73E6C86A3089644300472449 /* Ignore */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1950,11 +1955,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 73E6C8693089644300472449 /* XCRemoteSwiftPackageReference "swift-ignore" */;
 			productName = Ignore;
-		};
-		8106F7FEE4BAD6941D90FB59 /* SwiftLibSSH */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 7322A9262F294D5400D8117D /* XCRemoteSwiftPackageReference "swift-libssh" */;
-			productName = SwiftLibSSH;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

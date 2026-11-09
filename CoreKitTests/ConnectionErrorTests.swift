@@ -1,32 +1,30 @@
 import Common
 import Foundation
-import SwiftLibSSH
+import SwiftRussh
 import Testing
 
 @testable import CoreKit
 
 @Suite struct ConnectionErrorTests {
-    @Test func mapsUnknownHost() {
-        let error = ConnectionError(
-            from: SSHError.connectionFailed(
-                message: "Failed to resolve hostname example.invalid"
-            )
-        )
-        #expect(error == .unknownHost)
-    }
-
     @Test(
-        arguments: [
-            "Connection refused",
-            "Socket error",
-            "Bad file descriptor",
-        ]
-    )
-    func mapsConnectionRefused(_ message: String) {
-        let error = ConnectionError(
-            from: SSHError.connectionFailed(message: message)
+        arguments: zip(
+            [
+                ConnectionFailure.unknownHost, .refused, .timedOut, .lost,
+            ],
+            [
+                ConnectionError.unknownHost, .connectionRefused,
+                .connectionTimedOut, .connectionLost,
+            ]
         )
-        #expect(error == .connectionRefused)
+    )
+    func mapsConnectionFailureReasons(
+        _ failure: ConnectionFailure,
+        _ expected: ConnectionError
+    ) {
+        let error = ConnectionError(
+            from: SSHError.connectionFailed(failure, message: "detail")
+        )
+        #expect(error == expected)
     }
 
     @Test func mapsHostKeyMismatchToTheNewKey() {
@@ -50,13 +48,6 @@ import Testing
 
     @Test func otherErrorDetailsAreTheirMessage() {
         #expect(ConnectionError.connectionRefused.detail == "Connection refused")
-    }
-
-    @Test func mapsConnectionTimedOut() {
-        let error = ConnectionError(
-            from: SSHError.connectionFailed(message: "Timeout connecting")
-        )
-        #expect(error == .connectionTimedOut)
     }
 
     @Test func mapsInvalidPrivateKey() {
@@ -84,7 +75,10 @@ import Testing
 
     @Test func mapsUnrecognizedSSHErrorToUnknown() {
         let error = ConnectionError(
-            from: SSHError.connectionFailed(message: "something unexpected")
+            from: SSHError.connectionFailed(
+                .other,
+                message: "something unexpected"
+            )
         )
         guard case .unknown = error else {
             Issue.record("Expected .unknown, got \(error)")

@@ -1,6 +1,6 @@
 import Common
 import FileProvider
-import SwiftLibSSH
+import SwiftRussh
 
 public struct ConnectionConfig: Message, CustomStringConvertible {
     public enum ValidationError: Error, Equatable {

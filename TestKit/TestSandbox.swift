@@ -2,7 +2,7 @@ import Common
 import FileProvider
 import Foundation
 import SwiftData
-import SwiftLibSSH
+import SwiftRussh
 import Testing
 import XPC
 
@@ -38,7 +38,8 @@ struct NoopExtensionController: ExtensionController {
 extension ConnectionError {
     fileprivate var isTransient: Bool {
         switch self {
-        case .connectionRefused, .connectionTimedOut, .unknown:
+        case .connectionRefused, .connectionTimedOut, .connectionLost,
+            .unknown:
             true
         case .unknownHost, .invalidPrivateKey, .authenticationFailed,
             .hostKeyChanged, .remotePathNotFound, .remotePathNotDirectory,
