@@ -9,7 +9,7 @@ import Testing
     @Test(
         arguments: zip(
             [
-                ConnectionFailure.unknownHost, .refused, .timedOut, .lost,
+                SSHError.ConnectionFailure.unknownHost, .refused, .timedOut, .lost,
             ],
             [
                 ConnectionError.unknownHost, .connectionRefused,
@@ -18,7 +18,7 @@ import Testing
         )
     )
     func mapsConnectionFailureReasons(
-        _ failure: ConnectionFailure,
+        _ failure: SSHError.ConnectionFailure,
         _ expected: ConnectionError
     ) {
         let error = ConnectionError(
@@ -68,7 +68,7 @@ import Testing
 
     @Test func mapsRemotePathNotFound() {
         let error = ConnectionError(
-            from: SSHError.sftpError(.noSuchFile, message: "no such file")
+            from: SSHError.sftp(.noSuchFile, message: "no such file")
         )
         #expect(error == .remotePathNotFound)
     }

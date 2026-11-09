@@ -44,7 +44,7 @@ public enum ConnectionError: Message, Error {
             case .hostKeyMismatch(_, let actual, _):
                 self = .hostKeyChanged(actual)
                 return
-            case .sftpError(.noSuchFile, _):
+            case .sftp(.noSuchFile, _):
                 self = .remotePathNotFound
                 return
             default:

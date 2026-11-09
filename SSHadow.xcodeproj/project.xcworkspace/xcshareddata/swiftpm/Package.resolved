@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/kosolabs/swift-russh.git",
       "state" : {
-        "revision" : "bf1e8647a87411f637f3022caca9798fc134682e",
-        "version" : "0.2.1"
+        "revision" : "6c7f1941bc3179ebe18013d5446e55c155852727",
+        "version" : "0.4.0"
       }
     }
   ],
