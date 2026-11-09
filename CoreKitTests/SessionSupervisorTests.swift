@@ -58,6 +58,26 @@ private actor SpyExtensionController: ExtensionController {
     }
 
     private(set) var calls: [Call] = []
+    private var holdsSuspends = false
+    private var suspendGate: CheckedContinuation<Void, Never>?
+    private var suspendingWaiter: CheckedContinuation<Void, Never>?
+
+    /// Make later suspends block until `releaseSuspend()`, as File Provider
+    /// can for a domain it failed to start.
+    func holdSuspends() {
+        holdsSuspends = true
+    }
+
+    func waitUntilSuspending() async {
+        guard suspendGate == nil else { return }
+        await withCheckedContinuation { suspendingWaiter = $0 }
+    }
+
+    func releaseSuspend() {
+        holdsSuspends = false
+        suspendGate?.resume()
+        suspendGate = nil
+    }
 
     func resume() async {
         calls.append(.resume)
@@ -68,6 +88,12 @@ private actor SpyExtensionController: ExtensionController {
         options: NSFileProviderManager.DisconnectionOptions
     ) async {
         calls.append(.suspend)
+        guard holdsSuspends else { return }
+        await withCheckedContinuation { gate in
+            suspendGate = gate
+            suspendingWaiter?.resume()
+            suspendingWaiter = nil
+        }
     }
 
     func remove() async {
@@ -1207,6 +1233,39 @@ struct SessionSupervisorTests {
             spy.statuses == [
                 .connecting, .online, .disconnecting(.disabled),
                 .offline(.disabled),
+            ]
+        )
+    }
+
+    @Test func disableWhileDisconnectingRemovesWithoutWaiting() async throws {
+        let sandbox = TestSandbox()
+        let spy = StatusSpy()
+        let ext = SpyExtensionController()
+        let supervisor = try await SessionSupervisor(
+            domain: sandbox.domain,
+            pollInterval: nil,
+            openSession: sandbox.sessionProvider(),
+            xpc: SpyXPCBroker(),
+            ext: ext,
+            onStatusChange: spy.handler()
+        )
+        try await supervisor.connect(config: try sandbox.config)
+        await ext.holdSuspends()
+        let pauseTask = Task { await supervisor.pause() }
+        await ext.waitUntilSuspending()
+
+        await supervisor.disable()
+
+        #expect(await ext.calls == [.resume, .suspend, .remove])
+        #expect(await supervisor.status == .disconnecting(.disabled))
+
+        await ext.releaseSuspend()
+        await pauseTask.value
+
+        #expect(
+            spy.statuses == [
+                .connecting, .online, .disconnecting(.paused),
+                .disconnecting(.disabled), .offline(.disabled),
             ]
         )
     }

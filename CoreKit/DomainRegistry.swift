@@ -19,10 +19,10 @@ public actor DomainRegistry {
 
     public static let shared: DomainRegistry = DomainRegistry(
         signalChanges: { config in
-            await config.domain.signalChanges()
+            config.domain.signalChanges()
         },
         retryIgnored: { config in
-            await config.domain.retryIgnored()
+            config.domain.retryIgnored()
         },
         materializedItems: { config in
             try config.domain.manager.enumeratorForMaterializedItems()
