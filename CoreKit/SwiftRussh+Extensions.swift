@@ -70,7 +70,7 @@ extension SSHClient {
 extension SFTPClient {
     func makeDirectory(at path: String, mode: mode_t) async throws {
         do {
-            try await createDirectory(at: path, mode: mode)
+            try await createDirectory(at: path, permissions: mode)
         } catch let error as SSHError
             where error.sftpStatus == .failure
             || error.sftpStatus == .fileAlreadyExists
@@ -99,10 +99,11 @@ extension SFTPClient {
         perform: @Sendable (SFTPFile) async throws -> T
     ) async throws -> T {
         do {
-            return try await withSftpFile(
+            return try await withFile(
                 at: path,
-                accessType: .writeOnly,
-                mode: mode,
+                access: .writeOnly,
+                options: [.create, .truncate],
+                permissions: mode,
                 perform: perform
             )
         } catch let error as SSHError where error.sftpStatus == .failure {
