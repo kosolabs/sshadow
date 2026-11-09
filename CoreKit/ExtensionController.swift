@@ -8,6 +8,7 @@ protocol ExtensionController {
         options: NSFileProviderManager.DisconnectionOptions
     ) async
     func remove() async
+    func retryUnreachable() async
 }
 
 extension ExtensionController {

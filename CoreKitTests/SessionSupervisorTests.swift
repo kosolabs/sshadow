@@ -38,9 +38,10 @@ private actor SpyXPCBroker: XPCBroker {
         }
     }
 
-    func ready() async {
-        guard isConnected else { return }
+    func ready() async -> Bool {
+        guard isConnected else { return false }
         calls.append(.ready)
+        return true
     }
 
     func teardown() async {
@@ -55,6 +56,7 @@ private actor SpyExtensionController: ExtensionController {
         case resume
         case suspend
         case remove
+        case retryUnreachable
     }
 
     private(set) var calls: [Call] = []
@@ -98,6 +100,10 @@ private actor SpyExtensionController: ExtensionController {
 
     func remove() async {
         calls.append(.remove)
+    }
+
+    func retryUnreachable() async {
+        calls.append(.retryUnreachable)
     }
 }
 
@@ -266,7 +272,11 @@ struct SessionSupervisorTests {
         try await supervisor.connect(config: try sandbox.config)
 
         #expect(await provider.callCount == 1)
-        #expect(await ext.calls == [.resume])
+        // Items that failed while the domain was disconnected wait out File
+        // Provider's backoff, several seconds, before it retries them. Once
+        // the extension is ready, signalling that the server is reachable
+        // makes it retry them straight away.
+        #expect(await ext.calls == [.resume, .retryUnreachable])
         #expect(await xpc.calls == [.broker, .ready])
         #expect(await supervisor.status == .online)
 
@@ -659,7 +669,7 @@ struct SessionSupervisorTests {
 
         // pause() suspends the domain (preserving the cache); it must not
         // remove it the way disable() does.
-        #expect(await ext.calls == [.resume, .suspend])
+        #expect(await ext.calls == [.resume, .retryUnreachable, .suspend])
         #expect(await xpc.calls == [.broker, .ready, .teardown])
         #expect(await xpc.cancelledTeardowns == 0)
         #expect(await supervisor.status == .offline(.paused))
@@ -713,7 +723,7 @@ struct SessionSupervisorTests {
         #expect(
             await xpc.calls == [.broker, .ready, .teardown, .broker, .teardown]
         )
-        #expect(await ext.calls == [.resume, .suspend, .resume, .suspend])
+        #expect(await ext.calls == [.resume, .retryUnreachable, .suspend, .resume, .suspend])
         #expect(await provider.callCount == 2)
         #expect(spy.statuses.last == .offline(.paused))
     }
@@ -762,7 +772,7 @@ struct SessionSupervisorTests {
         #expect(await provider.callCount == 2)
         #expect(await xpc.calls == [.broker, .ready, .teardown])
         #expect(await xpc.cancelledTeardowns == 0)
-        #expect(await ext.calls == [.resume, .suspend])
+        #expect(await ext.calls == [.resume, .retryUnreachable, .suspend])
         #expect(spy.statuses.last == .offline(.paused))
     }
 
@@ -1179,7 +1189,7 @@ struct SessionSupervisorTests {
         #expect(await provider.callCount == 2)
         #expect(await xpc.calls == [.broker, .ready, .teardown])
         #expect(await xpc.cancelledTeardowns == 0)
-        #expect(await ext.calls == [.resume, .suspend, .remove])
+        #expect(await ext.calls == [.resume, .retryUnreachable, .suspend, .remove])
         #expect(spy.statuses.last == .offline(.disabled))
     }
 
@@ -1256,7 +1266,7 @@ struct SessionSupervisorTests {
 
         await supervisor.disable()
 
-        #expect(await ext.calls == [.resume, .suspend, .remove])
+        #expect(await ext.calls == [.resume, .retryUnreachable, .suspend, .remove])
         #expect(await supervisor.status == .disconnecting(.disabled))
 
         await ext.releaseSuspend()
@@ -1299,7 +1309,7 @@ struct SessionSupervisorTests {
 
         #expect(await xpc.calls == [.broker, .ready, .teardown])
         #expect(await xpc.cancelledTeardowns == 0)
-        #expect(await ext.calls == [.resume, .suspend, .remove])
+        #expect(await ext.calls == [.resume, .retryUnreachable, .suspend, .remove])
         #expect(spy.statuses.last == .offline(.disabled))
     }
 
@@ -1346,7 +1356,7 @@ struct SessionSupervisorTests {
 
         #expect(await xpc.calls == [.broker, .ready, .teardown])
         #expect(await xpc.cancelledTeardowns == 0)
-        #expect(await ext.calls == [.resume, .suspend, .remove])
+        #expect(await ext.calls == [.resume, .retryUnreachable, .suspend, .remove])
         #expect(spy.statuses.last == .offline(.disabled))
     }
 
@@ -1387,7 +1397,7 @@ struct SessionSupervisorTests {
 
         #expect(await xpc.calls == [.broker, .ready, .teardown])
         #expect(await xpc.cancelledTeardowns == 0)
-        #expect(await ext.calls == [.resume, .suspend, .suspend])
+        #expect(await ext.calls == [.resume, .retryUnreachable, .suspend, .suspend])
         #expect(spy.statuses.last == .offline(.paused))
     }
 
@@ -1417,6 +1427,8 @@ struct SessionSupervisorTests {
             is: .offline(.xpcUnreachable(otherExtension: otherExtension))
         )
         #expect(await xpc.calls == [.broker, .teardown])
+        // No retry signal: File Provider would retry against an extension
+        // that isn't attached, fail again, and back off.
         #expect(await ext.calls == [.resume, .suspend])
         #expect(await provider.callCount == 1)
     }
@@ -1446,7 +1458,7 @@ struct SessionSupervisorTests {
             is: .offline(.xpcUnreachable(otherExtension: otherExtension))
         )
         #expect(await xpc.calls == [.broker, .ready, .teardown])
-        #expect(await ext.calls == [.resume, .suspend])
+        #expect(await ext.calls == [.resume, .retryUnreachable, .suspend])
         #expect(await provider.callCount == 1)
     }
 

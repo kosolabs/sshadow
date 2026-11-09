@@ -91,6 +91,21 @@ extension NSFileProviderDomain {
         }
     }
 
+    public func retryUnreachable() {
+        Task {
+            do {
+                try await manager.signalErrorResolved(
+                    NSFileProviderError(.serverUnreachable)
+                )
+                logger.info("Retrying unreachable items: \(self)")
+            } catch {
+                logger.error(
+                    "Failed to retry unreachable items for \(self): \(error)"
+                )
+            }
+        }
+    }
+
     public func retryIgnored() {
         Task {
             do {

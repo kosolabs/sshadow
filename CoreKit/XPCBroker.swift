@@ -11,7 +11,7 @@ protocol XPCBroker {
         exporting service: CoreService,
         onUnreachable: @escaping UnreachableHandler
     ) async
-    func ready() async
+    func ready() async -> Bool
     func teardown() async
 }
 
@@ -156,12 +156,14 @@ actor DomainXPCBroker: XPCBroker {
         }
     }
 
-    func ready() async {
-        guard case .connected(let connection) = state else { return }
+    func ready() async -> Bool {
+        guard case .connected(let connection) = state else { return false }
         do {
             try await connection.ready()
+            return true
         } catch {
             logger.error("Failed to signal ready to \(domain): \(error)")
+            return false
         }
     }
 
