@@ -87,6 +87,9 @@ def test_rebroker_domains(
         if kill == "app":
             app.kill()
             logs.expect_all([suspended_by_extension(name) for name in remotes])
+            # File Provider restarts each domain after its extension suspends
+            # it, and can lose a reconnect that arrives mid-restart.
+            time.sleep(2)
             relaunch_app()
         else:
             app.kill_extension()
