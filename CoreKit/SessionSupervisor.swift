@@ -180,8 +180,7 @@ package actor SessionSupervisor {
         case .online(let session):
             await disconnect(session, reason: .disabled)
         case .disconnecting:
-            logger.info("Ignored disable while in \(state)")
-            return
+            state = .disconnecting(.disabled)
         }
         await ext.remove()
         log.notice("Disconnected from \(domain.displayName)")
@@ -251,7 +250,7 @@ package actor SessionSupervisor {
         state = .disconnecting(reason)
         task.cancel()
         _ = await task.value
-        state = .offline(reason)
+        state = .offline(disconnectingReason ?? reason)
     }
 
     private func disconnect(_ session: Session, reason: OfflineReason) async {
@@ -262,7 +261,12 @@ package actor SessionSupervisor {
             await ext.suspend(reason: reason.text, options: .temporary)
             await session.close()
         }.value
-        state = .offline(reason)
+        state = .offline(disconnectingReason ?? reason)
+    }
+
+    private var disconnectingReason: OfflineReason? {
+        guard case .disconnecting(let reason) = state else { return nil }
+        return reason
     }
 
     private func setLogSource(_ config: ConnectionConfig) {
