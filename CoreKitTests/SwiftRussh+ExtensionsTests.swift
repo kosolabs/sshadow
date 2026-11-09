@@ -80,7 +80,7 @@ import XPC
         let config = try sandbox.config
 
         let (ssh, _) = try await connect(config)
-        let served = try await ssh.hostKey
+        let served = ssh.hostKey
         await ssh.close()
 
         #expect(served == config.hostKey)

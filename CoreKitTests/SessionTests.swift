@@ -3635,7 +3635,7 @@ struct SessionTests {
             #expect(try sandbox.stagedUploads() == [])
         }
 
-        private static let slowChunkSize: UInt64 = 1024
+        private static let slowChunkSize = 1024
 
         private func waitForBytes(_ progress: Progress) async throws {
             while progress.completedUnitCount == 0 {
