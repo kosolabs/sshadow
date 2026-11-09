@@ -129,15 +129,13 @@ struct Manifest: Message {
             let children = try await sftp.withDirectory(
                 at: folder.path(under: root)
             ) { dir in
-                var children: [SFTPAttributes] = []
-                for try await attrs in dir { children.append(attrs) }
+                var children: [SFTPDirectory.Entry] = []
+                for try await entry in dir { children.append(entry) }
                 return children
             }
-            let named = children.compactMap { attrs in
-                attrs.name.map { ($0, attrs) }
-            }
-            for (name, attrs) in named.sorted(by: { $0.0 < $1.0 }) {
-                let relative = folder.child(named: name)
+            for child in children.sorted(by: { $0.name < $1.name }) {
+                let attrs = child.attributes
+                let relative = folder.child(named: child.name)
                 let kind: Entry.Kind
                 switch attrs.type {
                 case .directory:
