@@ -73,7 +73,7 @@ def test_rebroker_domains(
     logs: LogWatcher,
     profiles: Profiles,
     remote: Path,
-    relaunch_app: Callable[[], None],
+    relaunch_app: Callable[..., None],
     kill: str,
 ) -> None:
     remotes = {"Test-E2E-A": remote / "a", "Test-E2E-B": remote / "b"}
@@ -87,7 +87,7 @@ def test_rebroker_domains(
         if kill == "app":
             app.kill()
             logs.expect_all([suspended_by_extension(name) for name in remotes])
-            relaunch_app()
+            relaunch_app(*remotes)
         else:
             app.kill_extension()
             logs.expect_all([invalidated(name) for name in remotes])
@@ -240,7 +240,7 @@ def test_changed_host_key_is_refused_until_trusted(
     proxied_profile: str,
     remote: Path,
     impostor: Impostor,
-    relaunch_app: Callable[[], None],
+    relaunch_app: Callable[..., None],
 ) -> None:
     name = proxied_profile
     socket = f"127.0.0.1:{proxy.port}"
@@ -263,6 +263,6 @@ def test_changed_host_key_is_refused_until_trusted(
     tree = round_trip(app, logs, name, local, remote, tree)
 
     app.quit()
-    relaunch_app()
+    relaunch_app(name)
     logs.expect(connected(name), timeout=60)
     round_trip(app, logs, name, local, remote, tree)

@@ -32,7 +32,7 @@ def test_quit_and_relaunch(
     logs: LogWatcher,
     profile: str,
     remote: Path,
-    relaunch_app: Callable[[], None],
+    relaunch_app: Callable[..., None],
 ) -> None:
     local = enable(app, logs, profile)
     make_tree(local, TREE)
@@ -45,7 +45,7 @@ def test_quit_and_relaunch(
     make_tree(local, local_change)
     tree = tree | remote_change | local_change
 
-    relaunch_app()
+    relaunch_app(profile)
     logs.expect_all([brokered(profile), connected(profile)], timeout=60)
     app.send("poll", name=profile)
     wait_for_tree(remote, tree, timeout=60, on_poll=logs.check)

@@ -2,7 +2,6 @@
 import getpass
 import json
 import os
-import plistlib
 import re
 import signal
 import subprocess
@@ -12,7 +11,6 @@ from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import objc
 from Foundation import (
@@ -45,11 +43,6 @@ LSREGISTER = (
 APP_EXECUTABLE = "Contents/MacOS/SSHadow"
 EXTENSION_BUNDLE = "Contents/PlugIns/Extension.appex"
 EXTENSION_EXECUTABLE = f"{EXTENSION_BUNDLE}/Contents/MacOS/Extension"
-DOMAINS_PLIST = (
-    Path.home()
-    / "Library/Application Support/FileProvider/com.kosolabs.SSHadow.Extension/Domains.plist"
-)
-DEFAULT_DOMAIN = "NSFileProviderDomainDefaultIdentifier"
 
 
 def post_distributed_notification(name: str, obj: str) -> None:
@@ -172,7 +165,6 @@ class App:
         self.path = path.resolve()
         self.executable = self.path / APP_EXECUTABLE
         self.extension = self.path / EXTENSION_EXECUTABLE
-        self.domains_connected_at_stop: list[str] = []
 
     def started(self) -> datetime | None:
         processes = find_processes(self.executable)
@@ -204,7 +196,6 @@ class App:
         )
 
     def quit(self, timeout: float = 10) -> None:
-        self.domains_connected_at_stop = connected_domains()
         self.send("quit")
         deadline = time.monotonic() + timeout
         while self.started() is not None:
@@ -213,7 +204,6 @@ class App:
             time.sleep(0.1)
 
     def kill(self, timeout: float = 10) -> None:
-        self.domains_connected_at_stop = connected_domains()
         kill(self.executable, timeout)
 
     def kill_extension(self, timeout: float = 10) -> None:
@@ -226,26 +216,6 @@ class App:
             COMMAND_NOTIFICATION,
             json.dumps({"command": command, **params}, default=str),
         )
-
-
-def read_domains() -> dict[str, Any]:
-    try:
-        with DOMAINS_PLIST.open("rb") as f:
-            return plistlib.load(f)
-    except FileNotFoundError:
-        return {}
-    except PermissionError as e:
-        raise RuntimeError(
-            f"Can't read {DOMAINS_PLIST}. Give the terminal running the tests Full Disk Access."
-        ) from e
-
-
-def connected_domains() -> list[str]:
-    return [
-        identifier
-        for identifier, domain in read_domains().items()
-        if identifier != DEFAULT_DOMAIN and domain.get("Connected")
-    ]
 
 
 def obfuscated(identifier: str) -> str:

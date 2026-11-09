@@ -1,4 +1,5 @@
 import ctypes
+import plistlib
 import re
 import shutil
 import subprocess
@@ -6,6 +7,7 @@ import time
 from collections.abc import Callable, Generator
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -13,8 +15,6 @@ from impostor import Impostor
 from logwatch import LogWatcher, msg
 from proxy import Proxy
 from sshadow import (
-    DEFAULT_DOMAIN,
-    DOMAINS_PLIST,
     PROFILE_NAME,
     REMOTE_ROOT,
     REPO,
@@ -24,7 +24,6 @@ from sshadow import (
     cloud_storage,
     create_profile,
     find_app,
-    read_domains,
     wait_for_removal,
     wait_for_restarts,
 )
@@ -40,6 +39,11 @@ PREDICATE = f'subsystem BEGINSWITH "com.kosolabs.SSHadow" OR ({DOMAIN_RESTARTS})
 LOG_DIR = REPO / "logs"
 TEST_KEY = REPO / "TestKit" / "id_ed25519"
 APPROVAL_PROFILE_NAME = "Test-E2E-Approval"
+DOMAINS_PLIST = (
+    Path.home()
+    / "Library/Application Support/FileProvider/com.kosolabs.SSHadow.Extension/Domains.plist"
+)
+DEFAULT_DOMAIN = "NSFileProviderDomainDefaultIdentifier"
 IMPOSTOR_PORT = 2252
 
 
@@ -187,6 +191,18 @@ def delete_leftover_profiles(app: App, logs: LogWatcher) -> None:
         wait_for_removal(leftover)
 
 
+def read_domains() -> dict[str, Any]:
+    try:
+        with DOMAINS_PLIST.open("rb") as f:
+            return plistlib.load(f)
+    except FileNotFoundError:
+        return {}
+    except PermissionError as e:
+        raise RuntimeError(
+            f"Can't read {DOMAINS_PLIST}. Give the terminal running the tests Full Disk Access."
+        ) from e
+
+
 def domain_named(name: str, timeout: float = 30) -> str:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -252,9 +268,10 @@ def profiles(
 @pytest.fixture
 def relaunch_app(
     app: App, logs: LogWatcher, key: Path, profiles: Profiles
-) -> Generator[Callable[[], None]]:
-    def relaunch() -> None:
-        wait_for_restarts(logs, app.domains_connected_at_stop)
+) -> Generator[Callable[..., None]]:
+    def relaunch(*connected: str) -> None:
+        """Relaunch SSHadow once File Provider has restarted the `connected` profiles' domains."""
+        wait_for_restarts(logs, [domain_named(name) for name in connected])
         launch(app, logs, key)
 
     yield relaunch

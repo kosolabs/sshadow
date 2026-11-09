@@ -385,7 +385,7 @@ def test_removing_rule_remotely_while_quit_uploads_ignored_items(
     logs: LogWatcher,
     profile: str,
     remote: Path,
-    relaunch_app: Callable[[], None],
+    relaunch_app: Callable[..., None],
 ) -> None:
     local = enable(app, logs, profile)
     make_tree(local, {".sshadowignore": File(b"build/\n")})
@@ -395,7 +395,7 @@ def test_removing_rule_remotely_while_quit_uploads_ignored_items(
 
     app.quit()
     (remote / ".sshadowignore").write_bytes(b"")
-    relaunch_app()
+    relaunch_app(profile)
     logs.expect_all([brokered(profile), connected(profile)], timeout=60)
     app.send("poll", name=profile)
     expected: Tree = {

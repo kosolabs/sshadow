@@ -13,7 +13,7 @@ from sshadow import App, disable, enable, unregister
 
 @pytest.fixture
 def other_copy(
-    app: App, relaunch_app: Callable[[], None], tmp_path: Path
+    app: App, relaunch_app: Callable[..., None], tmp_path: Path
 ) -> Generator[App]:
     """A copy of the app under test at another path, removed before relaunching."""
     path = tmp_path / "SSHadow.app"

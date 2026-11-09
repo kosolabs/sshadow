@@ -75,7 +75,7 @@ def test_relaunch_reloads_materialized_set(
     logs: LogWatcher,
     profile: str,
     remote: Path,
-    relaunch_app: Callable[[], None],
+    relaunch_app: Callable[..., None],
 ) -> None:
     make_tree(remote, TREE)
     local = enable(app, logs, profile)
@@ -85,7 +85,7 @@ def test_relaunch_reloads_materialized_set(
     logs.expect(materialized("a.txt"), timeout=30)
 
     app.quit()
-    relaunch_app()
+    relaunch_app(profile)
     logs.expect_all(
         [brokered(profile), connected(profile), materialized("a.txt")], timeout=60
     )
