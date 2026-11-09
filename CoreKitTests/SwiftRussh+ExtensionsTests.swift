@@ -1,7 +1,7 @@
 import Common
 import Foundation
 import SwiftData
-import SwiftLibSSH
+import SwiftRussh
 import TestKit
 import Testing
 import XPC

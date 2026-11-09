@@ -1,5 +1,5 @@
 import Foundation
-import SwiftLibSSH
+import SwiftRussh
 import TestKit
 import Testing
 

@@ -1,8 +1,8 @@
 import Common
 import Foundation
-import SwiftLibSSH
+import SwiftRussh
 
-private let logger = Logger(category: "SwiftLibSSH")
+private let logger = Logger(category: "SwiftRussh")
 
 extension SSHClient {
     static func serverHostKey(

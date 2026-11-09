@@ -2,7 +2,7 @@ import Common
 import FileProvider
 import Foundation
 import SwiftData
-import SwiftLibSSH
+import SwiftRussh
 
 private let logger = Logger(category: "DomainRegistry")
 

@@ -1,11 +1,12 @@
 import Common
 import Foundation
-import SwiftLibSSH
+import SwiftRussh
 
 public enum ConnectionError: Message, Error {
     case unknownHost
     case connectionRefused
     case connectionTimedOut
+    case connectionLost
     case invalidPrivateKey
     case authenticationFailed
     case hostKeyChanged(SSHHostKey)
@@ -21,19 +22,17 @@ public enum ConnectionError: Message, Error {
         }
         if let sshError = error as? SSHError {
             switch sshError {
-            case .connectionFailed(let message)
-            where message.contains("Failed to resolve hostname"):
+            case .connectionFailed(.unknownHost, _):
                 self = .unknownHost
                 return
-            case .connectionFailed(let message)
-            where message.contains("Connection refused")
-                || message.contains("Socket error")
-                || message.contains("Bad file descriptor"):
+            case .connectionFailed(.refused, _):
                 self = .connectionRefused
                 return
-            case .connectionFailed(let message)
-            where message.contains("Timeout"):
+            case .connectionFailed(.timedOut, _):
                 self = .connectionTimedOut
+                return
+            case .connectionFailed(.lost, _):
+                self = .connectionLost
                 return
             case .authenticationFailed(let message)
             where message.contains("Failed to import private key"):
@@ -62,8 +61,8 @@ public enum ConnectionError: Message, Error {
 
     public var isRetryable: Bool {
         switch self {
-        case .unknownHost, .connectionRefused, .connectionTimedOut, .cancelled,
-            .unknown:
+        case .unknownHost, .connectionRefused, .connectionTimedOut,
+            .connectionLost, .cancelled, .unknown:
             true
         case .invalidPrivateKey, .authenticationFailed, .hostKeyChanged,
             .remotePathNotFound, .remotePathNotDirectory:
@@ -85,6 +84,7 @@ public enum ConnectionError: Message, Error {
         case .unknownHost: "Unknown host"
         case .connectionRefused: "Connection refused"
         case .connectionTimedOut: "Connection timed out"
+        case .connectionLost: "Connection lost"
         case .invalidPrivateKey: "Invalid private key"
         case .authenticationFailed: "Authentication failed"
         case .hostKeyChanged: "Host key changed"

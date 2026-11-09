@@ -24,7 +24,7 @@ SSHadow uses the File Provider framework, so each connection shows up as a locat
 
 ## Architecture
 
-- Built on our own libssh wrapper, [SwiftLibSSH](https://github.com/kosolabs/swift-lib-ssh/) for much faster uploads and downloads than other pure Swift SSH implementations.
+- Built on our own SSH client, [SwiftRussh](https://github.com/kosolabs/swift-russh), a Swift wrapper around the Rust [russh](https://github.com/Eugeny/russh) library, for much faster uploads and downloads than other pure Swift SSH implementations.
 - Runs inside the macOS App Sandbox, with the following entitlements:
   - Outgoing network access to reach SSH servers.
   - Shared app group between the app and its File Provider extension

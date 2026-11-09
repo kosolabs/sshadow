@@ -1,5 +1,5 @@
 import Common
-import SwiftLibSSH
+import SwiftRussh
 import Testing
 
 @testable import CoreKit

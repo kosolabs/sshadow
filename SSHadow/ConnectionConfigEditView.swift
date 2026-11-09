@@ -1,7 +1,7 @@
 import Common
 import CoreKit
 import SwiftData
-import SwiftLibSSH
+import SwiftRussh
 import SwiftUI
 import UniformTypeIdentifiers
 
