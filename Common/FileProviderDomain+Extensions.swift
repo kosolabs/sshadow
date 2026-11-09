@@ -81,22 +81,28 @@ extension NSFileProviderDomain {
         }
     }
 
-    public func signalChanges() async {
-        do {
-            try await manager.signalEnumerator(for: .workingSet)
-        } catch {
-            logger.error("Failed to signal changes \(self): \(error)")
+    public func signalChanges() {
+        Task {
+            do {
+                try await manager.signalEnumerator(for: .workingSet)
+            } catch {
+                logger.error("Failed to signal changes \(self): \(error)")
+            }
         }
     }
 
-    public func retryIgnored() async {
-        do {
-            try await manager.signalErrorResolved(
-                NSFileProviderError(.excludedFromSync)
-            )
-            logger.info("Retrying ignored items: \(self)")
-        } catch {
-            logger.error("Failed to retry ignored items for \(self): \(error)")
+    public func retryIgnored() {
+        Task {
+            do {
+                try await manager.signalErrorResolved(
+                    NSFileProviderError(.excludedFromSync)
+                )
+                logger.info("Retrying ignored items: \(self)")
+            } catch {
+                logger.error(
+                    "Failed to retry ignored items for \(self): \(error)"
+                )
+            }
         }
     }
 
