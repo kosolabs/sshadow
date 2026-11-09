@@ -1176,7 +1176,7 @@ extension Session {
                     at: remotePath,
                     mode: entry.mode
                 ) { file in
-                    try await file.withAsyncWriter { writer in
+                    try await file.withWriter { writer in
                         while let data = try fp.read(upToCount: bufferSize) {
                             if progress.isCancelled {
                                 throw CoreError.userCancelled
