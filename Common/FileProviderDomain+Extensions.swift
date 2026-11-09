@@ -81,8 +81,6 @@ extension NSFileProviderDomain {
         }
     }
 
-    /// Returns without waiting for File Provider, which can leave the call
-    /// pending indefinitely for a domain it failed to start.
     public func signalChanges() {
         Task {
             do {
@@ -93,8 +91,6 @@ extension NSFileProviderDomain {
         }
     }
 
-    /// Returns without waiting for File Provider, which can leave the call
-    /// pending indefinitely for a domain it failed to start.
     public func retryIgnored() {
         Task {
             do {
