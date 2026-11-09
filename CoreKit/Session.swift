@@ -921,7 +921,7 @@ extension Session {
     }
 
     private func refreshIgnores(
-        from listing: [SFTPAttributes],
+        from listing: [SFTPDirectory.Entry],
         in dir: String
     ) async throws {
         guard !config.ignoreFilenames.isEmpty, !dir.hasPrefix(".sshadow/")
@@ -950,15 +950,20 @@ extension Session {
     }
 
     private func listedIgnoreFiles(
-        in listing: [SFTPAttributes],
+        in listing: [SFTPDirectory.Entry],
         at dir: String
     ) async throws -> [IgnoreFile] {
         var files: [IgnoreFile] = []
-        for attrs in listing {
-            guard attrs.type != .directory, let name = attrs.name,
+        for entry in listing {
+            let name = entry.name
+            guard entry.attributes.type != .directory,
                 config.ignoreFilenames.contains(name)
             else { continue }
-            if ignores.isCurrent(name, in: dir, at: attrs.ignoreFileVersion) {
+            if ignores.isCurrent(
+                name,
+                in: dir,
+                at: entry.attributes.ignoreFileVersion
+            ) {
                 files.append(IgnoreFile(name: name, content: .unresolved))
             } else if let file = try await readIgnoreFile(name, in: dir) {
                 files.append(file)
@@ -1345,14 +1350,14 @@ extension Session {
         do {
             stale = try await sftp.withDirectory(at: stagingPath) { dir in
                 var stale: [(String, Manifest.Entry.Kind)] = []
-                for try await attrs in dir {
-                    guard let name = attrs.name,
-                        let modifyTime = attrs.modifyTime,
+                for try await entry in dir {
+                    guard let modifyTime = entry.attributes.modifyTime,
                         modifyTime < cutoff
                     else { continue }
                     let kind: Manifest.Entry.Kind =
-                        attrs.type == .directory ? .folder : .file(size: 0)
-                    stale.append((name, kind))
+                        entry.attributes.type == .directory
+                        ? .folder : .file(size: 0)
+                    stale.append((entry.name, kind))
                 }
                 return stale
             }
@@ -1511,7 +1516,7 @@ extension Session {
             flags: .from(attrs.permissions),
             accessTime: attrs.accessTime,
             modifyTime: attrs.modifyTime,
-            createTime: attrs.createTime
+            createTime: nil
         )
     }
 
@@ -1535,7 +1540,7 @@ extension Session {
             flags: .from(attrs.permissions),
             accessTime: attrs.accessTime,
             modifyTime: attrs.modifyTime,
-            createTime: attrs.createTime
+            createTime: nil
         )
     }
 
@@ -1553,11 +1558,11 @@ extension Session {
     private func entries(
         of itemId: NSFileProviderItemIdentifier
     ) async throws -> [SSHItem] {
-        let listing: [SFTPAttributes]
+        let listing: [SFTPDirectory.Entry]
         do {
             listing = try await withDirectory(for: itemId) { dir in
-                var listing: [SFTPAttributes] = []
-                for try await attrs in dir { listing.append(attrs) }
+                var listing: [SFTPDirectory.Entry] = []
+                for try await entry in dir { listing.append(entry) }
                 return listing
             }
         } catch CoreError.itemNotFound where itemId == .trashContainer {
@@ -1568,17 +1573,17 @@ extension Session {
         try await refreshIgnores(from: listing, in: dir)
 
         var entries: [SSHItem] = []
-        for attrs in listing {
-            guard let name = attrs.name else { continue }
+        for entry in listing {
+            let name = entry.name
             if itemId == .rootContainer, name == ".sshadow" { continue }
-            let isDirectory = attrs.type == .directory
+            let isDirectory = entry.attributes.type == .directory
             if ignores.rule(ignoring: name, in: dir, isDirectory: isDirectory)
                 != nil
             {
                 continue
             }
             entries.append(
-                try await sshItem(for: name, in: itemId, from: attrs)
+                try await sshItem(for: name, in: itemId, from: entry.attributes)
             )
         }
         return entries
@@ -1623,7 +1628,7 @@ extension Session {
             flags: .from(attrs.permissions),
             accessTime: attrs.accessTime,
             modifyTime: attrs.modifyTime,
-            createTime: attrs.createTime
+            createTime: nil
         )
     }
 
