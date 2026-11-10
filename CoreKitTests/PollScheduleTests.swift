@@ -22,13 +22,61 @@ struct PollScheduleTests {
         #expect(schedule.next(now: now, userIdle: .zero) == .wait)
     }
 
-    @Test func requestedPollAllIsDueImmediately() {
+    @Test func requestedPollAllWaitsForTheQuietPeriod() {
         let schedule = schedule()
-        schedule.requestPollAll()
-        #expect(schedule.next(now: now, userIdle: .seconds(3600)) == .pollAll)
+        schedule.requestPollAll(at: now)
 
-        schedule.recordPollAll(at: now)
         #expect(schedule.next(now: now, userIdle: .zero) == .wait)
+        #expect(
+            schedule.next(
+                now: now + PollSchedule.requestQuietPeriod,
+                userIdle: .seconds(3600)
+            ) == .pollAll
+        )
+    }
+
+    @Test func anotherRequestRestartsTheQuietPeriod() {
+        let schedule = schedule()
+        schedule.requestPollAll(at: now)
+        let later = now + .milliseconds(800)
+        schedule.requestPollAll(at: later)
+
+        #expect(
+            schedule.next(
+                now: now + PollSchedule.requestQuietPeriod,
+                userIdle: .zero
+            ) == .wait
+        )
+        #expect(
+            schedule.next(
+                now: later + PollSchedule.requestQuietPeriod,
+                userIdle: .zero
+            ) == .pollAll
+        )
+    }
+
+    @Test func recordedPollAllClearsTheRequest() {
+        let schedule = schedule()
+        schedule.requestPollAll(at: now)
+        let polled = now + PollSchedule.requestQuietPeriod
+        schedule.recordPollAll(at: polled)
+
+        #expect(schedule.next(now: polled, userIdle: .zero) == .wait)
+    }
+
+    @Test func manualScheduleOnlyPollsOnRequest() {
+        let schedule = PollSchedule(begin: now, settings: nil)
+        let muchLater = now + .seconds(86_400)
+
+        #expect(schedule.next(now: muchLater, userIdle: .zero) == .wait)
+
+        schedule.requestPollAll(at: muchLater)
+        #expect(
+            schedule.next(
+                now: muchLater + PollSchedule.requestQuietPeriod,
+                userIdle: .zero
+            ) == .pollAll
+        )
     }
 
     @Test func pollAllBecomesDueAfterInterval() {

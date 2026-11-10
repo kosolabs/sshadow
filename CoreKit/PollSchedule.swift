@@ -27,18 +27,20 @@ public struct PollSettings: Message, CustomStringConvertible {
 }
 
 class PollSchedule {
+    static let requestQuietPeriod: Duration = .seconds(1)
+
     enum Operation: Equatable {
         case pollAll
         case pollWatched
         case wait
     }
 
-    private var settings: PollSettings
+    private(set) var settings: PollSettings?
     private var lastPollAll: ContinuousClock.Instant
     private var lastPollWatched: ContinuousClock.Instant?
-    private var pollAllRequested = false
+    private var pollAllRequestedAt: ContinuousClock.Instant?
 
-    init(begin now: ContinuousClock.Instant, settings: PollSettings) {
+    init(begin now: ContinuousClock.Instant, settings: PollSettings?) {
         self.settings = settings
         lastPollAll = now
         lastPollWatched = now
@@ -48,9 +50,12 @@ class PollSchedule {
         now: ContinuousClock.Instant,
         userIdle: Duration
     ) -> Operation {
-        if pollAllRequested {
+        if let pollAllRequestedAt,
+            now - pollAllRequestedAt >= Self.requestQuietPeriod
+        {
             return .pollAll
         }
+        guard let settings else { return .wait }
         if isDue(
             now,
             since: lastPollAll,
@@ -72,16 +77,16 @@ class PollSchedule {
         return .wait
     }
 
-    func update(settings: PollSettings) {
+    func update(settings: PollSettings?) {
         self.settings = settings
     }
 
-    func requestPollAll() {
-        pollAllRequested = true
+    func requestPollAll(at now: ContinuousClock.Instant) {
+        pollAllRequestedAt = now
     }
 
     func recordPollAll(at now: ContinuousClock.Instant) {
-        pollAllRequested = false
+        pollAllRequestedAt = nil
         lastPollAll = now
         lastPollWatched = now
     }

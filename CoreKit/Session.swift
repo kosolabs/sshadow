@@ -45,9 +45,8 @@ package actor Session {
     )
 
     private(set) var ignoreFilenames: [String]
-    private var poll: PollSettings?
     private var watched: Set<NSFileProviderItemIdentifier> = []
-    private var schedule: PollSchedule?
+    private let schedule: PollSchedule
     private var pollTask: Task<Void, Never>?
     private(set) var reconcileTask: Task<[Change], any Error>?
     private let gate = ReconcileGate()
@@ -115,7 +114,10 @@ package actor Session {
     ) {
         self.config = config
         self.ignoreFilenames = config.ignoreFilenames
-        self.poll = config.poll
+        self.schedule = PollSchedule(
+            begin: ContinuousClock.now,
+            settings: config.poll
+        )
         self.ssh = ssh
         self.sftp = sftp
         self.db = db
@@ -151,12 +153,7 @@ extension Session {
     func start() async {
         await refreshMaterialized()
         await ignoreRulesChangedHandler()
-        guard pollTask == nil, let poll else { return }
-        startPolling(poll)
-    }
-
-    private func startPolling(_ poll: PollSettings) {
-        schedule = PollSchedule(begin: ContinuousClock.now, settings: poll)
+        guard pollTask == nil else { return }
         pollTask = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
@@ -177,7 +174,6 @@ extension Session {
     }
 
     func tick() async throws {
-        guard let schedule else { return }
         guard !gate.isBusy else { return }
         switch schedule.next(
             now: ContinuousClock.now,
@@ -197,12 +193,6 @@ extension Session {
         pollTask?.cancel()
         pollTask = nil
     }
-
-    private func stopPolling() {
-        pollTask?.cancel()
-        pollTask = nil
-        schedule = nil
-    }
 }
 
 // MARK: - Live Settings
@@ -214,19 +204,11 @@ extension Session {
     }
 
     func updatePoll(_ newPoll: PollSettings?) {
-        guard newPoll != poll else { return }
-        poll = newPoll
+        guard newPoll != schedule.settings else { return }
+        schedule.update(settings: newPoll)
         logger.notice(
             "Poll updated: \(newPoll.map(String.init(describing:)) ?? "manual")"
         )
-        switch (newPoll, schedule) {
-        case (let newPoll?, let schedule?):
-            schedule.update(settings: newPoll)
-        case (let newPoll?, nil):
-            startPolling(newPoll)
-        case (nil, _):
-            stopPolling()
-        }
     }
 
     func updateIgnoreFilenames(_ filenames: [String]) async {
@@ -241,21 +223,7 @@ extension Session {
                 ? "None" : filenames.joined(separator: ", ")
         )
         await ignoreRulesChangedHandler()
-        pollAllSoon()
-    }
-
-    private func pollAllSoon() {
-        if let schedule {
-            schedule.requestPollAll()
-            return
-        }
-        Task { [weak self] in
-            do {
-                try await self?.pollAll()
-            } catch {
-                logger.error("Poll after ignore files changed failed: \(error)")
-            }
-        }
+        schedule.requestPollAll(at: ContinuousClock.now)
     }
 }
 
@@ -316,7 +284,7 @@ extension Session {
         let itemIds = itemIds.subtracting([.workingSet, .trashContainer])
         guard itemIds != watched else { return }
         if !itemIds.isSubset(of: watched) {
-            schedule?.recordWatchStarted()
+            schedule.recordWatchStarted()
         }
         watched = itemIds
 
@@ -348,7 +316,7 @@ extension Session {
             return try await reconcileTask.value
         }
 
-        schedule?.recordPollAll(at: ContinuousClock.now)
+        schedule.recordPollAll(at: ContinuousClock.now)
         guard !newChanges.isEmpty else {
             log.info("No changes on server")
             return
@@ -398,7 +366,7 @@ extension Session {
             return try await reconcileTask.value
         }
 
-        schedule?.recordPollWatched(at: ContinuousClock.now)
+        schedule.recordPollWatched(at: ContinuousClock.now)
         guard !newChanges.isEmpty else {
             return
         }
@@ -1041,7 +1009,7 @@ extension Session {
             logger.info(message)
             fileLog.info(message)
         }
-        if poll { schedule?.requestPollAll() }
+        if poll { schedule.requestPollAll(at: ContinuousClock.now) }
         await ignoreRulesChangedHandler()
     }
 

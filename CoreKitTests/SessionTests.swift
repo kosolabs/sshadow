@@ -4427,15 +4427,34 @@ struct SessionTests {
             watchedIdleThreshold: .seconds(120)
         )
 
-        @Test func addingAnIgnoreFileHidesItsMatchesWithoutASchedule()
-            async throws
-        {
+        @Test func localIgnoreFileEditPollsWhenManual() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "a.tmp")
+            let session = try await sandbox.getSession()
+            let tmpId = try await session.child(name: "a.tmp")
+            await session.start()
+
+            try sandbox.createFile(at: ".sshadowignore", contents: "*.tmp\n")
+            _ = try await session.createDirectory(
+                "dir",
+                in: .rootContainer,
+                snapshot: [folder("", text("*.tmp\n"))]
+            )
+
+            await expect(eventually: {
+                let (_, changes) = await session.changes(since: 0)
+                return changes.contains(.delete(itemId: tmpId.rawValue))
+            })
+            await session.stop()
+        }
+
+        @Test func addingAnIgnoreFileHidesItsMatchesWhenManual() async throws {
             let sandbox = TestSandbox()
             try sandbox.createFile(at: ".gitignore", contents: "*.log\n")
             try sandbox.createFile(at: "a.log")
             let session = try await sandbox.getSession()
             let logId = try await session.child(name: "a.log")
-            await session.refreshMaterialized().value
+            await session.start()
 
             await session.updateIgnoreFilenames([".sshadowignore", ".gitignore"])
 
@@ -4446,6 +4465,7 @@ struct SessionTests {
             await #expect(throws: CoreError.itemNotFound) {
                 try await session.child(name: "a.log")
             }
+            await session.stop()
         }
 
         @Test func removingAnIgnoreFileShowsItsMatchesAndRetriesIgnored()
@@ -4455,10 +4475,12 @@ struct SessionTests {
             try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
             try sandbox.createFile(at: "a.log")
 
-            try await confirmation { retried in
+            // start() signals once; changing the ignore files signals again.
+            try await confirmation(expectedCount: 2) { retried in
                 let session = try await sandbox.getSession(
                     ignoreRulesChangedHandler: { retried() }
                 )
+                await session.start()
                 await #expect(throws: CoreError.itemNotFound) {
                     try await session.child(name: "a.log")
                 }
@@ -4468,6 +4490,7 @@ struct SessionTests {
                 await expect(eventually: {
                     (try? await session.child(name: "a.log")) != nil
                 })
+                await session.stop()
             }
         }
 
@@ -4476,6 +4499,7 @@ struct SessionTests {
             let session = try await sandbox.getSession(idleTimeProvider: {
                 .zero
             })
+            await session.start()
             try sandbox.createFile(at: "new.txt")
 
             await session.updatePoll(dueImmediately)
@@ -4498,6 +4522,7 @@ struct SessionTests {
             try await session.tick()
 
             #expect(await session.anchor == anchor)
+            await session.stop()
         }
     }
 }
