@@ -189,6 +189,18 @@ public class ConnectionConfigModel: CustomStringConvertible {
         logger.notice("Profile disabled: \(self)")
     }
 
+    public func submitLiveSettings(settings: SettingsModel) {
+        guard enabled else { return }
+        let config: ConnectionConfig
+        do {
+            config = try ConnectionConfig(from: self, settings: settings)
+        } catch {
+            logger.notice("Live settings not applied to \(self): \(error)")
+            return
+        }
+        Task { await DomainRegistry.shared.update(config: config) }
+    }
+
     private func globalSettings() throws -> SettingsModel {
         guard let modelContext else { return SettingsModel() }
         return try modelContext.settings()

@@ -36,7 +36,7 @@ package actor Session {
     nonisolated private let fileLog: Events<ContinuousClock>.Logger
 
     private lazy var cache = FileCache(read: read)
-    private lazy var ignores = Ignores(filenames: config.ignoreFilenames)
+    private lazy var ignores = Ignores(filenames: ignoreFilenames)
     private lazy var materialized = MaterializedSet(
         enumerator: materializedItems,
         changed: { [weak self] added, removed in
@@ -44,6 +44,8 @@ package actor Session {
         }
     )
 
+    private(set) var ignoreFilenames: [String]
+    private var poll: PollSettings?
     private var watched: Set<NSFileProviderItemIdentifier> = []
     private var schedule: PollSchedule?
     private var pollTask: Task<Void, Never>?
@@ -60,10 +62,6 @@ package actor Session {
             maxReadLength: UInt64(sftp.limits.maxReadLength),
             maxWriteLength: UInt64(sftp.limits.maxWriteLength)
         )
-    }
-
-    var ignoreFilenames: [String] {
-        config.ignoreFilenames
     }
 
     var outstanding: Int { gate.operations }
@@ -116,6 +114,8 @@ package actor Session {
         events: Events<ContinuousClock>
     ) {
         self.config = config
+        self.ignoreFilenames = config.ignoreFilenames
+        self.poll = config.poll
         self.ssh = ssh
         self.sftp = sftp
         self.db = db
@@ -151,7 +151,11 @@ extension Session {
     func start() async {
         await refreshMaterialized()
         await ignoreRulesChangedHandler()
-        guard pollTask == nil, let poll = config.poll else { return }
+        guard pollTask == nil, let poll else { return }
+        startPolling(poll)
+    }
+
+    private func startPolling(_ poll: PollSettings) {
         schedule = PollSchedule(begin: ContinuousClock.now, settings: poll)
         pollTask = Task { [weak self] in
             guard let self else { return }
@@ -192,6 +196,66 @@ extension Session {
         reconcileTask?.cancel()
         pollTask?.cancel()
         pollTask = nil
+    }
+
+    private func stopPolling() {
+        pollTask?.cancel()
+        pollTask = nil
+        schedule = nil
+    }
+}
+
+// MARK: - Live Settings
+
+extension Session {
+    func update(from config: ConnectionConfig) async {
+        updatePoll(config.poll)
+        await updateIgnoreFilenames(config.ignoreFilenames)
+    }
+
+    func updatePoll(_ newPoll: PollSettings?) {
+        guard newPoll != poll else { return }
+        poll = newPoll
+        logger.notice(
+            "Poll updated: \(newPoll.map(String.init(describing:)) ?? "manual")"
+        )
+        switch (newPoll, schedule) {
+        case (let newPoll?, let schedule?):
+            schedule.update(settings: newPoll)
+        case (let newPoll?, nil):
+            startPolling(newPoll)
+        case (nil, _):
+            stopPolling()
+        }
+    }
+
+    func updateIgnoreFilenames(_ filenames: [String]) async {
+        guard filenames != ignoreFilenames else { return }
+        ignoreFilenames = filenames
+        ignores = Ignores(filenames: filenames)
+        reconcileTask?.cancel()
+        logger.notice("Ignore files changed: \(filenames)")
+        fileLog.info(
+            "Ignore files changed",
+            detail: filenames.isEmpty
+                ? "None" : filenames.joined(separator: ", ")
+        )
+        await ignoreRulesChangedHandler()
+        pollAllSoon()
+    }
+
+    private func pollAllSoon() {
+        if let schedule {
+            schedule.requestPollAll()
+            return
+        }
+        Task { [weak self] in
+            do {
+                try await self?.pollAll()
+            } catch {
+                logger.error("Poll after ignore files changed failed: \(error)")
+            }
+        }
     }
 }
 
@@ -921,7 +985,7 @@ extension Session {
         from listing: [SFTPDirectory.Entry],
         in dir: String
     ) async throws {
-        guard !config.ignoreFilenames.isEmpty, !dir.hasPrefix(".sshadow/")
+        guard !ignoreFilenames.isEmpty, !dir.hasPrefix(".sshadow/")
         else { return }
 
         try await loadIgnores(in: ancestors(of: dir))
@@ -936,7 +1000,7 @@ extension Session {
         var folders: [IgnoreFolder] = []
         for dir in dirs where !ignores.knows(dir) {
             var files: [IgnoreFile] = []
-            for name in config.ignoreFilenames {
+            for name in ignoreFilenames {
                 if let file = try await readIgnoreFile(name, in: dir) {
                     files.append(file)
                 }
@@ -954,7 +1018,7 @@ extension Session {
         for entry in listing {
             let name = entry.name
             guard entry.attributes.type != .directory,
-                config.ignoreFilenames.contains(name)
+                ignoreFilenames.contains(name)
             else { continue }
             if ignores.isCurrent(
                 name,

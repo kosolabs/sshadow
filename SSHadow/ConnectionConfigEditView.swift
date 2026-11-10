@@ -317,7 +317,6 @@ struct ConnectionConfigEditView: View {
                     error: validationError == .ignoreFilenameInvalid
                         ? validationError : nil
                 )
-                .disabled(locked)
             }
             .formStyle(.grouped)
             .onAppear {
@@ -326,7 +325,10 @@ struct ConnectionConfigEditView: View {
             }
             .onChange(of: config.authMethod) { validate() }
             .onChange(of: config.bookmark) { validate() }
-            .onChange(of: config.ignoreFilenames) { validate() }
+            .onChange(of: config.ignoreFilenames) {
+                validate()
+                config.submitLiveSettings(settings: settings)
+            }
             .alert(
                 "Trust the New Host Key?",
                 isPresented: Binding(

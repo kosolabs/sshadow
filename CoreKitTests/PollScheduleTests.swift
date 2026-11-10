@@ -142,4 +142,22 @@ struct PollScheduleTests {
             ) == .pollWatched
         )
     }
+
+    @Test func updatedSettingsApplyToTheNextDecision() {
+        let schedule = schedule()
+        schedule.update(
+            settings: PollSettings(
+                interval: .seconds(10),
+                idleThreshold: .seconds(600),
+                watchedInterval: .seconds(10),
+                watchedIdleThreshold: .seconds(120)
+            )
+        )
+        #expect(
+            schedule.next(
+                now: now.advanced(by: .seconds(10)),
+                userIdle: .zero
+            ) == .pollAll
+        )
+    }
 }

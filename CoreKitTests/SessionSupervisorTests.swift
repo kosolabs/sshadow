@@ -1486,4 +1486,85 @@ struct SessionSupervisorTests {
         #expect(await ext.calls == [.resume, .suspend])
         #expect(await provider.callCount == 1)
     }
+
+    @Test func updateAppliesLiveSettingsToTheOnlineSession() async throws {
+        let sandbox = TestSandbox()
+        let supervisor = try await SessionSupervisor(
+            domain: sandbox.domain,
+            openSession: sandbox.sessionProvider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController(),
+            onStatusChange: { _ in }
+        )
+        try await supervisor.connect(config: try sandbox.config)
+
+        sandbox.ignoreFilenames = [".gitignore"]
+        await supervisor.update(config: try sandbox.config)
+
+        let filenames = try await supervisor.withSession {
+            await $0.ignoreFilenames
+        }
+        #expect(filenames == [".gitignore"])
+
+        await supervisor.disable()
+    }
+
+    @Test func updateWhileConnectingAppliesOnceOnline() async throws {
+        let sandbox = TestSandbox()
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider(),
+            gateFromCall: 1
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            openSession: provider.provider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController(),
+            onStatusChange: { _ in }
+        )
+        let original = try sandbox.config
+        let connecting = Task { try await supervisor.connect(config: original) }
+        await provider.waitUntilGated()
+
+        sandbox.ignoreFilenames = [".gitignore"]
+        await supervisor.update(config: try sandbox.config)
+        await provider.release()
+        try await connecting.value
+
+        #expect(await provider.capturedConfig?.ignoreFilenames == [".sshadowignore"])
+        let filenames = try await supervisor.withSession {
+            await $0.ignoreFilenames
+        }
+        #expect(filenames == [".gitignore"])
+
+        await supervisor.disable()
+    }
+
+    @Test func reconnectAfterLossUsesUpdatedSettings() async throws {
+        let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
+        let provider = try await SpySessionProvider(
+            base: sandbox.sessionProvider()
+        )
+        let supervisor = SessionSupervisor(
+            domain: sandbox.domain,
+            initialBackoff: .milliseconds(1),
+            openSession: provider.provider(),
+            xpc: SpyXPCBroker(),
+            ext: SpyExtensionController(),
+            onStatusChange: { _ in }
+        )
+        try await supervisor.connect(config: try sandbox.config)
+
+        sandbox.ignoreFilenames = [".gitignore"]
+        await supervisor.update(config: try sandbox.config)
+        let handler = try #require(await provider.capturedHandler)
+        await handler(ConnectionError.connectionRefused)
+        try await waitUntilOnline(supervisor)
+
+        #expect(await provider.callCount == 2)
+        #expect(await provider.capturedConfig?.ignoreFilenames == [".gitignore"])
+
+        await supervisor.disable()
+    }
 }
