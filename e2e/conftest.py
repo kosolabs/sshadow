@@ -144,6 +144,7 @@ def app(key: Path) -> Generator[App]:
     if app.started() is not None:
         pytest.fail("SSHadow is already running. Quit it and rerun.", pytrace=False)
     app.make_only_copy()
+    app.backdate()
     watcher = LogWatcher(PREDICATE)
     try:
         launch(app, watcher, key)

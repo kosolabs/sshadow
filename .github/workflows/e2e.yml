@@ -44,12 +44,6 @@ jobs:
     - name: Install the app under test
       run: mv build/SSHadow.app /Applications/
 
-    # CoreServicesUIAgent re-registers apps installed since it started on
-    # every launch, which makes fileproviderd restart the app's domains each
-    # time. Restarting it treats the new install as known.
-    - name: Settle the app's LaunchServices registration
-      run: sudo killall -9 CoreServicesUIAgent || true
-
     - name: Install uv
       uses: astral-sh/setup-uv@v10.3.3
 
