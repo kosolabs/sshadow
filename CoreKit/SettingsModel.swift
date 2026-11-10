@@ -79,6 +79,50 @@ extension SettingsModel {
     }
 }
 
+// MARK: - Ignore Files
+
+extension SettingsModel {
+    public var customizesIgnoreFiles: Bool {
+        get { ignoreFilenames != nil }
+        set { ignoreFilenames = newValue ? effectiveIgnoreFilenames : nil }
+    }
+}
+
+// MARK: - Poll Frequency
+
+extension SettingsModel {
+    public enum PollFrequency: Hashable, Sendable {
+        case automatic(intervalSeconds: Int?)
+        case manual
+    }
+
+    public var pollFrequency: PollFrequency {
+        get {
+            effectivePollsAutomatically
+                ? .automatic(intervalSeconds: pollIntervalSeconds)
+                : .manual
+        }
+        set {
+            switch newValue {
+            case .automatic(let intervalSeconds):
+                pollsAutomatically = nil
+                pollIntervalSeconds = intervalSeconds
+            case .manual:
+                pollsAutomatically = false
+                pollIntervalSeconds = nil
+            }
+        }
+    }
+}
+
+// MARK: - Validation
+
+extension SettingsModel {
+    public func validate() throws(ConnectionConfig.ValidationError) {
+        try ConnectionConfig.validate(ignoreFilenames: effectiveIgnoreFilenames)
+    }
+}
+
 // MARK: - Storage
 
 extension ModelContext {

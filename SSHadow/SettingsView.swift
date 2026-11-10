@@ -1,84 +1,105 @@
+import Common
 import CoreKit
 import SwiftData
 import SwiftUI
+
+private let logger = Logger(category: "SettingsView")
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SettingsNavigation.self) private var navigation
     @Environment(WindowActivationTracker.self) private var activation
     @Query private var configs: [ConnectionConfigModel]
-
-    @State private var section: SidebarSection? = .connections
+    @Query private var storedSettings: [SettingsModel]
 
     var body: some View {
         @Bindable var navigation = navigation
 
         NavigationSplitView {
-            List(selection: $section) {
-                ForEach(SidebarSection.allCases) { section in
+            List(selection: $navigation.section) {
+                ForEach(SettingsSection.allCases) { section in
                     NavigationLink(value: section) {
                         Label(section.title, systemImage: section.systemImage)
                     }
                 }
             }
             .navigationSplitViewColumnWidth(min: 160, ideal: 180)
-        } content: {
-            switch section {
+        } detail: {
+            switch navigation.section {
+            case .general:
+                if let settings = storedSettings.first {
+                    GeneralSettingsView(settings: settings)
+                }
             case .connections:
-                ConnectionConfigListView(selection: $navigation.selectedConfig)
-                    .navigationSplitViewColumnWidth(min: 250, ideal: 300)
+                HSplitView {
+                    ConnectionConfigListView(
+                        selection: $navigation.selectedConfig
+                    )
+                    .frame(
+                        minWidth: 250,
+                        idealWidth: 300,
+                        maxWidth: 400,
+                        maxHeight: .infinity
+                    )
+                    connectionDetail
+                        .frame(
+                            minWidth: 300,
+                            maxWidth: .infinity,
+                            maxHeight: .infinity
+                        )
+                }
+            case .advanced:
+                if let settings = storedSettings.first {
+                    AdvancedSettingsView(settings: settings)
+                }
             case nil:
                 ContentUnavailableView(
                     "Select a Section",
                     systemImage: "gearshape"
                 )
             }
-        } detail: {
-            if let selectedConfig = navigation.selectedConfig {
-                ConnectionConfigEditView(config: selectedConfig)
-                    .id(selectedConfig.id)
-            } else if configs.isEmpty {
-                ContentUnavailableView {
-                    Label(
-                        "No Connections",
-                        systemImage: SidebarSection.connections.systemImage
-                    )
-                } description: {
-                    Text("Mount a remote directory over SSH in Finder.")
-                } actions: {
-                    Button("Add Connection") {
-                        navigation.addConnection(to: modelContext)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                }
-            } else {
-                ContentUnavailableView(
-                    "Select a Connection",
-                    systemImage: "globe"
-                )
-            }
         }
         .frame(minWidth: 720, minHeight: 600)
-        .onAppear { activation.retain() }
+        .onAppear {
+            activation.retain()
+            insertSettingsIfMissing()
+        }
         .onDisappear { activation.release() }
     }
-}
 
-enum SidebarSection: String, CaseIterable, Identifiable {
-    case connections
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .connections: "Connections"
+    @ViewBuilder
+    private var connectionDetail: some View {
+        if let selectedConfig = navigation.selectedConfig {
+            ConnectionConfigEditView(config: selectedConfig)
+                .id(selectedConfig.id)
+        } else if configs.isEmpty {
+            ContentUnavailableView {
+                Label(
+                    "No Connections",
+                    systemImage: SettingsSection.connections.systemImage
+                )
+            } description: {
+                Text("Mount a remote directory over SSH in Finder.")
+            } actions: {
+                Button("Add Connection") {
+                    navigation.addConnection(to: modelContext)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
+        } else {
+            ContentUnavailableView(
+                "Select a Connection",
+                systemImage: "globe"
+            )
         }
     }
 
-    var systemImage: String {
-        switch self {
-        case .connections: "externaldrive.badge.icloud"
+    private func insertSettingsIfMissing() {
+        do {
+            _ = try modelContext.settings()
+        } catch {
+            logger.error("Failed to load settings: \(error)")
         }
     }
 }

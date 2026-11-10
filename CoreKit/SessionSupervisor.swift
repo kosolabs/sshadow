@@ -99,6 +99,7 @@ package actor SessionSupervisor {
         guard case .offline = state else { return }
         setLogSource(config)
         log.info("Connecting to \(config.name)")
+        logger.notice("Connecting: \(config.detailedDescription)")
 
         let task: ConnectTask = Task {
             do throws(ConnectionError) {
@@ -161,7 +162,7 @@ package actor SessionSupervisor {
             nil,
             nextAttempt: nil
         )
-        logger.notice("Session reconnecting: \(config)")
+        logger.notice("Session reconnecting: \(config.detailedDescription)")
     }
 
     func disable() async {
