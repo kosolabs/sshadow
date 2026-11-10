@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.2.1](https://github.com/kosolabs/sshadow/compare/v1.2.0...v1.2.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* adopt swift-russh 0.4.0 ([#483](https://github.com/kosolabs/sshadow/issues/483)) ([b7b8538](https://github.com/kosolabs/sshadow/commit/b7b85385c57869e93053e5637cda9529a6f32ae0))
+* keep a stalled File Provider domain from wedging its connection ([#489](https://github.com/kosolabs/sshadow/issues/489)) ([421cd22](https://github.com/kosolabs/sshadow/commit/421cd22f77cddda1624aeab2ff5339b7a3902217))
+* retry items that failed while SSHadow wasn't running ([#493](https://github.com/kosolabs/sshadow/issues/493)) ([08e9236](https://github.com/kosolabs/sshadow/commit/08e923675c10d66bfa0d7ef7b6f8ef3a6e29285f))
+
+
+### Reverts
+
+* wait for File Provider's domain restarts before relaunching ([#492](https://github.com/kosolabs/sshadow/issues/492)) ([b68348b](https://github.com/kosolabs/sshadow/commit/b68348b63a01ff7c5a57f74699c12002d0f882c6))
+
 ## [1.2.0](https://github.com/kosolabs/sshadow/compare/v1.1.0...v1.2.0) (2026-11-09)
 
 
