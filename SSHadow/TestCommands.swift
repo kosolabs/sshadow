@@ -78,6 +78,8 @@ final class TestCommands {
                 key: params.required("key"),
                 ignoreFilenames: params.strings("ignore_filenames"),
             )
+        case "settings":
+            try updateSettings(params)
         case "delete":
             try await delete(name: params.required("name"))
         case "delete-all":
@@ -149,6 +151,38 @@ final class TestCommands {
         context.insert(config)
         try context.save()
         logger.notice("Profile created: \(config)")
+    }
+
+    private func updateSettings(_ params: [String: Param]) throws {
+        let context = SSHadowApp.modelContainer.mainContext
+        let settings = try context.settings()
+        switch params["check_every"] {
+        case nil:
+            break
+        case .string("default"):
+            settings.pollFrequency = .automatic(intervalSeconds: nil)
+        case .string("manual"):
+            settings.pollFrequency = .manual
+        case .int(let seconds):
+            settings.pollFrequency = .automatic(intervalSeconds: seconds)
+        case let other?:
+            throw Error(message: "invalid check_every: \(other)")
+        }
+        switch params["ignore_filenames"] {
+        case nil:
+            break
+        case .string("default"):
+            settings.ignoreFilenames = nil
+        case .strings(let filenames):
+            settings.ignoreFilenames = filenames
+        case let other?:
+            throw Error(message: "invalid ignore_filenames: \(other)")
+        }
+        try context.save()
+        for config in try context.fetch(FetchDescriptor<ConnectionConfigModel>()) {
+            config.submitLiveSettings(settings: settings)
+        }
+        logger.notice("Settings updated")
     }
 
     private func delete(name: String) async throws {
