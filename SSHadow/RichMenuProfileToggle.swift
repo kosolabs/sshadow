@@ -157,7 +157,7 @@ struct RichMenuProfileToggle: View {
 
     private func editInSettings() {
         NSApp.dismissMenuBarExtra()
-        settingsNavigation.selectedConfig = config
+        settingsNavigation.show(config)
         openWindow.inFront(id: "settings")
     }
 

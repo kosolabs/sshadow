@@ -94,8 +94,33 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
         "ConnectionConfig(id: \(id), name: \(name), url: \(url), authMethod: \(authMethod))"
     }
 
+    public var detailedDescription: String {
+        let fields = [
+            "id: \(id)",
+            "name: \(name)",
+            "url: \(url)",
+            "authMethod: \(authMethod)",
+            "ignoreFilenames: \(ignoreFilenames)",
+            "poll: \(poll.map(String.init(describing:)) ?? "manual")",
+            "connectTimeout: \(connectTimeout)",
+            "maxReconnectDelay: \(maxReconnectDelay)",
+        ]
+        return "ConnectionConfig(\(fields.joined(separator: ", ")))"
+    }
+
     public var domain: NSFileProviderDomain {
         NSFileProviderDomain(id: id, displayName: name)
+    }
+
+    public static func validate(
+        ignoreFilenames: [String]
+    ) throws(ValidationError) {
+        let invalid = ignoreFilenames.contains {
+            $0.isEmpty || $0 == "." || $0 == ".." || $0.contains("/")
+        }
+        if invalid {
+            throw .ignoreFilenameInvalid
+        }
     }
 
     public func path(for subpath: String = "") -> String {

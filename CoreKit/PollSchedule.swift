@@ -1,7 +1,7 @@
 import Common
 import Foundation
 
-public struct PollSettings: Message {
+public struct PollSettings: Message, CustomStringConvertible {
     public let interval: Duration
     public let idleThreshold: Duration
     public let watchedInterval: Duration
@@ -17,6 +17,12 @@ public struct PollSettings: Message {
         self.idleThreshold = idleThreshold
         self.watchedInterval = watchedInterval
         self.watchedIdleThreshold = watchedIdleThreshold
+    }
+
+    public var description: String {
+        "PollSettings(interval: \(interval), idleThreshold: \(idleThreshold), "
+            + "watchedInterval: \(watchedInterval), "
+            + "watchedIdleThreshold: \(watchedIdleThreshold))"
     }
 }
 

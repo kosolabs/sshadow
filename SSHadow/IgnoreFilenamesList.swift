@@ -1,3 +1,4 @@
+import CoreKit
 import SwiftUI
 
 struct IgnoreFilenamesList: View {
@@ -145,5 +146,75 @@ struct IgnoreFilenamesList: View {
             selection = nil
         }
         editing = nil
+    }
+}
+
+struct IgnoreFilesSection<Notes: View>: View {
+    @Binding var customizes: Bool
+    @Binding var filenames: [String]
+    let inheritedNote: String
+    let error: ConnectionConfig.ValidationError?
+    @ViewBuilder let notes: Notes
+
+    var body: some View {
+        Section {
+            Toggle("Customize Ignore Files", isOn: $customizes)
+                .accessibilityIdentifier("customizesIgnoreFilesToggle")
+            IgnoreFilenamesList(filenames: $filenames)
+                .disabled(!customizes)
+        } header: {
+            Text("Ignore Files")
+        } footer: {
+            VStack(alignment: .leading, spacing: 4) {
+                if let error {
+                    Text(error.message)
+                        .foregroundStyle(.red)
+                }
+                Group {
+                    IgnoreFilesSummary(count: filenames.count)
+                    if !customizes {
+                        Text(inheritedNote)
+                    }
+                    notes
+                }
+                .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+extension IgnoreFilesSection where Notes == EmptyView {
+    init(
+        customizes: Binding<Bool>,
+        filenames: Binding<[String]>,
+        inheritedNote: String,
+        error: ConnectionConfig.ValidationError?
+    ) {
+        self.init(
+            customizes: customizes,
+            filenames: filenames,
+            inheritedNote: inheritedNote,
+            error: error,
+            notes: { EmptyView() }
+        )
+    }
+}
+
+struct IgnoreFilesSummary: View {
+    let count: Int
+
+    var body: some View {
+        switch count {
+        case 0:
+            Text("Nothing will be ignored.")
+        case 1:
+            Text(
+                "SSHadow will look for this file in every folder and ignore items matching its patterns. Ignore files use [gitignore syntax](https://git-scm.com/docs/gitignore#_pattern_format)."
+            )
+        default:
+            Text(
+                "SSHadow will look for these files in every folder and ignore items matching their patterns. When files disagree, the one lower in the list wins. Ignore files use [gitignore syntax](https://git-scm.com/docs/gitignore#_pattern_format)."
+            )
+        }
     }
 }

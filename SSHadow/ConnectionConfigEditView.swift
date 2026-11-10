@@ -111,21 +111,6 @@ struct ConnectionConfigEditView: View {
         )
     }
 
-    private var ignoreFilesSummary: Text {
-        switch ignoreFilenames.wrappedValue.count {
-        case 0:
-            Text("Nothing will be ignored.")
-        case 1:
-            Text(
-                "SSHadow will look for this file in every folder and ignore items matching its patterns. Ignore files use [gitignore syntax](https://git-scm.com/docs/gitignore#_pattern_format)."
-            )
-        default:
-            Text(
-                "SSHadow will look for these files in every folder and ignore items matching their patterns. When files disagree, the one lower in the list wins. Ignore files use [gitignore syntax](https://git-scm.com/docs/gitignore#_pattern_format)."
-            )
-        }
-    }
-
     private var status: ConnectionStatus {
         connections.status(for: config.id)
     }
@@ -138,27 +123,6 @@ struct ConnectionConfigEditView: View {
             validationError = nil
         } catch {
             validationError = error
-        }
-    }
-
-    private func message(
-        for error: ConnectionConfig.ValidationError
-    ) -> String {
-        switch error {
-        case .passwordMissing:
-            "Password is required."
-        case .privateKeyMissing:
-            "Private key is required."
-        case .privateKeyUnreadable:
-            "The selected file isn't a readable private key."
-        case .passphraseRequired:
-            "This private key requires a passphrase."
-        case .privateKeyInvalid:
-            "Private key is invalid or the passphrase is incorrect."
-        case .ignoreFilenameInvalid:
-            "Ignore file names can't be empty or contain slashes."
-        case .hostKeyUnknown:
-            "The server's host key hasn't been checked yet."
         }
     }
 
@@ -186,7 +150,7 @@ struct ConnectionConfigEditView: View {
                         Spacer()
                         if let validationError {
                             Label(
-                                message(for: validationError),
+                                validationError.message,
                                 systemImage: "lock.circle"
                             )
                             .foregroundStyle(.red)
@@ -346,21 +310,14 @@ struct ConnectionConfigEditView: View {
                         }
                     }
                 }
-                Section {
-                    Toggle(
-                        "Customize Ignore Files",
-                        isOn: customizesIgnoreFiles
-                    )
-                    .disabled(locked)
-                    .accessibilityIdentifier("customizesIgnoreFilesToggle")
-                    IgnoreFilenamesList(filenames: ignoreFilenames)
-                        .disabled(locked || !customizesIgnoreFiles.wrappedValue)
-                } header: {
-                    Text("Ignore Files")
-                } footer: {
-                    ignoreFilesSummary
-                        .foregroundStyle(.secondary)
-                }
+                IgnoreFilesSection(
+                    customizes: customizesIgnoreFiles,
+                    filenames: ignoreFilenames,
+                    inheritedNote: "These are the defaults from General settings.",
+                    error: validationError == .ignoreFilenameInvalid
+                        ? validationError : nil
+                )
+                .disabled(locked)
             }
             .formStyle(.grouped)
             .onAppear {

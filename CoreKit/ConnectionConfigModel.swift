@@ -111,7 +111,15 @@ public class ConnectionConfigModel: CustomStringConvertible {
     }
 
     public var description: String {
-        "ConnectionProfile(id: \(id), name: \(name ?? "-"), enabled: \(enabled), url: \(url), authMethod: \(authMethod))"
+        let fields = [
+            "id: \(id)",
+            "name: \(name ?? "-")",
+            "enabled: \(enabled)",
+            "url: \(url)",
+            "authMethod: \(authMethod)",
+            "ignoreFilenames: \(ignoreFilenames.map(String.init(describing:)) ?? "default")",
+        ]
+        return "ConnectionProfile(\(fields.joined(separator: ", ")))"
     }
 
     public var domain: NSFileProviderDomain {
@@ -360,12 +368,9 @@ public class ConnectionConfigModel: CustomStringConvertible {
     fileprivate func validateIgnoreFilenames(
         settings: SettingsModel
     ) throws(ConnectionConfig.ValidationError) {
-        let invalid = effectiveIgnoreFilenames(settings: settings).contains {
-            $0.isEmpty || $0 == "." || $0 == ".." || $0.contains("/")
-        }
-        if invalid {
-            throw .ignoreFilenameInvalid
-        }
+        try ConnectionConfig.validate(
+            ignoreFilenames: effectiveIgnoreFilenames(settings: settings)
+        )
     }
 
     // MARK: - Private Key Passphrase Management
