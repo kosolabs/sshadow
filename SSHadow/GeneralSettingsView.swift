@@ -24,6 +24,8 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
+            OpenAtLoginSection()
+
             Section {
                 AppliesOnRestartNote()
             }
