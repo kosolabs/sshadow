@@ -22,7 +22,7 @@ struct NoopXPCBroker: XPCBroker {
         exporting service: CoreService,
         onUnreachable: @escaping UnreachableHandler
     ) async {}
-    func ready() async {}
+    func ready() async -> Bool { true }
     func teardown() async {}
 }
 
@@ -33,6 +33,7 @@ struct NoopExtensionController: ExtensionController {
         options: NSFileProviderManager.DisconnectionOptions
     ) async {}
     func remove() async {}
+    func retryUnreachable() async {}
 }
 
 extension ConnectionError {

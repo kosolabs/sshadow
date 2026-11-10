@@ -169,6 +169,19 @@ class App:
         processes = find_processes(self.executable)
         return processes[0][1] if processes else None
 
+    def backdate(self) -> None:
+        """Set the bundle's modification time to a day ago, as for an app not just installed.
+
+        While an app's bundle was modified recently (within roughly two hours),
+        CoreServicesUIAgent re-registers it with LaunchServices on every launch.
+        Each re-registration makes fileproviderd reload its extensions and
+        restart SSHadow's domains, and on a slow machine two overlapping
+        restarts can wedge a domain. A freshly built or installed bundle would
+        otherwise test that, rather than the state users are normally in.
+        """
+        a_day_ago = time.time() - 24 * 60 * 60
+        os.utime(self.path, (a_day_ago, a_day_ago))
+
     def make_only_copy(self) -> None:
         """Make this the only copy of SSHadow whose extension File Provider runs.
 
