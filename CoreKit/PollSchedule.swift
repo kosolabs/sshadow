@@ -1,4 +1,24 @@
+import Common
 import Foundation
+
+public struct PollSettings: Message {
+    public let interval: Duration
+    public let idleThreshold: Duration
+    public let watchedInterval: Duration
+    public let watchedIdleThreshold: Duration
+
+    public init(
+        interval: Duration,
+        idleThreshold: Duration,
+        watchedInterval: Duration,
+        watchedIdleThreshold: Duration
+    ) {
+        self.interval = interval
+        self.idleThreshold = idleThreshold
+        self.watchedInterval = watchedInterval
+        self.watchedIdleThreshold = watchedIdleThreshold
+    }
+}
 
 class PollSchedule {
     enum Operation: Equatable {
@@ -7,27 +27,13 @@ class PollSchedule {
         case wait
     }
 
-    private let allInterval: Duration
-    private let allIdleThreshold: Duration
+    private let settings: PollSettings
     private var lastPollAll: ContinuousClock.Instant
-
-    private let watchedInterval: Duration
-    private let watchedIdleThreshold: Duration
     private var lastPollWatched: ContinuousClock.Instant?
     private var pollAllRequested = false
 
-    init(
-        begin now: ContinuousClock.Instant,
-        allInterval: Duration,
-        allIdleThreshold: Duration = .seconds(600),
-        watchedInterval: Duration = .seconds(10),
-        watchedIdleThreshold: Duration = .seconds(120)
-    ) {
-        self.allInterval = allInterval
-        self.allIdleThreshold = allIdleThreshold
-        self.watchedInterval = watchedInterval
-        self.watchedIdleThreshold = watchedIdleThreshold
-
+    init(begin now: ContinuousClock.Instant, settings: PollSettings) {
+        self.settings = settings
         lastPollAll = now
         lastPollWatched = now
     }
@@ -42,18 +48,18 @@ class PollSchedule {
         if isDue(
             now,
             since: lastPollAll,
-            interval: allInterval,
+            interval: settings.interval,
             userIdle: userIdle,
-            idleThreshold: allIdleThreshold
+            idleThreshold: settings.idleThreshold
         ) {
             return .pollAll
         }
         if isDue(
             now,
             since: lastPollWatched,
-            interval: watchedInterval,
+            interval: settings.watchedInterval,
             userIdle: userIdle,
-            idleThreshold: watchedIdleThreshold
+            idleThreshold: settings.watchedIdleThreshold
         ) {
             return .pollWatched
         }

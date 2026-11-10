@@ -241,7 +241,6 @@ struct SessionSupervisorTests {
         let sandbox = TestSandbox()
         let supervisor = try await SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: sandbox.sessionProvider(),
             xpc: SpyXPCBroker(),
             ext: SpyExtensionController(),
@@ -262,7 +261,6 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -293,7 +291,6 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -314,14 +311,13 @@ struct SessionSupervisorTests {
 
     @Test func reconnectRetriesUntilConnectSucceeds() async throws {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
         let provider = try await SpySessionProvider(
             base: sandbox.sessionProvider()
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             initialBackoff: .milliseconds(1),
-            maxBackoff: .milliseconds(5),
             openSession: provider.provider(),
             xpc: SpyXPCBroker(),
             ext: SpyExtensionController(),
@@ -347,6 +343,7 @@ struct SessionSupervisorTests {
 
     @Test func connectionLostSuspendsThenReconnects() async throws {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
         let xpc = SpyXPCBroker()
         let ext = SpyExtensionController()
         let provider = try await SpySessionProvider(
@@ -354,9 +351,7 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             initialBackoff: .milliseconds(1),
-            maxBackoff: .milliseconds(5),
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -383,15 +378,14 @@ struct SessionSupervisorTests {
         async throws
     {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
         let xpc = SpyXPCBroker()
         let provider = try await SpySessionProvider(
             base: sandbox.sessionProvider()
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             initialBackoff: .milliseconds(1),
-            maxBackoff: .milliseconds(5),
             openSession: provider.provider(),
             xpc: xpc,
             ext: SpyExtensionController(),
@@ -415,15 +409,14 @@ struct SessionSupervisorTests {
 
     @Test func connectionLostAfterPauseDoesNotReconnect() async throws {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
         let spy = StatusSpy()
         let provider = try await SpySessionProvider(
             base: sandbox.sessionProvider()
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             initialBackoff: .milliseconds(1),
-            maxBackoff: .milliseconds(5),
             openSession: provider.provider(),
             xpc: SpyXPCBroker(),
             ext: SpyExtensionController(),
@@ -450,6 +443,7 @@ struct SessionSupervisorTests {
 
     @Test func connectionLostWhileConnectingDoesNotReconnect() async throws {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
         let spy = StatusSpy()
         let provider = try await SpySessionProvider(
             base: sandbox.sessionProvider(),
@@ -457,9 +451,7 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             initialBackoff: .milliseconds(1),
-            maxBackoff: .milliseconds(5),
             openSession: provider.provider(),
             xpc: SpyXPCBroker(),
             ext: SpyExtensionController(),
@@ -501,7 +493,6 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -549,7 +540,6 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -592,7 +582,6 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -633,7 +622,6 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -657,7 +645,6 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -679,6 +666,7 @@ struct SessionSupervisorTests {
         async throws
     {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
         let spy = StatusSpy()
         let xpc = SpyXPCBroker()
         let ext = SpyExtensionController()
@@ -688,9 +676,7 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             initialBackoff: .milliseconds(1),
-            maxBackoff: .milliseconds(5),
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -730,6 +716,7 @@ struct SessionSupervisorTests {
 
     @Test func pauseWhileReconnectingBetweenAttemptsGoesOffline() async throws {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .seconds(30)
         let spy = StatusSpy()
         let xpc = SpyXPCBroker()
         let ext = SpyExtensionController()
@@ -738,11 +725,9 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             // A long backoff parks the reconnect loop in its sleep so we can
             // pause between attempts deterministically.
             initialBackoff: .seconds(30),
-            maxBackoff: .seconds(30),
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -778,15 +763,14 @@ struct SessionSupervisorTests {
 
     @Test func reconnectGoesOfflineOnPermanentFailure() async throws {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
         let spy = StatusSpy()
         let provider = try await SpySessionProvider(
             base: sandbox.sessionProvider()
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             initialBackoff: .milliseconds(1),
-            maxBackoff: .milliseconds(5),
             openSession: provider.provider(),
             xpc: SpyXPCBroker(),
             ext: SpyExtensionController(),
@@ -828,7 +812,6 @@ struct SessionSupervisorTests {
         let spy = StatusSpy()
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: try await sandbox.sessionProvider(),
             xpc: SpyXPCBroker(),
             ext: SpyExtensionController(),
@@ -845,7 +828,10 @@ struct SessionSupervisorTests {
             path: served.path,
             authMethod: served.authMethod,
             ignoreFilenames: served.ignoreFilenames,
-            hostKey: unrelatedHostKey
+            hostKey: unrelatedHostKey,
+            poll: served.poll,
+            connectTimeout: served.connectTimeout,
+            maxReconnectDelay: served.maxReconnectDelay
         )
 
         await #expect(throws: changed) {
@@ -857,6 +843,7 @@ struct SessionSupervisorTests {
 
     @Test func reconnectGoesOfflineWhenHostKeyChanges() async throws {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
         let spy = StatusSpy()
         let events = Events()
         let provider = try await SpySessionProvider(
@@ -864,9 +851,7 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             initialBackoff: .milliseconds(1),
-            maxBackoff: .milliseconds(5),
             openSession: provider.provider(),
             xpc: SpyXPCBroker(),
             ext: SpyExtensionController(),
@@ -905,15 +890,14 @@ struct SessionSupervisorTests {
         async throws
     {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
         let provider = try await SpySessionProvider(
             base: sandbox.sessionProvider(),
             failuresBeforeSuccess: 2
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             initialBackoff: .milliseconds(1),
-            maxBackoff: .milliseconds(5),
             openSession: provider.provider(),
             xpc: SpyXPCBroker(),
             ext: SpyExtensionController(),
@@ -932,6 +916,7 @@ struct SessionSupervisorTests {
         async throws
     {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
         let spy = StatusSpy()
         let provider = try await SpySessionProvider(
             base: sandbox.sessionProvider(),
@@ -939,9 +924,7 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             initialBackoff: .milliseconds(1),
-            maxBackoff: .milliseconds(5),
             openSession: provider.provider(),
             xpc: SpyXPCBroker(),
             ext: SpyExtensionController(),
@@ -968,15 +951,14 @@ struct SessionSupervisorTests {
         async throws
     {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
         let spy = StatusSpy()
         let provider = try await SpySessionProvider(
             base: sandbox.sessionProvider()
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             initialBackoff: .milliseconds(1),
-            maxBackoff: .milliseconds(5),
             openSession: provider.provider(),
             xpc: SpyXPCBroker(),
             ext: SpyExtensionController(),
@@ -1000,15 +982,14 @@ struct SessionSupervisorTests {
 
     @Test func reconnectWhileOnlineDoesNothing() async throws {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
         let spy = StatusSpy()
         let provider = try await SpySessionProvider(
             base: sandbox.sessionProvider()
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             initialBackoff: .milliseconds(1),
-            maxBackoff: .milliseconds(5),
             openSession: provider.provider(),
             xpc: SpyXPCBroker(),
             ext: SpyExtensionController(),
@@ -1034,7 +1015,6 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -1058,7 +1038,10 @@ struct SessionSupervisorTests {
             path: original.path,
             authMethod: original.authMethod,
             ignoreFilenames: original.ignoreFilenames,
-            hostKey: original.hostKey
+            hostKey: original.hostKey,
+            poll: original.poll,
+            connectTimeout: original.connectTimeout,
+            maxReconnectDelay: original.maxReconnectDelay
         )
         try await supervisor.connect(config: edited)
         try await waitUntilOnline(supervisor)
@@ -1083,7 +1066,6 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: provider.provider(),
             xpc: SpyXPCBroker(),
             ext: SpyExtensionController(),
@@ -1107,15 +1089,14 @@ struct SessionSupervisorTests {
         async throws
     {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
         let spy = StatusSpy()
         let provider = try await SpySessionProvider(
             base: sandbox.sessionProvider()
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             initialBackoff: .milliseconds(1),
-            maxBackoff: .milliseconds(5),
             openSession: provider.provider(),
             xpc: SpyXPCBroker(),
             ext: SpyExtensionController(),
@@ -1147,6 +1128,7 @@ struct SessionSupervisorTests {
 
     @Test func disableWhileReconnectingCancelsAndRemoves() async throws {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .seconds(30)
         let spy = StatusSpy()
         let xpc = SpyXPCBroker()
         let ext = SpyExtensionController()
@@ -1155,11 +1137,9 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             // A long backoff parks the reconnect loop in its sleep so we can
             // disable between attempts deterministically.
             initialBackoff: .seconds(30),
-            maxBackoff: .seconds(30),
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -1201,7 +1181,6 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: provider.provider(),
             xpc: SpyXPCBroker(),
             ext: SpyExtensionController(),
@@ -1229,7 +1208,6 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: provider.provider(),
             xpc: SpyXPCBroker(),
             ext: SpyExtensionController(),
@@ -1253,7 +1231,6 @@ struct SessionSupervisorTests {
         let ext = SpyExtensionController()
         let supervisor = try await SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: sandbox.sessionProvider(),
             xpc: SpyXPCBroker(),
             ext: ext,
@@ -1290,7 +1267,6 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -1315,6 +1291,7 @@ struct SessionSupervisorTests {
 
     @Test func disableFromFailedRemovesDomain() async throws {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
         let spy = StatusSpy()
         let xpc = SpyXPCBroker()
         let ext = SpyExtensionController()
@@ -1323,9 +1300,7 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             initialBackoff: .milliseconds(1),
-            maxBackoff: .milliseconds(5),
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -1362,6 +1337,7 @@ struct SessionSupervisorTests {
 
     @Test func pauseFromFailedSuspendsAsPaused() async throws {
         let sandbox = TestSandbox()
+        sandbox.maxReconnectDelay = .milliseconds(5)
         let spy = StatusSpy()
         let xpc = SpyXPCBroker()
         let ext = SpyExtensionController()
@@ -1370,9 +1346,7 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             initialBackoff: .milliseconds(1),
-            maxBackoff: .milliseconds(5),
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -1412,7 +1386,6 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -1442,7 +1415,6 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,
@@ -1468,7 +1440,6 @@ struct SessionSupervisorTests {
         let ext = SpyExtensionController()
         let supervisor = try await SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: sandbox.sessionProvider(),
             xpc: xpc,
             ext: ext,
@@ -1498,7 +1469,6 @@ struct SessionSupervisorTests {
         )
         let supervisor = SessionSupervisor(
             domain: sandbox.domain,
-            pollInterval: nil,
             openSession: provider.provider(),
             xpc: xpc,
             ext: ext,

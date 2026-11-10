@@ -36,7 +36,11 @@ struct ConnectionConfigModelTests {
     @Test func unsetIgnoreFilenamesUseTheDefault() throws {
         let model = ConnectionConfigModel(host: "example.com")
         model.trustHostKey(unrelatedHostKey)
-        let config = try ConnectionConfig(from: model, authMethod: .password("secret"))
+        let config = try ConnectionConfig(
+            from: model,
+            settings: SettingsModel(),
+            authMethod: .password("secret")
+        )
         #expect(model.ignoreFilenames == nil)
         #expect(config.ignoreFilenames == [".sshadowignore"])
     }
@@ -47,14 +51,22 @@ struct ConnectionConfigModelTests {
             ignoreFilenames: [".gitignore", ".sshadowignore"]
         )
         model.trustHostKey(unrelatedHostKey)
-        let config = try ConnectionConfig(from: model, authMethod: .password("secret"))
+        let config = try ConnectionConfig(
+            from: model,
+            settings: SettingsModel(),
+            authMethod: .password("secret")
+        )
         #expect(config.ignoreFilenames == [".gitignore", ".sshadowignore"])
     }
 
     @Test func emptyIgnoreFilenamesStayEmpty() throws {
         let model = ConnectionConfigModel(host: "example.com", ignoreFilenames: [])
         model.trustHostKey(unrelatedHostKey)
-        let config = try ConnectionConfig(from: model, authMethod: .password("secret"))
+        let config = try ConnectionConfig(
+            from: model,
+            settings: SettingsModel(),
+            authMethod: .password("secret")
+        )
         #expect(config.ignoreFilenames == [])
     }
 
@@ -64,7 +76,11 @@ struct ConnectionConfigModelTests {
             ignoreFilenames: [".gitignore", ".sshadowignore", ".gitignore"]
         )
         model.trustHostKey(unrelatedHostKey)
-        let config = try ConnectionConfig(from: model, authMethod: .password("secret"))
+        let config = try ConnectionConfig(
+            from: model,
+            settings: SettingsModel(),
+            authMethod: .password("secret")
+        )
         #expect(config.ignoreFilenames == [".gitignore", ".sshadowignore"])
     }
 
@@ -78,8 +94,16 @@ struct ConnectionConfigModelTests {
 
     @Test func customizingIgnoreFilesStartsFromTheDefault() {
         let model = ConnectionConfigModel(host: "example.com")
-        model.customizesIgnoreFiles = true
+        model.setCustomizesIgnoreFiles(true, settings: SettingsModel())
         #expect(model.ignoreFilenames == [".sshadowignore"])
+    }
+
+    @Test func customizingIgnoreFilesStartsFromTheGlobalDefault() {
+        let settings = SettingsModel()
+        settings.ignoreFilenames = [".gitignore"]
+        let model = ConnectionConfigModel(host: "example.com")
+        model.setCustomizesIgnoreFiles(true, settings: settings)
+        #expect(model.ignoreFilenames == [".gitignore"])
     }
 
     @Test func customizingIgnoreFilesKeepsExistingFilenames() {
@@ -87,7 +111,7 @@ struct ConnectionConfigModelTests {
             host: "example.com",
             ignoreFilenames: [".gitignore"]
         )
-        model.customizesIgnoreFiles = true
+        model.setCustomizesIgnoreFiles(true, settings: SettingsModel())
         #expect(model.ignoreFilenames == [".gitignore"])
     }
 
@@ -96,9 +120,95 @@ struct ConnectionConfigModelTests {
             host: "example.com",
             ignoreFilenames: [".gitignore"]
         )
-        model.customizesIgnoreFiles = false
+        model.setCustomizesIgnoreFiles(false, settings: SettingsModel())
         #expect(model.ignoreFilenames == nil)
-        #expect(model.effectiveIgnoreFilenames == [".sshadowignore"])
+        #expect(
+            model.effectiveIgnoreFilenames(settings: SettingsModel())
+                == [".sshadowignore"]
+        )
+    }
+
+    @Test func unsetIgnoreFilenamesUseTheGlobalDefault() throws {
+        let settings = SettingsModel()
+        settings.ignoreFilenames = [".gitignore"]
+        let model = ConnectionConfigModel(host: "example.com")
+        model.trustHostKey(unrelatedHostKey)
+        let config = try ConnectionConfig(
+            from: model,
+            settings: settings,
+            authMethod: .password("secret")
+        )
+        #expect(config.ignoreFilenames == [".gitignore"])
+    }
+
+    @Test func customIgnoreFilenamesOverrideTheGlobalDefault() throws {
+        let settings = SettingsModel()
+        settings.ignoreFilenames = [".gitignore"]
+        let model = ConnectionConfigModel(
+            host: "example.com",
+            ignoreFilenames: [".sshadowignore"]
+        )
+        model.trustHostKey(unrelatedHostKey)
+        let config = try ConnectionConfig(
+            from: model,
+            settings: settings,
+            authMethod: .password("secret")
+        )
+        #expect(config.ignoreFilenames == [".sshadowignore"])
+    }
+
+    @Test func invalidGlobalIgnoreFilenamesFailValidation() {
+        let settings = SettingsModel()
+        settings.ignoreFilenames = ["dir/.gitignore"]
+        let model = ConnectionConfigModel(host: "example.com")
+        #expect(throws: ConnectionConfig.ValidationError.ignoreFilenameInvalid) {
+            try ConnectionConfig(
+                from: model,
+                settings: settings,
+                authMethod: .password("secret")
+            )
+        }
+    }
+
+    @Test func configCarriesTheGlobalSettings() throws {
+        let settings = SettingsModel()
+        settings.pollIntervalSeconds = 900
+        settings.pollIdleThresholdSeconds = 1800
+        settings.watchedPollIntervalSeconds = 30
+        settings.watchedPollIdleThresholdSeconds = 300
+        settings.connectTimeoutSeconds = 15
+        settings.maxReconnectDelaySeconds = 300
+        let model = ConnectionConfigModel(host: "example.com")
+        model.trustHostKey(unrelatedHostKey)
+        let config = try ConnectionConfig(
+            from: model,
+            settings: settings,
+            authMethod: .password("secret")
+        )
+        #expect(
+            config.poll
+                == PollSettings(
+                    interval: .seconds(900),
+                    idleThreshold: .seconds(1800),
+                    watchedInterval: .seconds(30),
+                    watchedIdleThreshold: .seconds(300)
+                )
+        )
+        #expect(config.connectTimeout == .seconds(15))
+        #expect(config.maxReconnectDelay == .seconds(300))
+    }
+
+    @Test func manualSyncLeavesTheConfigWithoutPolling() throws {
+        let settings = SettingsModel()
+        settings.pollsAutomatically = false
+        let model = ConnectionConfigModel(host: "example.com")
+        model.trustHostKey(unrelatedHostKey)
+        let config = try ConnectionConfig(
+            from: model,
+            settings: settings,
+            authMethod: .password("secret")
+        )
+        #expect(config.poll == nil)
     }
 
     @Test(arguments: ["", ".", "..", "dir/.gitignore", "/"])
@@ -108,7 +218,11 @@ struct ConnectionConfigModelTests {
             ignoreFilenames: [".sshadowignore", name]
         )
         #expect(throws: ConnectionConfig.ValidationError.ignoreFilenameInvalid) {
-            try ConnectionConfig(from: model, authMethod: .password("secret"))
+            try ConnectionConfig(
+                from: model,
+                settings: SettingsModel(),
+                authMethod: .password("secret")
+            )
         }
     }
 }

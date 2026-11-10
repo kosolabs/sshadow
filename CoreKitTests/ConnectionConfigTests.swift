@@ -14,7 +14,10 @@ struct ConnectionConfigTests {
             path: "",
             authMethod: .none,
             ignoreFilenames: [],
-            hostKey: unrelatedHostKey
+            hostKey: unrelatedHostKey,
+            poll: nil,
+            connectTimeout: .seconds(60),
+            maxReconnectDelay: .seconds(60)
         )
 
         #expect(config.path(for: "file.txt") == "file.txt")
@@ -30,7 +33,10 @@ struct ConnectionConfigTests {
             path: "",
             authMethod: .none,
             ignoreFilenames: [],
-            hostKey: unrelatedHostKey
+            hostKey: unrelatedHostKey,
+            poll: nil,
+            connectTimeout: .seconds(60),
+            maxReconnectDelay: .seconds(60)
         )
 
         #expect(config.path(for: "") == ".")
@@ -46,7 +52,10 @@ struct ConnectionConfigTests {
             path: "base",
             authMethod: .none,
             ignoreFilenames: [],
-            hostKey: unrelatedHostKey
+            hostKey: unrelatedHostKey,
+            poll: nil,
+            connectTimeout: .seconds(60),
+            maxReconnectDelay: .seconds(60)
         )
 
         #expect(config.path(for: "file.txt") == "base/file.txt")
@@ -62,7 +71,10 @@ struct ConnectionConfigTests {
             path: "base",
             authMethod: .none,
             ignoreFilenames: [],
-            hostKey: unrelatedHostKey
+            hostKey: unrelatedHostKey,
+            poll: nil,
+            connectTimeout: .seconds(60),
+            maxReconnectDelay: .seconds(60)
         )
 
         #expect(config.path(for: "") == "base")
@@ -78,7 +90,10 @@ struct ConnectionConfigTests {
             path: "base/",
             authMethod: .none,
             ignoreFilenames: [],
-            hostKey: unrelatedHostKey
+            hostKey: unrelatedHostKey,
+            poll: nil,
+            connectTimeout: .seconds(60),
+            maxReconnectDelay: .seconds(60)
         )
 
         #expect(config.path(for: "file.txt") == "base/file.txt")
@@ -94,7 +109,10 @@ struct ConnectionConfigTests {
             path: "/base",
             authMethod: .none,
             ignoreFilenames: [],
-            hostKey: unrelatedHostKey
+            hostKey: unrelatedHostKey,
+            poll: nil,
+            connectTimeout: .seconds(60),
+            maxReconnectDelay: .seconds(60)
         )
 
         #expect(config.path(for: "file.txt") == "/base/file.txt")

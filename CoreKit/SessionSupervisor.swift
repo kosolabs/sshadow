@@ -12,9 +12,7 @@ package actor SessionSupervisor {
 
     private let domain: NSFileProviderDomain
 
-    private let pollInterval: Duration?
     private let initialBackoff: Duration
-    private let maxBackoff: Duration
 
     private let openSession: Session.Provider
     private let xpc: XPCBroker
@@ -75,9 +73,7 @@ package actor SessionSupervisor {
 
     init(
         domain: NSFileProviderDomain,
-        pollInterval: Duration?,
         initialBackoff: Duration = .seconds(1),
-        maxBackoff: Duration = .seconds(60),
         openSession: @escaping Session.Provider,
         xpc: XPCBroker? = nil,
         ext: ExtensionController? = nil,
@@ -86,9 +82,7 @@ package actor SessionSupervisor {
     ) {
         self.domain = domain
 
-        self.pollInterval = pollInterval
         self.initialBackoff = initialBackoff
-        self.maxBackoff = maxBackoff
 
         self.openSession = openSession
         self.xpc =
@@ -141,7 +135,7 @@ package actor SessionSupervisor {
             // going offline cancels.
             Task { await self?.unreachable(otherExtension: otherExtension) }
         }
-        await session.start(pollInterval: pollInterval)
+        await session.start()
 
         if case .disconnecting(let reason) = state {
             await disconnect(session, reason: reason)
@@ -279,7 +273,7 @@ package actor SessionSupervisor {
     }
 
     private func reconnectLoop(config: ConnectionConfig) async {
-        var backoff = initialBackoff
+        var backoff = min(initialBackoff, config.maxReconnectDelay)
         while !Task.isCancelled {
             do {
                 try await open(config: config)
@@ -302,7 +296,7 @@ package actor SessionSupervisor {
                 logger.error("Connect failed; retrying in \(backoff): \(error)")
                 do { try await Task.sleep(for: backoff) } catch { break }
                 setReconnecting(error: error, nextAttempt: nil)
-                backoff = min(backoff * 2, maxBackoff)
+                backoff = min(backoff * 2, config.maxReconnectDelay)
             }
         }
         logger.notice("Reconnect cancelled: \(config)")

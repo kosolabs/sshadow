@@ -11,6 +11,7 @@ struct ConnectionConfigEditView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Connections.self) private var connections
     @Environment(\.openWindow) private var openWindow
+    @Query private var storedSettings: [SettingsModel]
 
     var config = ConnectionConfigModel()
     @State private var isImportingKey: Bool = false
@@ -92,16 +93,20 @@ struct ConnectionConfigEditView: View {
         )
     }
 
+    private var settings: SettingsModel {
+        storedSettings.first ?? SettingsModel()
+    }
+
     private var customizesIgnoreFiles: Binding<Bool> {
         Binding<Bool>(
             get: { config.customizesIgnoreFiles },
-            set: { config.customizesIgnoreFiles = $0 }
+            set: { config.setCustomizesIgnoreFiles($0, settings: settings) }
         )
     }
 
     private var ignoreFilenames: Binding<[String]> {
         Binding<[String]>(
-            get: { config.effectiveIgnoreFilenames },
+            get: { config.effectiveIgnoreFilenames(settings: settings) },
             set: { config.ignoreFilenames = $0 }
         )
     }
@@ -129,7 +134,7 @@ struct ConnectionConfigEditView: View {
 
     private func validate() {
         do {
-            try config.validate()
+            try config.validate(settings: settings)
             validationError = nil
         } catch {
             validationError = error

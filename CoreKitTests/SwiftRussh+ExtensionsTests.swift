@@ -20,6 +20,9 @@ import XPC
             authMethod: .none,
             ignoreFilenames: [],
             hostKey: unrelatedHostKey,
+            poll: nil,
+            connectTimeout: .seconds(60),
+            maxReconnectDelay: .seconds(60)
         )
 
         await #expect(throws: ConnectionError.unknownHost) {
@@ -38,11 +41,39 @@ import XPC
             authMethod: .none,
             ignoreFilenames: [],
             hostKey: unrelatedHostKey,
+            poll: nil,
+            connectTimeout: .seconds(60),
+            maxReconnectDelay: .seconds(60)
         )
 
         await #expect(throws: ConnectionError.connectionRefused) {
             try await SSHClient.connect(config: config)
         }
+    }
+
+    @Test func connectGivesUpAfterTheConnectTimeout() async throws {
+        let listener = try SilentListener()
+        defer { listener.close() }
+        let config = ConnectionConfig(
+            id: UUID(),
+            name: "test",
+            host: "127.0.0.1",
+            port: listener.port,
+            user: "user",
+            path: "/home/user",
+            authMethod: .none,
+            ignoreFilenames: [],
+            hostKey: unrelatedHostKey,
+            poll: nil,
+            connectTimeout: .seconds(1),
+            maxReconnectDelay: .seconds(60)
+        )
+
+        let start = ContinuousClock.now
+        await #expect(throws: ConnectionError.connectionTimedOut) {
+            try await SSHClient.connect(config: config)
+        }
+        #expect(ContinuousClock.now - start < .seconds(10))
     }
 
     @Test func testThrowsAuthenticationFailed() async throws {
@@ -147,6 +178,9 @@ extension TestSandbox {
             authMethod: authMethod ?? base.authMethod,
             ignoreFilenames: base.ignoreFilenames,
             hostKey: hostKey ?? base.hostKey,
+            poll: base.poll,
+            connectTimeout: base.connectTimeout,
+            maxReconnectDelay: base.maxReconnectDelay
         )
     }
 }
@@ -368,5 +402,33 @@ private let unauthorizedKey = """
         let (_, sftp) = try await connect(sandbox)
 
         #expect(try await !sftp.isDirectory(at: path("missing", in: sandbox)))
+    }
+}
+
+// Accepts TCP connections into its backlog but never speaks SSH.
+private struct SilentListener {
+    let port: UInt16
+    private let fd: Int32
+
+    init() throws {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        try #require(fd >= 0)
+        var address = sockaddr_in()
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let bound = withUnsafeMutablePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(fd, $0, length) == 0 && listen(fd, 1) == 0
+                    && getsockname(fd, $0, &length) == 0
+            }
+        }
+        try #require(bound)
+        self.fd = fd
+        self.port = UInt16(bigEndian: address.sin_port)
+    }
+
+    func close() {
+        Darwin.close(fd)
     }
 }

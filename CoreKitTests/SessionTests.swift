@@ -1225,7 +1225,7 @@ struct SessionTests {
                     () async throws(ConnectionError) -> Session in
                     try await provider(config) { _ in }
                 }
-                await session.start(pollInterval: nil)
+                await session.start()
                 await session.close()
             }
         }
@@ -1256,7 +1256,7 @@ struct SessionTests {
 
             #expect(store.created == 0)
 
-            await session.start(pollInterval: nil)
+            await session.start()
             let deadline = ContinuousClock.now + .seconds(10)
             while store.reloads == 0 {
                 try #require(ContinuousClock.now < deadline)
@@ -4359,8 +4359,16 @@ struct SessionTests {
     }
 
     struct TickGatingTests {
+        let dueImmediately = PollSettings(
+            interval: .zero,
+            idleThreshold: .seconds(600),
+            watchedInterval: .seconds(10),
+            watchedIdleThreshold: .seconds(120)
+        )
+
         @Test func tickPollsWhenIdleAndUnblocked() async throws {
             let sandbox = TestSandbox()
+            sandbox.poll = dueImmediately
             try sandbox.createFolder(at: "dir")
             let session = try await sandbox.getSession(idleTimeProvider: {
                 .zero
@@ -4370,7 +4378,7 @@ struct SessionTests {
             try sandbox.createFile(at: "dir/new.txt")
 
             // A zero interval plus zero idle makes pollAll due immediately.
-            await session.start(pollInterval: .zero)
+            await session.start()
             await session.stop()  // stop the loop; the schedule remains
 
             try await session.tick()
@@ -4380,6 +4388,7 @@ struct SessionTests {
 
         @Test func tickSkipsPollWhileOperationOutstanding() async throws {
             let sandbox = TestSandbox()
+            sandbox.poll = dueImmediately
             try sandbox.createFile(at: "file.txt")
             let latch = Latch()
             let (session, ssh) = try await sandbox.makeSession(
@@ -4388,7 +4397,7 @@ struct SessionTests {
             )
             let itemId = try await session.child(name: "file.txt")
 
-            await session.start(pollInterval: .zero)
+            await session.start()
             await session.stop()
             await ssh.close()
 

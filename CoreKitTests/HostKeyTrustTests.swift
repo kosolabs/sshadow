@@ -79,7 +79,11 @@ struct HostKeyTrustTests {
         let model = ConnectionConfigModel(host: "example.com")
 
         #expect(throws: ConnectionConfig.ValidationError.hostKeyUnknown) {
-            try ConnectionConfig(from: model, authMethod: .none)
+            try ConnectionConfig(
+                from: model,
+                settings: SettingsModel(),
+                authMethod: .none
+            )
         }
     }
 
@@ -87,7 +91,11 @@ struct HostKeyTrustTests {
         let model = ConnectionConfigModel(host: "example.com")
         model.trustHostKey(unrelatedHostKey)
 
-        let config = try ConnectionConfig(from: model, authMethod: .none)
+        let config = try ConnectionConfig(
+            from: model,
+            settings: SettingsModel(),
+            authMethod: .none
+        )
 
         #expect(config.hostKey == unrelatedHostKey)
     }

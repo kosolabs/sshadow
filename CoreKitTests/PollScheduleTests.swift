@@ -8,10 +8,12 @@ struct PollScheduleTests {
     private func schedule() -> PollSchedule {
         return PollSchedule(
             begin: now,
-            allInterval: .seconds(30),
-            allIdleThreshold: .seconds(600),
-            watchedInterval: .seconds(10),
-            watchedIdleThreshold: .seconds(120)
+            settings: PollSettings(
+                interval: .seconds(30),
+                idleThreshold: .seconds(600),
+                watchedInterval: .seconds(10),
+                watchedIdleThreshold: .seconds(120)
+            )
         )
     }
 
