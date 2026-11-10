@@ -39,6 +39,9 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
     public let authMethod: AuthMethod
     public let ignoreFilenames: [String]
     public let hostKey: SSHHostKey
+    public let poll: PollSettings?
+    public let connectTimeout: Duration
+    public let maxReconnectDelay: Duration
 
     public init(
         id: UUID,
@@ -50,6 +53,9 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
         authMethod: AuthMethod,
         ignoreFilenames: [String],
         hostKey: SSHHostKey,
+        poll: PollSettings?,
+        connectTimeout: Duration,
+        maxReconnectDelay: Duration,
     ) {
         self.id = id
         self.name = name
@@ -63,6 +69,9 @@ public struct ConnectionConfig: Message, CustomStringConvertible {
             seen.insert($0).inserted
         }
         self.hostKey = hostKey
+        self.poll = poll
+        self.connectTimeout = connectTimeout
+        self.maxReconnectDelay = maxReconnectDelay
     }
 
     public var socket: String {

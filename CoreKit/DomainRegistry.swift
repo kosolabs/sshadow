@@ -30,7 +30,6 @@ public actor DomainRegistry {
         evictItem: { config, itemId in
             try await config.domain.manager.evictItem(identifier: itemId)
         },
-        pollInterval: .seconds(300),
         connections: Connections.shared,
         transfers: Transfers.shared,
         events: Events.shared
@@ -41,7 +40,6 @@ public actor DomainRegistry {
     private let retryIgnored: DomainSignal
     private let materializedItems: MaterializedEnumerator
     private let evictItem: ItemEvictor
-    private let pollInterval: Duration?
     private let connections: Connections
     private let transfers: Transfers<ContinuousClock>
     private let events: Events<ContinuousClock>
@@ -58,7 +56,6 @@ public actor DomainRegistry {
         retryIgnored: @escaping DomainSignal,
         materializedItems: @escaping MaterializedEnumerator,
         evictItem: @escaping ItemEvictor,
-        pollInterval: Duration? = nil,
         connections: Connections,
         transfers: Transfers<ContinuousClock>,
         events: Events<ContinuousClock>,
@@ -77,7 +74,6 @@ public actor DomainRegistry {
         self.retryIgnored = retryIgnored
         self.materializedItems = materializedItems
         self.evictItem = evictItem
-        self.pollInterval = pollInterval
         self.connections = connections
         self.transfers = transfers
         self.events = events
@@ -97,7 +93,6 @@ public actor DomainRegistry {
 
             let supervisor = SessionSupervisor(
                 domain: domain,
-                pollInterval: pollInterval,
                 openSession: Session.provider(
                     domainDb: domainDb,
                     groupUrl: groupUrl,

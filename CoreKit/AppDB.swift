@@ -12,7 +12,7 @@ public actor AppDB {
     public static func getModelContainer(
         config: ModelConfiguration = ModelConfiguration()
     ) throws -> ModelContainer {
-        let schema = Schema([ConnectionConfigModel.self])
+        let schema = Schema([ConnectionConfigModel.self, SettingsModel.self])
         return try ModelContainer(
             for: schema,
             configurations: config

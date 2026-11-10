@@ -104,8 +104,10 @@ public class ConnectionConfigModel: CustomStringConvertible {
         return p.count > 1 && p.hasSuffix("/") ? String(p.dropLast()) : p
     }
 
-    public var effectiveIgnoreFilenames: [String] {
-        ignoreFilenames ?? [".sshadowignore"]
+    public func effectiveIgnoreFilenames(
+        settings: SettingsModel
+    ) -> [String] {
+        ignoreFilenames ?? settings.effectiveIgnoreFilenames
     }
 
     public var description: String {
@@ -128,7 +130,8 @@ public class ConnectionConfigModel: CustomStringConvertible {
 
     public func enable() async {
         do {
-            try validate()
+            let settings = try globalSettings()
+            try validate(settings: settings)
             if effectiveHostKey == nil {
                 await Connections.shared.beginHostKeyCheck(id: id)
                 do {
@@ -139,7 +142,7 @@ public class ConnectionConfigModel: CustomStringConvertible {
                 }
             }
             do {
-                let config = try ConnectionConfig(from: self)
+                let config = try ConnectionConfig(from: self, settings: settings)
                 try await DomainRegistry.shared.connect(config: config)
             } catch {
                 await Connections.shared.endHostKeyCheck(id: id)
@@ -160,7 +163,10 @@ public class ConnectionConfigModel: CustomStringConvertible {
             return
         }
         do {
-            let config = try ConnectionConfig(from: self)
+            let config = try ConnectionConfig(
+                from: self,
+                settings: globalSettings()
+            )
             try await DomainRegistry.shared.reconnect(config: config)
         } catch {
             logger.error("Failed to reconnect \(self): \(error)")
@@ -173,6 +179,11 @@ public class ConnectionConfigModel: CustomStringConvertible {
         self.enabled = false
         save()
         logger.notice("Profile disabled: \(self)")
+    }
+
+    private func globalSettings() throws -> SettingsModel {
+        guard let modelContext else { return SettingsModel() }
+        return try modelContext.settings()
     }
 
     private func save() {
@@ -328,19 +339,28 @@ public class ConnectionConfigModel: CustomStringConvertible {
     // MARK: - Ignore Files
 
     public var customizesIgnoreFiles: Bool {
-        get { ignoreFilenames != nil }
-        set { ignoreFilenames = newValue ? effectiveIgnoreFilenames : nil }
+        ignoreFilenames != nil
     }
 
-    public func validate() throws(ConnectionConfig.ValidationError) {
+    public func setCustomizesIgnoreFiles(
+        _ customizes: Bool,
+        settings: SettingsModel
+    ) {
+        ignoreFilenames =
+            customizes ? effectiveIgnoreFilenames(settings: settings) : nil
+    }
+
+    public func validate(
+        settings: SettingsModel
+    ) throws(ConnectionConfig.ValidationError) {
         _ = try resolveConfigAuthMethod()
-        try validateIgnoreFilenames()
+        try validateIgnoreFilenames(settings: settings)
     }
 
-    fileprivate func validateIgnoreFilenames()
-        throws(ConnectionConfig.ValidationError)
-    {
-        let invalid = effectiveIgnoreFilenames.contains {
+    fileprivate func validateIgnoreFilenames(
+        settings: SettingsModel
+    ) throws(ConnectionConfig.ValidationError) {
+        let invalid = effectiveIgnoreFilenames(settings: settings).contains {
             $0.isEmpty || $0 == "." || $0 == ".." || $0.contains("/")
         }
         if invalid {
@@ -424,15 +444,23 @@ extension ModelContext {
 }
 
 extension ConnectionConfig {
-    public init(from profile: ConnectionConfigModel) throws(ValidationError) {
-        try self.init(from: profile, authMethod: profile.resolveConfigAuthMethod())
+    public init(
+        from profile: ConnectionConfigModel,
+        settings: SettingsModel
+    ) throws(ValidationError) {
+        try self.init(
+            from: profile,
+            settings: settings,
+            authMethod: profile.resolveConfigAuthMethod()
+        )
     }
 
     init(
         from profile: ConnectionConfigModel,
+        settings: SettingsModel,
         authMethod: AuthMethod
     ) throws(ValidationError) {
-        try profile.validateIgnoreFilenames()
+        try profile.validateIgnoreFilenames(settings: settings)
         guard let hostKey = profile.effectiveHostKey else {
             throw .hostKeyUnknown
         }
@@ -444,8 +472,11 @@ extension ConnectionConfig {
             user: profile.effectiveUser,
             path: profile.effectivePath,
             authMethod: authMethod,
-            ignoreFilenames: profile.effectiveIgnoreFilenames,
-            hostKey: hostKey
+            ignoreFilenames: profile.effectiveIgnoreFilenames(settings: settings),
+            hostKey: hostKey,
+            poll: settings.effectivePoll,
+            connectTimeout: settings.effectiveConnectTimeout,
+            maxReconnectDelay: settings.effectiveMaxReconnectDelay
         )
     }
 }

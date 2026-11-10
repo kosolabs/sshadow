@@ -148,14 +148,11 @@ extension Session {
         logger.notice("SSH disconnected: \(config)")
     }
 
-    func start(pollInterval: Duration?) async {
+    func start() async {
         await refreshMaterialized()
         await ignoreRulesChangedHandler()
-        guard pollTask == nil, let pollInterval else { return }
-        schedule = PollSchedule(
-            begin: ContinuousClock.now,
-            allInterval: pollInterval
-        )
+        guard pollTask == nil, let poll = config.poll else { return }
+        schedule = PollSchedule(begin: ContinuousClock.now, settings: poll)
         pollTask = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {

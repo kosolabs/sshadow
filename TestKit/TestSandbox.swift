@@ -83,6 +83,9 @@ package class TestSandbox {
     package let host: String
     package let port: UInt16
     package let user: String
+    package var poll: PollSettings?
+    package var connectTimeout: Duration
+    package var maxReconnectDelay: Duration
     package let domain: NSFileProviderDomain
     package let materializedItems = FakeMaterializedItems()
     package let events = Events<ContinuousClock>()
@@ -102,6 +105,9 @@ package class TestSandbox {
         self.host = "localhost"
         self.port = 2248
         self.user = NSUserName()
+        self.poll = nil
+        self.connectTimeout = .seconds(60)
+        self.maxReconnectDelay = .seconds(60)
 
         self.root = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString)
@@ -131,7 +137,10 @@ package class TestSandbox {
                     passphrase: nil
                 ),
                 ignoreFilenames: [".sshadowignore"],
-                hostKey: serverHostKey
+                hostKey: serverHostKey,
+                poll: poll,
+                connectTimeout: connectTimeout,
+                maxReconnectDelay: maxReconnectDelay
             )
         }
     }
@@ -204,7 +213,6 @@ package class TestSandbox {
 
             let supervisor = SessionSupervisor(
                 domain: domain,
-                pollInterval: nil,
                 openSession: try await sessionProvider(),
                 xpc: NoopXPCBroker(),
                 ext: NoopExtensionController(),
