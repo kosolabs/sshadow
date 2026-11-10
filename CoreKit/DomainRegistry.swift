@@ -125,6 +125,10 @@ public actor DomainRegistry {
         try await supervisor(for: config.domain).reconnect(config: config)
     }
 
+    public func update(config: ConnectionConfig) async {
+        await supervisors[config.id]?.update(config: config)
+    }
+
     public func poll(domain: NSFileProviderDomain) async throws {
         if let supervisor = supervisors[domain.id] {
             try await supervisor.withSession { try await $0.pollAll() }

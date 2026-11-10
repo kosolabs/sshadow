@@ -33,7 +33,7 @@ class PollSchedule {
         case wait
     }
 
-    private let settings: PollSettings
+    private var settings: PollSettings
     private var lastPollAll: ContinuousClock.Instant
     private var lastPollWatched: ContinuousClock.Instant?
     private var pollAllRequested = false
@@ -70,6 +70,10 @@ class PollSchedule {
             return .pollWatched
         }
         return .wait
+    }
+
+    func update(settings: PollSettings) {
+        self.settings = settings
     }
 
     func requestPollAll() {

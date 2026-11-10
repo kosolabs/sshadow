@@ -83,6 +83,7 @@ package class TestSandbox {
     package let host: String
     package let port: UInt16
     package let user: String
+    package var ignoreFilenames: [String]
     package var poll: PollSettings?
     package var connectTimeout: Duration
     package var maxReconnectDelay: Duration
@@ -105,6 +106,7 @@ package class TestSandbox {
         self.host = "localhost"
         self.port = 2248
         self.user = NSUserName()
+        self.ignoreFilenames = [".sshadowignore"]
         self.poll = nil
         self.connectTimeout = .seconds(60)
         self.maxReconnectDelay = .seconds(60)
@@ -136,7 +138,7 @@ package class TestSandbox {
                     contents: privateKeyContents,
                     passphrase: nil
                 ),
-                ignoreFilenames: [".sshadowignore"],
+                ignoreFilenames: ignoreFilenames,
                 hostKey: serverHostKey,
                 poll: poll,
                 connectTimeout: connectTimeout,

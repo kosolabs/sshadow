@@ -23,16 +23,33 @@ package actor SessionSupervisor {
 
     private lazy var service = CoreService(supervisor: self)
 
-    private enum State {
+    private enum State: CustomStringConvertible {
         case offline(OfflineReason)
         case disconnecting(OfflineReason)
-        case connecting(ConnectTask)
+        case connecting(ConnectTask, ConnectionConfig)
         case reconnecting(
             ReconnectTask,
+            ConnectionConfig,
             ConnectionError?,
             nextAttempt: Date?
         )
-        case online(Session)
+        case online(Session, ConnectionConfig)
+
+        var description: String {
+            switch self {
+            case .offline(let reason):
+                "offline(\(reason))"
+            case .disconnecting(let reason):
+                "disconnecting(\(reason))"
+            case .connecting:
+                "connecting"
+            case .reconnecting(_, _, let error, let nextAttempt):
+                "reconnecting(error: \(error.map(String.init(describing:)) ?? "nil"), "
+                    + "nextAttempt: \(nextAttempt.map(String.init(describing:)) ?? "nil"))"
+            case .online:
+                "online"
+            }
+        }
     }
 
     private var _state: State = .offline(.disabled)
@@ -60,7 +77,7 @@ package actor SessionSupervisor {
             .disconnecting(reason)
         case .connecting:
             .connecting
-        case .reconnecting(_, let error, let nextAttempt):
+        case .reconnecting(_, _, let error, let nextAttempt):
             .reconnecting(error, nextAttempt: nextAttempt)
         case .online:
             .online
@@ -109,7 +126,7 @@ package actor SessionSupervisor {
                 return .failure(error)
             }
         }
-        state = .connecting(task)
+        state = .connecting(task, config)
 
         switch await task.value {
         case .success:
@@ -128,7 +145,7 @@ package actor SessionSupervisor {
     private func open(config: ConnectionConfig) async throws(ConnectionError) {
         let session = try await openSession(config) { [weak self] error in
             guard let self else { return }
-            await self.fail(config: config, error: error)
+            await self.fail(error: error)
         }
         await ext.resume()
         await xpc.broker(exporting: service) { [weak self] otherExtension in
@@ -143,7 +160,11 @@ package actor SessionSupervisor {
             return
         }
 
-        state = .online(session)
+        let latest = startingConfig ?? config
+        state = .online(session, latest)
+        if latest != config {
+            await session.update(from: latest)
+        }
         if await xpc.ready() {
             await ext.retryUnreachable()
         }
@@ -157,8 +178,9 @@ package actor SessionSupervisor {
         state = .reconnecting(
             Task { [weak self] in
                 guard let self else { return }
-                await reconnectLoop(config: config)
+                await reconnectLoop()
             },
+            config,
             nil,
             nextAttempt: nil
         )
@@ -170,11 +192,11 @@ package actor SessionSupervisor {
         case .offline:
             state = .offline(.disabled)
             break
-        case .connecting(let task):
+        case .connecting(let task, _):
             await cancel(task, reason: .disabled)
-        case .reconnecting(let task, _, _):
+        case .reconnecting(let task, _, _, _):
             await cancel(task, reason: .disabled)
-        case .online(let session):
+        case .online(let session, _):
             await disconnect(session, reason: .disabled)
         case .disconnecting:
             state = .disconnecting(.disabled)
@@ -186,11 +208,11 @@ package actor SessionSupervisor {
 
     func pause() async {
         switch state {
-        case .connecting(let task):
+        case .connecting(let task, _):
             await cancel(task, reason: .paused)
-        case .reconnecting(let task, _, _):
+        case .reconnecting(let task, _, _, _):
             await cancel(task, reason: .paused)
-        case .online(let session):
+        case .online(let session, _):
             await disconnect(session, reason: .paused)
         case .offline(.failed), .offline(.xpcUnreachable):
             state = .offline(.paused)
@@ -206,8 +228,29 @@ package actor SessionSupervisor {
         logger.notice("Supervisor paused: \(domain)")
     }
 
-    private func fail(config: ConnectionConfig, error: ConnectionError) async {
-        guard case .online(let session) = state else { return }
+    func update(config newConfig: ConnectionConfig) async {
+        switch state {
+        case .connecting(let task, let config) where config != newConfig:
+            state = .connecting(task, newConfig)
+        case .reconnecting(let task, let config, let error, let nextAttempt)
+        where config != newConfig:
+            state = .reconnecting(
+                task,
+                newConfig,
+                error,
+                nextAttempt: nextAttempt
+            )
+        case .online(let session, let config) where config != newConfig:
+            state = .online(session, newConfig)
+            await session.update(from: newConfig)
+        default:
+            return
+        }
+        logger.notice("Live settings updated: \(newConfig.detailedDescription)")
+    }
+
+    private func fail(error: ConnectionError) async {
+        guard case .online(let session, let config) = state else { return }
         log.warning("Lost connection to \(config.name)")
         await disconnect(session, reason: .failed(error))
         reconnect(config: config)
@@ -218,11 +261,11 @@ package actor SessionSupervisor {
             otherExtension: otherExtension
         )
         switch state {
-        case .connecting(let task):
+        case .connecting(let task, _):
             await cancel(task, reason: reason)
-        case .reconnecting(let task, _, _):
+        case .reconnecting(let task, _, _, _):
             await cancel(task, reason: reason)
-        case .online(let session):
+        case .online(let session, _):
             await disconnect(session, reason: reason)
         case .offline, .disconnecting:
             return
@@ -261,6 +304,15 @@ package actor SessionSupervisor {
         state = .offline(disconnectingReason ?? reason)
     }
 
+    private var startingConfig: ConnectionConfig? {
+        switch state {
+        case .connecting(_, let config), .reconnecting(_, let config, _, _):
+            config
+        case .offline, .disconnecting, .online:
+            nil
+        }
+    }
+
     private var disconnectingReason: OfflineReason? {
         guard case .disconnecting(let reason) = state else { return nil }
         return reason
@@ -273,9 +325,12 @@ package actor SessionSupervisor {
         )
     }
 
-    private func reconnectLoop(config: ConnectionConfig) async {
+    private func reconnectLoop() async {
+        guard var config = startingConfig else { return }
         var backoff = min(initialBackoff, config.maxReconnectDelay)
         while !Task.isCancelled {
+            guard let latest = startingConfig else { break }
+            config = latest
             do {
                 try await open(config: config)
                 break
@@ -304,8 +359,8 @@ package actor SessionSupervisor {
     }
 
     private func setReconnecting(error: ConnectionError?, nextAttempt: Date?) {
-        if case .reconnecting(let task, _, _) = state {
-            state = .reconnecting(task, error, nextAttempt: nextAttempt)
+        if case .reconnecting(let task, let config, _, _) = state {
+            state = .reconnecting(task, config, error, nextAttempt: nextAttempt)
         }
     }
 
@@ -313,7 +368,7 @@ package actor SessionSupervisor {
     func withSession<T: Sendable>(
         _ operation: @Sendable (Session) async throws -> T
     ) async throws -> T {
-        guard case .online(let session) = state else {
+        guard case .online(let session, _) = state else {
             throw CoreError.serverUnreachable
         }
         return try await operation(session)

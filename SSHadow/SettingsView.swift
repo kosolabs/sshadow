@@ -65,6 +65,12 @@ struct SettingsView: View {
             insertSettingsIfMissing()
         }
         .onDisappear { activation.release() }
+        .onChange(of: storedSettings.first?.effectivePoll) {
+            submitLiveSettings()
+        }
+        .onChange(of: storedSettings.first?.effectiveIgnoreFilenames) {
+            submitLiveSettings()
+        }
     }
 
     @ViewBuilder
@@ -92,6 +98,13 @@ struct SettingsView: View {
                 "Select a Connection",
                 systemImage: "globe"
             )
+        }
+    }
+
+    private func submitLiveSettings() {
+        guard let settings = storedSettings.first else { return }
+        for config in configs {
+            config.submitLiveSettings(settings: settings)
         }
     }
 

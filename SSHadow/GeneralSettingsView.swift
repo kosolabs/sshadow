@@ -27,10 +27,6 @@ struct GeneralSettingsView: View {
             OpenAtLoginSection()
 
             Section {
-                AppliesOnRestartNote()
-            }
-
-            Section {
                 Picker("Check for Remote Changes", selection: $settings.pollFrequency) {
                     ForEach(Self.checkIntervalChoices, id: \.self) { choice in
                         checkIntervalLabel(choice)

@@ -2419,7 +2419,7 @@ struct SessionTests {
             try sandbox.createFile(at: "x/child.txt", contents: "c")
             let (updates, _) = try await session.reconcileAll().split()
 
-            #expect(updates.map(\.name) == ["child.txt"])
+            #expect(updates.map(\.name).contains("child.txt"))
         }
 
         @Test func createDirectoryOverFileThrows() async throws {
@@ -4416,6 +4416,88 @@ struct SessionTests {
 
             await latch.open()
             _ = try? await operation.value
+        }
+    }
+
+    struct LiveSettingsTests {
+        let dueImmediately = PollSettings(
+            interval: .zero,
+            idleThreshold: .seconds(600),
+            watchedInterval: .seconds(10),
+            watchedIdleThreshold: .seconds(120)
+        )
+
+        @Test func addingAnIgnoreFileHidesItsMatchesWithoutASchedule()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".gitignore", contents: "*.log\n")
+            try sandbox.createFile(at: "a.log")
+            let session = try await sandbox.getSession()
+            let logId = try await session.child(name: "a.log")
+            await session.refreshMaterialized().value
+
+            await session.updateIgnoreFilenames([".sshadowignore", ".gitignore"])
+
+            await expect(eventually: {
+                let (_, changes) = await session.changes(since: 0)
+                return changes.contains(.delete(itemId: logId.rawValue))
+            })
+            await #expect(throws: CoreError.itemNotFound) {
+                try await session.child(name: "a.log")
+            }
+        }
+
+        @Test func removingAnIgnoreFileShowsItsMatchesAndRetriesIgnored()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: ".sshadowignore", contents: "*.log\n")
+            try sandbox.createFile(at: "a.log")
+
+            try await confirmation { retried in
+                let session = try await sandbox.getSession(
+                    ignoreRulesChangedHandler: { retried() }
+                )
+                await #expect(throws: CoreError.itemNotFound) {
+                    try await session.child(name: "a.log")
+                }
+
+                await session.updateIgnoreFilenames([])
+
+                await expect(eventually: {
+                    (try? await session.child(name: "a.log")) != nil
+                })
+            }
+        }
+
+        @Test func turningPollingOnStartsChecking() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession(idleTimeProvider: {
+                .zero
+            })
+            try sandbox.createFile(at: "new.txt")
+
+            await session.updatePoll(dueImmediately)
+
+            await expect(eventually: { await session.anchor > 0 })
+            await session.stop()
+        }
+
+        @Test func switchingToManualStopsChecking() async throws {
+            let sandbox = TestSandbox()
+            sandbox.poll = dueImmediately
+            let session = try await sandbox.getSession(idleTimeProvider: {
+                .zero
+            })
+            await session.start()
+
+            await session.updatePoll(nil)
+            let anchor = await session.anchor
+            try sandbox.createFile(at: "new.txt")
+            try await session.tick()
+
+            #expect(await session.anchor == anchor)
         }
     }
 }

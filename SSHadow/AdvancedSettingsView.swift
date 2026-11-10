@@ -7,10 +7,6 @@ struct AdvancedSettingsView: View {
     var body: some View {
         Form {
             Section {
-                AppliesOnRestartNote()
-            }
-
-            Section {
                 DurationPicker(
                     title: "Check Open Folders Every",
                     seconds: $settings.watchedPollIntervalSeconds,
@@ -68,10 +64,13 @@ struct AdvancedSettingsView: View {
             } header: {
                 Text("Connection")
             } footer: {
-                Text(
-                    "The timeout is how long SSHadow waits for a server to respond, both when connecting and before treating an unresponsive connection as lost. After a connection drops, SSHadow retries with growing delays, up to the maximum."
-                )
-                .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(
+                        "The timeout is how long SSHadow waits for a server to respond, both when connecting and before treating an unresponsive connection as lost. After a connection drops, SSHadow retries with growing delays, up to the maximum."
+                    )
+                    .foregroundStyle(.secondary)
+                    AppliesOnRestartNote()
+                }
             }
         }
         .formStyle(.grouped)
