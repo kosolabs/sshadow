@@ -908,7 +908,8 @@ extension Session {
         let to = await ref(for: trashName, in: .trashContainer)
         try await perform(
             with: parentId,
-            recording: "Move conflicting \(from) to \(to)"
+            recording: "Move conflicting \(from) to \(to)",
+            at: .notice
         ) {
             try await creatingTrash(in: .trashContainer) {
                 try await sftp.move(from: conflictPath, to: trashPath)
@@ -1859,12 +1860,13 @@ extension Session {
     private func perform<T>(
         with itemId: NSFileProviderItemIdentifier,
         recording message: LogMessage? = nil,
+        at level: Event.Level = .info,
         _ work: () async throws -> T
     ) async throws -> T {
         if let message { logger.info(message.debug) }
         do {
             let result = try await work()
-            if let message { fileLog.info(message.display) }
+            if let message { fileLog.log(level: level, message.display) }
             return result
         } catch {
             let mapped = coreError(from: error, itemId: itemId)

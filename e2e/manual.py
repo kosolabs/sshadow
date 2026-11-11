@@ -758,8 +758,8 @@ def remote_checks(g: Guide) -> None:
         expect=[
             "clash.txt shows up in Finder once, with no clash 2.txt.",
             (
-                'Event Log: Move conflicting "docs/clash.txt" to '
-                '".sshadow/trash/clash.txt" and Upload "docs/clash.txt" with its size.'
+                'Event Log: a blue notice, Move conflicting "docs/clash.txt" to '
+                '".sshadow/trash/clash.txt", and Upload "docs/clash.txt" with its size.'
             ),
             "The Finder Trash has a clash.txt containing server.",
         ],
@@ -783,9 +783,9 @@ def remote_checks(g: Guide) -> None:
         expect=[
             "clash.txt in Finder keeps mac edit.",
             (
-                'Event Log: Move conflicting "docs/clash.txt" to ".sshadow/trash/'
-                'clash.txt" with the time added to the name, and Upload '
-                '"docs/clash.txt".'
+                'Event Log: a blue notice, Move conflicting "docs/clash.txt" to '
+                '".sshadow/trash/clash.txt" with the time added to the name, and '
+                'Upload "docs/clash.txt".'
             ),
             "The Finder Trash has a second clash.txt, named with the time.",
         ],
@@ -803,8 +803,8 @@ def remote_checks(g: Guide) -> None:
         expect=[
             "clash.txt is gone from Finder.",
             (
-                'Event Log: Move conflicting "docs/clash.txt" to ".sshadow/trash/'
-                '…", not Remove file.'
+                'Event Log: a blue notice, Move conflicting "docs/clash.txt" to '
+                '".sshadow/trash/…", not Remove file.'
             ),
             "The Finder Trash has a third clash.txt.",
         ],
