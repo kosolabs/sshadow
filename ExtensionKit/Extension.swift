@@ -263,7 +263,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     parentId: parentId,
                     name: filename,
                     file: url,
-                    ifExists: .moveToTrash,
+                    baseRevision: nil,
                     snapshot: snapshot,
                     progress: subprogress
                 )
@@ -391,7 +391,9 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     parentId: item.parentId,
                     name: item.filename,
                     file: newContents,
-                    ifExists: .replace,
+                    baseRevision: try Item.revision(
+                        fromContentVersion: version.contentVersion
+                    ),
                     snapshot: self.ignoreSnapshot(in: item.parentId),
                     progress: subprogress
                 )
@@ -462,14 +464,22 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                 logger.info("Already deleted: \(identifier)")
                 return
             }
+            let baseRevision = try Item.revision(
+                fromContentVersion: version.contentVersion
+            )
             let snapshot = try await ignoreSnapshot(in: item.parentId)
             if item.kind.isDirectory {
                 try await client.removeDirectory(
                     for: identifier,
+                    baseRevision: baseRevision,
                     snapshot: snapshot
                 )
             } else {
-                try await client.removeFile(for: identifier, snapshot: snapshot)
+                try await client.removeFile(
+                    for: identifier,
+                    baseRevision: baseRevision,
+                    snapshot: snapshot
+                )
             }
         }
     }

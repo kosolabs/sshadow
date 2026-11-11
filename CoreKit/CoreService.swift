@@ -291,6 +291,7 @@ extension CoreService {
     ) async throws -> RemoveFileResponse {
         try await session.removeFile(
             for: NSFileProviderItemIdentifier(request.itemId),
+            baseRevision: request.baseRevision,
             snapshot: request.snapshot
         )
         return RemoveFileResponse()
@@ -302,6 +303,7 @@ extension CoreService {
     ) async throws -> RemoveDirectoryResponse {
         try await session.removeDirectory(
             for: NSFileProviderItemIdentifier(request.itemId),
+            baseRevision: request.baseRevision,
             snapshot: request.snapshot
         )
         return RemoveDirectoryResponse()
@@ -368,7 +370,7 @@ extension CoreService {
             request.name,
             to: NSFileProviderItemIdentifier(request.parentId),
             file: request.file,
-            ifExists: request.ifExists,
+            baseRevision: request.baseRevision,
             snapshot: request.snapshot,
             progress: sync.progress
         )

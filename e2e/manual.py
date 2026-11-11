@@ -103,7 +103,7 @@ class Guide:
         self.key = key
         self.failures: list[str] = []
         self.auto = False
-        self.parts = -1
+        self.parts = 0
         self.sections = 0
         self.steps = 0
 
@@ -389,6 +389,16 @@ def exists(path: Path) -> Callable[[], str]:
 
 def missing(path: Path) -> Callable[[], str]:
     return lambda: f"{path} still exists" if path.exists() else ""
+
+
+def in_trash(expected: bytes) -> Callable[[], str]:
+    trash = R / ".sshadow/trash"
+
+    def check() -> str:
+        found = any(p.is_file() and p.read_bytes() == expected for p in trash.iterdir())
+        return "" if found else f"Nothing in {trash} has {expected!r}"
+
+    return check
 
 
 def contains(path: Path, expected: bytes) -> Callable[[], str]:
@@ -695,8 +705,8 @@ def remote_checks(g: Guide) -> None:
         "Checking for remote changes",
         "Sync settings apply right away, without reconnecting. Checking manually "
         "stops all automatic checks, but an ignore file edit still triggers one. "
-        "When the Mac creates a file the server already has, the Mac's copy wins "
-        "and the server's moves to the Trash.",
+        "When the Mac creates, edits or deletes a file the server changed "
+        "unseen, the Mac's change wins and the server's copy moves to the Trash.",
     )
     manual = L / "docs/manual.txt"
     temp = L / "docs/remote.tmp"
@@ -762,6 +772,45 @@ def remote_checks(g: Guide) -> None:
                 "The server's clash.txt is in its trash",
                 contains(R / ".sshadow/trash/clash.txt", b"server\n"),
             ),
+        ],
+    )
+    g.act(
+        "Edit clash.txt on both sides",
+        run=(
+            'echo "server edit" > "$R/docs/clash.txt"\n'
+            'echo "mac edit" > "$L/docs/clash.txt"'
+        ),
+        expect=[
+            "clash.txt in Finder keeps mac edit.",
+            (
+                'Event Log: Move conflicting "docs/clash.txt" to ".sshadow/trash/'
+                'clash.txt" with the time added to the name, and Upload '
+                '"docs/clash.txt".'
+            ),
+            "The Finder Trash has a second clash.txt, named with the time.",
+        ],
+        checks=[
+            until(
+                "The server has the Mac's edit",
+                contains(R / "docs/clash.txt", b"mac edit\n"),
+            ),
+            until("The server's edit is in its trash", in_trash(b"server edit\n")),
+        ],
+    )
+    g.act(
+        "Delete clash.txt after the server edits it",
+        run='echo "server again" > "$R/docs/clash.txt"\nrm "$L/docs/clash.txt"',
+        expect=[
+            "clash.txt is gone from Finder.",
+            (
+                'Event Log: Move conflicting "docs/clash.txt" to ".sshadow/trash/'
+                '…", not Remove file.'
+            ),
+            "The Finder Trash has a third clash.txt.",
+        ],
+        checks=[
+            until("clash.txt is gone from the server", missing(R / "docs/clash.txt")),
+            until("The server's edit is in its trash", in_trash(b"server again\n")),
         ],
     )
     g.act(
@@ -1310,7 +1359,6 @@ def disable(g: Guide) -> None:
                     "docs/.gitignore": File(b"*.bak\n"),
                     "docs/.sshadowignore": File(b"*.tmp\n"),
                     "docs/auto.txt": File(b"auto\n"),
-                    "docs/clash.txt": File(b"mac\n"),
                     "docs/manual.txt": File(b"manual\n"),
                     "docs/offline.txt": File(b"offline\n"),
                     "docs/old.bak": File(b"old\n"),

@@ -1,13 +1,14 @@
 import random
-from collections.abc import Callable
+import shutil
+from collections.abc import Callable, Generator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from logwatch import LogWatcher
-from sshadow import App, enable, evict, replace_item, trash
+from logwatch import LogWatcher, msg
+from sshadow import App, enable, evict, replace_item, reset_settings, trash
 from tree import (
     Delete,
     Dir,
@@ -263,3 +264,61 @@ def test_trash(app: App, logs: LogWatcher, profile: str, remote: Path) -> None:
     wait_for_tree(local / ".Trash", {}, on_poll=logs.check)
     wait_for_tree(remote, tree, on_poll=logs.check)
     wait_for_tree(remote / TRASH, {}, on_poll=logs.check)
+
+
+@pytest.fixture
+def checking_manually(app: App, logs: LogWatcher) -> Generator[None]:
+    """Stop automatic checks, so a server change stays unseen until a poll."""
+    app.send("settings", check_every="manual")
+    logs.expect(msg(r"^Settings updated$"))
+    yield
+    reset_settings(app, logs)
+
+
+def test_edit_on_both_sides_moves_server_copy_to_trash(
+    app: App, logs: LogWatcher, profile: str, remote: Path, checking_manually: None
+) -> None:
+    local = enable(app, logs, profile)
+    make_tree(local, {"notes.txt": File(b"first\n")})
+    wait_for_tree(remote, {"notes.txt": File(b"first\n")}, on_poll=logs.check)
+
+    make_tree(remote, {"notes.txt": File(b"server\n")})
+    (local / "notes.txt").write_bytes(b"mac\n")
+    wait_for_tree(remote / TRASH, {"notes.txt": File(b"server\n")}, on_poll=logs.check)
+    wait_for_tree(remote, {"notes.txt": File(b"mac\n")}, on_poll=logs.check)
+    wait_for_tree(local, {"notes.txt": File(b"mac\n")}, on_poll=logs.check)
+
+
+def test_delete_folder_right_after_adding_to_it_removes_it(
+    app: App, logs: LogWatcher, profile: str, remote: Path
+) -> None:
+    # The Mac's own additions must not look like a server change to the folder.
+    tree: Tree = {"proj": Dir(), "proj/a.txt": File(b"a\n")}
+    local = enable(app, logs, profile)
+    make_tree(local, tree)
+    wait_for_tree(remote, tree, on_poll=logs.check)
+
+    added: Tree = {
+        "proj/new": Dir(),
+        "proj/new/b.txt": File(b"b\n"),
+        "proj/c.txt": File(b"c\n"),
+    }
+    make_tree(local, added)
+    wait_for_tree(remote, tree | added, on_poll=logs.check)
+
+    shutil.rmtree(local / "proj")
+    wait_for_tree(remote, {}, on_poll=logs.check)
+    assert not (remote / TRASH).exists()
+
+
+def test_delete_after_server_edit_moves_server_copy_to_trash(
+    app: App, logs: LogWatcher, profile: str, remote: Path, checking_manually: None
+) -> None:
+    local = enable(app, logs, profile)
+    make_tree(local, {"notes.txt": File(b"first\n")})
+    wait_for_tree(remote, {"notes.txt": File(b"first\n")}, on_poll=logs.check)
+
+    make_tree(remote, {"notes.txt": File(b"server\n")})
+    (local / "notes.txt").unlink()
+    wait_for_tree(remote / TRASH, {"notes.txt": File(b"server\n")}, on_poll=logs.check)
+    wait_for_tree(remote, {}, on_poll=logs.check)

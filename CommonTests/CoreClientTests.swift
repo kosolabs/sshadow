@@ -153,7 +153,11 @@ struct CoreClientTests {
         try sandbox.createFile(at: "file.txt")
         let client = try await sandbox.client
         let itemId = try await client.child(name: "file.txt")
-        try await client.removeFile(for: itemId, snapshot: nil)
+        try await client.removeFile(
+            for: itemId,
+            baseRevision: try await client.item(for: itemId).revision,
+            snapshot: nil
+        )
 
         #expect(!sandbox.exists(at: "file.txt"))
     }
@@ -163,7 +167,11 @@ struct CoreClientTests {
         try sandbox.createFolder(at: "folder")
         let client = try await sandbox.client
         let itemId = try await client.child(name: "folder")
-        try await client.removeDirectory(for: itemId, snapshot: nil)
+        try await client.removeDirectory(
+            for: itemId,
+            baseRevision: try await client.item(for: itemId).revision,
+            snapshot: nil
+        )
 
         #expect(!sandbox.exists(at: "folder"))
     }
@@ -188,7 +196,7 @@ struct CoreClientTests {
             parentId: .rootContainer,
             name: "upload.txt",
             file: localFile,
-            ifExists: .moveToTrash,
+            baseRevision: nil,
             snapshot: nil,
             progress: Progress()
         )

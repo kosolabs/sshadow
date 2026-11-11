@@ -668,7 +668,7 @@ extension Session {
             throw CoreError.ignored
         }
 
-        try await moveConflictToTrash(name, in: parentId)
+        try await moveConflictToTrash(name, in: parentId, keeping: nil)
 
         try await perform(
             with: parentId,
@@ -708,7 +708,7 @@ extension Session {
             throw CoreError.ignored
         }
 
-        try await moveConflictToTrash(name, in: parentId)
+        try await moveConflictToTrash(name, in: parentId, keeping: nil)
 
         try await perform(
             with: parentId,
@@ -763,7 +763,11 @@ extension Session {
                 oldParentId == newParentId
                 && oldName.caseInsensitiveCompare(newName) == .orderedSame
             if newParentId != .trashContainer, !isCaseOnlyRename {
-                try await moveConflictToTrash(newName, in: newParentId)
+                try await moveConflictToTrash(
+                    newName,
+                    in: newParentId,
+                    keeping: nil
+                )
             }
 
             let oldPath = try await path(for: itemId)
@@ -788,6 +792,7 @@ extension Session {
 
     func removeFile(
         for itemId: NSFileProviderItemIdentifier,
+        baseRevision: Int,
         snapshot: IgnoreSnapshot?
     ) async throws {
         await gate.enter()
@@ -797,9 +802,11 @@ extension Session {
             return
         }
 
-        let ref = await ref(for: itemId)
-        try await perform(with: itemId, recording: "Remove file \(ref)") {
-            try await sftp.removeFile(at: path(for: itemId))
+        if try await !trashIfChanged(itemId, since: baseRevision) {
+            let ref = await ref(for: itemId)
+            try await perform(with: itemId, recording: "Remove file \(ref)") {
+                try await sftp.removeFile(at: path(for: itemId))
+            }
         }
         try await refresh(db.parent(of: itemId).id)
         try await db.remove(itemId)
@@ -807,6 +814,7 @@ extension Session {
 
     func removeDirectory(
         for itemId: NSFileProviderItemIdentifier,
+        baseRevision: Int,
         snapshot: IgnoreSnapshot?
     ) async throws {
         await gate.enter()
@@ -816,11 +824,15 @@ extension Session {
             return
         }
 
-        try await perform(
-            with: itemId,
-            recording: "Remove directory \(ref(for: itemId))"
-        ) {
-            try await sftp.removeDirectoryRecursively(at: path(for: itemId))
+        if try await !trashIfChanged(itemId, since: baseRevision) {
+            try await perform(
+                with: itemId,
+                recording: "Remove directory \(ref(for: itemId))"
+            ) {
+                try await sftp.removeDirectoryRecursively(
+                    at: path(for: itemId)
+                )
+            }
         }
         try await refresh(db.parent(of: itemId).id)
         try await db.remove(itemId)
@@ -842,9 +854,47 @@ extension Session {
 // MARK: - Conflicts
 
 extension Session {
+    private func conflicts(
+        at name: String,
+        in parentId: NSFileProviderItemIdentifier,
+        baseRevision: Int?
+    ) async throws -> Bool {
+        guard let baseRevision, let item = try? await db.child(of: parentId, name: name)
+        else { return true }
+        return try await changedOnServer(item, since: baseRevision)
+    }
+
+    private func trashIfChanged(
+        _ itemId: NSFileProviderItemIdentifier,
+        since baseRevision: Int
+    ) async throws -> Bool {
+        let item = try await db.item(for: itemId)
+        guard let parentId = item.parentId,
+            try await changedOnServer(item, since: baseRevision)
+        else { return false }
+        try await moveConflictToTrash(item.name, in: parentId, keeping: itemId)
+        return true
+    }
+
+    private func changedOnServer(
+        _ item: Item,
+        since baseRevision: Int
+    ) async throws -> Bool {
+        guard item.revision == baseRevision else { return true }
+        let attrs: SFTPAttributes
+        do {
+            attrs = try await attributes(for: item.id)
+        } catch CoreError.itemNotFound {
+            return false
+        }
+        return attrs.itemSize != item.size
+            || attrs.modifyTime?.truncate() != item.modifyTime
+    }
+
     private func moveConflictToTrash(
         _ name: String,
-        in parentId: NSFileProviderItemIdentifier
+        in parentId: NSFileProviderItemIdentifier,
+        keeping keptId: NSFileProviderItemIdentifier?
     ) async throws {
         let conflictPath = try await path(for: name, in: parentId)
         let exists = try await perform(with: parentId) {
@@ -866,7 +916,9 @@ extension Session {
         }
 
         let trashed: Item
-        if let known = try? await db.child(of: parentId, name: name) {
+        if let known = try? await db.child(of: parentId, name: name),
+            known.id != keptId
+        {
             try await db.move(
                 known.id,
                 toParent: .trashContainer,
@@ -1145,7 +1197,7 @@ extension Session {
         _ name: String,
         to parentId: NSFileProviderItemIdentifier,
         file url: URL,
-        ifExists: OnExists,
+        baseRevision: Int?,
         chunkSize: Int = SFTPLimits.defaultBufferSize,
         snapshot: IgnoreSnapshot?,
         progress: Progress
@@ -1215,8 +1267,17 @@ extension Session {
                     try await sftp.createDirectoryRecursively(at: stagingPath)
                     try await writeStaged()
                 }
-                if ifExists == .moveToTrash {
-                    try await moveConflictToTrash(name, in: parentId)
+                if try await conflicts(
+                    at: name,
+                    in: parentId,
+                    baseRevision: baseRevision
+                ) {
+                    let edited = try? await db.child(of: parentId, name: name)
+                    try await moveConflictToTrash(
+                        name,
+                        in: parentId,
+                        keeping: baseRevision == nil ? nil : edited?.id
+                    )
                 }
                 let target = try await path(for: name, in: parentId)
                 try await creatingTrash(in: parentId) {
@@ -1224,7 +1285,7 @@ extension Session {
                         staged,
                         at: target,
                         kind: kind,
-                        ifExists: ifExists
+                        replacing: baseRevision != nil
                     )
                 }
             } catch {
@@ -1253,9 +1314,9 @@ extension Session {
         _ staged: String,
         at target: String,
         kind: Manifest.Entry.Kind,
-        ifExists: OnExists
+        replacing: Bool
     ) async throws {
-        guard ifExists == .replace else {
+        guard replacing else {
             try await sftp.moveWithoutReplacing(
                 from: stagingPath(staged),
                 to: target

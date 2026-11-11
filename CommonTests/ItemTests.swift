@@ -147,6 +147,17 @@ struct ContentVersionTests {
         #expect(a.contentVersion == b.contentVersion)
     }
 
+    @Test func revisionDecodesFromContentVersion() throws {
+        let version = makeItem(revision: 7).contentVersion
+        #expect(try Item.revision(fromContentVersion: version) == 7)
+    }
+
+    @Test func revisionFromUndecodableContentVersionThrows() {
+        #expect(throws: CoreError.cannotSynchronize) {
+            try Item.revision(fromContentVersion: Data("1700000000.0-5".utf8))
+        }
+    }
+
     @Test func contentVersionIgnoresMetadataOnlyFields() {
         let a = makeItem(
             name: "a.txt",
