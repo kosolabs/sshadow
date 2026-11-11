@@ -114,24 +114,32 @@ struct ItemFlagsTests {
 }
 
 struct ContentVersionTests {
+    static let allKinds: [Item.Kind] = [
+        .file, .package, .folder, .symlink(target: "target"),
+    ]
+
     @Test func contentVersionIsStableForEqualContent() {
         #expect(makeItem().contentVersion == makeItem().contentVersion)
     }
 
-    @Test func fileContentVersionChangesWithRevision() {
+    @Test(arguments: ContentVersionTests.allKinds)
+    func contentVersionChangesWithRevision(kind: Item.Kind) {
         #expect(
-            makeItem(revision: 1).contentVersion
-                != makeItem(revision: 2).contentVersion
+            makeItem(kind: kind, revision: 1).contentVersion
+                != makeItem(kind: kind, revision: 2).contentVersion
         )
     }
 
-    @Test func fileContentVersionIgnoresSizeAndModifyTime() {
+    @Test(arguments: ContentVersionTests.allKinds)
+    func contentVersionIgnoresSizeAndModifyTime(kind: Item.Kind) {
         let a = makeItem(
+            kind: kind,
             size: 1024,
             modifyTime: Date(timeIntervalSince1970: 200),
             revision: 1
         )
         let b = makeItem(
+            kind: kind,
             size: 2048,
             modifyTime: Date(timeIntervalSince1970: 201),
             revision: 1
@@ -151,21 +159,6 @@ struct ContentVersionTests {
             createTime: Date(timeIntervalSince1970: 999)
         )
         #expect(a.contentVersion == b.contentVersion)
-    }
-
-    @Test(arguments: [Item.Kind.folder, .symlink(target: "target")])
-    func contentVersionOfItemWithoutContentsChangesWithModifyTime(
-        kind: Item.Kind
-    ) {
-        let a = makeItem(
-            kind: kind,
-            modifyTime: Date(timeIntervalSince1970: 200)
-        )
-        let b = makeItem(
-            kind: kind,
-            modifyTime: Date(timeIntervalSince1970: 201)
-        )
-        #expect(a.contentVersion != b.contentVersion)
     }
 }
 
