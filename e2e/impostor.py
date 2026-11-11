@@ -29,6 +29,11 @@ class Impostor:
 
     def __init__(self, port: int):
         self.port = port
+        if _listening(port):
+            raise RuntimeError(
+                f"Port {port} is already in use, probably by an impostor sshd "
+                f"left over from an earlier run. Find it with: lsof -nP -iTCP:{port}"
+            )
         self._dir = Path(tempfile.mkdtemp(prefix="sshadow-impostor-"))
         self.host_key = self._dir / "host_key_ed25519"
         self.log = self._dir / "sshd.log"
@@ -62,14 +67,20 @@ class Impostor:
         while time.monotonic() < deadline:
             if self._process.poll() is not None:
                 raise RuntimeError(f"sshd exited: {self._log_lines()}")
-            try:
-                socket.create_connection(("127.0.0.1", self.port), timeout=1).close()
+            if _listening(self.port):
                 return
-            except OSError:
-                time.sleep(0.05)
+            time.sleep(0.05)
         raise TimeoutError(f"sshd isn't listening on port {self.port}")
 
     def close(self) -> None:
         self._process.terminate()
         self._process.wait(timeout=10)
         shutil.rmtree(self._dir, ignore_errors=True)
+
+
+def _listening(port: int) -> bool:
+    try:
+        socket.create_connection(("127.0.0.1", port), timeout=1).close()
+        return True
+    except OSError:
+        return False

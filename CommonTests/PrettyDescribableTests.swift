@@ -9,7 +9,7 @@ struct PrettyDescribableTests {
         #expect(
             "\(CoreError.serverUnreachable)" == "CoreError.serverUnreachable"
         )
-        #expect("\(OnExists.fail)" == "OnExists.fail")
+        #expect("\(OnExists.moveToTrash)" == "OnExists.moveToTrash")
     }
 
     @Test("Optional payload renders nil or a quoted string")

@@ -668,6 +668,8 @@ extension Session {
             throw CoreError.ignored
         }
 
+        try await moveConflictToTrash(name, in: parentId)
+
         try await perform(
             with: parentId,
             recording: "Create symlink from \(ref) to \(target)"
@@ -705,6 +707,8 @@ extension Session {
             logIgnored("Ignore create directory \(ref)", by: rule)
             throw CoreError.ignored
         }
+
+        try await moveConflictToTrash(name, in: parentId)
 
         try await perform(
             with: parentId,
@@ -754,6 +758,14 @@ extension Session {
             }
 
             let oldParentId = try await db.parent(of: itemId).id
+            let oldName = try await db.name(of: itemId)
+            let isCaseOnlyRename =
+                oldParentId == newParentId
+                && oldName.caseInsensitiveCompare(newName) == .orderedSame
+            if newParentId != .trashContainer, !isCaseOnlyRename {
+                try await moveConflictToTrash(newName, in: newParentId)
+            }
+
             let oldPath = try await path(for: itemId)
             let newPath = try await path(for: newName, in: newParentId)
 
@@ -824,6 +836,90 @@ extension Session {
         try await db.remove(itemId)
         await cache.invalidate(itemId)
         return true
+    }
+}
+
+// MARK: - Conflicts
+
+extension Session {
+    private func moveConflictToTrash(
+        _ name: String,
+        in parentId: NSFileProviderItemIdentifier
+    ) async throws {
+        let conflictPath = try await path(for: name, in: parentId)
+        let exists = try await perform(with: parentId) {
+            try await sftp.attributesIfExists(at: conflictPath) != nil
+        }
+        guard exists else { return }
+
+        let trashName = try await freeTrashName(for: name)
+        let trashPath = try await path(for: trashName, in: .trashContainer)
+        let from = await ref(for: name, in: parentId)
+        let to = await ref(for: trashName, in: .trashContainer)
+        try await perform(
+            with: parentId,
+            recording: "Move conflicting \(from) to \(to)"
+        ) {
+            try await creatingTrash(in: .trashContainer) {
+                try await sftp.move(from: conflictPath, to: trashPath)
+            }
+        }
+
+        let trashed: Item
+        if let known = try? await db.child(of: parentId, name: name) {
+            try await db.move(
+                known.id,
+                toParent: .trashContainer,
+                name: trashName
+            )
+            trashed = try await db.item(for: known.id)
+        } else {
+            let attrs = try await attributes(
+                for: trashName,
+                in: .trashContainer
+            )
+            trashed = try await upsert(
+                parentId: .trashContainer,
+                sshItem: sshItem(
+                    for: trashName,
+                    in: .trashContainer,
+                    from: attrs
+                )
+            )
+        }
+        record([.update(item: trashed)])
+        await changesDetectedHandler()
+    }
+
+    private func freeTrashName(for name: String) async throws -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "h.mm.ss a"
+        let time = formatter.string(from: Date())
+        var candidate = name
+        var copy = 1
+        while try await existsInTrash(candidate) {
+            let suffix = copy == 1 ? time : "\(time) \(copy)"
+            candidate = Self.name(name, suffixedWith: suffix)
+            copy += 1
+        }
+        return candidate
+    }
+
+    private func existsInTrash(_ name: String) async throws -> Bool {
+        let path = try await path(for: name, in: .trashContainer)
+        return try await perform(with: .trashContainer) {
+            try await sftp.attributesIfExists(at: path) != nil
+        }
+    }
+
+    private static func name(
+        _ name: String,
+        suffixedWith suffix: String
+    ) -> String {
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        return ext.isEmpty ? "\(base) \(suffix)" : "\(base) \(suffix).\(ext)"
     }
 }
 
@@ -1118,6 +1214,9 @@ extension Session {
                     await removeStaged(staged, kind: kind)
                     try await sftp.createDirectoryRecursively(at: stagingPath)
                     try await writeStaged()
+                }
+                if ifExists == .moveToTrash {
+                    try await moveConflictToTrash(name, in: parentId)
                 }
                 let target = try await path(for: name, in: parentId)
                 try await creatingTrash(in: parentId) {

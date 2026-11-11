@@ -2422,60 +2422,6 @@ struct SessionTests {
             #expect(updates.map(\.name).contains("child.txt"))
         }
 
-        @Test func createDirectoryOverFileThrows() async throws {
-            let sandbox = TestSandbox()
-            try sandbox.createFile(at: "existing-file")
-            let session = try await sandbox.getSession()
-
-            await #expect(throws: CoreError.filenameCollision) {
-                _ = try await session.createDirectory(
-                    "existing-file",
-                    in: .rootContainer,
-                    snapshot: nil
-                )
-            }
-            let changes = try await session.reconcileAll()
-            #expect(changes == [])
-        }
-
-        @Test func createDirectoryOverSymlinkThrows() async throws {
-            let sandbox = TestSandbox()
-            _ = try sandbox.createFolder(at: "target-dir")
-            try sandbox.createSymlink(at: "link-dir", target: "target-dir")
-            let session = try await sandbox.getSession()
-
-            await #expect(throws: CoreError.filenameCollision) {
-                _ = try await session.createDirectory(
-                    "link-dir",
-                    in: .rootContainer,
-                    snapshot: nil
-                )
-            }
-            let changes = try await session.reconcileAll()
-            #expect(changes == [])
-        }
-
-        @Test func createDirectoryWhenExistsThrows() async throws {
-            let sandbox = TestSandbox()
-            try sandbox.createFolder(at: "already-exists")
-            let session = try await sandbox.getSession()
-
-            await #expect {
-                try await session.createDirectory(
-                    "already-exists",
-                    in: .rootContainer,
-                    snapshot: nil
-                )
-            } throws: { error in
-                guard case CoreError.filenameCollision = error else {
-                    return false
-                }
-                return true
-            }
-            let changes = try await session.reconcileAll()
-            #expect(changes == [])
-        }
-
         @Test func createDirectoryInsertsRowMatchingItemId() async throws {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
@@ -2492,21 +2438,6 @@ struct SessionTests {
             #expect(changes == [])
         }
 
-        @Test func createDirectoryFailureLeavesNoRow() async throws {
-            let sandbox = TestSandbox()
-            try sandbox.createFolder(at: "collide-dir")
-            let session = try await sandbox.getSession()
-
-            await #expect(throws: CoreError.filenameCollision) {
-                _ = try await session.createDirectory(
-                    "collide-dir",
-                    in: .rootContainer,
-                    snapshot: nil
-                )
-            }
-            let changes = try await session.reconcileAll()
-            #expect(changes == [])
-        }
     }
 
     struct CreateSymlinkTests {
@@ -2568,22 +2499,6 @@ struct SessionTests {
             #expect(changes == [])
         }
 
-        @Test func createSymlinkFailureLeavesNoRow() async throws {
-            let sandbox = TestSandbox()
-            try sandbox.createFile(at: "collide")
-            let session = try await sandbox.getSession()
-
-            await #expect(throws: CoreError.filenameCollision) {
-                _ = try await session.createSymlink(
-                    "collide",
-                    in: .rootContainer,
-                    target: "/dev/null",
-                    snapshot: nil
-                )
-            }
-            let changes = try await session.reconcileAll()
-            #expect(changes == [])
-        }
     }
 
     struct MoveTests {
@@ -2885,7 +2800,7 @@ struct SessionTests {
                     "a.log",
                     to: .rootContainer,
                     file: sandbox.url(for: "a.log", in: .group),
-                    ifExists: .fail,
+                    ifExists: .moveToTrash,
                     snapshot: [folder("", text("*.log\n"))],
                     progress: Progress()
                 )
@@ -3121,7 +3036,7 @@ struct SessionTests {
                 "Doc.rtfd",
                 to: .rootContainer,
                 file: source,
-                ifExists: .fail,
+                ifExists: .moveToTrash,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -3142,7 +3057,7 @@ struct SessionTests {
                 "a.txt",
                 to: .trashContainer,
                 file: source,
-                ifExists: .fail,
+                ifExists: .moveToTrash,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -3170,7 +3085,7 @@ struct SessionTests {
                 filename,
                 to: .rootContainer,
                 file: uploadUrl,
-                ifExists: .fail,
+                ifExists: .moveToTrash,
                 snapshot: nil,
                 progress: progress
             )
@@ -3202,7 +3117,7 @@ struct SessionTests {
                 filename,
                 to: .rootContainer,
                 file: uploadUrl,
-                ifExists: .fail,
+                ifExists: .moveToTrash,
                 snapshot: nil,
                 progress: progress
             )
@@ -3257,7 +3172,7 @@ struct SessionTests {
                     "cancelled.dat",
                     to: .rootContainer,
                     file: uploadUrl,
-                    ifExists: .fail,
+                    ifExists: .moveToTrash,
                     snapshot: nil,
                     progress: progress
                 )
@@ -3279,7 +3194,7 @@ struct SessionTests {
                     "partial.dat",
                     to: .rootContainer,
                     file: uploadUrl,
-                    ifExists: .fail,
+                    ifExists: .moveToTrash,
                     snapshot: nil,
                     progress: progress
                 )
@@ -3304,7 +3219,7 @@ struct SessionTests {
                     "partial.dat",
                     to: .rootContainer,
                     file: uploadUrl,
-                    ifExists: .fail,
+                    ifExists: .moveToTrash,
                     chunkSize: Self.slowChunkSize,
                     snapshot: nil,
                     progress: progress
@@ -3465,62 +3380,6 @@ struct SessionTests {
             #expect(changes == [])
         }
 
-        @Test func uploadFailingIfExistsOverExistingFileThrowsCollision()
-            async throws
-        {
-            let sandbox = TestSandbox()
-            try sandbox.createFile(at: "existing.txt", contents: "original")
-            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
-            try Data("replacement".utf8).write(to: uploadUrl)
-            let session = try await sandbox.getSession()
-
-            await #expect(throws: CoreError.filenameCollision) {
-                _ = try await session.upload(
-                    "existing.txt",
-                    to: .rootContainer,
-                    file: uploadUrl,
-                    ifExists: .fail,
-                    snapshot: nil,
-                    progress: Progress()
-                )
-            }
-            #expect(try sandbox.contents(of: "existing.txt") == "original")
-            #expect(try sandbox.stagedUploads() == [])
-            let changes = try await session.reconcileAll()
-            #expect(changes == [])
-        }
-
-        @Test func uploadPackageFailingIfExistsOverExistingThrowsCollision()
-            async throws
-        {
-            let sandbox = TestSandbox()
-            try sandbox.createPackage(
-                at: "Doc.rtfd",
-                files: [.file(path: "text.rtf", contents: "old")]
-            )
-            let source = try sandbox.createPackage(
-                at: "src.rtfd",
-                in: .group,
-                files: [.file(path: "text.rtf", contents: "new")]
-            )
-            let session = try await sandbox.getSession()
-
-            await #expect(throws: CoreError.filenameCollision) {
-                _ = try await session.upload(
-                    "Doc.rtfd",
-                    to: .rootContainer,
-                    file: source,
-                    ifExists: .fail,
-                    snapshot: nil,
-                    progress: Progress()
-                )
-            }
-            #expect(try sandbox.contents(of: "Doc.rtfd/text.rtf") == "old")
-            #expect(try sandbox.stagedUploads() == [])
-            let changes = try await session.reconcileAll()
-            #expect(changes == [])
-        }
-
         @Test func uploadIntoLockedFolderThrowsCannotSynchronize()
             async throws
         {
@@ -3563,7 +3422,7 @@ struct SessionTests {
                 "first.txt",
                 to: .rootContainer,
                 file: uploadUrl,
-                ifExists: .fail,
+                ifExists: .moveToTrash,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -3572,7 +3431,7 @@ struct SessionTests {
                 "second.txt",
                 to: .rootContainer,
                 file: uploadUrl,
-                ifExists: .fail,
+                ifExists: .moveToTrash,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -3666,7 +3525,7 @@ struct SessionTests {
                 "file.txt",
                 to: folderId,
                 file: uploadUrl,
-                ifExists: .fail,
+                ifExists: .moveToTrash,
                 snapshot: nil,
                 progress: progress
             )
@@ -3703,7 +3562,7 @@ struct SessionTests {
                 "Doc.rtfd",
                 to: .rootContainer,
                 file: source,
-                ifExists: .fail,
+                ifExists: .moveToTrash,
                 snapshot: nil,
                 progress: progress
             )
@@ -3735,7 +3594,7 @@ struct SessionTests {
                 "Empty.rtfd",
                 to: .rootContainer,
                 file: source,
-                ifExists: .fail,
+                ifExists: .moveToTrash,
                 snapshot: nil,
                 progress: progress
             )
@@ -3774,7 +3633,7 @@ struct SessionTests {
                     "Bundle.app",
                     to: .rootContainer,
                     file: source,
-                    ifExists: .fail,
+                    ifExists: .moveToTrash,
                     snapshot: nil,
                     progress: Progress()
                 )
@@ -3795,7 +3654,7 @@ struct SessionTests {
                     "Bundle.app",
                     to: .rootContainer,
                     file: source,
-                    ifExists: .fail,
+                    ifExists: .moveToTrash,
                     snapshot: nil,
                     progress: progress
                 )
@@ -3842,6 +3701,283 @@ struct SessionTests {
             #expect(progress.isFinished)
             let changes = try await session.reconcileAll()
             #expect(changes == [])
+        }
+    }
+
+    struct ConflictTests {
+        // A conflict is a name the Mac writes to that the server already has
+        // an item at. The Mac's item always takes the name; the server's item
+        // is moved to the trash so it can be recovered.
+
+        @Test func uploadOverFileMovesServerFileToTrash() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "notes.txt", contents: "server")
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
+            try Data("mac".utf8).write(to: uploadUrl)
+            let session = try await sandbox.getSession()
+
+            _ = try await session.upload(
+                "notes.txt",
+                to: .rootContainer,
+                file: uploadUrl,
+                ifExists: .moveToTrash,
+                snapshot: nil,
+                progress: Progress()
+            )
+
+            #expect(try sandbox.contents(of: "notes.txt") == "mac")
+            #expect(
+                try sandbox.contents(of: ".sshadow/trash/notes.txt") == "server"
+            )
+        }
+
+        @Test func uploadPackageOverPackageMovesServerPackageToTrash()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createPackage(
+                at: "Doc.rtfd",
+                files: [.file(path: "text.rtf", contents: "server")]
+            )
+            let source = try sandbox.createPackage(
+                at: "src.rtfd",
+                in: .group,
+                files: [.file(path: "text.rtf", contents: "mac")]
+            )
+            let session = try await sandbox.getSession()
+
+            _ = try await session.upload(
+                "Doc.rtfd",
+                to: .rootContainer,
+                file: source,
+                ifExists: .moveToTrash,
+                snapshot: nil,
+                progress: Progress()
+            )
+
+            #expect(try sandbox.contents(of: "Doc.rtfd/text.rtf") == "mac")
+            #expect(
+                try sandbox.contents(of: ".sshadow/trash/Doc.rtfd/text.rtf")
+                    == "server"
+            )
+        }
+
+        @Test func uploadOverFolderMovesServerFolderToTrash() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "build/out.o", contents: "server")
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
+            try Data("mac".utf8).write(to: uploadUrl)
+            let session = try await sandbox.getSession()
+
+            _ = try await session.upload(
+                "build",
+                to: .rootContainer,
+                file: uploadUrl,
+                ifExists: .moveToTrash,
+                snapshot: nil,
+                progress: Progress()
+            )
+
+            #expect(try sandbox.contents(of: "build") == "mac")
+            #expect(
+                try sandbox.contents(of: ".sshadow/trash/build/out.o")
+                    == "server"
+            )
+        }
+
+        @Test func createDirectoryOverFolderMovesServerFolderToTrash()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "build/out.o", contents: "server")
+            let session = try await sandbox.getSession()
+
+            let item = try await session.createDirectory(
+                "build",
+                in: .rootContainer,
+                snapshot: nil
+            )
+
+            #expect(try await session.list(for: item.id) == [])
+            #expect(!sandbox.exists(at: "build/out.o"))
+            #expect(
+                try sandbox.contents(of: ".sshadow/trash/build/out.o")
+                    == "server"
+            )
+        }
+
+        @Test func createDirectoryOverFileMovesServerFileToTrash()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "build", contents: "server")
+            let session = try await sandbox.getSession()
+
+            let item = try await session.createDirectory(
+                "build",
+                in: .rootContainer,
+                snapshot: nil
+            )
+
+            #expect(item.kind == .folder)
+            #expect(
+                try sandbox.contents(of: ".sshadow/trash/build") == "server"
+            )
+        }
+
+        @Test func createSymlinkOverFileMovesServerFileToTrash() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "link", contents: "server")
+            let session = try await sandbox.getSession()
+
+            _ = try await session.createSymlink(
+                "link",
+                in: .rootContainer,
+                target: "/dev/null",
+                snapshot: nil
+            )
+
+            #expect(try sandbox.target(of: "link") == "/dev/null")
+            #expect(
+                try sandbox.contents(of: ".sshadow/trash/link") == "server"
+            )
+        }
+
+        @Test func moveOntoServerItemMovesServerItemToTrash() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "draft.txt", contents: "mac")
+            let session = try await sandbox.getSession()
+            let draftId = try await session.child(name: "draft.txt")
+            try sandbox.createFile(at: "final.txt", contents: "server")
+
+            let item = try await session.move(
+                draftId,
+                to: .rootContainer,
+                name: "final.txt",
+                snapshot: nil
+            )
+
+            #expect(item.id == draftId)
+            #expect(try sandbox.contents(of: "final.txt") == "mac")
+            #expect(
+                try sandbox.contents(of: ".sshadow/trash/final.txt")
+                    == "server"
+            )
+        }
+
+        @Test func moveToTrashLeavesSameNameInTrashAlone() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "notes.txt", contents: "mac")
+            let session = try await sandbox.getSession()
+            let notesId = try await session.child(name: "notes.txt")
+            try sandbox.createFile(
+                at: ".sshadow/trash/other.txt",
+                contents: "trashed"
+            )
+
+            try await session.move(
+                notesId,
+                to: .trashContainer,
+                name: "notes.txt",
+                snapshot: nil
+            )
+
+            #expect(
+                try sandbox.contents(of: ".sshadow/trash/notes.txt") == "mac"
+            )
+            #expect(
+                try sandbox.contents(of: ".sshadow/trash/other.txt")
+                    == "trashed"
+            )
+        }
+
+        @Test func repeatedConflictsKeepEveryServerCopyInTrash() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+
+            for version in ["first", "second", "third"] {
+                try sandbox.createFile(at: "notes.txt", contents: version)
+                let uploadUrl = sandbox.url(
+                    for: UUID().uuidString,
+                    in: .group
+                )
+                try Data("mac".utf8).write(to: uploadUrl)
+                _ = try await session.upload(
+                    "notes.txt",
+                    to: .rootContainer,
+                    file: uploadUrl,
+                    ifExists: .moveToTrash,
+                    snapshot: nil,
+                    progress: Progress()
+                )
+            }
+
+            let trash = sandbox.url(for: ".sshadow/trash")
+            let trashed = try FileManager.default.contentsOfDirectory(
+                at: trash,
+                includingPropertiesForKeys: nil
+            )
+            let contents = try trashed.map {
+                try String(contentsOf: $0, encoding: .utf8)
+            }
+            #expect(Set(contents) == ["first", "second", "third"])
+            #expect(
+                trashed.allSatisfy { $0.pathExtension == "txt" }
+            )
+        }
+
+        @Test func conflictWithUnknownItemReportsItInTrash() async throws {
+            let sandbox = TestSandbox()
+            let session = try await sandbox.getSession()
+            try sandbox.createFile(at: "notes.txt", contents: "server")
+            let (anchor, _) = await session.changes(since: 0)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
+            try Data("mac".utf8).write(to: uploadUrl)
+
+            _ = try await session.upload(
+                "notes.txt",
+                to: .rootContainer,
+                file: uploadUrl,
+                ifExists: .moveToTrash,
+                snapshot: nil,
+                progress: Progress()
+            )
+
+            let trashedId = try await session.child(
+                of: .trashContainer,
+                name: "notes.txt"
+            )
+            let trashed = try await session.item(for: trashedId)
+            let (_, changes) = await session.changes(since: anchor)
+            #expect(changes == [.update(item: trashed)])
+            #expect(try await session.reconcileAll() == [])
+        }
+
+        @Test func conflictWithKnownItemReportsItMovedToTrash() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "notes.txt", contents: "server")
+            let session = try await sandbox.getSession()
+            let serverId = try await session.child(name: "notes.txt")
+            let (anchor, _) = await session.changes(since: 0)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
+            try Data("mac".utf8).write(to: uploadUrl)
+
+            let item = try await session.upload(
+                "notes.txt",
+                to: .rootContainer,
+                file: uploadUrl,
+                ifExists: .moveToTrash,
+                snapshot: nil,
+                progress: Progress()
+            )
+
+            #expect(item.id != serverId)
+            let trashed = try await session.item(for: serverId)
+            #expect(trashed.parentId == .trashContainer)
+            #expect(trashed.name == "notes.txt")
+            let (_, changes) = await session.changes(since: anchor)
+            #expect(changes == [.update(item: trashed)])
+            #expect(try await session.reconcileAll() == [])
         }
     }
 
