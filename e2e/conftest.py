@@ -24,6 +24,7 @@ from sshadow import (
     cloud_storage,
     create_profile,
     find_app,
+    reset_settings,
     wait_for_removal,
 )
 
@@ -149,6 +150,7 @@ def app(key: Path) -> Generator[App]:
     try:
         launch(app, watcher, key)
         delete_leftover_profiles(app, watcher)
+        reset_settings(app, watcher)
         approve_file_provider(app, watcher, key)
     except BaseException as e:
         # Teardown doesn't run when setup fails.

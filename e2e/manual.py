@@ -45,6 +45,7 @@ from sshadow import (
     evict,
     find_app,
     named,
+    reset_settings,
     trash,
     uploading,
     wait_for_removal,
@@ -348,6 +349,19 @@ def until(what: str, condition: Callable[[], str], timeout: float = 30) -> Check
     return Check(what, lambda t: wait_for(condition, timeout=t), timeout)
 
 
+def stays(what: str, condition: Callable[[], str], seconds: float) -> Check:
+    """Fail if `condition` reports a problem at any point in the next `seconds`."""
+
+    def hold(_: float) -> None:
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            if problem := condition():
+                raise AssertionError(problem)
+            time.sleep(0.5)
+
+    return Check(what, hold, seconds)
+
+
 def matches(what: str, root: Path, tree: Tree, timeout: float = 30) -> Check:
     return Check(what, lambda t: wait_for_tree(root, tree, timeout=t), timeout)
 
@@ -358,6 +372,14 @@ def exists(path: Path) -> Callable[[], str]:
 
 def missing(path: Path) -> Callable[[], str]:
     return lambda: f"{path} still exists" if path.exists() else ""
+
+
+def contains(path: Path, expected: bytes) -> Callable[[], str]:
+    def check() -> str:
+        actual = path.read_bytes() if path.exists() else None
+        return "" if actual == expected else f"{path} has {actual!r}"
+
+    return check
 
 
 def downloaded(path: Path, want: bool) -> Callable[[], str]:
@@ -437,6 +459,7 @@ def setup() -> Guide:
     shutil.copy(KEY, key)
     logs = LogWatcher(PREDICATE)
     launch(app, logs, key)
+    reset_settings(app, logs)
 
     app.send("delete", name=NAME)
     try:
@@ -662,6 +685,224 @@ def server_changes(g: Guide) -> None:
     )
 
 
+def settings_window(g: Guide) -> None:
+    g.section(
+        "Settings window",
+        "The sidebar has Connections, General and Advanced, and the menu opens "
+        "the right one.",
+    )
+    g.act(
+        "Open General",
+        by_hand=(
+            "Choose Connections & Settings… from the SSHadow menu, then click "
+            "General in the sidebar."
+        ),
+        expect=[
+            "The sidebar lists Connections, General and Advanced, in that order.",
+            (
+                "General has Open at Login, Sync and Ignore Files, and no note "
+                "about changes applying when a connection starts."
+            ),
+        ],
+    )
+    g.act(
+        "Edit the connection from the menu",
+        by_hand=(
+            "With Settings still on General, right-click the connection in the "
+            "SSHadow menu and choose Edit Connection…."
+        ),
+        expect=[f"Settings switches to Connections with {NAME} selected."],
+    )
+    g.act(
+        "Look at Advanced",
+        by_hand="Click Advanced in the sidebar.",
+        expect=[
+            "Every picker shows its (Default) choice.",
+            (
+                "Only the Connection section says changes apply the next time a "
+                "connection starts."
+            ),
+        ],
+    )
+
+
+def remote_checks(g: Guide) -> None:
+    g.section(
+        "Checking for remote changes",
+        "Sync settings apply right away, without reconnecting. Checking manually "
+        "stops all automatic checks, but an ignore file edit still triggers one.",
+    )
+    manual = L / "docs/manual.txt"
+    temp = L / "docs/remote.tmp"
+    g.act(
+        "Check manually",
+        do=lambda: g.app.send("settings", check_every="manual"),
+        doing="set Check for Remote Changes to Manually",
+        by_hand="In Settings → General, set Check for Remote Changes to Manually.",
+        expect=[
+            (
+                "General's Sync footer says changes appear when you choose Check "
+                "for Remote Changes in the menu bar."
+            ),
+            "In Advanced, the Sync section is greyed out and says why.",
+        ],
+        checks=[g.logged("Stopped checking", msg(r"^Poll updated: manual$"))],
+    )
+    g.act(
+        "Change the server while checking manually",
+        run='echo manual > "$R/docs/manual.txt"\necho temp > "$R/docs/remote.tmp"',
+        expect=[
+            (
+                "Neither file appears in Finder for the next 15 seconds, though "
+                "docs is open."
+            )
+        ],
+        checks=[
+            until("They're on the server", exists(R / "docs/remote.tmp")),
+            stays("They stay out of Finder", missing(manual), 15),
+        ],
+    )
+    g.act(
+        "Check for remote changes",
+        do=lambda: g.app.send("poll", name=NAME),
+        doing="check the server, as Check for Remote Changes does",
+        by_hand="Right-click the connection and choose Check for Remote Changes.",
+        expect=[
+            "manual.txt and remote.tmp appear in Finder with cloud icons.",
+            "Event Log: NOTICE Detected 2 change(s) on server.",
+        ],
+        checks=[
+            until("manual.txt appeared", exists(manual)),
+            until("remote.tmp appeared", exists(temp)),
+        ],
+    )
+    g.act(
+        "Ignore .tmp files while checking manually",
+        run="echo '*.tmp' > \"$L/docs/.sshadowignore\"",
+        expect=[
+            "Within a few seconds, remote.tmp disappears from Finder.",
+            (
+                'Event Log: Ignore rules changed in "docs", then Hide ignored '
+                '"docs/remote.tmp" with the rule in the detail.'
+            ),
+        ],
+        checks=[until("remote.tmp disappeared", missing(temp))],
+    )
+    g.act(
+        "Check automatically again",
+        do=lambda: g.app.send("settings", check_every="default"),
+        doing="set Check for Remote Changes back to its default",
+        by_hand=("Set Check for Remote Changes back to Every 5 minutes (Default)."),
+        checks=[g.logged("Started checking", msg(r"^Poll updated: PollSettings\("))],
+    )
+    auto = L / "docs/auto.txt"
+    g.act(
+        "Change the server again",
+        run='echo auto > "$R/docs/auto.txt"',
+        expect=["Within 10 seconds, auto.txt appears in Finder."],
+        checks=[until("auto.txt appeared", exists(auto))],
+    )
+
+
+def ignore_files(g: Guide) -> None:
+    g.section(
+        "Ignore files in Settings",
+        "Changing which files hold ignore rules applies right away. General sets "
+        "the default, and a connection can customize its own.",
+    )
+    old = L / "docs/old.bak"
+    g.act(
+        "Add a .gitignore on the server",
+        run=(
+            'printf \'*.bak\\n\' > "$R/docs/.gitignore"\necho old > "$R/docs/old.bak"'
+        ),
+        expect=[
+            (
+                "Within 10 seconds, .gitignore and old.bak appear in Finder, since "
+                ".gitignore isn't an ignore file yet."
+            )
+        ],
+        checks=[until("old.bak appeared", exists(old))],
+    )
+    g.act(
+        "Read .gitignore files for every connection",
+        do=lambda: g.app.send(
+            "settings", ignore_filenames=[".sshadowignore", ".gitignore"]
+        ),
+        doing="add .gitignore to the default ignore files",
+        by_hand=(
+            "In Settings → General, turn on Customize Ignore Files and add "
+            ".gitignore below .sshadowignore."
+        ),
+        expect=[
+            "Within a few seconds, old.bak disappears from Finder.",
+            "Event Log: Ignore files changed, with .sshadowignore, .gitignore.",
+        ],
+        checks=[
+            g.logged(
+                "Ignore files changed", msg(r"^Ignore files changed: .*gitignore")
+            ),
+            until("old.bak disappeared", missing(old)),
+        ],
+    )
+    g.act(
+        "Try an invalid name",
+        by_hand=(
+            "In General, add an ignore file named dir/x. Then select "
+            f"{NAME} in Connections. Afterwards, remove dir/x again."
+        ),
+        expect=[
+            "General says Ignore file names can't be empty or contain slashes. in red.",
+            f"{NAME}'s Status row shows the same message.",
+        ],
+    )
+    g.act(
+        "Customize the connection's ignore files",
+        by_hand=(
+            f"In Connections, select {NAME} and turn on Customize Ignore Files. "
+            "Remove .gitignore from its list, then turn Customize Ignore Files "
+            "off again."
+        ),
+        expect=[
+            "Turning it on starts the list from General's: .sshadowignore, .gitignore.",
+            "Removing .gitignore brings old.bak back to Finder within a few seconds.",
+            "Turning it off hides old.bak again.",
+        ],
+        checks=[
+            until("old.bak came back", exists(old)),
+            until("old.bak is hidden again", missing(old)),
+        ],
+    )
+    g.act(
+        "Restore the default ignore files",
+        do=lambda: g.app.send("settings", ignore_filenames="default"),
+        doing="restore the default ignore files",
+        by_hand="In General, turn off Customize Ignore Files.",
+        expect=["old.bak comes back to Finder within a few seconds."],
+        checks=[until("old.bak came back", exists(old))],
+    )
+
+
+def open_at_login(g: Guide) -> None:
+    g.section(
+        "Open at Login",
+        "This registers the copy of SSHadow you're testing as a login item, then "
+        "removes it again.",
+    )
+    g.act(
+        "Turn on Open at Login",
+        by_hand="In Settings → General, turn on Open at Login.",
+        expect=["System Settings → General → Login Items lists SSHadow."],
+        checks=[g.logged("Turned on", msg(r"^Open at login enabled$"))],
+    )
+    g.act(
+        "Turn it off",
+        by_hand="Turn off Open at Login.",
+        expect=["SSHadow is gone from Login Items."],
+        checks=[g.logged("Turned off", msg(r"^Open at login disabled$"))],
+    )
+
+
 def transfers(g: Guide) -> None:
     g.section(
         "Transfers, pause and resume",
@@ -756,10 +997,8 @@ def outage(g: Guide) -> None:
         ],
         checks=[
             g.logged("Connected", connected(NAME), timeout=90),
-            matches(
-                "offline.txt uploaded",
-                R,
-                {"docs": Dir(), "docs/offline.txt": File(b"offline\n")},
+            until(
+                "offline.txt uploaded", contains(R / "docs/offline.txt", b"offline\n")
             ),
         ],
     )
@@ -929,11 +1168,6 @@ def connection_menu(g: Guide) -> None:
         checks=[clipboard(f"ssh -p {PROXY_PORT} {getpass.getuser()}@localhost")],
         confirm=True,
     )
-    g.act(
-        "Edit the connection",
-        by_hand="Right-click the connection and choose Edit Connection… from its menu.",
-        expect=["Settings opens with the connection selected."],
-    )
 
 
 def event_log(g: Guide) -> None:
@@ -1049,7 +1283,13 @@ def disable(g: Guide) -> None:
                 R,
                 {
                     "docs": Dir(),
+                    "docs/.gitignore": File(b"*.bak\n"),
+                    "docs/.sshadowignore": File(b"*.tmp\n"),
+                    "docs/auto.txt": File(b"auto\n"),
+                    "docs/manual.txt": File(b"manual\n"),
                     "docs/offline.txt": File(b"offline\n"),
+                    "docs/old.bak": File(b"old\n"),
+                    "docs/remote.tmp": File(b"temp\n"),
                     "docs/while-quit.txt": File(b"quit\n"),
                 },
             ),
@@ -1084,6 +1324,10 @@ def main() -> None:
             create_connection,
             mac_changes,
             server_changes,
+            settings_window,
+            remote_checks,
+            ignore_files,
+            open_at_login,
             transfers,
             outage,
             failed_connection,
@@ -1098,6 +1342,8 @@ def main() -> None:
     except KeyboardInterrupt:
         console.print(f"\nStopped. Rerun to start over; it deletes {NAME} first.")
     finally:
+        if g.app.started() is not None:
+            reset_settings(g.app, g.logs)
         g.proxy.close()
         g.impostor.close()
         g.logs.close()

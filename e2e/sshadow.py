@@ -481,6 +481,12 @@ def pause(app: App, logs: LogWatcher, profile: str, timeout: float = 30) -> None
     )
 
 
+def reset_settings(app: App, logs: LogWatcher) -> None:
+    """Put SSHadow's global settings back to their defaults."""
+    app.send("settings", check_every="default", ignore_filenames="default")
+    logs.expect(msg(r"^Settings updated$"))
+
+
 def connected(profile: str) -> Matcher:
     return msg(rf"^Supervisor connected: .*{named(profile)}")
 
