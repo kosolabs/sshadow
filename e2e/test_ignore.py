@@ -1,5 +1,4 @@
 import re
-import shutil
 from collections.abc import Callable
 from pathlib import Path
 
@@ -247,17 +246,21 @@ LOCAL_FOLDER: Tree = side(FOLDER, b"local ") | LOCAL_ONLY
 REMOTE_FOLDER: Tree = side(FOLDER, b"remote ") | REMOTE_ONLY
 
 
-def renamed(tree: Tree, name: str) -> Tree:
-    """`tree` with its top item renamed, as File Provider does on a collision."""
-    top = min(tree)
-    return {name + k.removeprefix(top): v for k, v in tree.items()}
-
-
 LOCAL_FILE: Tree = side(FILE, b"local ")
 REMOTE_FILE: Tree = side(FILE, b"remote ")
 
 
-def test_removing_rule_locally_keeps_both_files_until_one_is_deleted(
+def wait_for_conflict_resolved(
+    local: Path, remote: Path, logs: LogWatcher, mac: Tree, server: Tree
+) -> None:
+    """The Mac's copy keeps its name on both sides; the server's is in the trash."""
+    synced = {".sshadowignore": File(b"")} | MARKER | mac
+    wait_for_tree(remote / ".sshadow/trash", server, timeout=60, on_poll=logs.check)
+    wait_for_tree(remote, synced, on_poll=logs.check)
+    wait_for_tree(local, synced, on_poll=logs.check)
+
+
+def test_removing_rule_locally_moves_remote_file_to_trash(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
     local = detach_on_both_sides(
@@ -265,17 +268,10 @@ def test_removing_rule_locally_keeps_both_files_until_one_is_deleted(
     )
 
     (local / ".sshadowignore").write_bytes(b"")
-    base = {".sshadowignore": File(b"")} | MARKER
-    expected = REMOTE_FILE | renamed(LOCAL_FILE, "x 2.log")
-    wait_for_entries(local, expected, timeout=60, on_poll=logs.check)
-    wait_for_tree(remote, base | REMOTE_FILE, on_poll=logs.check)
-
-    (local / "x.log").unlink()
-    wait_for_tree(remote, base | LOCAL_FILE, timeout=60, on_poll=logs.check)
-    wait_for_tree(local, base | LOCAL_FILE, on_poll=logs.check)
+    wait_for_conflict_resolved(local, remote, logs, LOCAL_FILE, REMOTE_FILE)
 
 
-def test_removing_rule_remotely_keeps_both_files_until_one_is_deleted(
+def test_removing_rule_remotely_moves_remote_file_to_trash(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
     local = detach_on_both_sides(
@@ -284,18 +280,10 @@ def test_removing_rule_remotely_keeps_both_files_until_one_is_deleted(
 
     (remote / ".sshadowignore").write_bytes(b"")
     app.send("poll", name=profile)
-    base = {".sshadowignore": File(b"")} | MARKER
-    expected = REMOTE_FILE | renamed(LOCAL_FILE, "x 2.log")
-    wait_for_entries(local, expected, timeout=60, on_poll=logs.check)
-    wait_for_tree(remote, base | REMOTE_FILE, on_poll=logs.check)
-
-    (local / "x 2.log").unlink()
-    app.send("poll", name=profile)
-    wait_for_tree(local, base | REMOTE_FILE, timeout=60, on_poll=logs.check)
-    wait_for_tree(remote, base | REMOTE_FILE, on_poll=logs.check)
+    wait_for_conflict_resolved(local, remote, logs, LOCAL_FILE, REMOTE_FILE)
 
 
-def test_removing_rule_locally_keeps_both_folders_until_one_is_deleted(
+def test_removing_rule_locally_moves_remote_folder_to_trash(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
     local = detach_on_both_sides(
@@ -303,17 +291,10 @@ def test_removing_rule_locally_keeps_both_folders_until_one_is_deleted(
     )
 
     (local / ".sshadowignore").write_bytes(b"")
-    base = {".sshadowignore": File(b"")} | MARKER
-    expected = REMOTE_FOLDER | renamed(LOCAL_FOLDER, "build 2")
-    wait_for_entries(local, expected, timeout=60, on_poll=logs.check)
-    wait_for_tree(remote, base | REMOTE_FOLDER, on_poll=logs.check)
-
-    shutil.rmtree(local / "build")
-    wait_for_tree(remote, base | LOCAL_FOLDER, timeout=60, on_poll=logs.check)
-    wait_for_tree(local, base | LOCAL_FOLDER, on_poll=logs.check)
+    wait_for_conflict_resolved(local, remote, logs, LOCAL_FOLDER, REMOTE_FOLDER)
 
 
-def test_removing_rule_remotely_keeps_both_folders_until_one_is_deleted(
+def test_removing_rule_remotely_moves_remote_folder_to_trash(
     app: App, logs: LogWatcher, profile: str, remote: Path
 ) -> None:
     local = detach_on_both_sides(
@@ -322,15 +303,7 @@ def test_removing_rule_remotely_keeps_both_folders_until_one_is_deleted(
 
     (remote / ".sshadowignore").write_bytes(b"")
     app.send("poll", name=profile)
-    base = {".sshadowignore": File(b"")} | MARKER
-    expected = REMOTE_FOLDER | renamed(LOCAL_FOLDER, "build 2")
-    wait_for_entries(local, expected, timeout=60, on_poll=logs.check)
-    wait_for_tree(remote, base | REMOTE_FOLDER, on_poll=logs.check)
-
-    shutil.rmtree(local / "build 2")
-    app.send("poll", name=profile)
-    wait_for_tree(local, base | REMOTE_FOLDER, timeout=60, on_poll=logs.check)
-    wait_for_tree(remote, base | REMOTE_FOLDER, on_poll=logs.check)
+    wait_for_conflict_resolved(local, remote, logs, LOCAL_FOLDER, REMOTE_FOLDER)
 
 
 def test_remote_rule_keeps_listed_folder_until_its_files_are_evicted(

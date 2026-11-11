@@ -263,7 +263,7 @@ public class Extension: NSObject, NSFileProviderReplicatedExtension,
                     parentId: parentId,
                     name: filename,
                     file: url,
-                    ifExists: .fail,
+                    ifExists: .moveToTrash,
                     snapshot: snapshot,
                     progress: subprogress
                 )

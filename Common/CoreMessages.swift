@@ -400,8 +400,8 @@ public struct UploadResponse: Message, PrettyDescribable {
 }
 
 public enum OnExists: Message, PrettyDescribable {
-    case fail
     case replace
+    case moveToTrash
 }
 
 public struct DownloadRequest: CoreProgressRequestType, PrettyDescribable {

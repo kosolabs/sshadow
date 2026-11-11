@@ -5,6 +5,15 @@ each step says what it does and what to look for. Press Enter and the script
 does it, or do it yourself and the script notices. Either way, the script
 checks files and console logs afterwards, and you judge Finder, the menu,
 Settings and the Event Log.
+
+The walkthrough tells one story in parts: setup, sync, connection, the
+interface (the SSHadow menu, Settings and the Event Log), then teardown. Each
+section picks up where the last one left off, so related steps sit together
+and you don't have to switch context to follow along. Running a section
+automatically skips the steps that need you.
+
+Churn in this file is fine when it serves that story: move, merge or split
+steps and sections whenever it keeps related things together.
 """
 
 import getpass
@@ -94,14 +103,22 @@ class Guide:
         self.key = key
         self.failures: list[str] = []
         self.auto = False
+        self.parts = -1
         self.sections = 0
         self.steps = 0
+
+    def part(self, title: str) -> None:
+        self.parts += 1
+        self.sections = 0
+        console.print()
+        console.rule(f"[bold]{self.parts}. {escape(title)}", characters="═")
 
     def section(self, title: str, about: str) -> None:
         self.sections += 1
         self.steps = 0
         console.print()
-        console.rule(f"[bold]{self.sections}. {escape(title)}", align="left")
+        number = f"{self.parts}.{self.sections}"
+        console.rule(f"[bold]{number}. {escape(title)}", align="left")
         console.print(escape(about))
         automatically = "Run it automatically"
         self.auto = menu([automatically, "Walk me through it"]) == automatically
@@ -120,7 +137,7 @@ class Guide:
     ) -> bool:
         """Describe a step, have it done, and check it. Return whether you did it."""
         self.steps += 1
-        heading = f"{self.sections}.{self.steps} {escape(title)}"
+        heading = f"{self.parts}.{self.sections}.{self.steps} {escape(title)}"
         scripted = bool(run or do)
         manual = bool(run or by_hand)
 
@@ -478,20 +495,8 @@ def setup() -> Guide:
     impostor = Impostor(IMPOSTOR_PORT)
 
     subprocess.run(["open", R], check=True)
-    subprocess.run(
-        [
-            "osascript",
-            "-e",
-            f'tell application "Terminal" to do script "cd {REPO} && just log"',
-        ],
-        check=True,
-        capture_output=True,
-    )
 
-    console.print(
-        "\nArrange the Event Log beside the Finder window on "
-        f"{R} and the `just log` window."
-    )
+    console.print(f"\nArrange the Event Log beside the Finder window on {R}.")
     console.print("To run commands yourself, first run this in your terminal:")
     indented(f'export L="{L}" R="{R}"')
     menu(["Start"])
@@ -685,52 +690,13 @@ def server_changes(g: Guide) -> None:
     )
 
 
-def settings_window(g: Guide) -> None:
-    g.section(
-        "Settings window",
-        "The sidebar has Connections, General and Advanced, and the menu opens "
-        "the right one.",
-    )
-    g.act(
-        "Open General",
-        by_hand=(
-            "Choose Connections & Settings… from the SSHadow menu, then click "
-            "General in the sidebar."
-        ),
-        expect=[
-            "The sidebar lists Connections, General and Advanced, in that order.",
-            (
-                "General has Open at Login, Sync and Ignore Files, and no note "
-                "about changes applying when a connection starts."
-            ),
-        ],
-    )
-    g.act(
-        "Edit the connection from the menu",
-        by_hand=(
-            "With Settings still on General, right-click the connection in the "
-            "SSHadow menu and choose Edit Connection…."
-        ),
-        expect=[f"Settings switches to Connections with {NAME} selected."],
-    )
-    g.act(
-        "Look at Advanced",
-        by_hand="Click Advanced in the sidebar.",
-        expect=[
-            "Every picker shows its (Default) choice.",
-            (
-                "Only the Connection section says changes apply the next time a "
-                "connection starts."
-            ),
-        ],
-    )
-
-
 def remote_checks(g: Guide) -> None:
     g.section(
         "Checking for remote changes",
         "Sync settings apply right away, without reconnecting. Checking manually "
-        "stops all automatic checks, but an ignore file edit still triggers one.",
+        "stops all automatic checks, but an ignore file edit still triggers one. "
+        "When the Mac creates a file the server already has, the Mac's copy wins "
+        "and the server's moves to the Trash.",
     )
     manual = L / "docs/manual.txt"
     temp = L / "docs/remote.tmp"
@@ -777,6 +743,28 @@ def remote_checks(g: Guide) -> None:
         ],
     )
     g.act(
+        "Create a file the server already has",
+        run='echo server > "$R/docs/clash.txt"\necho mac > "$L/docs/clash.txt"',
+        expect=[
+            "clash.txt shows up in Finder once, with no clash 2.txt.",
+            (
+                'Event Log: Move conflicting "docs/clash.txt" to '
+                '".sshadow/trash/clash.txt" and Upload "docs/clash.txt" with its size.'
+            ),
+            "The Finder Trash has a clash.txt containing server.",
+        ],
+        checks=[
+            until(
+                "The server has the Mac's clash.txt",
+                contains(R / "docs/clash.txt", b"mac\n"),
+            ),
+            until(
+                "The server's clash.txt is in its trash",
+                contains(R / ".sshadow/trash/clash.txt", b"server\n"),
+            ),
+        ],
+    )
+    g.act(
         "Ignore .tmp files while checking manually",
         run="echo '*.tmp' > \"$L/docs/.sshadowignore\"",
         expect=[
@@ -806,7 +794,7 @@ def remote_checks(g: Guide) -> None:
 
 def ignore_files(g: Guide) -> None:
     g.section(
-        "Ignore files in Settings",
+        "Ignore files",
         "Changing which files hold ignore rules applies right away. General sets "
         "the default, and a connection can customize its own.",
     )
@@ -846,17 +834,6 @@ def ignore_files(g: Guide) -> None:
         ],
     )
     g.act(
-        "Try an invalid name",
-        by_hand=(
-            "In General, add an ignore file named dir/x. Then select "
-            f"{NAME} in Connections. Afterwards, remove dir/x again."
-        ),
-        expect=[
-            "General says Ignore file names can't be empty or contain slashes. in red.",
-            f"{NAME}'s Status row shows the same message.",
-        ],
-    )
-    g.act(
         "Customize the connection's ignore files",
         by_hand=(
             f"In Connections, select {NAME} and turn on Customize Ignore Files. "
@@ -880,26 +857,6 @@ def ignore_files(g: Guide) -> None:
         by_hand="In General, turn off Customize Ignore Files.",
         expect=["old.bak comes back to Finder within a few seconds."],
         checks=[until("old.bak came back", exists(old))],
-    )
-
-
-def open_at_login(g: Guide) -> None:
-    g.section(
-        "Open at Login",
-        "This registers the copy of SSHadow you're testing as a login item, then "
-        "removes it again.",
-    )
-    g.act(
-        "Turn on Open at Login",
-        by_hand="In Settings → General, turn on Open at Login.",
-        expect=["System Settings → General → Login Items lists SSHadow."],
-        checks=[g.logged("Turned on", msg(r"^Open at login enabled$"))],
-    )
-    g.act(
-        "Turn it off",
-        by_hand="Turn off Open at Login.",
-        expect=["SSHadow is gone from Login Items."],
-        checks=[g.logged("Turned off", msg(r"^Open at login disabled$"))],
     )
 
 
@@ -1151,66 +1108,6 @@ def host_key_change(g: Guide) -> None:
     )
 
 
-def connection_menu(g: Guide) -> None:
-    g.section(
-        "Connection menu",
-        "The connection's right-click menu in the SSHadow menu.",
-    )
-    g.act(
-        "Copy the mounted folder's path",
-        by_hand="Right-click the connection and choose Copy Path.",
-        checks=[clipboard(str(L))],
-        confirm=True,
-    )
-    g.act(
-        "Copy the SSH command",
-        by_hand="Right-click the connection and choose Copy SSH Command.",
-        checks=[clipboard(f"ssh -p {PROXY_PORT} {getpass.getuser()}@localhost")],
-        confirm=True,
-    )
-
-
-def event_log(g: Guide) -> None:
-    g.section("Event Log", "Search, filters, copying and clearing.")
-    g.act(
-        "Search",
-        by_hand="Search for docs/, then for zzz, then clear the search.",
-        expect=[
-            "For docs/, only entries mentioning docs/ in their message or detail.",
-            "For zzz, the window shows there are no results.",
-        ],
-    )
-    g.act(
-        "Filter",
-        by_hand=(
-            "In Filter, turn off Info, then turn off Connection. Turn both back on."
-        ),
-        expect=[
-            "Without Info, only notices, warnings and errors.",
-            (
-                "Without Connection too, only the Detected … entries and any "
-                "failed transfers."
-            ),
-        ],
-    )
-    copied = g.act(
-        "Copy every entry",
-        by_hand="Click an entry, then press ⌘A and ⌘C.",
-        checks=[Check("Copied the entries", copied_entries)],
-        confirm=True,
-    )
-    if copied:
-        for line in pasted().splitlines()[:3]:
-            indented(f"[dim]{escape(line)}", 4)
-    g.act("Close the Event Log", by_hand="Close the Event Log window.")
-    open_event_log(g, "Reopen the Event Log", ["The filter shows everything again."])
-    g.act(
-        "Clear the Event Log",
-        by_hand="Click Clear.",
-        expect=["The window shows No Events."],
-    )
-
-
 def relaunch(g: Guide) -> None:
     g.section(
         "Quit and relaunch",
@@ -1264,6 +1161,133 @@ def relaunch(g: Guide) -> None:
     )
 
 
+def connection_menu(g: Guide) -> None:
+    g.section(
+        "SSHadow menu",
+        "The connection's right-click menu.",
+    )
+    g.act(
+        "Copy the mounted folder's path",
+        by_hand="Right-click the connection and choose Copy Path.",
+        checks=[clipboard(str(L))],
+        confirm=True,
+    )
+    g.act(
+        "Copy the SSH command",
+        by_hand="Right-click the connection and choose Copy SSH Command.",
+        checks=[clipboard(f"ssh -p {PROXY_PORT} {getpass.getuser()}@localhost")],
+        confirm=True,
+    )
+    g.act(
+        "Edit the connection",
+        by_hand=(
+            "Choose Connections & Settings… and click General in the sidebar. "
+            "Then right-click the connection in the SSHadow menu and choose "
+            "Edit Connection…."
+        ),
+        expect=[f"Settings switches to Connections with {NAME} selected."],
+    )
+
+
+def settings_window(g: Guide) -> None:
+    g.section(
+        "Settings window",
+        "The sidebar has Connections, General and Advanced. Open at Login "
+        "registers the copy of SSHadow you're testing as a login item, then "
+        "removes it again.",
+    )
+    g.act(
+        "Open General",
+        by_hand=(
+            "Choose Connections & Settings… from the SSHadow menu, then click "
+            "General in the sidebar."
+        ),
+        expect=[
+            "The sidebar lists Connections, General and Advanced, in that order.",
+            (
+                "General has Open at Login, Sync and Ignore Files, and no note "
+                "about changes applying when a connection starts."
+            ),
+        ],
+    )
+    g.act(
+        "Try an invalid ignore file name",
+        by_hand=(
+            "In General, turn on Customize Ignore Files and add an ignore file "
+            f"named dir/x. Then select {NAME} in Connections. Afterwards, turn "
+            "Customize Ignore Files off again."
+        ),
+        expect=[
+            "General says Ignore file names can't be empty or contain slashes. in red.",
+            f"{NAME}'s Status row shows the same message.",
+        ],
+    )
+    g.act(
+        "Turn on Open at Login",
+        by_hand="In General, turn on Open at Login.",
+        expect=["System Settings → General → Login Items lists SSHadow."],
+        checks=[g.logged("Turned on", msg(r"^Open at login enabled$"))],
+    )
+    g.act(
+        "Turn it off",
+        by_hand="Turn off Open at Login.",
+        expect=["SSHadow is gone from Login Items."],
+        checks=[g.logged("Turned off", msg(r"^Open at login disabled$"))],
+    )
+    g.act(
+        "Look at Advanced",
+        by_hand="Click Advanced in the sidebar.",
+        expect=[
+            "Every picker shows its (Default) choice.",
+            (
+                "Only the Connection section says changes apply the next time a "
+                "connection starts."
+            ),
+        ],
+    )
+
+
+def event_log(g: Guide) -> None:
+    g.section("Event Log", "Search, filters, copying and clearing.")
+    g.act(
+        "Search",
+        by_hand="Search for docs/, then for zzz, then clear the search.",
+        expect=[
+            "For docs/, only entries mentioning docs/ in their message or detail.",
+            "For zzz, the window shows there are no results.",
+        ],
+    )
+    g.act(
+        "Filter",
+        by_hand=(
+            "In Filter, turn off Info, then turn off Connection. Turn both back on."
+        ),
+        expect=[
+            "Without Info, only notices, warnings and errors.",
+            (
+                "Without Connection too, only the Detected … entries and any "
+                "failed transfers."
+            ),
+        ],
+    )
+    copied = g.act(
+        "Copy every entry",
+        by_hand="Click an entry, then press ⌘A and ⌘C.",
+        checks=[Check("Copied the entries", copied_entries)],
+        confirm=True,
+    )
+    if copied:
+        for line in pasted().splitlines()[:3]:
+            indented(f"[dim]{escape(line)}", 4)
+    g.act("Close the Event Log", by_hand="Close the Event Log window.")
+    open_event_log(g, "Reopen the Event Log", ["The filter shows everything again."])
+    g.act(
+        "Clear the Event Log",
+        by_hand="Click Clear.",
+        expect=["The window shows No Events."],
+    )
+
+
 def disable(g: Guide) -> None:
     g.section("Disable", "Disabling removes the mounted folder, not the files.")
     g.act(
@@ -1286,6 +1310,7 @@ def disable(g: Guide) -> None:
                     "docs/.gitignore": File(b"*.bak\n"),
                     "docs/.sshadowignore": File(b"*.tmp\n"),
                     "docs/auto.txt": File(b"auto\n"),
+                    "docs/clash.txt": File(b"mac\n"),
                     "docs/manual.txt": File(b"manual\n"),
                     "docs/offline.txt": File(b"offline\n"),
                     "docs/old.bak": File(b"old\n"),
@@ -1318,26 +1343,22 @@ def finish(g: Guide) -> None:
 
 
 def main() -> None:
+    parts: list[tuple[str, list[Callable[[Guide], None]]]] = [
+        ("Setup", [create_connection]),
+        (
+            "Sync",
+            [mac_changes, server_changes, remote_checks, ignore_files, transfers],
+        ),
+        ("Connection", [outage, failed_connection, host_key_change, relaunch]),
+        ("Interface", [connection_menu, settings_window, event_log]),
+        ("Teardown", [disable]),
+    ]
     g = setup()
     try:
-        for step in [
-            create_connection,
-            mac_changes,
-            server_changes,
-            settings_window,
-            remote_checks,
-            ignore_files,
-            open_at_login,
-            transfers,
-            outage,
-            failed_connection,
-            host_key_change,
-            connection_menu,
-            event_log,
-            relaunch,
-            disable,
-        ]:
-            step(g)
+        for title, sections in parts:
+            g.part(title)
+            for section in sections:
+                section(g)
         finish(g)
     except KeyboardInterrupt:
         console.print(f"\nStopped. Rerun to start over; it deletes {NAME} first.")
