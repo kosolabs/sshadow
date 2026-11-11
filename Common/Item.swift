@@ -140,6 +140,13 @@ public struct Item: Message, PrettyDescribable {
         Data(String(revision).utf8)
     }
 
+    public static func revision(fromContentVersion version: Data) throws -> Int {
+        guard let revision = Int(String(decoding: version, as: UTF8.self)) else {
+            throw CoreError.cannotSynchronize
+        }
+        return revision
+    }
+
     public var metadataVersion: Data {
         let fields = [
             name,

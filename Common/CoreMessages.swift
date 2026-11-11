@@ -327,12 +327,18 @@ public struct MoveResponse: Message, PrettyDescribable {
 public struct RemoveFileRequest: CoreRequestType, PrettyDescribable {
     public typealias Response = RemoveFileResponse
     public let itemId: String
+    public let baseRevision: Int
     public let snapshot: IgnoreSnapshot?
 
     public var wrapped: CoreRequest { .removeFile(self) }
 
-    public init(itemId: String, snapshot: IgnoreSnapshot?) {
+    public init(
+        itemId: String,
+        baseRevision: Int,
+        snapshot: IgnoreSnapshot?
+    ) {
         self.itemId = itemId
+        self.baseRevision = baseRevision
         self.snapshot = snapshot
     }
 }
@@ -344,12 +350,18 @@ public struct RemoveFileResponse: Message, PrettyDescribable {
 public struct RemoveDirectoryRequest: CoreRequestType, PrettyDescribable {
     public typealias Response = RemoveDirectoryResponse
     public let itemId: String
+    public let baseRevision: Int
     public let snapshot: IgnoreSnapshot?
 
     public var wrapped: CoreRequest { .removeDirectory(self) }
 
-    public init(itemId: String, snapshot: IgnoreSnapshot?) {
+    public init(
+        itemId: String,
+        baseRevision: Int,
+        snapshot: IgnoreSnapshot?
+    ) {
         self.itemId = itemId
+        self.baseRevision = baseRevision
         self.snapshot = snapshot
     }
 }
@@ -368,7 +380,7 @@ public struct UploadRequest: CoreProgressRequestType, PrettyDescribable {
     public let parentId: String
     public let name: String
     public let file: URL
-    public let ifExists: OnExists
+    public let baseRevision: Int?
     public let chunkSize: UInt64
     public let snapshot: IgnoreSnapshot?
 
@@ -378,14 +390,14 @@ public struct UploadRequest: CoreProgressRequestType, PrettyDescribable {
         parentId: String,
         name: String,
         file: URL,
-        ifExists: OnExists,
+        baseRevision: Int?,
         chunkSize: UInt64,
         snapshot: IgnoreSnapshot?
     ) {
         self.parentId = parentId
         self.name = name
         self.file = file
-        self.ifExists = ifExists
+        self.baseRevision = baseRevision
         self.chunkSize = chunkSize
         self.snapshot = snapshot
     }
@@ -397,11 +409,6 @@ public struct UploadResponse: Message, PrettyDescribable {
     public init(item: Item) {
         self.item = item
     }
-}
-
-public enum OnExists: Message, PrettyDescribable {
-    case replace
-    case moveToTrash
 }
 
 public struct DownloadRequest: CoreProgressRequestType, PrettyDescribable {

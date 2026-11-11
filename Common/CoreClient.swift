@@ -329,19 +329,29 @@ extension CoreClient {
 
     public func removeFile(
         for itemId: NSFileProviderItemIdentifier,
+        baseRevision: Int,
         snapshot: IgnoreSnapshot?
     ) async throws(CoreError) {
         _ = try await perform(
-            RemoveFileRequest(itemId: itemId.rawValue, snapshot: snapshot)
+            RemoveFileRequest(
+                itemId: itemId.rawValue,
+                baseRevision: baseRevision,
+                snapshot: snapshot
+            )
         )
     }
 
     public func removeDirectory(
         for itemId: NSFileProviderItemIdentifier,
+        baseRevision: Int,
         snapshot: IgnoreSnapshot?
     ) async throws(CoreError) {
         _ = try await perform(
-            RemoveDirectoryRequest(itemId: itemId.rawValue, snapshot: snapshot)
+            RemoveDirectoryRequest(
+                itemId: itemId.rawValue,
+                baseRevision: baseRevision,
+                snapshot: snapshot
+            )
         )
     }
 
@@ -349,7 +359,7 @@ extension CoreClient {
         parentId: NSFileProviderItemIdentifier,
         name: String,
         file: URL,
-        ifExists: OnExists,
+        baseRevision: Int?,
         chunkSize: UInt64 = Limits.defaultBufferSize,
         snapshot: IgnoreSnapshot?,
         progress: Progress
@@ -371,7 +381,7 @@ extension CoreClient {
                 parentId: parentId.rawValue,
                 name: name,
                 file: stagedUrl,
-                ifExists: ifExists,
+                baseRevision: baseRevision,
                 chunkSize: chunkSize,
                 snapshot: snapshot
             ),

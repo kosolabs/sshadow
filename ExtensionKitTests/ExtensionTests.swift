@@ -84,14 +84,27 @@ extension TestSandbox {
 
     fileprivate func delete(
         _ itemId: NSFileProviderItemIdentifier,
+        basedOn version: NSFileProviderItemVersion,
         with ext: Extension
     ) async throws {
         try await ext.deleteItem(
             identifier: itemId,
-            baseVersion: NSFileProviderItemVersion(),
+            baseVersion: version,
             request: NSFileProviderRequest(),
             progress: Progress()
         )
+    }
+
+    fileprivate func version(
+        of itemId: NSFileProviderItemIdentifier,
+        with ext: Extension
+    ) async throws -> NSFileProviderItemVersion {
+        let item = try await ext.item(
+            for: itemId,
+            request: NSFileProviderRequest(),
+            progress: Progress()
+        )
+        return try #require(item.itemVersion)
     }
 }
 
@@ -745,7 +758,11 @@ struct ExtensionTests {
         await #expect(throws: CoreError.ignored) {
             try await sandbox.move(aId, to: .rootContainer, name: "a.log", with: ext)
         }
-        try await sandbox.delete(aId, with: ext)
+        try await sandbox.delete(
+            aId,
+            basedOn: sandbox.version(of: aId, with: ext),
+            with: ext
+        )
 
         #expect(!sandbox.exists(at: "a.txt"))
         #expect(!sandbox.exists(at: "a.log"))
@@ -766,7 +783,11 @@ struct ExtensionTests {
         await #expect(throws: CoreError.ignored) {
             try await sandbox.move(aId, to: dataId, name: "b.txt", with: ext)
         }
-        try await sandbox.delete(aId, with: ext)
+        try await sandbox.delete(
+            aId,
+            basedOn: sandbox.version(of: aId, with: ext),
+            with: ext
+        )
 
         #expect(sandbox.exists(at: "data/a.txt"))
         #expect(!sandbox.exists(at: "data/b.txt"))
@@ -786,7 +807,11 @@ struct ExtensionTests {
         await #expect(throws: CoreError.ignored) {
             try await sandbox.move(bId, to: .trashContainer, name: "b.txt", with: ext)
         }
-        try await sandbox.delete(bId, with: ext)
+        try await sandbox.delete(
+            bId,
+            basedOn: sandbox.version(of: bId, with: ext),
+            with: ext
+        )
 
         #expect(sandbox.exists(at: "b.txt"))
         #expect(!sandbox.exists(at: ".sshadow/trash/b.txt"))
@@ -803,7 +828,11 @@ struct ExtensionTests {
         let (ext, client) = try await sandbox.getExtensionAndClient()
         let bId = try await client.child(name: "b.txt")
 
-        try await sandbox.delete(bId, with: ext)
+        try await sandbox.delete(
+            bId,
+            basedOn: sandbox.version(of: bId, with: ext),
+            with: ext
+        )
 
         #expect(sandbox.exists(at: "b.txt"))
     }
@@ -834,7 +863,7 @@ struct ExtensionTests {
                     documentSize: 7,
                     contentModificationDate: .now
                 ),
-                baseVersion: NSFileProviderItemVersion(),
+                baseVersion: sandbox.version(of: bId, with: ext),
                 changedFields: [.contents, .contentModificationDate],
                 contents: edited,
                 options: [],
@@ -842,7 +871,11 @@ struct ExtensionTests {
                 progress: Progress()
             )
         }
-        try await sandbox.delete(bId, with: ext)
+        try await sandbox.delete(
+            bId,
+            basedOn: sandbox.version(of: bId, with: ext),
+            with: ext
+        )
 
         #expect(try sandbox.contents(of: "b.txt") == "b")
     }
@@ -874,8 +907,13 @@ struct ExtensionTests {
         let folderId = try await client.child(name: "folder")
         let fileId = try await client.child(of: folderId, name: "file.txt")
 
-        try await sandbox.delete(folderId, with: ext)
-        try await sandbox.delete(fileId, with: ext)
+        let fileVersion = try await sandbox.version(of: fileId, with: ext)
+        try await sandbox.delete(
+            folderId,
+            basedOn: sandbox.version(of: folderId, with: ext),
+            with: ext
+        )
+        try await sandbox.delete(fileId, basedOn: fileVersion, with: ext)
 
         #expect(!sandbox.exists(at: "folder"))
     }
@@ -1319,7 +1357,7 @@ struct ExtensionTests {
                 documentSize: NSNumber(value: newContents.count),
                 contentModificationDate: newDate,
             ),
-            baseVersion: NSFileProviderItemVersion(),
+            baseVersion: sandbox.version(of: fileId, with: ext),
             changedFields: [.contents, .contentModificationDate],
             contents: newContentsUrl,
             options: [],
@@ -1390,7 +1428,7 @@ struct ExtensionTests {
                 documentSize: 4096,
                 contentModificationDate: newDate,
             ),
-            baseVersion: NSFileProviderItemVersion(),
+            baseVersion: sandbox.version(of: packageId, with: ext),
             changedFields: [.contents, .contentModificationDate],
             contents: packageUrl,
             options: [],
@@ -1571,7 +1609,7 @@ struct ExtensionTests {
         let progress = Progress()
         try await ext.deleteItem(
             identifier: folderId,
-            baseVersion: NSFileProviderItemVersion(),
+            baseVersion: sandbox.version(of: folderId, with: ext),
             request: NSFileProviderRequest(),
             progress: progress
         )
@@ -1591,7 +1629,7 @@ struct ExtensionTests {
         let progress = Progress()
         try await ext.deleteItem(
             identifier: fileId,
-            baseVersion: NSFileProviderItemVersion(),
+            baseVersion: sandbox.version(of: fileId, with: ext),
             request: NSFileProviderRequest(),
             progress: progress
         )

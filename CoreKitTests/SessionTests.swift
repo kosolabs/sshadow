@@ -1014,7 +1014,10 @@ struct SessionTests {
             await session.setWatched([aId])
 
             try await session.removeFile(
+
                 for: otherId,
+
+                baseRevision: try await session.item(for: otherId).revision,
                 snapshot: [folder("", text("a.txt\n"))]
             )
             let changes = try await session.reconcileWatched()
@@ -2704,7 +2707,11 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(name: "delete.txt")
-            try await session.removeFile(for: itemId, snapshot: nil)
+            try await session.removeFile(
+                for: itemId,
+                baseRevision: try await session.item(for: itemId).revision,
+                snapshot: nil
+            )
 
             #expect(!sandbox.exists(at: "delete.txt"))
             let changes = try await session.reconcileAll()
@@ -2721,7 +2728,11 @@ struct SessionTests {
                 of: folderId,
                 name: "delete.txt"
             )
-            try await session.removeFile(for: itemId, snapshot: nil)
+            try await session.removeFile(
+                for: itemId,
+                baseRevision: try await session.item(for: itemId).revision,
+                snapshot: nil
+            )
 
             #expect(!sandbox.exists(at: "folder/delete.txt"))
             let changes = try await session.reconcileAll()
@@ -2734,10 +2745,19 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(name: "missing.txt")
-            try await session.removeFile(for: itemId, snapshot: nil)
+            let baseRevision = try await session.item(for: itemId).revision
+            try await session.removeFile(
+                for: itemId,
+                baseRevision: baseRevision,
+                snapshot: nil
+            )
 
             await #expect(throws: CoreError.itemNotFound(itemId)) {
-                try await session.removeFile(for: itemId, snapshot: nil)
+                try await session.removeFile(
+                    for: itemId,
+                    baseRevision: baseRevision,
+                    snapshot: nil
+                )
             }
             let changes = try await session.reconcileAll()
             #expect(changes == [])
@@ -2751,7 +2771,11 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(name: "delete")
-            try await session.removeDirectory(for: itemId, snapshot: nil)
+            try await session.removeDirectory(
+                for: itemId,
+                baseRevision: try await session.item(for: itemId).revision,
+                snapshot: nil
+            )
 
             #expect(!sandbox.exists(at: "delete"))
             let changes = try await session.reconcileAll()
@@ -2764,7 +2788,11 @@ struct SessionTests {
             let session = try await sandbox.getSession()
 
             let itemId = try await session.child(name: "non-empty")
-            try await session.removeDirectory(for: itemId, snapshot: nil)
+            try await session.removeDirectory(
+                for: itemId,
+                baseRevision: try await session.item(for: itemId).revision,
+                snapshot: nil
+            )
 
             #expect(!sandbox.exists(at: "non-empty"))
             let changes = try await session.reconcileAll()
@@ -2780,7 +2808,10 @@ struct SessionTests {
             let bId = try await session.child(name: "b.txt")
 
             try await session.removeFile(
+
                 for: bId,
+
+                baseRevision: try await session.item(for: bId).revision,
                 snapshot: [folder("", text("b.txt\n"))]
             )
 
@@ -2800,7 +2831,7 @@ struct SessionTests {
                     "a.log",
                     to: .rootContainer,
                     file: sandbox.url(for: "a.log", in: .group),
-                    ifExists: .moveToTrash,
+                    baseRevision: nil,
                     snapshot: [folder("", text("*.log\n"))],
                     progress: Progress()
                 )
@@ -2865,7 +2896,10 @@ struct SessionTests {
                 }
 
                 try await session.removeFile(
+
                     for: ignoreId,
+
+                    baseRevision: try await session.item(for: ignoreId).revision,
                     snapshot: [folder("")]
                 )
                 _ = try await session.createDirectory(
@@ -3004,7 +3038,7 @@ struct SessionTests {
         {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
-            var versions: [Data] = []
+            var items: [Item] = []
             for contents in ["version 1\n", "version 2\n"] {
                 let url = sandbox.url(for: UUID().uuidString, in: .group)
                 try Data(contents.utf8).write(to: url)
@@ -3012,14 +3046,14 @@ struct SessionTests {
                     "doc.txt",
                     to: .rootContainer,
                     file: url,
-                    ifExists: .replace,
+                    baseRevision: items.last?.revision,
                     snapshot: nil,
                     progress: Progress()
                 )
-                versions.append(item.contentVersion)
+                items.append(item)
             }
 
-            #expect(versions[0] != versions[1])
+            #expect(items[0].contentVersion != items[1].contentVersion)
         }
 
         @Test func uploadPackageRecordsPackageKind() async throws {
@@ -3036,7 +3070,7 @@ struct SessionTests {
                 "Doc.rtfd",
                 to: .rootContainer,
                 file: source,
-                ifExists: .moveToTrash,
+                baseRevision: nil,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -3057,7 +3091,7 @@ struct SessionTests {
                 "a.txt",
                 to: .trashContainer,
                 file: source,
-                ifExists: .moveToTrash,
+                baseRevision: nil,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -3085,7 +3119,7 @@ struct SessionTests {
                 filename,
                 to: .rootContainer,
                 file: uploadUrl,
-                ifExists: .moveToTrash,
+                baseRevision: nil,
                 snapshot: nil,
                 progress: progress
             )
@@ -3117,7 +3151,7 @@ struct SessionTests {
                 filename,
                 to: .rootContainer,
                 file: uploadUrl,
-                ifExists: .moveToTrash,
+                baseRevision: nil,
                 snapshot: nil,
                 progress: progress
             )
@@ -3147,7 +3181,9 @@ struct SessionTests {
                     "collide-upload",
                     to: .rootContainer,
                     file: uploadUrl,
-                    ifExists: .replace,
+                    baseRevision: try await session.item(
+                        for: session.child(name: "collide-upload")
+                    ).revision,
                     snapshot: nil,
                     progress: Progress()
                 )
@@ -3172,7 +3208,7 @@ struct SessionTests {
                     "cancelled.dat",
                     to: .rootContainer,
                     file: uploadUrl,
-                    ifExists: .moveToTrash,
+                    baseRevision: nil,
                     snapshot: nil,
                     progress: progress
                 )
@@ -3194,7 +3230,7 @@ struct SessionTests {
                     "partial.dat",
                     to: .rootContainer,
                     file: uploadUrl,
-                    ifExists: .moveToTrash,
+                    baseRevision: nil,
                     snapshot: nil,
                     progress: progress
                 )
@@ -3219,7 +3255,7 @@ struct SessionTests {
                     "partial.dat",
                     to: .rootContainer,
                     file: uploadUrl,
-                    ifExists: .moveToTrash,
+                    baseRevision: nil,
                     chunkSize: Self.slowChunkSize,
                     snapshot: nil,
                     progress: progress
@@ -3255,7 +3291,9 @@ struct SessionTests {
                     "existing.txt",
                     to: .rootContainer,
                     file: uploadUrl,
-                    ifExists: .replace,
+                    baseRevision: try await session.item(
+                        for: session.child(name: "existing.txt")
+                    ).revision,
                     snapshot: nil,
                     progress: progress
                 )
@@ -3280,7 +3318,9 @@ struct SessionTests {
                     "existing.dat",
                     to: .rootContainer,
                     file: uploadUrl,
-                    ifExists: .replace,
+                    baseRevision: try await session.item(
+                        for: session.child(name: "existing.dat")
+                    ).revision,
                     snapshot: nil,
                     progress: progress
                 )
@@ -3302,7 +3342,9 @@ struct SessionTests {
                     "existing.dat",
                     to: .rootContainer,
                     file: uploadUrl,
-                    ifExists: .replace,
+                    baseRevision: try await session.item(
+                        for: session.child(name: "existing.dat")
+                    ).revision,
                     chunkSize: Self.slowChunkSize,
                     snapshot: nil,
                     progress: progress
@@ -3344,7 +3386,9 @@ struct SessionTests {
                     "Doc.rtfd",
                     to: .rootContainer,
                     file: source,
-                    ifExists: .replace,
+                    baseRevision: try await session.item(
+                        for: session.child(name: "Doc.rtfd")
+                    ).revision,
                     snapshot: nil,
                     progress: progress
                 )
@@ -3368,7 +3412,9 @@ struct SessionTests {
                 "existing.txt",
                 to: .rootContainer,
                 file: uploadUrl,
-                ifExists: .replace,
+                baseRevision: try await session.item(
+                    for: session.child(name: "existing.txt")
+                ).revision,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -3401,7 +3447,9 @@ struct SessionTests {
                     "existing.txt",
                     to: lockedId,
                     file: uploadUrl,
-                    ifExists: .replace,
+                    baseRevision: try await session.item(
+                        for: session.child(of: lockedId, name: "existing.txt")
+                    ).revision,
                     snapshot: nil,
                     progress: Progress()
                 )
@@ -3422,7 +3470,7 @@ struct SessionTests {
                 "first.txt",
                 to: .rootContainer,
                 file: uploadUrl,
-                ifExists: .moveToTrash,
+                baseRevision: nil,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -3431,7 +3479,7 @@ struct SessionTests {
                 "second.txt",
                 to: .rootContainer,
                 file: uploadUrl,
-                ifExists: .moveToTrash,
+                baseRevision: nil,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -3455,7 +3503,9 @@ struct SessionTests {
                     "existing.txt",
                     to: .rootContainer,
                     file: uploadUrl,
-                    ifExists: .replace,
+                    baseRevision: try await session.item(
+                        for: session.child(name: "existing.txt")
+                    ).revision,
                     snapshot: nil,
                     progress: Progress()
                 )
@@ -3525,7 +3575,7 @@ struct SessionTests {
                 "file.txt",
                 to: folderId,
                 file: uploadUrl,
-                ifExists: .moveToTrash,
+                baseRevision: nil,
                 snapshot: nil,
                 progress: progress
             )
@@ -3562,7 +3612,7 @@ struct SessionTests {
                 "Doc.rtfd",
                 to: .rootContainer,
                 file: source,
-                ifExists: .moveToTrash,
+                baseRevision: nil,
                 snapshot: nil,
                 progress: progress
             )
@@ -3594,7 +3644,7 @@ struct SessionTests {
                 "Empty.rtfd",
                 to: .rootContainer,
                 file: source,
-                ifExists: .moveToTrash,
+                baseRevision: nil,
                 snapshot: nil,
                 progress: progress
             )
@@ -3633,7 +3683,7 @@ struct SessionTests {
                     "Bundle.app",
                     to: .rootContainer,
                     file: source,
-                    ifExists: .moveToTrash,
+                    baseRevision: nil,
                     snapshot: nil,
                     progress: Progress()
                 )
@@ -3654,7 +3704,7 @@ struct SessionTests {
                     "Bundle.app",
                     to: .rootContainer,
                     file: source,
-                    ifExists: .moveToTrash,
+                    baseRevision: nil,
                     snapshot: nil,
                     progress: progress
                 )
@@ -3689,7 +3739,9 @@ struct SessionTests {
                 "Doc.rtfd",
                 to: .rootContainer,
                 file: source,
-                ifExists: .replace,
+                baseRevision: try await session.item(
+                    for: session.child(name: "Doc.rtfd")
+                ).revision,
                 snapshot: nil,
                 progress: progress
             )
@@ -3720,7 +3772,7 @@ struct SessionTests {
                 "notes.txt",
                 to: .rootContainer,
                 file: uploadUrl,
-                ifExists: .moveToTrash,
+                baseRevision: nil,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -3750,7 +3802,7 @@ struct SessionTests {
                 "Doc.rtfd",
                 to: .rootContainer,
                 file: source,
-                ifExists: .moveToTrash,
+                baseRevision: nil,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -3773,7 +3825,7 @@ struct SessionTests {
                 "build",
                 to: .rootContainer,
                 file: uploadUrl,
-                ifExists: .moveToTrash,
+                baseRevision: nil,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -3906,7 +3958,7 @@ struct SessionTests {
                     "notes.txt",
                     to: .rootContainer,
                     file: uploadUrl,
-                    ifExists: .moveToTrash,
+                    baseRevision: nil,
                     snapshot: nil,
                     progress: Progress()
                 )
@@ -3926,6 +3978,227 @@ struct SessionTests {
             )
         }
 
+        // An edit or delete conflicts when the server's copy changed since the
+        // version the Mac based it on, whether or not that change was seen yet.
+
+        @Test func editAfterUnseenServerChangeMovesServerCopyToTrash()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: "notes.txt",
+                contents: "first",
+                modifyDate: Date(timeIntervalSince1970: 1_000)
+            )
+            let session = try await sandbox.getSession()
+            let notesId = try await session.child(name: "notes.txt")
+            let baseRevision = try await session.item(for: notesId).revision
+            try sandbox.createFile(
+                at: "notes.txt",
+                contents: "SERVER",
+                modifyDate: Date(timeIntervalSince1970: 2_000)
+            )
+            let (anchor, _) = await session.changes(since: 0)
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
+            try Data("mac".utf8).write(to: uploadUrl)
+
+            let item = try await session.upload(
+                "notes.txt",
+                to: .rootContainer,
+                file: uploadUrl,
+                baseRevision: baseRevision,
+                snapshot: nil,
+                progress: Progress()
+            )
+
+            #expect(item.id == notesId)
+            #expect(try sandbox.contents(of: "notes.txt") == "mac")
+            #expect(
+                try sandbox.contents(of: ".sshadow/trash/notes.txt") == "SERVER"
+            )
+            let trashedId = try await session.child(
+                of: .trashContainer,
+                name: "notes.txt"
+            )
+            #expect(trashedId != notesId)
+            let (_, changes) = await session.changes(since: anchor)
+            #expect(try await changes == [.update(item: session.item(for: trashedId))])
+            #expect(try await session.reconcileAll() == [])
+        }
+
+        @Test func editAfterSeenServerChangeMovesServerCopyToTrash()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "notes.txt", contents: "first")
+            let session = try await sandbox.getSession()
+            let notesId = try await session.child(name: "notes.txt")
+            let baseRevision = try await session.item(for: notesId).revision
+            try sandbox.createFile(at: "notes.txt", contents: "server edit")
+            _ = try await session.reconcileAll()
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
+            try Data("mac".utf8).write(to: uploadUrl)
+
+            _ = try await session.upload(
+                "notes.txt",
+                to: .rootContainer,
+                file: uploadUrl,
+                baseRevision: baseRevision,
+                snapshot: nil,
+                progress: Progress()
+            )
+
+            #expect(try sandbox.contents(of: "notes.txt") == "mac")
+            #expect(
+                try sandbox.contents(of: ".sshadow/trash/notes.txt")
+                    == "server edit"
+            )
+        }
+
+        @Test func editOfUnchangedServerCopyReplacesIt() async throws {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(at: "notes.txt", contents: "first")
+            let session = try await sandbox.getSession()
+            let notesId = try await session.child(name: "notes.txt")
+            let uploadUrl = sandbox.url(for: UUID().uuidString, in: .group)
+            try Data("mac".utf8).write(to: uploadUrl)
+
+            _ = try await session.upload(
+                "notes.txt",
+                to: .rootContainer,
+                file: uploadUrl,
+                baseRevision: session.item(for: notesId).revision,
+                snapshot: nil,
+                progress: Progress()
+            )
+
+            #expect(try sandbox.contents(of: "notes.txt") == "mac")
+            #expect(!sandbox.exists(at: ".sshadow/trash"))
+        }
+
+        @Test func deleteAfterServerChangeMovesServerCopyToTrash()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFile(
+                at: "notes.txt",
+                contents: "first",
+                modifyDate: Date(timeIntervalSince1970: 1_000)
+            )
+            let session = try await sandbox.getSession()
+            let notesId = try await session.child(name: "notes.txt")
+            let baseRevision = try await session.item(for: notesId).revision
+            try sandbox.createFile(at: "notes.txt", contents: "server edit")
+
+            try await session.removeFile(
+                for: notesId,
+                baseRevision: baseRevision,
+                snapshot: nil
+            )
+
+            #expect(!sandbox.exists(at: "notes.txt"))
+            #expect(
+                try sandbox.contents(of: ".sshadow/trash/notes.txt")
+                    == "server edit"
+            )
+            await #expect(throws: CoreError.itemNotFound(notesId.rawValue)) {
+                try await session.item(for: notesId)
+            }
+            #expect(try await session.reconcileAll() == [])
+        }
+
+        @Test func deletePackageAfterServerChangeMovesServerCopyToTrash()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createPackage(
+                at: "Doc.rtfd",
+                files: [.file(path: "text.rtf", contents: "first")]
+            )
+            try sandbox.touch(
+                "Doc.rtfd",
+                modifyDate: Date(timeIntervalSince1970: 1_000)
+            )
+            let session = try await sandbox.getSession()
+            let docId = try await session.child(name: "Doc.rtfd")
+            let baseRevision = try await session.item(for: docId).revision
+            try sandbox.createFile(
+                at: "Doc.rtfd/image.png",
+                contents: "server edit"
+            )
+
+            try await session.removeDirectory(
+                for: docId,
+                baseRevision: baseRevision,
+                snapshot: nil
+            )
+
+            #expect(!sandbox.exists(at: "Doc.rtfd"))
+            #expect(
+                try sandbox.contents(of: ".sshadow/trash/Doc.rtfd/image.png")
+                    == "server edit"
+            )
+        }
+
+        @Test func deleteFolderAfterServerChangeMovesServerCopyToTrash()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createFolder(
+                at: "build",
+                modifyDate: Date(timeIntervalSince1970: 1_000)
+            )
+            let session = try await sandbox.getSession()
+            let buildId = try await session.child(name: "build")
+            let baseRevision = try await session.item(for: buildId).revision
+            try sandbox.createFile(at: "build/out.o", contents: "server")
+
+            try await session.removeDirectory(
+                for: buildId,
+                baseRevision: baseRevision,
+                snapshot: nil
+            )
+
+            #expect(!sandbox.exists(at: "build"))
+            #expect(
+                try sandbox.contents(of: ".sshadow/trash/build/out.o")
+                    == "server"
+            )
+        }
+
+        @Test func deleteSymlinkAfterServerChangeMovesServerCopyToTrash()
+            async throws
+        {
+            let sandbox = TestSandbox()
+            try sandbox.createSymlink(
+                at: "latest",
+                target: "v1",
+                modifyDate: Date(timeIntervalSince1970: 1_000)
+            )
+            let session = try await sandbox.getSession()
+            let linkId = try await session.child(name: "latest")
+            let baseRevision = try await session.item(for: linkId).revision
+            try sandbox.createSymlink(at: "latest", target: "v2")
+
+            try await session.removeFile(
+                for: linkId,
+                baseRevision: baseRevision,
+                snapshot: nil
+            )
+
+            let files = FileManager.default
+            #expect(throws: (any Error).self) {
+                try files.destinationOfSymbolicLink(
+                    atPath: sandbox.url(for: "latest").path()
+                )
+            }
+            #expect(
+                try files.destinationOfSymbolicLink(
+                    atPath: sandbox.url(for: ".sshadow/trash/latest").path()
+                ) == "v2"
+            )
+        }
+
         @Test func conflictWithUnknownItemReportsItInTrash() async throws {
             let sandbox = TestSandbox()
             let session = try await sandbox.getSession()
@@ -3938,7 +4211,7 @@ struct SessionTests {
                 "notes.txt",
                 to: .rootContainer,
                 file: uploadUrl,
-                ifExists: .moveToTrash,
+                baseRevision: nil,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -3966,7 +4239,7 @@ struct SessionTests {
                 "notes.txt",
                 to: .rootContainer,
                 file: uploadUrl,
-                ifExists: .moveToTrash,
+                baseRevision: nil,
                 snapshot: nil,
                 progress: Progress()
             )
@@ -4306,7 +4579,9 @@ struct SessionTests {
                 "edited.dat",
                 to: .rootContainer,
                 file: uploadUrl,
-                ifExists: .replace,
+                baseRevision: try await session.item(
+                    for: session.child(name: "edited.dat")
+                ).revision,
                 snapshot: nil,
                 progress: Progress()
             )

@@ -277,7 +277,7 @@ actor DomainDB {
 }
 
 extension Date {
-    fileprivate func truncate() -> Date {
+    func truncate() -> Date {
         Date(
             timeIntervalSince1970:
                 self.timeIntervalSince1970.rounded(.towardZero)
