@@ -137,16 +137,7 @@ public struct Item: Message, PrettyDescribable {
     }
 
     public var contentVersion: Data {
-        switch kind {
-        case .file, .package:
-            return Data(String(revision).utf8)
-        case .folder, .symlink:
-            let fields = [
-                String(modifyTime?.timeIntervalSince1970 ?? 0),
-                String(size ?? 0),
-            ]
-            return Data(fields.joined(separator: "-").utf8)
-        }
+        Data(String(revision).utf8)
     }
 
     public var metadataVersion: Data {
