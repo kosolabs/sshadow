@@ -13,6 +13,9 @@ private func startup() {
             + "(version \(SSHadow.version), build \(SSHadow.build))"
     )
     Task {
+        await Events.shared.persist(in: AppDB.shared)
+    }
+    Task {
         await reconnectEnabledDomains()
         await removeOrphanedDomains()
     }

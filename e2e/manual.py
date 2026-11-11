@@ -1297,7 +1297,20 @@ def settings_window(g: Guide) -> None:
 
 
 def event_log(g: Guide) -> None:
-    g.section("Event Log", "Search, filters, copying and clearing.")
+    g.section(
+        "Event Log",
+        "Entries kept across relaunches, search, filters, copying and clearing.",
+    )
+    g.act(
+        "Find entries from before the relaunch",
+        by_hand="Search for clash.txt, then clear the search.",
+        expect=[
+            (
+                'The blue Move conflicting "docs/clash.txt" notices from '
+                "Checking for remote changes are still there."
+            ),
+        ],
+    )
     g.act(
         "Search",
         by_hand="Search for docs/, then for zzz, then clear the search.",

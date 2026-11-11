@@ -1,5 +1,6 @@
 import Common
 import Foundation
+import SwiftData
 import Testing
 
 @testable import CoreKit
@@ -147,5 +148,74 @@ struct EventsTests {
         clock.advance(by: .milliseconds(250))
         await expect(eventually: { !events.isActive })
         #expect(events.value.count == 1)
+    }
+
+    // MARK: - Persistence
+
+    private func openStore() throws -> AppDB {
+        try AppDB.open(config: ModelConfiguration(isStoredInMemoryOnly: true))
+    }
+
+    private func flush(_ clock: TestClock) async {
+        await expect(eventually: { clock.pendingCount == 1 })
+        clock.advance(by: .milliseconds(250))
+    }
+
+    @Test func savedEventsAreLoadedAtTheNextLaunch() async throws {
+        let store = try openStore()
+        let clock = TestClock()
+        let events = Events(clock: clock)
+        await events.persist(in: store)
+        let log = events.logger(for: .file, source: source)
+
+        log.info("a")
+        log.warning("b", detail: "why")
+        await flush(clock)
+        await expect(eventually: {
+            (try? await store.newestEvents(limit: 10).count) == 2
+        })
+
+        let relaunched = Events(clock: TestClock())
+        await relaunched.persist(in: store)
+
+        #expect(relaunched.value.map(\.id) == events.value.map(\.id))
+        #expect(relaunched.value[1].level == .warning)
+        #expect(relaunched.value[1].detail == "why")
+        #expect(relaunched.value[1].source == source)
+    }
+
+    @Test func eventsLoggedBeforePersistingAreSaved() async throws {
+        let store = try openStore()
+        let clock = TestClock()
+        let events = Events(clock: clock)
+        let log = events.logger(for: .file, source: source)
+
+        log.info("early")
+        await flush(clock)
+        await events.persist(in: store)
+
+        await expect(eventually: {
+            (try? await store.newestEvents(limit: 10).map(\.message))
+                == ["early"]
+        })
+    }
+
+    @Test func clearRemovesSavedEvents() async throws {
+        let store = try openStore()
+        let clock = TestClock()
+        let events = Events(clock: clock)
+        await events.persist(in: store)
+        let log = events.logger(for: .file, source: source)
+
+        log.info("a")
+        await flush(clock)
+        await expect(eventually: {
+            (try? await store.newestEvents(limit: 10).count) == 1
+        })
+        events.clear()
+
+        await expect(eventually: {
+            (try? await store.newestEvents(limit: 10).isEmpty) == true
+        })
     }
 }
