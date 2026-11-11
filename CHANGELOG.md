@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.3.0](https://github.com/kosolabs/sshadow/compare/v1.2.1...v1.3.0) (2026-11-11)
+
+
+### Features
+
+* add General and Advanced settings pages ([#495](https://github.com/kosolabs/sshadow/issues/495)) ([292ab7d](https://github.com/kosolabs/sshadow/commit/292ab7d9be38c85d098a077f8a61a313fce021e0))
+* add Open at Login to General settings ([#497](https://github.com/kosolabs/sshadow/issues/497)) ([f5be128](https://github.com/kosolabs/sshadow/commit/f5be128d2e6e195c78c2af0d797b27109ac8f3a8))
+* apply sync settings and ignore files without reconnecting ([#498](https://github.com/kosolabs/sshadow/issues/498)) ([25efcef](https://github.com/kosolabs/sshadow/commit/25efcefa51195e30b31cacec800bc3a9ddb18500))
+
+
+### Bug Fixes
+
+* poll after ignore file changes when checking manually ([#499](https://github.com/kosolabs/sshadow/issues/499)) ([029bc71](https://github.com/kosolabs/sshadow/commit/029bc71e7de92130afe903c11720f72ca7aa554a))
+
 ## [1.2.1](https://github.com/kosolabs/sshadow/compare/v1.2.0...v1.2.1) (2026-11-10)
 
 
