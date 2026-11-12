@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.0](https://github.com/kosolabs/sshadow/compare/v1.3.0...v1.4.0) (2026-11-12)
+
+
+### Features
+
+* cap the Event Log window at 10,000 entries and show the total ([#510](https://github.com/kosolabs/sshadow/issues/510)) ([ffdec77](https://github.com/kosolabs/sshadow/commit/ffdec777b123c54d4d088bd21932d667cafce46d))
+* keep the Event Log across relaunches ([#507](https://github.com/kosolabs/sshadow/issues/507)) ([01e59e0](https://github.com/kosolabs/sshadow/commit/01e59e004bc0f411707006248c09cccb06476b03))
+* move the server's copy to the trash on conflict ([#501](https://github.com/kosolabs/sshadow/issues/501)) ([ee0aef1](https://github.com/kosolabs/sshadow/commit/ee0aef1f9aeea221a131888b5d1d7ac3e06a6ecd))
+* move the server's copy to the trash on edit and delete conflicts ([#504](https://github.com/kosolabs/sshadow/issues/504)) ([5a5b689](https://github.com/kosolabs/sshadow/commit/5a5b689023844cdc84bed01299bfc777d116f273))
+* query the Event Log from the store ([#508](https://github.com/kosolabs/sshadow/issues/508)) ([1101771](https://github.com/kosolabs/sshadow/commit/1101771dd3ae41b0efa97e63e12e2955f768752d))
+* show conflicts as notices in the Event Log ([#506](https://github.com/kosolabs/sshadow/issues/506)) ([723ef24](https://github.com/kosolabs/sshadow/commit/723ef2473483a16948aac27c647cfd88ba4f8b5c))
+
 ## [1.3.0](https://github.com/kosolabs/sshadow/compare/v1.2.1...v1.3.0) (2026-11-11)
 
 
