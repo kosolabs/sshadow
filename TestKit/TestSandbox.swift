@@ -90,6 +90,7 @@ package class TestSandbox {
     package let domain: NSFileProviderDomain
     package let materializedItems = FakeMaterializedItems()
     package let events = Events<ContinuousClock>()
+    package let eventStore: ModelContainer = try! makeEventStore()
 
     private let root: URL
     private let local: URL
@@ -181,6 +182,7 @@ package class TestSandbox {
     }
 
     package func sessionProvider() async throws -> Session.Provider {
+        await events.persist(in: eventStore)
         let provider = try await Session.provider(
             domainDb: DomainDB.open(
                 config: ModelConfiguration(isStoredInMemoryOnly: true)

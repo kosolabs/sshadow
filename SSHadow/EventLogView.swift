@@ -76,12 +76,7 @@ private struct EventLogList: View {
                     .disabled(ids.isEmpty)
                 }
                 .onCopyCommand {
-                    guard !selection.isEmpty else { return [] }
-                    return [
-                        NSItemProvider(
-                            object: logLines(for: selection) as NSString
-                        )
-                    ]
+                    [NSItemProvider(object: logLines(for: copied) as NSString)]
                 }
             }
         }
@@ -104,21 +99,33 @@ private struct EventLogList: View {
             .help("Choose which events to show")
 
             Button {
-                selection = Set(visibleEvents.map(\.id))
+                if selection.isEmpty {
+                    selection = Set(visibleEvents.map(\.id))
+                } else {
+                    selection.removeAll()
+                }
             } label: {
-                Label("Select All", systemImage: "checklist")
+                if selection.isEmpty {
+                    Label("Select All", systemImage: "checklist")
+                } else {
+                    Label("Select None", systemImage: "checklist.unchecked")
+                }
             }
-            .help("Select all events shown")
+            .help(selection.isEmpty ? "Select all events shown" : "Deselect all events")
             .keyboardShortcut("a", modifiers: .command)
             .disabled(visibleEvents.isEmpty)
 
             Button {
-                NSPasteboard.general.copy(logLines(for: selection))
+                NSPasteboard.general.copy(logLines(for: copied))
             } label: {
                 Label("Copy", systemImage: "doc.on.doc")
             }
-            .help("Copy the selected events to the clipboard")
-            .disabled(selection.isEmpty)
+            .help(
+                selection.isEmpty
+                    ? "Copy all events shown to the clipboard"
+                    : "Copy the selected events to the clipboard"
+            )
+            .disabled(visibleEvents.isEmpty)
 
             Button {
                 selection.removeAll()
@@ -155,6 +162,10 @@ private struct EventLogList: View {
                 }
             }
         )
+    }
+
+    private var copied: Set<EventModel.ID> {
+        selection.isEmpty ? Set(visibleEvents.map(\.id)) : selection
     }
 
     private func logLines(for ids: Set<EventModel.ID>) -> String {

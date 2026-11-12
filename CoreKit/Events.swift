@@ -4,8 +4,6 @@ import SwiftData
 
 private let logger = Logger(category: "Events")
 
-private let maxEvents: Int = 10_000
-
 extension Events where C == ContinuousClock {
     nonisolated public static let shared = Events()
 }
@@ -13,18 +11,12 @@ extension Events where C == ContinuousClock {
 @MainActor
 @Observable
 public final class Events<C: Clock<Duration>> {
-    @ObservationIgnored private var _value: [Event] = []
     @ObservationIgnored private var unsaved: [Event] = []
-    @ObservationIgnored private var context: ModelContext?
+    @ObservationIgnored private var container: ModelContainer?
 
     private let clock: C
 
     private var signalUpdateTask: Task<Void, Never>?
-
-    public var value: [Event] {
-        access(keyPath: \.value)
-        return _value
-    }
 
     public var isActive: Bool {
         signalUpdateTask != nil
@@ -46,29 +38,11 @@ public final class Events<C: Clock<Duration>> {
     }
 
     public func persist(in container: ModelContainer) {
-        let context = container.mainContext
-        var newest = FetchDescriptor<EventModel>(
-            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
-        )
-        newest.fetchLimit = maxEvents
-        do {
-            let saved = try context.fetch(newest).reversed().compactMap {
-                Event(from: $0)
-            }
-            withMutation(keyPath: \.value) {
-                _value = Array((saved + _value).suffix(maxEvents))
-            }
-        } catch {
-            CoreKit.logger.error("Failed to load saved events: \(error)")
-        }
-        self.context = context
+        self.container = container
         saveUnsaved()
     }
 
     public func clear() {
-        withMutation(keyPath: \.value) {
-            _value.removeAll()
-        }
         unsaved.removeAll()
         save { context in try context.delete(model: EventModel.self) }
     }
@@ -94,11 +68,7 @@ public final class Events<C: Clock<Duration>> {
 
     private nonisolated func append(_ event: Event) {
         Task { @MainActor in
-            _value.append(event)
             unsaved.append(event)
-            if _value.count > maxEvents {
-                _value.removeFirst(_value.count - maxEvents)
-            }
             triggerSignalUpdate()
         }
     }
@@ -107,14 +77,13 @@ public final class Events<C: Clock<Duration>> {
         guard signalUpdateTask == nil else { return }
         signalUpdateTask = Task {
             try? await Task.sleep(for: .milliseconds(250), clock: clock)
-            withMutation(keyPath: \.value) {}
             saveUnsaved()
             signalUpdateTask = nil
         }
     }
 
     private func saveUnsaved() {
-        guard context != nil, !unsaved.isEmpty else { return }
+        guard container != nil, !unsaved.isEmpty else { return }
         let batch = unsaved
         unsaved.removeAll()
         save { context in
@@ -125,7 +94,7 @@ public final class Events<C: Clock<Duration>> {
     }
 
     private func save(_ change: (ModelContext) throws -> Void) {
-        guard let context else { return }
+        guard let context = container?.mainContext else { return }
         do {
             try change(context)
             try context.save()

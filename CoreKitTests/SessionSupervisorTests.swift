@@ -846,6 +846,8 @@ struct SessionSupervisorTests {
         sandbox.maxReconnectDelay = .milliseconds(5)
         let spy = StatusSpy()
         let events = Events()
+        let eventStore = try makeEventStore()
+        await events.persist(in: eventStore)
         let provider = try await SpySessionProvider(
             base: sandbox.sessionProvider()
         )
@@ -874,7 +876,7 @@ struct SessionSupervisorTests {
         #expect(await provider.callCount == 2)
         await expect(eventually: {
             await MainActor.run {
-                events.value.contains {
+                eventStore.savedEvents.contains {
                     $0.level == .error && $0.detail == changed.detail
                 }
             }
