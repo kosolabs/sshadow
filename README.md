@@ -11,16 +11,19 @@ SSHadow uses the File Provider framework, so each connection shows up as a locat
 - Multiple connections, each mapping a remote path on an SSH server to a Finder location.
 - Password and private key (with optional passphrase) authentication.
 - Credentials stored in the macOS Keychain.
+- Server host keys are trusted on first connect, and a changed key blocks the connection until you review it.
 - Automatic reconnects with exponential backoff when a connection drops.
 - Connections can be paused and resumed without removing them from Finder.
 - Browse remote tree without pulling all of it.
 - Stream file contents with read-ahead caching for sequential reads.
 - Downloaded files can be removed to free up local space while staying listed in Finder.
 - Edits are uploaded back to the server.
-- Periodic polling picks up remote changes so Finder stays in sync with the server.
+- When a file changes on both sides, your Mac's copy wins and the server's copy is moved to `.sshadow/trash` on the server.
+- Periodic polling picks up remote changes so Finder stays in sync with the server, on a schedule you can set globally or per connection.
 - Ignore files (`.sshadowignore` by default, configurable per connection) keep matching items from being uploaded or downloaded.
 - Fast uploads and downloads, with a transfer progress summary in the menu bar.
-- An event log of every remote change, with search and filters.
+- An event log of every remote change and conflict, kept across relaunches, with search and filters.
+- Optional Open at Login.
 
 ## Architecture
 
