@@ -6,6 +6,7 @@ public enum ConnectionError: Message, Error {
     case unknownHost
     case connectionRefused
     case connectionTimedOut
+    case hostUnreachable
     case connectionLost
     case invalidPrivateKey
     case authenticationFailed
@@ -31,11 +32,13 @@ public enum ConnectionError: Message, Error {
             case .connectionFailed(.timedOut, _):
                 self = .connectionTimedOut
                 return
+            case .connectionFailed(.unreachable, _):
+                self = .hostUnreachable
+                return
             case .connectionFailed(.lost, _):
                 self = .connectionLost
                 return
-            case .authenticationFailed(let message)
-            where message.contains("Failed to import private key"):
+            case .privateKey:
                 self = .invalidPrivateKey
                 return
             case .authenticationFailed:
@@ -62,7 +65,7 @@ public enum ConnectionError: Message, Error {
     public var isRetryable: Bool {
         switch self {
         case .unknownHost, .connectionRefused, .connectionTimedOut,
-            .connectionLost, .cancelled, .unknown:
+            .hostUnreachable, .connectionLost, .cancelled, .unknown:
             true
         case .invalidPrivateKey, .authenticationFailed, .hostKeyChanged,
             .remotePathNotFound, .remotePathNotDirectory:
@@ -84,6 +87,7 @@ public enum ConnectionError: Message, Error {
         case .unknownHost: "Unknown host"
         case .connectionRefused: "Connection refused"
         case .connectionTimedOut: "Connection timed out"
+        case .hostUnreachable: "Host unreachable"
         case .connectionLost: "Connection lost"
         case .invalidPrivateKey: "Invalid private key"
         case .authenticationFailed: "Authentication failed"
