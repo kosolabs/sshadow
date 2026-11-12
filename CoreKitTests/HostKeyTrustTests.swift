@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import SwiftRussh
 import TestKit
 import Testing
@@ -123,8 +124,15 @@ struct HostKeyTrustTests {
 }
 
 @MainActor
+private let sharedEventStore: ModelContainer = {
+    let store = try! makeEventStore()
+    Events.shared.persist(in: store)
+    return store
+}()
+
+@MainActor
 private func trustNotice(for name: String) -> Event? {
-    Events.shared.value.last {
+    sharedEventStore.savedEvents.last {
         $0.source?.name == name && $0.message == "Trusted host key for \(name)"
     }
 }

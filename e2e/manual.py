@@ -1332,9 +1332,17 @@ def event_log(g: Guide) -> None:
             ),
         ],
     )
+    g.act(
+        "Select all, then none",
+        by_hand="Click Select All, then click it again.",
+        expect=[
+            "First every entry is selected and the button changes to Select None.",
+            "Then nothing is selected and the button is Select All again.",
+        ],
+    )
     copied = g.act(
         "Copy every entry",
-        by_hand="Click an entry, then press ⌘A and ⌘C.",
+        by_hand="With nothing selected, click Copy.",
         checks=[Check("Copied the entries", copied_entries)],
         confirm=True,
     )

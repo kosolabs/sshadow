@@ -47,8 +47,8 @@ extension TestSandbox {
 
     @MainActor
     fileprivate func syncEvents(count: Int) async -> [Event] {
-        let syncEvents = { [events] in
-            events.value.filter { $0.category == .sync }
+        let syncEvents = { [eventStore] in
+            eventStore.savedEvents.filter { $0.category == .sync }
         }
         await expect(eventually: { syncEvents().count >= count })
         return syncEvents()
@@ -56,8 +56,8 @@ extension TestSandbox {
 
     @MainActor
     fileprivate func fileEvents(count: Int) async -> [String] {
-        let messages = { [events] in
-            events.value.filter { $0.category == .file }.map(\.message)
+        let messages = { [eventStore] in
+            eventStore.savedEvents.filter { $0.category == .file }.map(\.message)
         }
         await expect(eventually: { messages().count >= count })
         return messages()
@@ -81,6 +81,7 @@ extension TestSandbox {
         let db = try await DomainDB.open(
             config: ModelConfiguration(isStoredInMemoryOnly: true)
         )
+        await events.persist(in: eventStore)
 
         let session = Session(
             config: config,

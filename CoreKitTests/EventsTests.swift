@@ -1,6 +1,7 @@
 import Common
 import Foundation
 import SwiftData
+import TestKit
 import Testing
 
 @testable import CoreKit
@@ -13,16 +14,15 @@ struct EventsTests {
 
     private let source = Event.Source(name: "test", url: "user@host")
 
-    @Test func loggerStoresEntryWithInstantAndFields() async {
-        let events = Events(clock: TestClock())
+    @Test func loggerStoresEntryWithInstantAndFields() async throws {
+        let (events, clock, store) = try attached()
         let log = events.logger(for: .file, source: source)
 
         let before = Date.now
         log.info("Upload /f", detail: "ok")
-        await expect(eventually: { events.value.count == 1 })
         let after = Date.now
 
-        let event = events.value[0]
+        let event = try #require(await saved(1, in: store, advancing: clock).first)
         #expect(event.message == "Upload /f")
         #expect(event.level == .info)
         #expect(event.category == .file)
@@ -34,8 +34,8 @@ struct EventsTests {
         #expect(event.timestamp <= after)
     }
 
-    @Test func loggerMapsEachMethodOntoItsLevel() async {
-        let events = Events(clock: TestClock())
+    @Test func loggerMapsEachMethodOntoItsLevel() async throws {
+        let (events, clock, store) = try attached()
         let log = events.logger(for: .connection, source: source)
 
         log.info("a")
@@ -43,30 +43,28 @@ struct EventsTests {
         log.warning("c")
         log.error("d")
 
-        await expect(eventually: { events.value.count == 4 })
-
         #expect(
-            events.value.map(\.level) == [.info, .notice, .warning, .error]
+            await saved(4, in: store, advancing: clock).map(\.level)
+                == [.info, .notice, .warning, .error]
         )
     }
 
-    @Test func loggerRecordsErrorDescriptionAsDetail() async {
-        let events = Events(clock: TestClock())
+    @Test func loggerRecordsErrorDescriptionAsDetail() async throws {
+        let (events, clock, store) = try attached()
         let log = events.logger(for: .connection, source: source)
 
         log.warning("Reconnecting", error: SampleError())
         log.error("Failed", error: SampleError())
 
-        await expect(eventually: { events.value.count == 2 })
-
-        #expect(events.value[0].level == .warning)
-        #expect(events.value[0].detail == "something went wrong")
-        #expect(events.value[1].level == .error)
-        #expect(events.value[1].detail == "something went wrong")
+        let saved = await saved(2, in: store, advancing: clock)
+        #expect(saved[0].level == .warning)
+        #expect(saved[0].detail == "something went wrong")
+        #expect(saved[1].level == .error)
+        #expect(saved[1].detail == "something went wrong")
     }
 
-    @Test func loggerCarriesItsCategoryAndConfig() async {
-        let events = Events(clock: TestClock())
+    @Test func loggerCarriesItsCategoryAndConfig() async throws {
+        let (events, clock, store) = try attached()
 
         let syncSource = Event.Source(name: "sync", url: "")
         let fileSource = Event.Source(name: "file", url: "")
@@ -77,64 +75,61 @@ struct EventsTests {
         syncLog.notice("synced")
         fileLog.info("downloaded")
 
-        await expect(eventually: { events.value.count == 2 })
-
-        #expect(events.value[0].category == .sync)
-        #expect(events.value[0].source == syncSource)
-        #expect(events.value[1].category == .file)
-        #expect(events.value[1].source == fileSource)
+        let saved = await saved(2, in: store, advancing: clock)
+        #expect(saved[0].category == .sync)
+        #expect(saved[0].source == syncSource)
+        #expect(saved[1].category == .file)
+        #expect(saved[1].source == fileSource)
     }
 
-    @Test func logsPreserveOrder() async {
-        let events = Events(clock: TestClock())
+    @Test func logsPreserveOrder() async throws {
+        let (events, clock, store) = try attached()
         let log = events.logger(for: .file, source: source)
 
         log.info("a")
         log.info("b")
         log.info("c")
 
-        await expect(eventually: { events.value.count == 3 })
-
-        #expect(events.value.map(\.message) == ["a", "b", "c"])
+        #expect(
+            await saved(3, in: store, advancing: clock).map(\.message)
+                == ["a", "b", "c"]
+        )
     }
 
-    @Test func clearRemovesAllEntries() async {
-        let events = Events(clock: TestClock())
+    @Test func clearRemovesAllEntries() async throws {
+        let (events, clock, store) = try attached()
         let log = events.logger(for: .file, source: source)
 
         log.info("a")
         log.info("b")
-        await expect(eventually: { events.value.count == 2 })
+        _ = await saved(2, in: store, advancing: clock)
 
         events.clear()
 
-        #expect(events.value.isEmpty)
+        #expect(store.savedEvents.isEmpty)
     }
 
-    @Test func rapidLogsCoalesceIntoASingleSignalUpdate() async {
-        let clock = TestClock()
-        let events = Events(clock: clock)
+    @Test func rapidLogsCoalesceIntoASingleSignalUpdate() async throws {
+        let (events, clock, store) = try attached()
         let log = events.logger(for: .file, source: source)
 
         log.info("a")
         log.info("b")
         log.info("c")
 
-        // All three entries land, but they share one throttled signal task.
-        await expect(eventually: {
-            events.value.count == 3 && clock.pendingCount == 1
-        })
-
+        // All three entries are pending, but they share one throttled signal
+        // task, so they're saved together once it fires.
+        await expect(eventually: { clock.pendingCount == 1 })
         #expect(events.isActive)
+        #expect(store.savedEvents.isEmpty)
 
-        // Drain the parked sleep so no continuation is left suspended.
         clock.advance(by: .milliseconds(250))
         await expect(eventually: { !events.isActive })
+        #expect(store.savedEvents.count == 3)
     }
 
-    @Test func isActiveDependsOnlyOnThePendingSignalTask() async {
-        let clock = TestClock()
-        let events = Events(clock: clock)
+    @Test func isActiveDependsOnlyOnThePendingSignalTask() async throws {
+        let (events, clock, _) = try attached()
         let log = events.logger(for: .file, source: source)
 
         #expect(!events.isActive)
@@ -144,80 +139,44 @@ struct EventsTests {
             events.isActive && clock.pendingCount == 1
         })
 
-        // Draining the throttle clears isActive even though entries remain.
         clock.advance(by: .milliseconds(250))
         await expect(eventually: { !events.isActive })
-        #expect(events.value.count == 1)
-    }
-
-    // MARK: - Persistence
-
-    private func openStore() throws -> ModelContainer {
-        try AppDB.getModelContainer(
-            config: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-    }
-
-    private func saved(in store: ModelContainer) -> [Event] {
-        let oldestFirst = FetchDescriptor<EventModel>(
-            sortBy: [SortDescriptor(\.timestamp)]
-        )
-        let models = (try? store.mainContext.fetch(oldestFirst)) ?? []
-        return models.compactMap { Event(from: $0) }
-    }
-
-    private func flush(_ clock: TestClock) async {
-        await expect(eventually: { clock.pendingCount == 1 })
-        clock.advance(by: .milliseconds(250))
-    }
-
-    @Test func savedEventsAreLoadedAtTheNextLaunch() async throws {
-        let store = try openStore()
-        let clock = TestClock()
-        let events = Events(clock: clock)
-        events.persist(in: store)
-        let log = events.logger(for: .file, source: source)
-
-        log.info("a")
-        log.warning("b", detail: "why")
-        await flush(clock)
-        await expect(eventually: { saved(in: store).count == 2 })
-
-        let relaunched = Events(clock: TestClock())
-        relaunched.persist(in: store)
-
-        #expect(relaunched.value.map(\.id) == events.value.map(\.id))
-        #expect(relaunched.value[1].level == .warning)
-        #expect(relaunched.value[1].detail == "why")
-        #expect(relaunched.value[1].source == source)
     }
 
     @Test func eventsLoggedBeforePersistingAreSaved() async throws {
-        let store = try openStore()
+        let store = try makeEventStore()
         let clock = TestClock()
         let events = Events(clock: clock)
         let log = events.logger(for: .file, source: source)
 
         log.info("early")
-        await flush(clock)
+        await expect(eventually: { clock.pendingCount == 1 })
+        clock.advance(by: .milliseconds(250))
         await expect(eventually: { !events.isActive })
         events.persist(in: store)
 
-        #expect(saved(in: store).map(\.message) == ["early"])
+        #expect(store.savedEvents.map(\.message) == ["early"])
     }
 
-    @Test func clearRemovesSavedEvents() async throws {
-        let store = try openStore()
+    // MARK: - Helpers
+
+    private func attached() throws -> (Events<TestClock>, TestClock, ModelContainer) {
+        let store = try makeEventStore()
         let clock = TestClock()
         let events = Events(clock: clock)
         events.persist(in: store)
-        let log = events.logger(for: .file, source: source)
+        return (events, clock, store)
+    }
 
-        log.info("a")
-        await flush(clock)
-        await expect(eventually: { saved(in: store).count == 1 })
-        events.clear()
-
-        #expect(saved(in: store).isEmpty)
+    private func saved(
+        _ count: Int,
+        in store: ModelContainer,
+        advancing clock: TestClock
+    ) async -> [Event] {
+        await expect(eventually: {
+            clock.advance(by: .milliseconds(250))
+            return store.savedEvents.count >= count
+        })
+        return store.savedEvents
     }
 }
