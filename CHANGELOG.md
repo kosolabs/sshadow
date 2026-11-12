@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0](https://github.com/kosolabs/sshadow/compare/v1.4.0...v1.5.0) (2026-11-12)
+
+
+### Features
+
+* show unreachable hosts as "Host unreachable" instead of Other ([#513](https://github.com/kosolabs/sshadow/issues/513)) ([84046c6](https://github.com/kosolabs/sshadow/commit/84046c6777c9ad7f30e720690b4dc155cdd78f99))
+* split Connections and Settings into separate windows ([#511](https://github.com/kosolabs/sshadow/issues/511)) ([804f359](https://github.com/kosolabs/sshadow/commit/804f359f10515253fbbd81ce207290e59250ee2d))
+
 ## [1.4.0](https://github.com/kosolabs/sshadow/compare/v1.3.0...v1.4.0) (2026-11-12)
 
 
