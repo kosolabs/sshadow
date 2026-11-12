@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/kosolabs/sshadow/compare/v1.5.0...v1.5.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* make the hovered transfers menu item readable on macOS 15 ([#514](https://github.com/kosolabs/sshadow/issues/514)) ([b654e82](https://github.com/kosolabs/sshadow/commit/b654e8263fd03749078eab2b0a34fe2068e05a57))
+
 ## [1.5.0](https://github.com/kosolabs/sshadow/compare/v1.4.0...v1.5.0) (2026-11-12)
 
 
