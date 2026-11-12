@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-public struct EventFilter {
+public struct EventFilter: Hashable {
     public var hiddenLevels: Set<Event.Level> = []
     public var hiddenCategories: Set<Event.Category> = []
 
