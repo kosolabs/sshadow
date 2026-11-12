@@ -1897,7 +1897,7 @@
 			repositoryURL = "https://github.com/kosolabs/swift-russh.git";
 			requirement = {
 				kind = upToNextMinorVersion;
-				minimumVersion = 0.8.0;
+				minimumVersion = 0.9.0;
 			};
 		};
 		73E6C8693089644300472449 /* XCRemoteSwiftPackageReference "swift-ignore" */ = {

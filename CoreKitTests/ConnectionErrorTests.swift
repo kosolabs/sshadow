@@ -9,11 +9,12 @@ import Testing
     @Test(
         arguments: zip(
             [
-                SSHError.ConnectionFailure.unknownHost, .refused, .timedOut, .lost,
+                SSHError.ConnectionFailure.unknownHost, .refused, .timedOut,
+                .unreachable, .lost,
             ],
             [
                 ConnectionError.unknownHost, .connectionRefused,
-                .connectionTimedOut, .connectionLost,
+                .connectionTimedOut, .hostUnreachable, .connectionLost,
             ]
         )
     )
@@ -50,11 +51,16 @@ import Testing
         #expect(ConnectionError.connectionRefused.detail == "Connection refused")
     }
 
-    @Test func mapsInvalidPrivateKey() {
+    @Test(
+        arguments: [
+            SSHError.PrivateKeyFailure.unreadable, .passphraseRequired, .invalid,
+        ]
+    )
+    func mapsPrivateKeyFailuresToInvalidPrivateKey(
+        _ failure: SSHError.PrivateKeyFailure
+    ) {
         let error = ConnectionError(
-            from: SSHError.authenticationFailed(
-                message: "Failed to import private key"
-            )
+            from: SSHError.privateKey(failure, message: "detail")
         )
         #expect(error == .invalidPrivateKey)
     }

@@ -39,8 +39,8 @@ struct NoopExtensionController: ExtensionController {
 extension ConnectionError {
     fileprivate var isTransient: Bool {
         switch self {
-        case .connectionRefused, .connectionTimedOut, .connectionLost,
-            .unknown:
+        case .connectionRefused, .connectionTimedOut, .hostUnreachable,
+            .connectionLost, .unknown:
             true
         case .unknownHost, .invalidPrivateKey, .authenticationFailed,
             .hostKeyChanged, .remotePathNotFound, .remotePathNotDirectory,
