@@ -152,8 +152,18 @@ struct EventsTests {
 
     // MARK: - Persistence
 
-    private func openStore() throws -> AppDB {
-        try AppDB.open(config: ModelConfiguration(isStoredInMemoryOnly: true))
+    private func openStore() throws -> ModelContainer {
+        try AppDB.getModelContainer(
+            config: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+    }
+
+    private func saved(in store: ModelContainer) -> [Event] {
+        let oldestFirst = FetchDescriptor<EventModel>(
+            sortBy: [SortDescriptor(\.timestamp)]
+        )
+        let models = (try? store.mainContext.fetch(oldestFirst)) ?? []
+        return models.compactMap { Event(from: $0) }
     }
 
     private func flush(_ clock: TestClock) async {
@@ -165,18 +175,16 @@ struct EventsTests {
         let store = try openStore()
         let clock = TestClock()
         let events = Events(clock: clock)
-        await events.persist(in: store)
+        events.persist(in: store)
         let log = events.logger(for: .file, source: source)
 
         log.info("a")
         log.warning("b", detail: "why")
         await flush(clock)
-        await expect(eventually: {
-            (try? await store.newestEvents(limit: 10).count) == 2
-        })
+        await expect(eventually: { saved(in: store).count == 2 })
 
         let relaunched = Events(clock: TestClock())
-        await relaunched.persist(in: store)
+        relaunched.persist(in: store)
 
         #expect(relaunched.value.map(\.id) == events.value.map(\.id))
         #expect(relaunched.value[1].level == .warning)
@@ -192,30 +200,24 @@ struct EventsTests {
 
         log.info("early")
         await flush(clock)
-        await events.persist(in: store)
+        await expect(eventually: { !events.isActive })
+        events.persist(in: store)
 
-        await expect(eventually: {
-            (try? await store.newestEvents(limit: 10).map(\.message))
-                == ["early"]
-        })
+        #expect(saved(in: store).map(\.message) == ["early"])
     }
 
     @Test func clearRemovesSavedEvents() async throws {
         let store = try openStore()
         let clock = TestClock()
         let events = Events(clock: clock)
-        await events.persist(in: store)
+        events.persist(in: store)
         let log = events.logger(for: .file, source: source)
 
         log.info("a")
         await flush(clock)
-        await expect(eventually: {
-            (try? await store.newestEvents(limit: 10).count) == 1
-        })
+        await expect(eventually: { saved(in: store).count == 1 })
         events.clear()
 
-        await expect(eventually: {
-            (try? await store.newestEvents(limit: 10).isEmpty) == true
-        })
+        #expect(saved(in: store).isEmpty)
     }
 }

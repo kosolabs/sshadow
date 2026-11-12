@@ -1,5 +1,6 @@
 import Common
 import Foundation
+import SwiftData
 
 private let logger = Logger(category: "Events")
 
@@ -14,8 +15,7 @@ extension Events where C == ContinuousClock {
 public final class Events<C: Clock<Duration>> {
     @ObservationIgnored private var _value: [Event] = []
     @ObservationIgnored private var unsaved: [Event] = []
-    @ObservationIgnored private var store: AppDB?
-    @ObservationIgnored private var lastWrite: Task<Void, Never>?
+    @ObservationIgnored private var context: ModelContext?
 
     private let clock: C
 
@@ -45,16 +45,23 @@ public final class Events<C: Clock<Duration>> {
         )
     }
 
-    public func persist(in store: AppDB) async {
+    public func persist(in container: ModelContainer) {
+        let context = container.mainContext
+        var newest = FetchDescriptor<EventModel>(
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+        )
+        newest.fetchLimit = maxEvents
         do {
-            let saved = try await store.newestEvents(limit: maxEvents)
+            let saved = try context.fetch(newest).reversed().compactMap {
+                Event(from: $0)
+            }
             withMutation(keyPath: \.value) {
                 _value = Array((saved + _value).suffix(maxEvents))
             }
         } catch {
             CoreKit.logger.error("Failed to load saved events: \(error)")
         }
-        self.store = store
+        self.context = context
         saveUnsaved()
     }
 
@@ -63,7 +70,7 @@ public final class Events<C: Clock<Duration>> {
             _value.removeAll()
         }
         unsaved.removeAll()
-        write { store in try await store.removeAllEvents() }
+        save { context in try context.delete(model: EventModel.self) }
     }
 
     private nonisolated func log(
@@ -107,22 +114,23 @@ public final class Events<C: Clock<Duration>> {
     }
 
     private func saveUnsaved() {
-        guard store != nil, !unsaved.isEmpty else { return }
+        guard context != nil, !unsaved.isEmpty else { return }
         let batch = unsaved
         unsaved.removeAll()
-        write { store in try await store.append(batch) }
+        save { context in
+            for event in batch {
+                context.insert(EventModel(from: event))
+            }
+        }
     }
 
-    private func write(_ operation: @escaping @Sendable (AppDB) async throws -> Void) {
-        guard let store else { return }
-        let previous = lastWrite
-        lastWrite = Task {
-            await previous?.value
-            do {
-                try await operation(store)
-            } catch {
-                CoreKit.logger.error("Failed to save events: \(error)")
-            }
+    private func save(_ change: (ModelContext) throws -> Void) {
+        guard let context else { return }
+        do {
+            try change(context)
+            try context.save()
+        } catch {
+            CoreKit.logger.error("Failed to save events: \(error)")
         }
     }
 

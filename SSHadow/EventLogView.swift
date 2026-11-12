@@ -1,22 +1,49 @@
 import CoreKit
+import SwiftData
 import SwiftUI
 
 struct EventLogView: View {
-    @Environment(Events<ContinuousClock>.self) private var events
     @Environment(WindowActivationTracker.self) private var activation
 
     @State private var filter = EventFilter()
     @State private var search = ""
-    @State private var selection = Set<Event.ID>()
 
-    private var visibleEvents: [Event] {
-        events.value.filter { filter.includes($0, matching: search) }
+    var body: some View {
+        EventLogList(filter: $filter, search: search)
+            .navigationTitle("Event Log")
+            .searchable(text: $search, prompt: "Search")
+            .frame(minWidth: 480, minHeight: 320)
+            .onAppear { activation.retain() }
+            .onDisappear { activation.release() }
+    }
+}
+
+private struct EventLogList: View {
+    private static var anyEvent: FetchDescriptor<EventModel> {
+        var descriptor = FetchDescriptor<EventModel>()
+        descriptor.fetchLimit = 1
+        return descriptor
+    }
+
+    @Environment(Events<ContinuousClock>.self) private var events
+
+    @Query private var anyEvent: [EventModel]
+    @Query private var visibleEvents: [EventModel]
+
+    @Binding private var filter: EventFilter
+    private let search: String
+    @State private var selection = Set<EventModel.ID>()
+
+    init(filter: Binding<EventFilter>, search: String) {
+        _filter = filter
+        self.search = search
+        _anyEvent = Query(Self.anyEvent)
+        _visibleEvents = Query(filter.wrappedValue.descriptor(matching: search))
     }
 
     var body: some View {
-        let visibleEvents = visibleEvents
         Group {
-            if events.value.isEmpty {
+            if anyEvent.isEmpty {
                 ContentUnavailableView(
                     "No Events",
                     systemImage: "list.bullet.rectangle",
@@ -36,11 +63,13 @@ struct EventLogView: View {
                 )
             } else {
                 List(selection: $selection) {
-                    ForEach(visibleEvents.reversed()) { event in
-                        EventLogRow(event: event)
+                    ForEach(visibleEvents) { model in
+                        if let event = Event(from: model) {
+                            EventLogRow(event: event)
+                        }
                     }
                 }
-                .contextMenu(forSelectionType: Event.ID.self) { ids in
+                .contextMenu(forSelectionType: EventModel.ID.self) { ids in
                     Button("Copy") {
                         NSPasteboard.general.copy(logLines(for: ids))
                     }
@@ -56,9 +85,6 @@ struct EventLogView: View {
                 }
             }
         }
-        .navigationTitle("Event Log")
-        .searchable(text: $search, prompt: "Search")
-        .frame(minWidth: 480, minHeight: 320)
         .toolbar {
             Menu {
                 Section("Levels") {
@@ -101,10 +127,8 @@ struct EventLogView: View {
                 Label("Clear", systemImage: "trash")
             }
             .help("Clear the event log")
-            .disabled(events.value.isEmpty)
+            .disabled(anyEvent.isEmpty)
         }
-        .onAppear { activation.retain() }
-        .onDisappear { activation.release() }
     }
 
     private func shows(_ level: Event.Level) -> Binding<Bool> {
@@ -133,10 +157,11 @@ struct EventLogView: View {
         )
     }
 
-    private func logLines(for ids: Set<Event.ID>) -> String {
+    private func logLines(for ids: Set<EventModel.ID>) -> String {
         visibleEvents
+            .reversed()
             .filter { ids.contains($0.id) }
-            .map(\.logLine)
+            .compactMap { Event(from: $0)?.logLine }
             .joined(separator: "\n")
     }
 }

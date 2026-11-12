@@ -39,29 +39,3 @@ public actor AppDB {
         return Set(profiles.map(\.id))
     }
 }
-
-// MARK: - Events
-
-extension AppDB {
-    func append(_ events: [Event]) throws {
-        for event in events {
-            modelContext.insert(EventModel(from: event))
-        }
-        try modelContext.save()
-    }
-
-    func newestEvents(limit: Int) throws -> [Event] {
-        var descriptor = FetchDescriptor<EventModel>(
-            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
-        )
-        descriptor.fetchLimit = limit
-        return try modelContext.fetch(descriptor).reversed().compactMap {
-            Event(from: $0)
-        }
-    }
-
-    func removeAllEvents() throws {
-        try modelContext.delete(model: EventModel.self)
-        try modelContext.save()
-    }
-}
