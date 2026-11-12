@@ -27,11 +27,7 @@ struct RichMenuTransfers: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .contentShape(Rectangle())
-                .background(
-                    RoundedRectangle(cornerRadius: 8).fill(
-                        isHovered ? Color.primary : Color.clear
-                    )
-                )
+                .menuHighlight(isHovered)
             }
             .buttonStyle(.plain)
             .onHover { isHovered = $0 }
