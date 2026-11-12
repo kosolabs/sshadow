@@ -4,12 +4,12 @@ Each section can be walked through or run automatically. When walking through,
 each step says what it does and what to look for. Press Enter and the script
 does it, or do it yourself and the script notices. Either way, the script
 checks files and console logs afterwards, and you judge Finder, the menu,
-Settings and the Event Log.
+Connections, Settings and the Event Log.
 
 The walkthrough tells one story in parts: setup, sync, connection, the
-interface (the SSHadow menu, Settings and the Event Log), then teardown. Each
-section picks up where the last one left off, so related steps sit together
-and you don't have to switch context to follow along. Running a section
+interface (the SSHadow menu, Connections, Settings and the Event Log), then
+teardown. Each section picks up where the last one left off, so related steps
+sit together and you don't have to switch context to follow along. Running a section
 automatically skips the steps that need you.
 
 Churn in this file is fine when it serves that story: move, merge or split
@@ -553,14 +553,14 @@ def create_connection(g: Guide) -> None:
         doing=f"create {NAME} and enable it",
         by_hand=(
             "Open the SSHadow menu and click Add Your First Connection. If you "
-            "have other connections, choose Connections & Settings… → Add "
+            "have other connections, choose Connections… → Add "
             f"Connection instead. Fill in Display Name {NAME}, Hostname "
             f"localhost, Port {PROXY_PORT} and Remote Path {R}. Turn on Use "
             f"Private Key and choose {KEY} (press ⇧⌘G and paste the path). "
             "Then turn on Enabled."
         ),
         expect=[
-            "Settings' Status row shows Connecting…, then Connected.",
+            "The Connections window's Status row shows Connecting…, then Connected.",
             f"Event Log: INFO Connecting to {NAME}, then NOTICE Connected to {NAME}.",
             "The menu row shows the connection is online.",
         ],
@@ -979,7 +979,7 @@ def outage(g: Guide) -> None:
                 "the detail, repeating with longer gaps."
             ),
             (
-                "Settings' Status row shows the error and Reconnecting in Ns… "
+                "The Connections window's Status row shows the error and Reconnecting in Ns… "
                 "counting down, with a Pause button."
             ),
         ],
@@ -1027,7 +1027,7 @@ def failed_connection(g: Guide) -> None:
         "Break the connection",
         do=g.proxy.refuse,
         doing="refuse connections at the proxy",
-        by_hand=f"In Settings, set Port to {WRONG_PORT}.",
+        by_hand=f"In Connections, set Port to {WRONG_PORT}.",
     )
     g.act(
         "Resume the connection",
@@ -1039,7 +1039,7 @@ def failed_connection(g: Guide) -> None:
                 f"Event Log: ERROR Failed to connect to {NAME}, with the reason in "
                 "the detail."
             ),
-            "Settings' Status row shows the error, with Clear and Reconnect buttons.",
+            "The Connections window's Status row shows the error, with Clear and Reconnect buttons.",
             "The menu row shows an error icon.",
         ],
         checks=[
@@ -1062,7 +1062,7 @@ def failed_connection(g: Guide) -> None:
         "Reconnect",
         do=lambda: g.app.send("enable", name=NAME),
         doing="resume the connection",
-        by_hand="Click Reconnect in Settings.",
+        by_hand="Click Reconnect in Connections.",
         expect=[f"Event Log: Connected to {NAME}."],
         checks=[g.logged("Connected", connected(NAME))],
     )
@@ -1096,7 +1096,7 @@ def host_key_change(g: Guide) -> None:
                 f"changed; the server now presents {fingerprint}. Nothing after it."
             ),
             (
-                "Settings' Status row shows Host key changed in red, with Trust "
+                "The Connections window's Status row shows Host key changed in red, with Trust "
                 "New Key… and Clear buttons and no Reconnecting countdown."
             ),
             "The menu row shows an error icon.",
@@ -1112,7 +1112,7 @@ def host_key_change(g: Guide) -> None:
     g.act(
         "Look at the new key, then cancel",
         by_hand=(
-            "In Settings, click Trust New Key…. Check that the fingerprint is "
+            "In Connections, click Trust New Key…. Check that the fingerprint is "
             f"{fingerprint}, then click Cancel."
         ),
         expect=["The Status row still shows Host key changed."],
@@ -1123,7 +1123,7 @@ def host_key_change(g: Guide) -> None:
         doing="trust the new key, as Trust and Reconnect does",
         by_hand="Click Trust New Key… again, then Trust and Reconnect.",
         expect=[
-            "Settings' Status row shows Connected.",
+            "The Connections window's Status row shows Connected.",
             (
                 f"Event Log: NOTICE Trusted host key for {NAME}, with {fingerprint} "
                 f"for localhost:{PROXY_PORT}, replacing the old key's fingerprint, "
@@ -1151,7 +1151,7 @@ def host_key_change(g: Guide) -> None:
         "Reconnect with the trusted key",
         do=reconnect,
         doing="pause and resume the connection",
-        by_hand="Click Pause in Settings, then Reconnect.",
+        by_hand="Click Pause in Connections, then Reconnect.",
         expect=["Connected again, without asking about the host key."],
         checks=[g.logged("Connected", connected(NAME))],
     )
@@ -1230,29 +1230,25 @@ def connection_menu(g: Guide) -> None:
     g.act(
         "Edit the connection",
         by_hand=(
-            "Choose Connections & Settings… and click General in the sidebar. "
-            "Then right-click the connection in the SSHadow menu and choose "
-            "Edit Connection…."
+            "Choose Connections… and close the window. Then right-click the "
+            "connection in the SSHadow menu and choose Edit Connection…."
         ),
-        expect=[f"Settings switches to Connections with {NAME} selected."],
+        expect=[f"Connections opens in front with {NAME} selected."],
     )
 
 
 def settings_window(g: Guide) -> None:
     g.section(
         "Settings window",
-        "The sidebar has Connections, General and Advanced. Open at Login "
-        "registers the copy of SSHadow you're testing as a login item, then "
-        "removes it again.",
+        "Settings has General and Advanced tabs. Open at Login registers the "
+        "copy of SSHadow you're testing as a login item, then removes it again.",
     )
     g.act(
         "Open General",
-        by_hand=(
-            "Choose Connections & Settings… from the SSHadow menu, then click "
-            "General in the sidebar."
-        ),
+        by_hand="Choose Settings… from the SSHadow menu.",
         expect=[
-            "The sidebar lists Connections, General and Advanced, in that order.",
+            "Settings opens in front, showing the General tab.",
+            "The toolbar has General and Advanced tabs, in that order.",
             (
                 "General has Open at Login, Sync and Ignore Files, and no note "
                 "about changes applying when a connection starts."
@@ -1263,7 +1259,7 @@ def settings_window(g: Guide) -> None:
         "Try an invalid ignore file name",
         by_hand=(
             "In General, turn on Customize Ignore Files and add an ignore file "
-            f"named dir/x. Then select {NAME} in Connections. Afterwards, turn "
+            f"named dir/x. Then choose Connections… and select {NAME}. Afterwards, turn "
             "Customize Ignore Files off again."
         ),
         expect=[
@@ -1285,7 +1281,7 @@ def settings_window(g: Guide) -> None:
     )
     g.act(
         "Look at Advanced",
-        by_hand="Click Advanced in the sidebar.",
+        by_hand="Click the Advanced tab.",
         expect=[
             "Every picker shows its (Default) choice.",
             (
@@ -1391,9 +1387,9 @@ def disable(g: Guide) -> None:
         ],
     )
     g.act(
-        "Open the disabled connection's settings",
+        "Edit the disabled connection",
         by_hand="Click the disabled connection in the SSHadow menu.",
-        expect=["Settings opens with that connection selected."],
+        expect=["Connections opens with that connection selected."],
     )
 
 

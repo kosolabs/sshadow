@@ -7,6 +7,7 @@ import SwiftUI
 struct ConnectionConfigListView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Connections.self) private var connections
+    @Environment(ConnectionsNavigation.self) private var navigation
     @Query(sort: \ConnectionConfigModel.host) private var configs: [ConnectionConfigModel]
 
     @Binding var selection: ConnectionConfigModel?
@@ -22,14 +23,7 @@ struct ConnectionConfigListView: View {
                     .font(.system(size: 18))
                     .padding(.horizontal, 4)
 
-                    VStack(alignment: .leading) {
-                        if let name = config.name {
-                            Text(name)
-                            Text(config.displayUrl).font(.caption)
-                        } else {
-                            Text(config.displayUrl)
-                        }
-                    }
+                    ConnectionLabel(config: config)
                 }
                 .padding(.horizontal, 4)
                 .tag(config)
@@ -38,9 +32,7 @@ struct ConnectionConfigListView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    let config = ConnectionConfigModel()
-                    modelContext.insert(config)
-                    selection = config
+                    navigation.addConnection(to: modelContext)
                 } label: {
                     Label("Add Connection", systemImage: "plus")
                 }

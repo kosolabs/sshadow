@@ -313,7 +313,7 @@ struct ConnectionConfigEditView: View {
                 IgnoreFilesSection(
                     customizes: customizesIgnoreFiles,
                     filenames: ignoreFilenames,
-                    inheritedNote: "These are the defaults from General settings.",
+                    inheritedNote: "These are the defaults from Settings.",
                     error: validationError == .ignoreFilenameInvalid
                         ? validationError : nil
                 )

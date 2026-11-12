@@ -7,7 +7,7 @@ private let logger = Logger(category: "RichMenuProfileToggle")
 
 struct RichMenuProfileToggle: View {
     @Environment(Connections.self) private var connections
-    @Environment(SettingsNavigation.self) private var settingsNavigation
+    @Environment(ConnectionsNavigation.self) private var connectionsNavigation
     @Environment(\.openWindow) private var openWindow
 
     let config: ConnectionConfigModel
@@ -40,23 +40,16 @@ struct RichMenuProfileToggle: View {
                 ConnectionStatusButton(config: config, status: status)
 
                 HStack {
-                    VStack(alignment: .leading) {
-                        if let name = config.name {
-                            Text(name)
-                            Text(config.displayUrl).font(.caption)
-                        } else {
-                            Text(config.displayUrl)
-                        }
-                    }
+                    ConnectionLabel(config: config)
 
                     Spacer()
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    config.isEnabled() ? openInFinder() : editInSettings()
+                    config.isEnabled() ? openInFinder() : editConnection()
                 }
                 .help(
-                    config.isEnabled() ? "Show in Finder" : "Edit in Settings"
+                    config.isEnabled() ? "Show in Finder" : "Edit Connection"
                 )
                 .draggable(ifAvailable: folderUrl.map(\.shellEscapedPath))
 
@@ -92,7 +85,7 @@ struct RichMenuProfileToggle: View {
         .contextMenu {
             Button("Show in Finder", action: openInFinder)
                 .disabled(folderUrl == nil)
-            Button("Edit Connection…", action: editInSettings)
+            Button("Edit Connection…", action: editConnection)
 
             Divider()
 
@@ -155,10 +148,10 @@ struct RichMenuProfileToggle: View {
         NSWorkspace.shared.activateFileViewerSelecting([folderUrl])
     }
 
-    private func editInSettings() {
+    private func editConnection() {
         NSApp.dismissMenuBarExtra()
-        settingsNavigation.show(config)
-        openWindow.inFront(id: "settings")
+        connectionsNavigation.selectedConfig = config
+        openWindow.inFront(id: "connections")
     }
 
     private func showFix(otherExtension: URL?) {
