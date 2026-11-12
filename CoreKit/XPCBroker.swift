@@ -152,7 +152,7 @@ actor DomainXPCBroker: XPCBroker {
         let task = start(service: service, onUnreachable: onUnreachable)
         Task {
             await task.value
-            await ready()
+            _ = await ready()
         }
     }
 
