@@ -1316,6 +1316,7 @@ def event_log(g: Guide) -> None:
         by_hand="Search for docs/, then for zzz, then clear the search.",
         expect=[
             "For docs/, only entries mentioning docs/ in their message or detail.",
+            "The count under the Event Log title drops to match, and goes back up.",
             "For zzz, the window shows there are no results.",
         ],
     )

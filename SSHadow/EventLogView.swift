@@ -19,6 +19,8 @@ struct EventLogView: View {
 }
 
 private struct EventLogList: View {
+    private static let maxShown = 10_000
+
     private static var anyEvent: FetchDescriptor<EventModel> {
         var descriptor = FetchDescriptor<EventModel>()
         descriptor.fetchLimit = 1
@@ -26,6 +28,7 @@ private struct EventLogList: View {
     }
 
     @Environment(Events<ContinuousClock>.self) private var events
+    @Environment(\.modelContext) private var modelContext
 
     @Query private var anyEvent: [EventModel]
     @Query private var visibleEvents: [EventModel]
@@ -33,12 +36,38 @@ private struct EventLogList: View {
     @Binding private var filter: EventFilter
     private let search: String
     @State private var selection = Set<EventModel.ID>()
+    @State private var total: Int?
 
     init(filter: Binding<EventFilter>, search: String) {
         _filter = filter
         self.search = search
         _anyEvent = Query(Self.anyEvent)
-        _visibleEvents = Query(filter.wrappedValue.descriptor(matching: search))
+        var shown = filter.wrappedValue.descriptor(matching: search)
+        shown.fetchLimit = Self.maxShown
+        _visibleEvents = Query(shown)
+    }
+
+    private struct TotalKey: Hashable {
+        let filter: EventFilter
+        let search: String
+        let newest: EventModel.ID?
+        let shown: Int
+    }
+
+    private var totalKey: TotalKey {
+        TotalKey(
+            filter: filter,
+            search: search,
+            newest: visibleEvents.first?.id,
+            shown: visibleEvents.count
+        )
+    }
+
+    private var subtitle: String {
+        guard let total, total > 0 else { return "" }
+        let counted = total == 1 ? "1 event" : "\(total.formatted()) events"
+        guard total > visibleEvents.count else { return counted }
+        return "Newest \(visibleEvents.count.formatted()) of \(counted)"
     }
 
     var body: some View {
@@ -79,6 +108,12 @@ private struct EventLogList: View {
                     [NSItemProvider(object: logLines(for: copied) as NSString)]
                 }
             }
+        }
+        .navigationSubtitle(subtitle)
+        .task(id: totalKey) {
+            total = try? modelContext.fetchCount(
+                filter.descriptor(matching: search)
+            )
         }
         .toolbar {
             Menu {
