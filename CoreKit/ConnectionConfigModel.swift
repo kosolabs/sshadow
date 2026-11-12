@@ -87,10 +87,6 @@ public class ConnectionConfigModel: CustomStringConvertible {
         host.isEmpty ? "New Connection" : name ?? url
     }
 
-    public var displayUrl: String {
-        host.isEmpty ? "New Connection" : url
-    }
-
     public var effectivePort: UInt16 {
         port ?? 22
     }

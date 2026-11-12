@@ -48,7 +48,7 @@ struct SSHadowApp: App {
 
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var activation = WindowActivationTracker()
-    @State private var settingsNavigation = SettingsNavigation()
+    @State private var connectionsNavigation = ConnectionsNavigation()
 
     init() {
         startup()
@@ -58,7 +58,7 @@ struct SSHadowApp: App {
         MenuBarExtra {
             RichMenuMainView()
                 .modelContainer(Self.modelContainer)
-                .environment(settingsNavigation)
+                .environment(connectionsNavigation)
                 .environment(Connections.shared)
                 .environment(Transfers.shared)
                 .environment(Events.shared)
@@ -70,16 +70,22 @@ struct SSHadowApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("Settings", id: "settings") {
-            SettingsView()
+        Window("Connections", id: "connections") {
+            ConnectionsView()
                 .modelContainer(Self.modelContainer)
-                .environment(settingsNavigation)
+                .environment(connectionsNavigation)
                 .environment(activation)
                 .environment(Connections.shared)
                 .environment(Transfers.shared)
                 .environment(Events.shared)
         }
         .handlesExternalEvents(matching: [])
+
+        Settings {
+            SettingsView()
+                .modelContainer(Self.modelContainer)
+                .environment(activation)
+        }
 
         Window("Event Log", id: "events") {
             EventLogView()

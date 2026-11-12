@@ -6,9 +6,10 @@ import SwiftUI
 
 struct RichMenuMainView: View {
     @Environment(Transfers<ContinuousClock>.self) private var transfers
-    @Environment(SettingsNavigation.self) private var settingsNavigation
+    @Environment(ConnectionsNavigation.self) private var connectionsNavigation
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     @Query(sort: \ConnectionConfigModel.host) private var configs: [ConnectionConfigModel]
 
@@ -23,8 +24,8 @@ struct RichMenuMainView: View {
 
                     Button {
                         NSApp.dismissMenuBarExtra()
-                        settingsNavigation.addConnection(to: modelContext)
-                        openWindow.inFront(id: "settings")
+                        connectionsNavigation.addConnection(to: modelContext)
+                        openWindow.inFront(id: "connections")
                     } label: {
                         Label("Add Your First Connection", systemImage: "plus")
                             .frame(maxWidth: .infinity)
@@ -50,9 +51,22 @@ struct RichMenuMainView: View {
             }
 
             RichMenuButton {
-                openWindow.inFront(id: "settings")
+                openWindow.inFront(id: "connections")
             } label: {
-                RichMenuLabel("Connections & Settings…", systemImage: "gear")
+                RichMenuLabel(
+                    "Connections…",
+                    systemImage: "externaldrive.badge.icloud"
+                )
+            }
+
+            RichMenuButton {
+                openSettings.inFront()
+            } label: {
+                RichMenuLabel(
+                    "Settings…",
+                    systemImage: "gear",
+                    shortcut: .init(",", modifiers: .command)
+                )
             }
 
             RichMenuButton {
