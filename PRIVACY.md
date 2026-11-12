@@ -1,16 +1,17 @@
 # Privacy Policy
 
-_Last updated: November 2, 2026_
+_Last updated: November 12, 2026_
 
-SSHadow does not collect, store, or share any personal data. It has no analytics, advertising, or tracking, and it does not send anything to the developer or any other third party.
+SSHadow does not collect or share any personal data. It has no analytics, advertising, or tracking, and it does not send anything to the developer or any other third party.
 
 ## What stays on your Mac
 
-- **Connection settings** (names, hostnames, ports, usernames, and remote paths) are stored locally on your Mac.
+- **Connection settings** (names, hostnames, ports, usernames, and remote paths) and app settings are stored locally on your Mac.
+- **Server host keys** you trust are stored with your connection settings, so SSHadow can warn you if a server's identity changes.
 - **Passwords and private key passphrases** are stored in the macOS Keychain.
 - **Private keys** stay where you keep them. SSHadow only remembers the location you chose and reads the key when it connects.
 - **Downloaded files** are cached locally by macOS so they can be opened in Finder and other apps. You can remove downloads at any time.
-- **The event log** is kept in memory while the app is running and is cleared when you quit.
+- **The event log** of file activity is stored locally on your Mac until you clear it from the Event Log window.
 - **Diagnostic logs** are written to the macOS system log on your Mac.
 
 ## Network connections
