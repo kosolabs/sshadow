@@ -2,10 +2,10 @@ import Foundation
 import SwiftData
 
 @Model
-final class EventModel {
+public final class EventModel {
     #Index<EventModel>([\.timestamp])
 
-    @Attribute(.unique) var id: UUID
+    @Attribute(.unique) public var id: UUID
     var timestamp: Date
     var sourceName: String?
     var sourceUrl: String?
@@ -27,7 +27,7 @@ final class EventModel {
 }
 
 extension Event {
-    init?(from model: EventModel) {
+    public init?(from model: EventModel) {
         guard let level = Level(rawValue: model.level),
             let category = Category(rawValue: model.category)
         else { return nil }

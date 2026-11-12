@@ -6,15 +6,14 @@ import SwiftUI
 
 private let logger = Logger(category: "SSHadowApp")
 
+@MainActor
 private func startup() {
     logger.notice(
         "Started "
             + "from \(Bundle.main.bundleURL.path(percentEncoded: false)) "
             + "(version \(SSHadow.version), build \(SSHadow.build))"
     )
-    Task {
-        await Events.shared.persist(in: AppDB.shared)
-    }
+    Events.shared.persist(in: SSHadowApp.modelContainer)
     Task {
         await reconnectEnabledDomains()
         await removeOrphanedDomains()
@@ -84,6 +83,7 @@ struct SSHadowApp: App {
 
         Window("Event Log", id: "events") {
             EventLogView()
+                .modelContainer(Self.modelContainer)
                 .environment(activation)
                 .environment(Transfers.shared)
                 .environment(Events.shared)
