@@ -6,6 +6,10 @@ A macOS menu bar app that mounts remote directories over SSH in Finder.
 
 SSHadow uses the File Provider framework, so each connection shows up as a location in Finder's sidebar. Files are listed and downloaded on demand rather than synced up front, and edits are uploaded back to the server.
 
+## Install
+
+SSHadow is available on the [Mac App Store](https://apps.apple.com/app/sshadow/id6758317010).
+
 ## Features
 
 - Multiple connections, each mapping a remote path on an SSH server to a Finder location.
