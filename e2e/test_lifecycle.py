@@ -4,7 +4,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from logwatch import LogWatcher
+from logwatch import LogWatcher, msg
 from proxy import Proxy
 from sshadow import (
     App,
@@ -51,6 +51,15 @@ def test_quit_and_relaunch(
     wait_for_tree(remote, tree, timeout=60, on_poll=logs.check)
     wait_for_tree(local, tree, on_poll=logs.check)
     round_trip(app, logs, profile, local, remote, tree)
+
+
+def test_reopen_opens_connections(
+    app: App, logs: LogWatcher, relaunch_app: Callable[[], None]
+) -> None:
+    app.reopen()
+    logs.expect(msg("^Opened window: connections$"))
+    # Closes the window, so it doesn't sit on the desktop for the rest of the run.
+    app.quit()
 
 
 def test_disable_and_enable(

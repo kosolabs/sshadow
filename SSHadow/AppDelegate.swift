@@ -11,4 +11,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             logger.notice("Opened file: \(url.path(percentEncoded: false))")
         }
     }
+
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows: Bool
+    ) -> Bool {
+        OpensRequestedWindows.request(id: "connections")
+        return false
+    }
 }
