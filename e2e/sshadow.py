@@ -207,6 +207,11 @@ class App:
             check=True,
         )
 
+    def reopen(self) -> None:
+        if self.started() is None:
+            raise RuntimeError(f"{self.path} isn't running")
+        subprocess.run(["open", "-a", self.path], check=True)
+
     def quit(self, timeout: float = 10) -> None:
         self.send("quit")
         deadline = time.monotonic() + timeout

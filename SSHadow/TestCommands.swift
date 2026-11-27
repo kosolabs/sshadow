@@ -85,10 +85,7 @@ final class TestCommands {
         case "delete-all":
             try await deleteAll(prefix: params.required("prefix"))
         case "open":
-            NotificationCenter.default.post(
-                name: .openWindowRequested,
-                object: try params.required("window")
-            )
+            OpensRequestedWindows.request(id: try params.required("window"))
         case "quit":
             NSApp.terminate(nil)
         default:
@@ -230,26 +227,6 @@ final class TestCommands {
                 predicate: #Predicate { $0.name == name }
             )
         )
-    }
-}
-
-extension Notification.Name {
-    fileprivate static let openWindowRequested = Notification.Name(
-        "com.kosolabs.SSHadow.openWindowRequested"
-    )
-}
-
-struct OpensRequestedWindows: ViewModifier {
-    @Environment(\.openWindow) private var openWindow
-
-    func body(content: Content) -> some View {
-        content.onReceive(
-            NotificationCenter.default.publisher(for: .openWindowRequested)
-        ) { notification in
-            guard let id = notification.object as? String else { return }
-            openWindow.inFront(id: id)
-            logger.notice("Opened window: \(id)")
-        }
     }
 }
 

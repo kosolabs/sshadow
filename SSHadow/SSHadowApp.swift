@@ -67,6 +67,7 @@ struct SSHadowApp: App {
                 isLoading: Events.shared.isActive || Transfers.shared.isActive
             )
             .modifier(OpensRequestedWindows())
+            .modifier(OpensConnectionsWhenEmpty())
         }
         .menuBarExtraStyle(.window)
 
