@@ -3,7 +3,7 @@ import SwiftUI
 
 struct AboutView: View {
     private let issuesURL = URL(
-        string: "https://github.com/kosolabs/sshadow/issues/new"
+        string: "https://github.com/kosolabs/sshadow/issues/new/choose"
     )!
 
     @Environment(WindowActivationTracker.self) private var activation
