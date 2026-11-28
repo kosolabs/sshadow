@@ -1,0 +1,43 @@
+name: Submit for Review
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag whose App Store build to submit for review
+        required: true
+        type: string
+  release:
+    types: [ published ]
+
+concurrency:
+  group: submit-for-review
+  cancel-in-progress: true
+
+jobs:
+  submit-for-review:
+    name: Submit for App Store review
+    runs-on: ubuntu-latest
+    # Xcode Cloud has to build and upload the tag, then App Store Connect has to process it.
+    timeout-minutes: 120
+
+    environment:
+      name: sshadow-release
+
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v10.4.0
+
+    - name: Submit the tag's build for review
+      env:
+        TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_SUBMIT_API_KEY_ID }}
+        APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_SUBMIT_API_PRIVATE_KEY }}
+      run: ./ci_scripts/submit_for_review.py
