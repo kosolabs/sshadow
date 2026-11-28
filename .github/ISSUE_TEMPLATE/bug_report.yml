@@ -1,0 +1,49 @@
+name: Bug report
+description: Something in SSHadow isn't working as expected.
+body:
+  - type: input
+    id: version
+    attributes:
+      label: SSHadow version
+      description: Shown in About SSHadow, in the menu bar menu.
+      placeholder: Version 1.5.0, Build 42
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: macOS 26.1
+    validations:
+      required: true
+  - type: input
+    id: server
+    attributes:
+      label: Server
+      description: The server's OS and SSH server, if you know them.
+      placeholder: Ubuntu 24.04, OpenSSH 9.6
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: If you can make it happen again, how?
+      placeholder: |
+        1.
+        2.
+        3.
+  - type: textarea
+    id: event-log
+    attributes:
+      label: Event log
+      description: >
+        Open Event Log from the menu bar menu, select the events around the
+        problem and click Copy. The log shows file paths and host names, so
+        check for anything you'd rather not share before pasting.
+      render: text
