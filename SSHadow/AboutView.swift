@@ -2,6 +2,10 @@ import Common
 import SwiftUI
 
 struct AboutView: View {
+    private let issuesURL = URL(
+        string: "https://github.com/kosolabs/sshadow/issues/new"
+    )!
+
     @Environment(WindowActivationTracker.self) private var activation
 
     var body: some View {
@@ -22,10 +26,20 @@ struct AboutView: View {
             }
             .font(.callout)
             .foregroundStyle(.secondary)
+
+            Text("Made with \(heart) by Koso Labs")
+                .font(.callout)
+
+            Link("Report an Issue", destination: issuesURL)
+                .font(.callout)
         }
         .padding(32)
         .frame(width: 280)
         .onAppear { activation.retain() }
         .onDisappear { activation.release() }
+    }
+
+    private var heart: Text {
+        Text(Image(systemName: "heart.fill")).foregroundStyle(.red)
     }
 }
