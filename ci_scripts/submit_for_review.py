@@ -16,6 +16,7 @@ Environment:
 """
 
 import os
+import sys
 import time
 
 from app_store_connect import APP_ID, AppStoreConnect
@@ -29,6 +30,7 @@ EDITABLE_VERSION_STATES = (
 
 
 def main():
+    sys.stdout.reconfigure(line_buffering=True)
     tag = os.environ["TAG"]
     version = tag.removeprefix("v")
     release_url = (
