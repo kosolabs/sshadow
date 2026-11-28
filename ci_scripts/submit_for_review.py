@@ -10,21 +10,16 @@ editable macOS App Store version at it, and submits it. Any submission that is
 still open is cancelled first, so the newest release always wins.
 
 Environment:
-  TAG                                Release tag, e.g. v1.5.2
-  APP_STORE_CONNECT_API_KEY_ID       Key ID of an App Manager API key
-  APP_STORE_CONNECT_API_ISSUER_ID    Issuer ID for that key
-  APP_STORE_CONNECT_API_PRIVATE_KEY  base64 of the AuthKey_<key id>.p8 contents
+  TAG                                   Release tag, e.g. v1.5.2
+  APP_STORE_CONNECT_API_*               An App Manager key; see app_store_connect.py
   GITHUB_SERVER_URL, GITHUB_REPOSITORY  Set by GitHub Actions
 """
 
-import base64
 import os
 import time
 
-import httpx
-import jwt
+from app_store_connect import APP_ID, AppStoreConnect
 
-APP_ID = "6758317010"
 PLATFORM = "MAC_OS"
 POLL_SECONDS = 60
 OPEN_SUBMISSION_STATES = "READY_FOR_REVIEW,WAITING_FOR_REVIEW,IN_REVIEW,UNRESOLVED_ISSUES"
@@ -33,51 +28,13 @@ EDITABLE_VERSION_STATES = (
 )
 
 
-class AppStoreConnect:
-    def __init__(self, key_id: str, issuer_id: str, private_key: str):
-        self._key_id = key_id
-        self._issuer_id = issuer_id
-        self._private_key = private_key
-        self._http = httpx.Client(base_url="https://api.appstoreconnect.apple.com", timeout=60)
-
-    def get(self, path: str, **params: str) -> list[dict] | dict:
-        return self._request("GET", path, params=params)
-
-    def post(self, path: str, resource: dict) -> dict:
-        return self._request("POST", path, json={"data": resource})
-
-    def patch(self, path: str, resource: dict) -> dict:
-        return self._request("PATCH", path, json={"data": resource})
-
-    def _request(self, method: str, path: str, **kwargs):
-        response = self._http.request(
-            method, path, headers={"Authorization": f"Bearer {self._token()}"}, **kwargs
-        )
-        if response.is_error:
-            raise SystemExit(f"{method} {path} failed with {response.status_code}: {response.text}")
-        return response.json()["data"]
-
-    def _token(self) -> str:
-        now = int(time.time())
-        return jwt.encode(
-            {"iss": self._issuer_id, "iat": now, "exp": now + 600, "aud": "appstoreconnect-v1"},
-            self._private_key,
-            algorithm="ES256",
-            headers={"kid": self._key_id},
-        )
-
-
 def main():
     tag = os.environ["TAG"]
     version = tag.removeprefix("v")
     release_url = (
         f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/releases/tag/{tag}"
     )
-    api = AppStoreConnect(
-        os.environ["APP_STORE_CONNECT_API_KEY_ID"],
-        os.environ["APP_STORE_CONNECT_API_ISSUER_ID"],
-        base64.b64decode(os.environ["APP_STORE_CONNECT_API_PRIVATE_KEY"]).decode(),
-    )
+    api = AppStoreConnect()
 
     build_id = wait_for_build(api, version)
     cancel_open_submissions(api)

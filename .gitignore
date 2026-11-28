@@ -2,6 +2,7 @@
 build/
 xcuserdata/
 logs/
+__pycache__/
 
 # Env
 .env

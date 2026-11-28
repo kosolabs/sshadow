@@ -37,8 +37,23 @@ jobs:
         provisioning-profile-app: ${{ secrets.PROVISIONING_PROFILE_APP }}
         provisioning-profile-extension: ${{ secrets.PROVISIONING_PROFILE_EXTENSION }}
 
+    - name: Install uv
+      uses: astral-sh/setup-uv@v10.4.0
+
+    - name: Match the App Store build number
+      id: build-number
+      timeout-minutes: 10
+      env:
+        APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
+      run: |
+        number="$(./ci_scripts/xcode_cloud_build_number.py "$(git rev-parse HEAD)")"
+        echo "number=$number" >> "$GITHUB_OUTPUT"
+
     - name: Build, sign, and notarize DMG
       env:
+        BUILD_NUMBER: ${{ steps.build-number.outputs.number }}
         APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
         APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
         APP_STORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
