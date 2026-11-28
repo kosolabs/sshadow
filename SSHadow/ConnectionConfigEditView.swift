@@ -204,6 +204,7 @@ struct ConnectionConfigEditView: View {
                                 Task { await config.disable() }
                             }
                         case .reconnecting, .online:
+                            Button("Show in Finder", action: showInFinder)
                             Button("Pause") {
                                 Task { await config.pause() }
                             }
@@ -355,6 +356,13 @@ struct ConnectionConfigEditView: View {
             )
         }
         .padding()
+    }
+
+    private func showInFinder() {
+        Task {
+            guard let folderUrl = await config.resolveFolderUrl() else { return }
+            NSWorkspace.shared.activateFileViewerSelecting([folderUrl])
+        }
     }
 
     private func handlePrivateKeyImport(_ result: Result<[URL], Error>) {

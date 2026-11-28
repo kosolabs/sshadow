@@ -1,9 +1,6 @@
 import Common
 import CoreKit
-import FileProvider
 import SwiftUI
-
-private let logger = Logger(category: "RichMenuProfileToggle")
 
 struct RichMenuProfileToggle: View {
     @Environment(Connections.self) private var connections
@@ -126,20 +123,9 @@ struct RichMenuProfileToggle: View {
             }
             .disabled(folderUrl == nil)
         }
-        .task(id: config.isEnabled()) { folderUrl = await resolveFolderUrl() }
-    }
-
-    private func resolveFolderUrl() async -> URL? {
-        if config.isEnabled() {
-            do {
-                return try await config.domain.manager.getUserVisibleURL(
-                    for: .rootContainer
-                )
-            } catch {
-                logger.error("Failed to resolve URL for \(config): \(error)")
-            }
+        .task(id: config.isEnabled()) {
+            folderUrl = await config.resolveFolderUrl()
         }
-        return nil
     }
 
     private func openInFinder() {
