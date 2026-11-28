@@ -15,14 +15,19 @@ set -euo pipefail
 #   APP_STORE_CONNECT_API_KEY_ID       Key ID of an App Store Connect API key
 #   APP_STORE_CONNECT_API_ISSUER_ID    Issuer ID for that key
 #   APP_STORE_CONNECT_API_PRIVATE_KEY  base64 of the AuthKey_<key id>.p8 contents
+#
+# BUILD_NUMBER overrides the build number, which defaults to the commit count.
+# Releases set it to match the App Store build (see xcode_cloud_build_number.py).
 
 cd "${0:a:h}/.."
 
 APP_NAME="SSHadow"
 TEAM_ID="A5S59GAS97"
 
-git fetch --unshallow 2>/dev/null || true
-BUILD_NUMBER="$(git rev-list --count HEAD)"
+if [[ -z "${BUILD_NUMBER:-}" ]]; then
+  git fetch --unshallow 2>/dev/null || true
+  BUILD_NUMBER="$(git rev-list --count HEAD)"
+fi
 STAGING_DIR="build/staging"
 ARCHIVE_PATH="build/${APP_NAME}.xcarchive"
 APP_PATH="build/${APP_NAME}.app"
