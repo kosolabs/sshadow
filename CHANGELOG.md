@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.0](https://github.com/kosolabs/sshadow/compare/v1.5.1...v1.6.0) (2026-11-28)
+
+
+### Features
+
+* credit Koso Labs and link to issues in the About window ([#522](https://github.com/kosolabs/sshadow/issues/522)) ([33ddcce](https://github.com/kosolabs/sshadow/commit/33ddcce29f672b26b6f6b5a5c4b2b241f8bc86f5))
+* open Connections on relaunch and when there are no connections ([#520](https://github.com/kosolabs/sshadow/issues/520)) ([510ec1f](https://github.com/kosolabs/sshadow/commit/510ec1f91e66dbfdadc3e6e8938ea87833e0b18b))
+* show a connected connection in Finder from the Connections window ([#524](https://github.com/kosolabs/sshadow/issues/524)) ([9d8ffbf](https://github.com/kosolabs/sshadow/commit/9d8ffbf8d2f2d9225976f3b98308b896b608c8a4))
+
+
+### Bug Fixes
+
+* send Report an Issue to the issue template chooser ([#525](https://github.com/kosolabs/sshadow/issues/525)) ([c9d02a2](https://github.com/kosolabs/sshadow/commit/c9d02a286a63656d17a3c891127ceea5fd0d6caa))
+
 ## [1.5.1](https://github.com/kosolabs/sshadow/compare/v1.5.0...v1.5.1) (2026-11-12)
 
 
